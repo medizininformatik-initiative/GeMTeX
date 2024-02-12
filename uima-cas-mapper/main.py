@@ -18,7 +18,7 @@ LOG = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
-class ArchitectureEnum(enum.StrEnum):
+class ArchitectureEnum(enum.Enum):
     TARGET = "target"
     SOURCE = "source"
 
