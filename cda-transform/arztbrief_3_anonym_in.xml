@@ -1,0 +1,550 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<levelone>
+	<clinical_document_header>
+		<id EX="1234567" RT=""/>
+		<version_nbr V="2"/>
+		<document_type_cd V="58761"/>
+		<confidentiality_code V="N"/>
+		<origination_dttm V="20260711 07:10:26"/>
+		<copy_dttm V=""/>
+		<patient_encounter>
+			<id EX="16"/>
+			<practice_setting_cd V="FAU"/>
+			<encounter_tmr V=""/>
+			<service_location>
+				<id EX="UKER"/>
+			</service_location>
+			<local_header descriptor="Visit">
+				<local_attr name="start_dttm" value="22.03.2026 08:21:00"/>
+				<local_attr name="end_dttm" value=""/>
+			</local_header>
+			<local_header descriptor="PatientLocation">
+				<local_attr name="dsc" value="M1 B2-1 Kussmaul"/>
+			</local_header>
+			<local_header descriptor="Account">
+				<local_attr name="ID" value="123456789"/>
+			</local_header>
+			<local_header descriptor="Patient Relationship">
+				<local_header descriptor="Attending Physician">
+					<local_attr name="PFX" value=""/>
+					<local_attr name="GIV" value=""/>
+					<local_attr name="FAM" value=""/>
+					<local_attr name="SFX" value=""/>
+					<local_attr name="telecom" value=""/>
+				</local_header>
+			</local_header>
+			<local_header descriptor="HealthCareUnit">
+				<local_attr name="MRUName" value="Gastroenterologie"/>
+				<local_attr name="MRUOID" value="106"/>
+				<local_attr name="LocationName" value="M1 B2-1 Kussmaul"/>
+				<local_attr name="VisitActivityOID" value="12345678"/>
+				<local_attr name="StartDTime" value="20260322 08:21:00"/>
+				<local_attr name="EndDTime" value=""/>
+				<local_attr name="MRUAbbr" value="M1"/>
+				<local_attr name="LocationAbbr" value="M1B21"/>
+			</local_header>
+		</patient_encounter>
+		<authenticator>
+			<authenticator.type_cd V="VRF"/>
+			<participation_tmr/>
+			<signature_cd V="X"/>
+			<person>
+				<id EX=""/>
+				<person_name>
+					<nm>
+						<PFX V=""/>
+						<GIV V=""/>
+						<MID V=""/>
+						<FAM V=""/>
+						<SFX V=""/>
+					</nm>
+					<person_name.type_cd/>
+				</person_name>
+			</person>
+		</authenticator>
+		<authenticator>
+			<authenticator.type_cd V="SPV"/>
+			<level V="1"/>
+			<title V=" Paul Hindemith"/>
+			<participation_tmr/>
+			<signature_cd V="X"/>
+			<person>
+				<id EX="25423700" supervisorType=""/>
+				<person_name>
+					<nm>
+						<PFX V=""/>
+						<GIV V="Paul"/>
+						<MID V=""/>
+						<FAM V="Hindemith"/>
+						<SFX V=""/>
+					</nm>
+				</person_name>
+				<jobtitle/>
+			</person>
+		</authenticator>
+		<intended_recipient>
+			<intended_recipient.type_cd V="TRC" id="P_0010066395_EX_1123261"/>
+			<person>
+				<id EX="1234044795"/>
+				<person_name>
+					<nm>
+						<PFX V="Dr. med."/>
+						<GIV V="Robert"/>
+						<MID V=""/>
+						<FAM V="Schuhmann"/>
+						<SFX V="Herr"/>
+					</nm>
+					<person_name.type_cd/>
+				</person_name>
+				<addr>
+					<STR V="Inselstraße 22 "/>
+					<ADL V=""/>
+					<POB V="04103"/>
+					<ZIP V="04103"/>
+					<CTY V="Leipzig"/>
+					<STA V=""/>
+					<CNT V=""/>
+				</addr>
+			</person>
+			<local_header descriptor="StaffIdentifiers">
+				<local_attr name="ES" value=""/>
+				<local_attr name="Sex" value="0"/>
+			</local_header>
+		</intended_recipient>
+		<intended_recipient>
+			<intended_recipient.type_cd V="TRC" id="T_1004123013_MR_4821230"/>
+			<person>
+				<id EX="0"/>
+				<person_name>
+					<nm>
+						<PFX V=""/>
+						<GIV V="Johann"/>
+						<MID V="Sebastian"/>
+						<FAM V="Bach"/>
+						<SFX V=""/>
+					</nm>
+					<person_name.type_cd/>
+				</person_name>
+				<addr>
+					<STR V="Thomanskirchof 18"/>
+					<ADL V=""/>
+					<POB V="04109"/>
+					<ZIP V="04109"/>
+					<CTY V="Leipzig"/>
+					<STA V=""/>
+					<CNT V="DE"/>
+				</addr>
+			</person>
+			<local_header descriptor="StaffIdentifiers">
+				<local_attr name="ES" value=""/>
+				<local_attr name="Sex" value="0"/>
+			</local_header>
+		</intended_recipient>
+		<transcriptionist>
+			<transcriptionist.type_cd V="ENT"/>
+			<person>
+				<id EX=""/>
+				<person_name>
+					<nm>
+						<PFX V=""/>
+						<GIV V=""/>
+						<MID V=""/>
+						<FAM V=""/>
+						<SFX V=""/>
+					</nm>
+				</person_name>
+			</person>
+		</transcriptionist>
+		<provider>
+			<provider.type_cd V="PRF"/>
+			<person>
+				<id EX="81123450"/>
+				<person_name>
+					<nm>
+						<PFX V=""/>
+						<GIV V="Fanny"/>
+						<MID V=""/>
+						<FAM V="Hensel"/>
+						<SFX V=""/>
+					</nm>
+				</person_name>
+			</person>
+		</provider>
+		<patient>
+			<patient.type_cd V="PAT"/>
+			<person>
+				<id EX="1001234013"/>
+				<person_name>
+					<nm>
+						<PFX V=""/>
+						<GIV V="Johann"/>
+						<MID V=""/>
+						<FAM V="Bach"/>
+						<SFX V=""/>
+					</nm>
+				</person_name>
+				<addr>
+					<STR V="Thomanskirchof 18"/>
+					<ADL V=""/>
+					<POB V="04903"/>
+					<ZIP V="04903"/>
+					<CTY V="Leipzig"/>
+					<STA V=""/>
+					<CNT V="DE"/>
+				</addr>
+			</person>
+			<birth_dttm V="16850331 00:00:00"/>
+			<administrative_gender_cd V="SEX_0"/>
+		</patient>
+	</clinical_document_header>
+	<body>
+		<section ID="M1_N_AP1" phlused="yes">
+			<caption>Ansprechpartner</caption>
+			<paragraph ID="UKER_FREE" lmDTTM="" phlitemid="UKER_FREE">
+				<caption/>
+				<content>
+					<local_markup>
+						<local_attr name="type" value="3"/>
+						<local_attr name="edit" value="1"/>
+						<local_attr name="loc" value=""/>
+						<local_attr name="lnk" value=""/>
+						<local_attr name="cmt" value="1"/>
+						<local_attr name="dict" value="0"/>
+						<local_attr name="dictn" value=""/>
+						<local_attr name="VT" value=""/>
+						<local_attr name="OID" value=""/>
+					</local_markup>
+				</content>
+			</paragraph>
+		</section>
+		<section ID="M1_N_KÜ1" phlused="yes">
+			<caption>Kürzel</caption>
+			<paragraph ID="UKER_FREE" lmDTTM="" phlitemid="UKER_FREE">
+				<caption/>
+				<content>
+					<local_markup>
+						<local_attr name="type" value="3"/>
+						<local_attr name="edit" value="1"/>
+						<local_attr name="loc" value=""/>
+						<local_attr name="lnk" value=""/>
+						<local_attr name="cmt" value="1"/>
+						<local_attr name="dict" value="0"/>
+						<local_attr name="dictn" value=""/>
+						<local_attr name="VT" value=""/>
+						<local_attr name="OID" value=""/>
+					</local_markup>
+				</content>
+			</paragraph>
+		</section>
+		<section ID="M1_NP_BETR1" phlused="yes">
+			<caption>Betreff</caption>
+			<paragraph ID="Salutation" lmDTTM="" phlitemid="Salutation">
+				<caption/>
+				<content>
+					<local_markup>
+						<local_attr name="type" value="3"/>
+						<local_attr name="edit" value="1"/>
+						<local_attr name="loc" value=""/>
+						<local_attr name="lnk" value=""/>
+						<local_attr name="cmt" value="1"/>
+						<local_attr name="dict" value="0"/>
+						<local_attr name="dictn" value=""/>
+						<local_attr name="VT" value=""/>
+						<local_attr name="OID" value="97"/>
+					</local_markup><![CDATA[<p style="MARGIN-TOP: 0px; MARGIN-BOTTOM: 0px"><strong>Bach, Johann, geb. am 31.03.1685, </strong></p><p style="MARGIN-TOP: 0px; MARGIN-BOTTOM: 0px"><strong>Thomanskirchof 18, 04903 Leipzig</strong></p>]]></content>
+			</paragraph>
+		</section>
+		<section ID="M1_NP_ANR1" phlused="yes">
+			<caption>Anrede</caption>
+			<paragraph ID="Salutation" lmDTTM="" phlitemid="Salutation">
+				<caption/>
+				<content>
+					<local_markup>
+						<local_attr name="type" value="3"/>
+						<local_attr name="edit" value="1"/>
+						<local_attr name="loc" value=""/>
+						<local_attr name="lnk" value=""/>
+						<local_attr name="cmt" value="1"/>
+						<local_attr name="dict" value="0"/>
+						<local_attr name="OID" value="97"/>
+						<local_attr name="dictn" value=""/>
+						<local_attr name="VT" value=""/>
+					</local_markup><![CDATA[ <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px">Sehr geehrte Frau Kollegin, sehr geehrter Herr Kollege, </p> <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px">&#160;</p> <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px">wir berichten Ihnen &#252;ber o. g. Patienten, der sich vom 22.03.2026 bis zum 23.03.2026 in unserer station&#228;ren Behandlung befand.</p>]]></content>
+			</paragraph>
+		</section>
+		<section ID="M1_DIA4" phlused="yes">
+			<caption>Diagnosen</caption>
+			<paragraph ID="UKER_FREE" lmDTTM="" phlitemid="UKER_FREE">
+				<caption/>
+				<content>
+					<local_markup>
+						<local_attr name="type" value="3"/>
+						<local_attr name="edit" value="1"/>
+						<local_attr name="loc" value=""/>
+						<local_attr name="lnk" value=""/>
+						<local_attr name="cmt" value="1"/>
+						<local_attr name="dict" value="0"/>
+						<local_attr name="OID" value=""/>
+						<local_attr name="dictn" value=""/>
+						<local_attr name="VT" value=""/>
+					</local_markup><![CDATA[ <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px"><strong>Aktuell:</strong></p> <ol style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px"> <li><strong>V. a. Pankreaskopfcarcinom</strong></li> <ol style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px"> <li>endosonographisch gesteuerte Punktion der Raumforderung</li> </ol> </ol> <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px">&#160;</p> <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px"><strong>Vorerkrankungen:</strong></p> <ul style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px"> <li>Arterielle Hypertonie</li> <li>Tachykardie</li> <li>Cholezystolithiasis</li> <li>Z.n. Lymphom</li> <li>Z.n.&#160;Splenektomie </li> <li>Z.n. Appendektomie</li> <li>Sklerodermie</li> </ul>]]></content>
+			</paragraph>
+		</section>
+		<section ID="M1_TH3" phlused="yes">
+			<caption>Therapie</caption>
+			<paragraph ID="UKER_FREE" lmDTTM="" phlitemid="UKER_FREE">
+				<caption/>
+				<content>
+					<local_markup>
+						<local_attr name="type" value="3"/>
+						<local_attr name="edit" value="1"/>
+						<local_attr name="loc" value=""/>
+						<local_attr name="lnk" value=""/>
+						<local_attr name="cmt" value="1"/>
+						<local_attr name="dict" value="0"/>
+						<local_attr name="dictn" value=""/>
+						<local_attr name="VT" value=""/>
+						<local_attr name="OID" value=""/>
+					</local_markup>
+				</content>
+			</paragraph>
+		</section>
+		<section ID="M1_AN1" phlused="yes">
+			<caption>Anamnese</caption>
+			<paragraph ID="UKER_FREE" lmDTTM="" phlitemid="UKER_FREE">
+				<caption/>
+				<content>
+					<local_markup>
+						<local_attr name="type" value="3"/>
+						<local_attr name="edit" value="1"/>
+						<local_attr name="loc" value=""/>
+						<local_attr name="lnk" value=""/>
+						<local_attr name="cmt" value="1"/>
+						<local_attr name="dict" value="0"/>
+						<local_attr name="OID" value=""/>
+						<local_attr name="dictn" value=""/>
+						<local_attr name="VT" value=""/>
+					</local_markup><![CDATA[ <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px">Die station&#228;re Aufnahme von Herrn Bach erfolgte f&#252;r eine geplante endosonographisch gesteuerte Pankreas-Punktion aufgrund sonographisch gestelltem V.a. Pankreas-Karzinom. Der Patient gibt Schmerzen im rechten Oberbauch an, die sich&#160;&#252;ber den Tag verschlimmern sollen und teilweise in den Brustbereich und Nierenlager ausstrahlen. Zudem habe der Patient seit Dezember 2021 einen Gewichtsverlust von 5kg. Weiterhin berichtet der Patient &#252;ber einen Appetitverlust und selteneren Stuhlg&#228;ngen. Er habe fr&#252;her t&#228;glich Stuhlgang gehabt, jetzt nur noch alle zwei Tage. Fieber, Nachtschwei&#223;, AP-Beschwerden und Dyspnoe werden verneint. Miktion sei unauff&#228;llig.</p> <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px">&#160;</p> <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px"><u>Noxen:</u></p> <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px; MARGIN-LEFT: 30px">kein Alkohol</p> <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px; MARGIN-LEFT: 30px">keine Zigaretten</p> <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px; MARGIN-LEFT: 30px">&#160;</p> <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px"><u>Sozialanamnese:</u></p> <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px; MARGIN-LEFT: 30px">Beruf: Elektroingenieur</p> <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px; MARGIN-LEFT: 30px">Versorgung: Selbstversorger </p> <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px; MARGIN-LEFT: 60px">-> Nachmittags f&#252;hle sich der Patient schwach und br&#228;uchte teilweise Unterst&#252;tzung durch seine Frau. </p>]]></content>
+			</paragraph>
+		</section>
+		<section ID="M1_UBEF1" phlused="yes">
+			<caption>Untersuchungsbefund</caption>
+			<paragraph ID="UKER_FREE" lmDTTM="" phlitemid="UKER_FREE">
+				<caption/>
+				<content>
+					<local_markup>
+						<local_attr name="type" value="3"/>
+						<local_attr name="edit" value="1"/>
+						<local_attr name="loc" value=""/>
+						<local_attr name="lnk" value=""/>
+						<local_attr name="cmt" value="1"/>
+						<local_attr name="dict" value="0"/>
+						<local_attr name="dictn" value=""/>
+						<local_attr name="VT" value=""/>
+						<local_attr name="OID" value=""/>
+					</local_markup>
+				</content>
+			</paragraph>
+		</section>
+		<section ID="M1_UNT1" phlused="yes">
+			<caption>Untersuchungen</caption>
+			<paragraph ID="M1_UNT1_LAB_PA_BEFUND_377123503_377769139_377912017" lmDTTM="20220321 16:15:00" phlitemid="LAB_PA_BEFUND">
+				<caption/>
+				<content>
+					<local_markup>
+						<local_attr name="type" value="4"/>
+						<local_attr name="edit" value="1"/>
+						<local_attr name="loc" value=""/>
+						<local_attr name="lnk" value=""/>
+						<local_attr name="cmt" value="1"/>
+						<local_attr name="dict" value="0"/>
+						<local_attr name="OID" value="LAB_PA_BEFUND:377669503~LAB_PA_BEFUND:377769139~LAB_PA_BEFUND:377926017"/>
+						<local_attr name="dictn" value=""/>
+						<local_attr name="VT" value="R"/>
+					</local_markup><![CDATA[ <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px"><strong><u>Histologie Hauptbefund vom 23.03.2026 (E-Nr. 12128722):</u></strong>&#160;</p> <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px">Zahlreiche kleinere Stanzfragmente mit oberfl&#228;chlichem erfasstem Gangepithel des Pankreas bzw. der Gallenwege mit erhaltener Zellschichtung ohne sichere zytologische Atypien. Zus&#228;tzlich Blutkoagel und Schleimanteile. In den vorliegenden Schnittstufen bisher kein Anhalt f&#252;r invasive Anteile eines Pankreaskarzinoms. Zum m&#246;glichen Nachweis von Malignit&#228;t wird das Material in Stufenschnitten weiter aufgearbeitet sowie immunhistochemische F&#228;rbungen erg&#228;nzt und dar&#252;ber nachberichtet. &#220;ber die noch nicht vorliegenden Zytologie wird ebenfalls nachberichtet.</p> <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px">&#160;</p> <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px"><strong><u>Histologie Nachbefund 1 vom 22.03.2026 (E-Nr. 12212322):</u></strong>&#160;</p> <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px">Inzwischen liegen uns die angek&#252;ndigten immunhistochemischen F&#228;rbungen und Stufenschnitte vor. Man sieht jetzt in tieferen Schnittstufen &#252;berwiegend erfasste oberfl&#228;chliche Anteile von foveol&#228;rem Magenepithel. Man erkennt zus&#228;tzlich jetzt einzelne Gangstrukturen aus dem Pankreas mit m&#228;&#223;igen, kleinfokal auch hochgradigen dysplastischen Ver&#228;nderungen. Ein invasives Wachstum l&#228;sst sich hier jedoch nicht sichern. Immunhistochemisch physiologische Expression von p53, in den Gangstrukturen mit Dysplasien eindeutige fokale Positivit&#228;t f&#252;r S100p und IMP-3 bei erh&#246;hter Proliferation in der Ki67-F&#228;rbung. Zusammenfassend damit Gangepithelien mit Dysplasien, kein sicher invasives Karzinom. Der Befund k&#246;nnte auch z. B. zu einer IPMN passen. Eine weitere histologische Sicherung ist hier anzustreben. Im Rahmen der institutsinternen Qualit&#228;tssicherung wurde der Befund von einem weiteren Facharzt f&#252;r Pathologie mitbegutachtet (Prof.Dr. Mozart). Der Befund wurde ausf&#252;hrlich am 24.03.2026 mit Frau Dr. Liszt, Tel. 123456, besprochen.</p> <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px">&#160;</p> <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px"><strong><u>Histologie Nachbefund 2 vom 23.03.2026 (E-Nr. 11234722):</u></strong>&#160;</p> <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px">Zytologischer Befund: Negativ (ohne Tumorzellen). Zellreiches Zytospinpr&#228;parat mit Epithelzellen mit regelrechter Kernplasmarelation ohne sichere zytologische Atypien. Im Hintergrund Entz&#252;ndungszellen, kein sicherer Nachweis atypischer Zellen. Der Zytoblock zellreich mit in Gruppen liegenden Epithelien, zum Teil mit hyperchromatischen Zellkernen und zytologischen Atypien.<strong> Keine sichere Malignit&#228;t, aber der dringende Verdacht auf Dysplasien in der Biopsie.</strong></p>]]></content>
+			</paragraph>
+			<paragraph ID="UKER_FREE" lmDTTM="" phlitemid="UKER_FREE">
+				<caption/>
+				<content>
+					<local_markup>
+						<local_attr name="type" value="3"/>
+						<local_attr name="edit" value="1"/>
+						<local_attr name="loc" value=""/>
+						<local_attr name="lnk" value=""/>
+						<local_attr name="cmt" value="1"/>
+						<local_attr name="dict" value="0"/>
+						<local_attr name="OID" value=""/>
+						<local_attr name="dictn" value=""/>
+						<local_attr name="VT" value=""/>
+					</local_markup><![CDATA[ <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px"><font style="FONT-SIZE: 10pt" pt?>Der 100-j&#228;hrige Patient stellt sich mit einem&#160;reduziertem AZ und reduziertem EZ vor. Keine Dyspnoe, keine Zyanose, keine Exikkose, keine Zyanose, kein Ikterus, Kein H.a. fokal neurologische Defizite, wach und vierfach orientiert. <strong>Pulmo: </strong>beidseits gut bel&#252;ftet,&#160;vesikul&#228;res Atemger&#228;usch&#160;<b><font style="FONT-SIZE: 10pt" pt?>Cor</font></b>: rhythmisch, reine HT, keine Nebenger&#228;usche <b><font style="FONT-SIZE: 10pt" pt?>Abdomen</font></b>: Abwehrspannung im rechten und linken Oberbauch,&#160;kein Druckschmerz, in allen 4 Quadranten rege Darmger&#228;usche, kein Aszites <b><font style="FONT-SIZE: 10pt" pt?>Extremit&#228;ten</font></b>: schlank, keine &#214;deme, Pulse tastbar, keine Seitendifferenz <b><font style="FONT-SIZE: 10pt" pt?>Kopf, Hals:</font></b> kein Meningismus. Keine prominenten Jugularien, keine vergr&#246;&#223;erten LK tastbar, Mundschleimhaut feucht und rosig, Pupillenmotorik unauff&#228;llig</font></p>]]></content>
+			</paragraph>
+		</section>
+		<section ID="M1_MIBI1" phlused="yes">
+			<caption>Mikrobiologie</caption>
+			<paragraph ID="UKER_FREE" lmDTTM="" phlitemid="UKER_FREE">
+				<caption/>
+				<content>
+					<local_markup>
+						<local_attr name="type" value="3"/>
+						<local_attr name="edit" value="1"/>
+						<local_attr name="loc" value=""/>
+						<local_attr name="lnk" value=""/>
+						<local_attr name="cmt" value="1"/>
+						<local_attr name="dict" value="0"/>
+						<local_attr name="dictn" value=""/>
+						<local_attr name="VT" value=""/>
+						<local_attr name="OID" value=""/>
+					</local_markup>
+				</content>
+			</paragraph>
+		</section>
+		<section ID="M1_VERL1" phlused="yes">
+			<caption>Verlauf</caption>
+			<paragraph ID="UKER_FREE" lmDTTM="" phlitemid="UKER_FREE">
+				<caption/>
+				<content>
+					<local_markup>
+						<local_attr name="type" value="3"/>
+						<local_attr name="edit" value="1"/>
+						<local_attr name="loc" value=""/>
+						<local_attr name="lnk" value=""/>
+						<local_attr name="cmt" value="1"/>
+						<local_attr name="dict" value="0"/>
+						<local_attr name="OID" value=""/>
+						<local_attr name="dictn" value=""/>
+						<local_attr name="VT" value=""/>
+					</local_markup><![CDATA[ <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px">Die station&#228;re Aufnahme von Herrn Bach erfolgte f&#252;r eine geplante endosonographisch gesteuerte Pankreas-Punktion aufgrund sonographisch gestelltem V.a. Pankreas-Karzinom am 21.03.22. <font style="FONT-SIZE: 11pt" face="Calibri">Nach Ausschluss von Kontraindikationen und laborchemischer Kontrolle erfolgte die komplikationslose Pankreas-Punktion. Der Patient blieb zur &#220;berwachung &#252;ber Nacht. </font></p> <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px"><font style="FONT-SIZE: 11pt" face="Calibri">&#160;</font></p> <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px"><font style="FONT-SIZE: 11pt" face="Calibri">Da keine Komplikationen aufgetreten sind, wurde der Patient am 23.03.2026 in Ihre Weiterbehandlung entlassen.</font></p> <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px"><font face="">Histologisch fanden sich Dysplasien. Bei anhaltendem Verdacht auf ein Malignom wurde eine erg&#228;nzende CT-gesteuerte Biopsie empfohlen.</font></p> <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px"><font face="">Der Patient wurde hier&#252;ber durch Frau Dr. Hensel aus der chirurgischen Klinik informiert.</font></p> <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px"><font style="FONT-SIZE: 11pt" face="Calibri">&#160;</font></p> <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px"><font style="FONT-SIZE: 11pt" face="Calibri"><strong><u>Empfehlungen:</u></strong></font></p> <ul style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px"> <li><font style="FONT-SIZE: 11pt" face="Calibri">Fortf&#252;hren der h&#228;uslichen Medikation (unver&#228;ndert).</font></li> <li>Wiedervorstellung bei akuter AZ-Verschlechterung oder Infektzeichen &#252;ber unsere internistische Notaufnahme.</li> </ul>]]></content>
+			</paragraph>
+		</section>
+		<section ID="M1_MED4" phlused="yes">
+			<caption>Medikation</caption>
+			<paragraph ID="UKER_FREE" lmDTTM="" phlitemid="UKER_FREE">
+				<caption/>
+				<content>
+					<local_markup>
+						<local_attr name="type" value="3"/>
+						<local_attr name="edit" value="1"/>
+						<local_attr name="loc" value=""/>
+						<local_attr name="lnk" value=""/>
+						<local_attr name="cmt" value="1"/>
+						<local_attr name="dict" value="0"/>
+						<local_attr name="dictn" value=""/>
+						<local_attr name="VT" value=""/>
+						<local_attr name="OID" value=""/>
+					</local_markup>
+				</content>
+			</paragraph>
+		</section>
+		<section ID="EM_MedEntl" phlused="yes">
+			<caption>Medikation bei Entlassung</caption>
+		</section>
+		<section ID="M1_NP_GF1" phlused="yes">
+			<caption>Grußformel</caption>
+			<paragraph ID="Salutation" lmDTTM="" phlitemid="Salutation">
+				<caption/>
+				<content>
+					<local_markup>
+						<local_attr name="type" value="3"/>
+						<local_attr name="edit" value="1"/>
+						<local_attr name="loc" value=""/>
+						<local_attr name="lnk" value=""/>
+						<local_attr name="cmt" value="1"/>
+						<local_attr name="dict" value="0"/>
+						<local_attr name="dictn" value=""/>
+						<local_attr name="VT" value=""/>
+						<local_attr name="OID" value="97"/>
+					</local_markup><![CDATA[<p style="MARGIN-TOP: 0px; MARGIN-BOTTOM: 0px">Wir entlassen den Patienten am heutigen Tage und danken für die Weiterbetreuung des Patienten. </p><p style="MARGIN-TOP: 0px; MARGIN-BOTTOM: 0px"> </p><p style="MARGIN-TOP: 0px; MARGIN-BOTTOM: 0px">Mit freundlichen kollegialen Grüßen</p>]]></content>
+			</paragraph>
+		</section>
+		<section ID="M1_NP_SIG2" phlused="yes">
+			<caption>Unterschriften</caption>
+			<paragraph ID="UKER_FREE" lmDTTM="" phlitemid="UKER_FREE">
+				<caption/>
+				<content>
+					<local_markup>
+						<local_attr name="type" value="3"/>
+						<local_attr name="edit" value="1"/>
+						<local_attr name="loc" value=""/>
+						<local_attr name="lnk" value=""/>
+						<local_attr name="cmt" value="1"/>
+						<local_attr name="dict" value="0"/>
+						<local_attr name="OID" value=""/>
+						<local_attr name="dictn" value=""/>
+						<local_attr name="VT" value=""/>
+					</local_markup><![CDATA[ <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px">&#160;</p> <table style="WIDTH: 100%; BORDER-COLLAPSE: collapse"> <tbody> <tr> <td style="WIDTH: 35%; vertical-align: top" valign="top"><font style="FONT-SIZE: 9pt; RIGHT: auto; ZOOM: normal; LEFT: auto; TOP: auto; BOTTOM: auto">Prof. Dr. med. Beethoven</font> <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px"><font style="FONT-SIZE: 9pt; RIGHT: auto; ZOOM: normal; LEFT: auto; TOP: auto; BOTTOM: auto">Klinikdirektor</font></p> <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px"><font style="FONT-SIZE: 9pt; RIGHT: auto; ZOOM: normal; LEFT: auto; TOP: auto; BOTTOM: auto">Facharzt f&#252;r Innere Medizin,</font></p> <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px"><font style="FONT-SIZE: 9pt; RIGHT: auto; ZOOM: normal; LEFT: auto; TOP: auto; BOTTOM: auto">Gastroenterologie</font></p></td> <td style="WIDTH: 33%; vertical-align: top" valign="top"> <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px"><font style="FONT-SIZE: 9pt; RIGHT: auto; ZOOM: normal; LEFT: auto; TOP: auto; BOTTOM: auto">PD Dr. med. Verdi</font></p> <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px"><font style="FONT-SIZE: 9pt; RIGHT: auto; ZOOM: normal; LEFT: auto; TOP: auto; BOTTOM: auto">Leiter Schwerpunkt Pneumologie</font></p> <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px"><font style="FONT-SIZE: 9pt; RIGHT: auto; ZOOM: normal; LEFT: auto; TOP: auto; BOTTOM: auto">Facharzt f&#252;r Innere Medizin,</font></p> <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px"><font style="FONT-SIZE: 9pt; RIGHT: auto; ZOOM: normal; LEFT: auto; TOP: auto; BOTTOM: auto">Pneumologie, </font><font style="FONT-SIZE: 9pt">Schlafmedizin</font></p></td> <td valign="top"> <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px"><font style="FONT-SIZE: 9pt; RIGHT: auto; ZOOM: normal; LEFT: auto; TOP: auto; BOTTOM: auto">Dr. med. G. Donnizetti</font></p> <p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px"><font style="FONT-SIZE: 9pt; RIGHT: auto; ZOOM: normal; LEFT: auto; TOP: auto; BOTTOM: auto">Assistenzarzt </font></p></td> </tr> </tbody> </table>]]></content>
+			</paragraph>
+		</section>
+		<section ID="M1_N_LAB3" phlused="yes">
+			<caption>Laborwerte</caption>
+			<paragraph ID="UKER_FREE" lmDTTM="" phlitemid="UKER_FREE">
+				<caption/>
+				<content>
+					<local_markup>
+						<local_attr name="type" value="3"/>
+						<local_attr name="edit" value="1"/>
+						<local_attr name="loc" value=""/>
+						<local_attr name="lnk" value=""/>
+						<local_attr name="cmt" value="1"/>
+						<local_attr name="dict" value="0"/>
+						<local_attr name="dictn" value=""/>
+						<local_attr name="VT" value=""/>
+						<local_attr name="OID" value=""/>
+					</local_markup>
+				</content>
+			</paragraph>
+		</section>
+		<section ID="M1_N_EMGMT" phlused="yes">
+			<caption>Entlassmanagement</caption>
+			<paragraph ID="UKER_FREE" lmDTTM="" phlitemid="UKER_FREE">
+				<caption/>
+				<content>
+					<local_markup>
+						<local_attr name="type" value="3"/>
+						<local_attr name="edit" value="1"/>
+						<local_attr name="loc" value=""/>
+						<local_attr name="lnk" value=""/>
+						<local_attr name="cmt" value="1"/>
+						<local_attr name="dict" value="0"/>
+						<local_attr name="dictn" value=""/>
+						<local_attr name="VT" value=""/>
+						<local_attr name="OID" value=""/>
+					</local_markup>
+				</content>
+			</paragraph>
+		</section>
+		<section ID="M1_N_MEDPLAN" phlused="yes">
+			<caption>Medikationsplan</caption>
+			<paragraph ID="M1_N_MEDPLAN_MED_377513002" lmDTTM="20220321 10:55:00" phlitemid="MED">
+				<caption/>
+				<content>
+					<local_markup>
+						<local_attr name="type" value="4"/>
+						<local_attr name="edit" value="1"/>
+						<local_attr name="loc" value=""/>
+						<local_attr name="lnk" value=""/>
+						<local_attr name="cmt" value="1"/>
+						<local_attr name="dict" value="1"/>
+						<local_attr name="dictn" value=""/>
+						<local_attr name="VT" value="R"/>
+						<local_attr name="OID" value="MED:377513002"/>
+					</local_markup><![CDATA[<p style="MARGIN-TOP: 0px; MARGIN-BOTTOM: 0px"><strong><u>Medikationsplan bei Entlassung:</u></strong> </p><p style="MARGIN-TOP: 0px; MARGIN-BOTTOM: 0px"> </p><p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px&quot;"><table style="WIDTH: 100%; BORDER-COLLAPSE: collapse"><tbody><tr><td style="VERTICAL-ALIGN: top; WIDTH: 18%"><p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px&quot;" align="left"><font style="FONT-SIZE: 8pt;"><strong>Wirkstoff</strong></font></p></td><td colspan="2" style="VERTICAL-ALIGN: top; WIDTH: 25%"><p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px&quot;" align="left"><font style="FONT-SIZE: 8pt;"><strong>Präparat</strong></font></p></td><td style="VERTICAL-ALIGN: top; WIDTH: 8%"><p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px&quot;" align="left"><font style="FONT-SIZE: 8pt;"><strong>Form</strong></font></p></td><td style="VERTICAL-ALIGN: top; WIDTH: 17%"><p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px&quot;" align="left"><font style="FONT-SIZE: 8pt;"><strong>Dosierung</strong></font></p></td><td style="VERTICAL-ALIGN: top; WIDTH: 7%"><p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px&quot;" align="left"><font style="FONT-SIZE: 8pt;"><strong>Appl.</strong></font></p></td><td colspan="2" style="VERTICAL-ALIGN: top; WIDTH: 25%"><p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px&quot;" align="left"><font style="FONT-SIZE: 8pt;"><strong>Hinweise/Grund</strong></font></p></td></tr><tr><td style="VERTICAL-ALIGN: top;" colspan="8"><font style="FONT-SIZE: 11pt;">-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------</font></td></tr><tr><td style="VERTICAL-ALIGN: top; WIDTH: 18%"><p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px&quot;" align="left"><font style="FONT-SIZE: 8pt;">Metoprolol succinat</font></p></td><td colspan="2"><p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px&quot;" align="left"><font style="FONT-SIZE: 8pt;">MetoHexal Succ 47,5 mg</font></p></td><td style="VERTICAL-ALIGN: top; WIDTH: 8%"><p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px&quot;" align="left"><font style="FONT-SIZE: 8pt;">Retard-Tbl.</font></p></td><td style="VERTICAL-ALIGN: top; WIDTH: 17%"><p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px&quot;" align="left"><font style="FONT-SIZE: 8pt;">1/2-0-1/2-0</font></p></td><td style="VERTICAL-ALIGN: top; WIDTH: 7%"><p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px&quot;" align="left"><font style="FONT-SIZE: 8pt;">oral</font></p></td><td colspan="2"><p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px&quot;" align="left"><font style="FONT-SIZE: 8pt;">Einnahme mit den Mahlzeiten</font></p></td></tr><tr><td style="VERTICAL-ALIGN: top;" colspan="8"><p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px&quot;" align="left"><font style="FONT-SIZE: 11pt;">-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------</font></p></td></tr><tr><td style="VERTICAL-ALIGN: top; WIDTH: 18%"><p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px&quot;" align="left"><font style="FONT-SIZE: 8pt;">Lercanidipin hydrochlorid</font></p></td><td colspan="2"><p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px&quot;" align="left"><font style="FONT-SIZE: 8pt;">Lercanidipin Heumann 10 mg</font></p></td><td style="VERTICAL-ALIGN: top; WIDTH: 8%"><p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px&quot;" align="left"><font style="FONT-SIZE: 8pt;">Filmtbl.</font></p></td><td style="VERTICAL-ALIGN: top; WIDTH: 17%"><p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px&quot;" align="left"><font style="FONT-SIZE: 8pt;">1/2-0-0-0</font></p></td><td style="VERTICAL-ALIGN: top; WIDTH: 7%"><p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px&quot;" align="left"><font style="FONT-SIZE: 8pt;">oral</font></p></td><td colspan="2"><p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px&quot;" align="left"><font style="FONT-SIZE: 8pt;">Einnahme vor den Mahlzeiten</font></p></td></tr><tr><td style="VERTICAL-ALIGN: top;" colspan="8"><p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px&quot;" align="left"><font style="FONT-SIZE: 11pt;">-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------</font></p></td></tr><tr><td style="VERTICAL-ALIGN: top; WIDTH: 18%"><p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px&quot;" align="left"><font style="FONT-SIZE: 8pt;">Metamizol natrium hydrat</font></p></td><td colspan="2"><p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px&quot;" align="left"><font style="FONT-SIZE: 8pt;">Novamins.ratioph.Tr. 500 mg/ml</font></p></td><td style="VERTICAL-ALIGN: top; WIDTH: 8%"><p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px&quot;" align="left"><font style="FONT-SIZE: 8pt;">Trpf.</font></p></td><td style="VERTICAL-ALIGN: top; WIDTH: 17%"><p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px&quot;" align="left"><font style="FONT-SIZE: 8pt;">0°-0°-40°-40°</font></p></td><td style="VERTICAL-ALIGN: top; WIDTH: 7%"><p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px&quot;" align="left"><font style="FONT-SIZE: 8pt;">oral</font></p></td><td colspan="2"><p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px&quot;" align="left"><font style="FONT-SIZE: 8pt;"></font></p></td></tr><tr><td style="VERTICAL-ALIGN: top;" colspan="8"><p style="MARGIN-BOTTOM: 0px; MARGIN-TOP: 0px&quot;" align="left"><font style="FONT-SIZE: 11pt;">-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------</font></p></td></tr></tbody></table></p><p style="MARGIN-TOP: 0px; MARGIN-BOTTOM: 0px"> </p><p style="MARGIN-TOP: 0px; MARGIN-BOTTOM: 0px"> </p><p style="MARGIN-TOP: 0px; MARGIN-BOTTOM: 0px" align="justify"><em><font style="FONT-SIZE: 8pt;">Die im Medikationsplan genannten Medikamente bei der Entlassung können nach Maßgabe des weiterbehandelnden Arztes wirkstoffgleich (Aut-Idem-Substitution) ausgetauscht werden, wobei die Galenik der Arzneiform, z.B. bei Retardarzneiformen, zu berücksichtigen ist. Dies gilt nicht für Wirkstoffe der Substitutionsausschlussliste (beispielsweise ausgewählte Antiepileptika und Immunsuppressiva).</font></em></p>]]></content>
+			</paragraph>
+			<paragraph ID="UKER_FREE" lmDTTM="" phlitemid="UKER_FREE">
+				<caption/>
+				<content>
+					<local_markup>
+						<local_attr name="type" value="3"/>
+						<local_attr name="edit" value="1"/>
+						<local_attr name="loc" value=""/>
+						<local_attr name="lnk" value=""/>
+						<local_attr name="cmt" value="1"/>
+						<local_attr name="dict" value="0"/>
+						<local_attr name="dictn" value=""/>
+						<local_attr name="VT" value=""/>
+						<local_attr name="OID" value=""/>
+					</local_markup>
+				</content>
+			</paragraph>
+		</section>
+	</body>
+</levelone>
