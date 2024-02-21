@@ -18,4 +18,4 @@ Dabei werden die entsprechenden Mapping-Anweisungen im `json`-Format angegeben. 
 Unterverzeichnis zu finden.
 
 ### `cda-transform`
-Eine Demo/Machbarkeitsnachweis wie CDA Dokumente Level One in ein HTML oder Plain-Text gewandelt werden können. Kein eigener Code, sonder nur Nutzung einer java-Librryr
+Eine Demo/Machbarkeitsnachweis wie CDA Dokumente Level One in HTML oder Plain-Text gewandelt werden können. Kein eigener Code, sondern nur Nutzung einer java-Library.
