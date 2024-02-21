@@ -1,7 +1,6 @@
 import enum
 import json
 import pathlib
-from collections import defaultdict
 from types import SimpleNamespace
 from typing import Union, Iterator
 
@@ -11,11 +10,54 @@ class ArchitectureEnum(enum.Enum):
     SOURCE = "source"
 
 
+class MappingTypeEnum(enum.Enum):
+    SINGLELAYER = "singlelayer"
+    MULTILAYER = "multilayer"
+
+
+class AnnotationMapping(dict):
+    def __init__(
+            self,
+            target_layer: str,
+            target_feature: str,
+            mapping_type: MappingTypeEnum = MappingTypeEnum.SINGLELAYER,
+            *args, **kwargs
+    ):
+        super().__init__(*args, **kwargs)
+        self.mapping_type = mapping_type
+        self.target_layer = target_layer
+        self.target_feature = target_feature
+
+    @property
+    def mapping_type(self):
+        return self._mapping_type
+
+    @mapping_type.setter
+    def mapping_type(self, val: MappingTypeEnum):
+        self._mapping_type = val
+
+    @property
+    def target_layer(self):
+        return self._target_layer
+
+    @target_layer.setter
+    def target_layer(self, val: str):
+        self._target_layer = val
+
+    @property
+    def target_feature(self):
+        return self._target_feature
+
+    @target_feature.setter
+    def target_feature(self, val: str):
+        self._target_feature = val
+
+
 class MappingConfig:
     macros: dict
     identifier: SimpleNamespace
     entries: SimpleNamespace
-    annotation_mapping: dict
+    annotation_mapping: dict[AnnotationMapping]
 
     def _layer_iterator(self) -> Iterator[tuple]:
         for layer_suffix, layer_dict in self.entries.__dict__.items():
@@ -31,11 +73,15 @@ class MappingConfig:
             yield source_layer, target_layer, layer_dict
 
     def _build_annotation_mapping(self):
-        self.annotation_mapping = defaultdict(dict)
+        self.annotation_mapping = {}
         for source_layer, target_layer, layer_dict in self._layer_iterator():
             if source_layer is not None:
-                self.annotation_mapping[source_layer] = {tf: (sf if not sf.startswith("$") else sf[1:])
-                                                         for tf, sf in layer_dict.get("features", {}).items()}
+                self.annotation_mapping[source_layer] = AnnotationMapping(
+                    target_layer,
+                    None,
+                    MappingTypeEnum.MULTILAYER,
+                    {tf: (sf if not sf.startswith("$") else sf[1:]) for tf, sf in layer_dict.get("features", {}).items()}
+                )
             else:
                 for feat, feat_val in layer_dict.get("features", {}).items():
                     if isinstance(feat_val, dict):
@@ -43,6 +89,12 @@ class MappingConfig:
                             if isinstance(val, dict):
                                 source_layer = self.get_macro_value(val.get("layer", None), ArchitectureEnum.SOURCE)
                                 check_fs = MappingConfig.resolve_simple_bool(val.get("feature", lambda x: True))
+                                if source_layer not in self.annotation_mapping:
+                                    self.annotation_mapping[source_layer] = AnnotationMapping(
+                                        target_layer=target_layer,
+                                        target_feature=feat,
+                                        mapping_type=MappingTypeEnum.SINGLELAYER
+                                    )
                                 self.annotation_mapping[source_layer][key] = check_fs
 
     def get_macro_value(self, macro: Union[str, dict], architecture: ArchitectureEnum = ArchitectureEnum.TARGET):
