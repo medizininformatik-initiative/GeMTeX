@@ -11,7 +11,7 @@ from typing import Optional, Tuple, Union
 from cassis import *
 from cassis.typesystem import TYPE_NAME_STRING, FeatureStructure
 from tqdm.contrib.logging import logging_redirect_tqdm
-from mapping_reader import MappingConfig, ArchitectureEnum
+from mapping_reader import MappingConfig, ArchitectureEnum, MappingTypeEnum
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -90,33 +90,45 @@ def mark_new(
     if missing_type_warn is None:
         missing_type_warn = []
 
-    for source_layer, target_layer, layer_dict in mapping._layer_iterator():
+    for source_layer, mapping_dict in mapping.annotation_mapping.items():
         duplicate_check = defaultdict(dict)
         try:
-            if source_layer is not None:
-                for layer_instance in old_cas.select(source_layer):
-                    check_for_more_specific(
-                        duplicate_dict=duplicate_check,
-                        layer_instance=layer_instance,
-                        feat={target_feature: layer_instance.get(source_feature) if not source_feature.startswith("$") else source_feature[1:]  #ToDo: put this into mapping as well?
-                              for target_feature, source_feature in layer_dict.get("features", {}).items()}
-                    )
-            else:
-                for feat, feat_val in layer_dict.get("features", {}).items():
-                    if isinstance(feat_val, dict):
-                        for key, val in feat_val.items():
-                            if isinstance(val, dict):
-                                source_layer = mapping.get_macro_value(val.get("layer", None), ArchitectureEnum.SOURCE)
-                                check_fs = MappingConfig.resolve_simple_bool(val.get("feature", lambda x: True))
-                                for layer_instance in old_cas.select(source_layer):
-                                    if check_fs(layer_instance):
-                                        check_for_more_specific(
-                                            duplicate_dict=duplicate_check,
-                                            layer_instance=layer_instance,
-                                            feat={feat: key}
-                                        )
-                    else:
-                        pass
+            for layer_instance in old_cas.select(source_layer):
+                feat = mapping_dict
+                if mapping_dict.mapping_type == MappingTypeEnum.SINGLELAYER:
+                    for k, v in mapping_dict.items():
+                        if v(layer_instance):
+                            feat = {mapping_dict.target_feature: k}
+                else:
+                    feat = {tf: layer_instance.get(sf) for tf, sf in mapping_dict.items() if sf is not None}
+                check_for_more_specific(duplicate_check, layer_instance, feat)
+    # for source_layer, target_layer, layer_dict in mapping._layer_iterator():
+    #     duplicate_check = defaultdict(dict)
+    #     try:
+    #         if source_layer is not None:
+    #             for layer_instance in old_cas.select(source_layer):
+    #                 check_for_more_specific(
+    #                     duplicate_dict=duplicate_check,
+    #                     layer_instance=layer_instance,
+    #                     feat={target_feature: layer_instance.get(source_feature) if not source_feature.startswith("$") else source_feature[1:]  #ToDo: put this into mapping as well?
+    #                           for target_feature, source_feature in layer_dict.get("features", {}).items()}
+    #                 )
+    #         else:
+    #             for feat, feat_val in layer_dict.get("features", {}).items():
+    #                 if isinstance(feat_val, dict):
+    #                     for key, val in feat_val.items():
+    #                         if isinstance(val, dict):
+    #                             source_layer = mapping.get_macro_value(val.get("layer", None), ArchitectureEnum.SOURCE)
+    #                             check_fs = MappingConfig.resolve_simple_bool(val.get("feature", lambda x: True))
+    #                             for layer_instance in old_cas.select(source_layer):
+    #                                 if check_fs(layer_instance):
+    #                                     check_for_more_specific(
+    #                                         duplicate_dict=duplicate_check,
+    #                                         layer_instance=layer_instance,
+    #                                         feat={feat: key}
+    #                                     )
+    #                 else:
+    #                     pass
 
         except cassis.typesystem.TypeNotFoundError as e:
             if source_layer not in missing_type_warn:
@@ -125,7 +137,7 @@ def mark_new(
             continue
         for fs_dict in duplicate_check.values():
             _layers, _feats = fs_dict["layer"], fs_dict["features"]
-            ts_init = ts.get_type(target_layer)
+            ts_init = ts.get_type(mapping_dict.target_layer)
             ts_instance = ts_init(begin=_layers.get("begin"), end=_layers.get("end"), **_feats)
             new_cas.add(ts_instance)
 
