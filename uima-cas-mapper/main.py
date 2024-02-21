@@ -2,9 +2,7 @@ import argparse
 import enum
 import logging
 import pathlib
-import json
 from collections import defaultdict
-from types import SimpleNamespace
 
 import cassis.typesystem
 from tqdm import tqdm
@@ -13,6 +11,7 @@ from typing import Optional, Tuple, Union
 from cassis import *
 from cassis.typesystem import TYPE_NAME_STRING, FeatureStructure
 from tqdm.contrib.logging import logging_redirect_tqdm
+from mapping_reader import MappingConfig
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -63,78 +62,6 @@ class TransformerParser(argparse.ArgumentParser):
         return ns
 
 
-class MappingConfig:
-    macros: dict
-    identifier: SimpleNamespace
-    entries: SimpleNamespace
-
-    @staticmethod
-    def resolve_simple_bool(check: str):
-        if isinstance(check, str) and check.startswith("@"):
-            _expr = check[1:].split("==")
-            if len(_expr) == 2:
-                _target = _expr[0]
-                _check = _expr[1]
-            else:
-                return lambda x: x.get(_expr[0]) is not None
-            return lambda x: (x.get(_target) if x.get(_target) is not None else "none").lower() in _check.split("|")
-        else:
-            return check
-
-    def get_macro_value(self, macro: Union[str, dict], architecture: ArchitectureEnum = ArchitectureEnum.TARGET):
-        value = macro
-        if isinstance(macro, str):
-            if macro.startswith("#"):
-                _list = value.split(".")
-                value = (f"{self.macros.get(_list[0][1:])}"
-                         f"{'.' if len(_list) > 1 else ''}"
-                         f"{'.'.join(_list[1:])}")
-            elif macro.startswith("."):
-                return f"{self.identifier.source_default if architecture == ArchitectureEnum.SOURCE else self.identifier.target_default}{macro}"
-        return value
-
-    def build(self, config_file: pathlib.Path):
-        config = None
-        if isinstance(config_file, pathlib.Path):
-            with config_file.open('rb') as fi:
-                config = json.load(fi)
-
-        if config is None or config_file is None:
-            return
-
-        self.macros = config.get("IDENTIFIER_MACROS", {})
-
-        _identifier_dict = {}
-        for key, value in config.get("MAPPING", {}).get("IDENTIFIER", {}).items():
-            _identifier_dict[key] = self.get_macro_value(value)
-        self.identifier = SimpleNamespace(**_identifier_dict)
-
-        _entries_dict = {}
-        for entry, entry_values in config.get("MAPPING", {}).get("ENTRIES", {}).items():
-            _entries_dict[entry] = {}
-            for layer_feature, _dict in entry_values.items():
-                _entries_dict[entry][layer_feature] = {}
-                for key, value in _dict.items():
-                    _entries_dict[entry][layer_feature][self.get_macro_value(key)] = self.get_macro_value(value)
-        self.entries = SimpleNamespace(**_entries_dict)
-
-        return self
-
-
-def _layer_iterator(mapping: MappingConfig):
-    for layer_suffix, layer_dict in mapping.entries.__dict__.items():
-        if layer_dict.get("layer", None) is None:
-            source_layer = None
-            target_layer = f"{mapping.identifier.target_default}.{layer_suffix}"
-        elif not layer_dict.get("layer"):
-            source_layer = f"{mapping.identifier.source_default}.{layer_suffix}"
-            target_layer = f"{mapping.identifier.target_default}.{layer_suffix}"
-        else:
-            source_layer = list(layer_dict.get("layer").values())[0]
-            target_layer = list(layer_dict.get("layer").keys())[0]
-        yield source_layer, target_layer, layer_dict
-
-
 def check_for_more_specific(duplicate_dict: dict, layer_instance: FeatureStructure, feat):
     _kind = layer_instance.get('kind') if layer_instance.get('kind') is not None else layer_instance.type.name
     _id = f"{layer_instance.get('begin')}_{layer_instance.get('end')}_{_kind}"
@@ -168,7 +95,7 @@ def mark_new(
     if missing_type_warn is None:
         missing_type_warn = []
 
-    for source_layer, target_layer, layer_dict in _layer_iterator(mapping):
+    for source_layer, target_layer, layer_dict in mapping._layer_iterator():
         duplicate_check = defaultdict(dict)
         try:
             if source_layer is not None:
@@ -257,7 +184,7 @@ def init_source_cas(
 
 def init_target_ts(mapping: MappingConfig) -> TypeSystem:
     typesystem = TypeSystem()
-    for _, target_layer, layer_dict in _layer_iterator(mapping):
+    for _, target_layer, layer_dict in mapping._layer_iterator():
         ts_type = typesystem.create_type(target_layer)
         ts_type_features = list(layer_dict.get("features", {}).keys())
         if len(ts_type_features) == 0:
@@ -275,7 +202,7 @@ if __name__ == '__main__':
     t_parser = TransformerParser()
     args = t_parser.parse_args()
 
-    mapping_config = MappingConfig().build(args.mapping_file)
+    mapping_config = MappingConfig.build(args.mapping_file)
     target_ts = init_target_ts(mapping_config)
     missing_types = None
     with logging_redirect_tqdm():
