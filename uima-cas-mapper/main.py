@@ -11,15 +11,10 @@ from typing import Optional, Tuple, Union
 from cassis import *
 from cassis.typesystem import TYPE_NAME_STRING, FeatureStructure
 from tqdm.contrib.logging import logging_redirect_tqdm
-from mapping_reader import MappingConfig
+from mapping_reader import MappingConfig, ArchitectureEnum
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
-
-
-class ArchitectureEnum(enum.Enum):
-    TARGET = "target"
-    SOURCE = "source"
 
 
 class TransformerParser(argparse.ArgumentParser):
