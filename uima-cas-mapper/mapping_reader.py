@@ -2,7 +2,7 @@ import enum
 import json
 import pathlib
 from types import SimpleNamespace
-from typing import Union, Iterator
+from typing import Union, Iterator, Dict
 
 
 class ArchitectureEnum(enum.Enum):
@@ -57,7 +57,7 @@ class MappingConfig:
     macros: dict
     identifier: SimpleNamespace
     entries: SimpleNamespace
-    annotation_mapping: dict[AnnotationMapping]
+    annotation_mapping: Dict[str, AnnotationMapping]
 
     def _layer_iterator(self) -> Iterator[tuple]:
         for layer_suffix, layer_dict in self.entries.__dict__.items():
