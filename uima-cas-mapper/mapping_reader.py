@@ -80,7 +80,7 @@ class MappingConfig:
                     target_layer,
                     None,
                     MappingTypeEnum.MULTILAYER,
-                    {tf: (sf if not sf.startswith("$") else sf[1:]) for tf, sf in layer_dict.get("features", {}).items()}
+                    {tf: ((lambda x, y: sf[1:]), sf[1:]) if sf.startswith("$") else ((lambda x, y: x.get(y)), sf) for tf, sf in layer_dict.get("features", {}).items()}
                 )
             else:
                 for feat, feat_val in layer_dict.get("features", {}).items():
