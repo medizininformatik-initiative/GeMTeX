@@ -1,3 +1,12 @@
+"""
+File: main.py
+Author: Franz Matthies
+Email: franz.matthies@imise.uni-leipzig.de
+Date: February 24, 2024
+
+Description: Contains a class that interprets a mapping file and provides the mapping methods.
+"""
+
 import enum
 import json
 import pathlib
@@ -67,6 +76,9 @@ class MappingConfig:
             elif not layer_dict.get("layer"):
                 source_layer = f"{self.identifier.source_default}.{layer_suffix}"
                 target_layer = f"{self.identifier.target_default}.{layer_suffix}"
+            elif isinstance(layer_dict.get("layer"), str):
+                source_layer = None
+                target_layer = self.get_macro_value(layer_dict.get("layer"))
             else:
                 source_layer = list(layer_dict.get("layer").values())[0]
                 target_layer = list(layer_dict.get("layer").keys())[0]

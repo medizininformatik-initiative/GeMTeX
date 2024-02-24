@@ -3,6 +3,7 @@
 Dieses Repositorium umfasst  Arbeiten (Code u.a.) zum Projekt [GeMTeX](https://www.smith.care/de/gemtex_mii/ueber-gemtex/), 
 die nicht gut im Projekt [Confluence](https://confluence.imi.med.fau.de) abgelegt werden können.
 
+
 ### `inception-projects`
 Beinhaltet exportierte Basis-Projekte (also im Grunde Konfigurationen der Layer etc.) für
 [INCEpTION](https://inception-project.github.io/), die von den einzelnen Standorten in ihre jeweilige
@@ -20,3 +21,6 @@ Unterverzeichnis zu finden.
 
 ### `cda-transform`
 Eine Demo/Machbarkeitsnachweis wie CDA Dokumente Level One über XSLT Sytlesheets in HTML oder Plain-Text gewandelt werden können.
+
+### Hinweis
+Änderungen am ``main`` branch dieses Repositoriums sind nur durch einen entsprechenden ``pull request`` durchführbar.

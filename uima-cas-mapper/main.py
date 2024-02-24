@@ -1,4 +1,15 @@
+"""
+File: main.py
+Author: Franz Matthies
+Email: franz.matthies@imise.uni-leipzig.de
+Date: February 24, 2024
+
+Description: Starts a cli program, which takes UIMA CAS XMI
+    and replaces Layers with different ones depending on a mapping file.
+"""
+
 import argparse
+import enum
 import logging
 import pathlib
 from collections import defaultdict
@@ -15,6 +26,10 @@ from mapping_reader import MappingConfig, MappingTypeEnum
 LOG = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
+
+class ExportEnum(enum.IntEnum):
+    JSON = 1
+    XMI = 2
 
 class TransformerParser(argparse.ArgumentParser):
     def __init__(self):
@@ -40,7 +55,12 @@ class TransformerParser(argparse.ArgumentParser):
         self.add_argument('-t',
                           '--ts_file_ending',
                           default='xml',
-                          help="File ending for the type system'. (default: 'xml')")
+                          help="File ending for the type system. (default: 'xml')")
+
+        self.add_argument('-x',
+                          '--export_format',
+                          default='json',
+                          help="Which format the 'target' cas should have (json/xmi). (default: 'json')")
 
     def parse_args(self, **kwargs):
         ns = super().parse_args(**kwargs)
@@ -53,6 +73,15 @@ class TransformerParser(argparse.ArgumentParser):
 
         if not ns.output_path.exists():
             ns.output_path.mkdir(parents=True)
+
+        _exp_dict = {'json': ExportEnum.JSON, 'jason': ExportEnum.JSON, 'jsn': ExportEnum.JSON,
+                     'xmi': ExportEnum.XMI, 'xml': ExportEnum.XMI}
+        if ns.export_format not in _exp_dict:
+            logging.warning(f"Unknown export format: {ns.export_format}. Using default format 'json'.")
+            ns.export_format = ExportEnum.JSON
+        else:
+            ns.export_format = _exp_dict[ns.export_format]
+
         return ns
 
 
@@ -189,4 +218,7 @@ if __name__ == '__main__':
         for _cas, _ts, fi_name in init_source_cas(args.xmi_path, args.typesystem, args.file_ending):
             target_cas = Cas(target_ts)
             export_cas, missing_types = mark_new(target_cas, _cas, target_ts, mapping_config, missing_types)
-            export_cas.to_json(pathlib.Path(args.output_path, f"{fi_name}.json"), pretty_print=True)
+            if args.export_format == ExportEnum.JSON:
+                export_cas.to_json(pathlib.Path(args.output_path, f"{fi_name}.json"), pretty_print=True)
+            elif args.export_format == ExportEnum.XMI:
+                export_cas.to_xmi(pathlib.Path(args.output_path, f"{fi_name}.xmi"), pretty_print=True)
