@@ -25,3 +25,39 @@ options:
 
 ## Mapping File
 
+Eine Mapping Datei ist in JSON geschrieben und gibt an, wie die verschiedenen Layer einer `source` CAS in eine `target` CAS umgewandelt werden sollen.
+Dabei gibt es folgende festgelegte Struktur:
+```
+{
+  "IDENTIFIER_MACROS": {
+      [...] (a)
+  },
+  "MAPPING": {
+    "IDENTIFIER": { (b)
+      "target_default": [...],
+      "source_default": [...]
+    },
+    "ENTRIES": {
+        [...] (c)
+    }
+  }
+}
+```
+<ol type="a">
+  <li>
+    Hier können Platzhalter definiert werden die im weiteren Verlauf der Mapping Datei mit '#' referenziert werden können.
+    Ein '.' darf dabei nicht verwendet werden, da dieser im Weiteren als Trennstelle interpretiert wird. 
+  </li>
+  <li>
+    Hier sind z.Z. nur zwei Einträge vorgesehen;
+    die Standard-Namensräume, die verwendet werden wenn im Folgenden Werte mit lediglich einem '.' beginnen.
+  </li>
+  <li>
+    Dieser Abschnitt enthält den Großteil der Definitionen und ist `target`-orientiert.
+    D.h. die Eltern-Layer-Einträge sind die der Ziel-CAS und darunter wird definiert, welche Quell-Layer darauf abgebildet werden soll.
+  </li>
+</ol>
+
+#### IDENTIFIER MACROS
+#### MAPPING: IDENTIFIER
+#### MAPPING: ENTRIES
