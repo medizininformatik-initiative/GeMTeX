@@ -1,0 +1,458 @@
+{
+  "%TYPES": {
+    "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Sentence": {
+      "%NAME": "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Sentence",
+      "%SUPER_TYPE": "uima.tcas.Annotation"
+    },
+    "webanno.custom.Age": {
+      "%NAME": "webanno.custom.Age",
+      "%SUPER_TYPE": "uima.tcas.Annotation"
+    },
+    "webanno.custom.Contact": {
+      "%NAME": "webanno.custom.Contact",
+      "%SUPER_TYPE": "uima.tcas.Annotation",
+      "kind": {
+        "%NAME": "kind",
+        "%RANGE": "uima.cas.String"
+      }
+    },
+    "webanno.custom.Date": {
+      "%NAME": "webanno.custom.Date",
+      "%SUPER_TYPE": "uima.tcas.Annotation",
+      "kind": {
+        "%NAME": "kind",
+        "%RANGE": "uima.cas.String"
+      },
+      "day": {
+        "%NAME": "day",
+        "%RANGE": "uima.cas.String"
+      },
+      "month": {
+        "%NAME": "month",
+        "%RANGE": "uima.cas.String"
+      },
+      "year": {
+        "%NAME": "year",
+        "%RANGE": "uima.cas.String"
+      }
+    },
+    "webanno.custom.ID": {
+      "%NAME": "webanno.custom.ID",
+      "%SUPER_TYPE": "uima.tcas.Annotation",
+      "kind": {
+        "%NAME": "kind",
+        "%RANGE": "uima.cas.String"
+      }
+    },
+    "webanno.custom.Location": {
+      "%NAME": "webanno.custom.Location",
+      "%SUPER_TYPE": "uima.tcas.Annotation",
+      "kind": {
+        "%NAME": "kind",
+        "%RANGE": "uima.cas.String"
+      }
+    },
+    "webanno.custom.Name": {
+      "%NAME": "webanno.custom.Name",
+      "%SUPER_TYPE": "uima.tcas.Annotation",
+      "kind": {
+        "%NAME": "kind",
+        "%RANGE": "uima.cas.String"
+      }
+    },
+    "webanno.custom.PHIOther": {
+      "%NAME": "webanno.custom.PHIOther",
+      "%SUPER_TYPE": "uima.tcas.Annotation"
+    },
+    "webanno.custom.Profession": {
+      "%NAME": "webanno.custom.Profession",
+      "%SUPER_TYPE": "uima.tcas.Annotation"
+    }
+  },
+  "%FEATURE_STRUCTURES": [
+    {
+      "%ID": 1,
+      "%TYPE": "uima.cas.Sofa",
+      "sofaNum": 1,
+      "sofaID": "_InitialView",
+      "mimeType": "text",
+      "sofaString": "Klinische Abteilung für Onkologie\n\nNeudorf, am 16.12.2029  \n\nSehr geehrte Frau Kollegin, sehr geehrter Herr Kollege, \n\nwir berichten über den Patienten FRITZLE, Fridolin, Fallnummer: 100101911, *6/7/1980, der sich \nvom 1/12/2029 bis 16/12/1929 in unserer stat. Behandlung befand. \n\n\nHAUPT-UND NEBENDIAGNOSEN\nHauptdiagnose(n), ICD-10\nRektumkarzinom, (04/29), lokal weit fortgeschritten, C20\nTumoranämie, (05/29), D63.0\nSt.p. Port-a-cath Implantation  \nBek. NINS 1°\nSchwerwiegende Sprachstörung und chron. organ. Psychosyndrom bei St.p. SHT 1995\nUnterschenkelamputation li und ausgedehnte Verbrennungsnarben re nach Polytrauma 1995\n\n\nKRANKHEITSVERLAUF\nOperation(en) und Histologie(n):\ndiagnostische PE 04/2029)\nHisto: Adeno-CA\nStad.: p N+MX G2\nendständige Sigmoideostomie (23.4.2029)\n\nMEDIZINISCHE TUMORTHERAPIE:\npall. PCT m. Folfox ab (06/29); MR nach 4 Zyklen\n\nAUFNAHMEGRUND\nFortsetzung der palliativen Polychemotherapie mit FOLFOX, 5. Zyklus, bei minimalem Ansprechen nach \nvier Zyklen.\n\nZUSATAND BEI AUFNAHME\n45-j. Patient in gutem AZ, schlankem EZ, kardiopulmonal unauffälliger Auskultations- und \nPerkussionsbefund\nAbdomen: Bauchdecken weich, kein Druckschmerz, DG normal\n \nDURCHGEFÜHRTE UNTERSUCHUNGEN\n- Labor bei Aufnahme 3.8.2033\nLeuko 6.21, Ery 4.87, Hb 14.1, Ht 33.5, MCV 72.1m MCH 29.9, MCHC 32.3, Thrombo 234500, MPV 8.2, Na 143, \nK 3.4, Ca ges. 2.23, Krea 1.4, Hrst 27, Hrnsr 12.9, GFR 77.42, Bili 0.21, GGT 265, AST 56, ALT 49, CK \n123, CK-MB 65, LDH 225, PZ 101, PZ INr 0.99, aPTT 55.4, CRP 0.9; \nTumormarker: CEA: 74.5, CA 19-9: im Normbereich\n\n- CT-Abdomen/Becken  \nGrößenabnahme der ausgedehnten Expansion des Rectums von vormals 14 cm auf 7.5 cm. Unverändert die \nZeichen der ausgeprägten Organüberschreitung mit breitflächiger Infiltration der Harnblasenhinterwand, \ndes Beckenbodens über die Fossa ischiorectalis und Fossa ischioanalis rechts bis nach cutan gluteal \nreichend.\n\nZUSAMMENFASSUNG VON THERAPIE UND VERLAUF\nAufgrund minimalem Response nach vier Zyklen palliativer Polychemotherapie mit FOLFOX wurde die Therapie zum 5. Zyklus fortgesetzt. Es wurde am Tag 1 Oxaliplatin 65mg/m², Calciumfolinat 400mg/m², 5FU als Bolus 350mg/m² und am Tag 1 bis 2 5FU als 46-h-Gabe 2.400mg/m² verabreicht, die Therapie trotz antiemetischer Begleitmaßnahmen nur bedingt gut vertragen.\n\nEmpfohlene Therapie\nLasix 40mg 1/2-0-0\nPantoloc 40mg 1-0-0\nFerretab 1-0-0\nMolaxole 2 x 1 Beutel\nCiproxin 500mg 1-0-1\nMexalen 500mg 1-0-1\nLovenox 40mg 1 x 1 s.c.\nNovalgin Tropfen 3 x 20gtt\nFortecortin 4mg 1-0-1  \nBei Übelkeit: Metoclopramid bis 3 x 20gtt tgl.\n\nProcedere\n13.1.2030, 08.15 Uhr Stationäre Wiederaufnahme zur Fortsetzung der Polychemotherapie mit FOLFOX, 6. Zyklus. \n \n\nMit freundlichen kollegialen Grüßen\n\nPD Dr. Thorben Thorwald \nOÄ Dr. Katharina Fabricius-Schätzle  "
+    },
+    {
+      "%ID": 2,
+      "%TYPE": "webanno.custom.Age",
+      "begin": 1011,
+      "end": 1013,
+      "@sofa": 1
+    },
+    {
+      "%ID": 3,
+      "%TYPE": "webanno.custom.Date",
+      "kind": "DATE",
+      "day": "16",
+      "month": "12",
+      "year": "2029",
+      "begin": 47,
+      "end": 57,
+      "@sofa": 1
+    },
+    {
+      "%ID": 4,
+      "%TYPE": "webanno.custom.Date",
+      "kind": "DATE",
+      "day": "6",
+      "month": "7",
+      "year": "1980",
+      "begin": 195,
+      "end": 203,
+      "@sofa": 1
+    },
+    {
+      "%ID": 5,
+      "%TYPE": "webanno.custom.Date",
+      "kind": "DATE",
+      "day": "1",
+      "month": "12",
+      "year": "2029",
+      "begin": 219,
+      "end": 228,
+      "@sofa": 1
+    },
+    {
+      "%ID": 6,
+      "%TYPE": "webanno.custom.Date",
+      "kind": "DATE",
+      "day": "16",
+      "month": "12",
+      "year": "1929",
+      "begin": 233,
+      "end": 243,
+      "@sofa": 1
+    },
+    {
+      "%ID": 7,
+      "%TYPE": "webanno.custom.Date",
+      "kind": "DATE",
+      "month": "4",
+      "year": "29",
+      "begin": 350,
+      "end": 355,
+      "@sofa": 1
+    },
+    {
+      "%ID": 8,
+      "%TYPE": "webanno.custom.Date",
+      "kind": "DATE",
+      "month": "5",
+      "year": "29",
+      "begin": 404,
+      "end": 409,
+      "@sofa": 1
+    },
+    {
+      "%ID": 9,
+      "%TYPE": "webanno.custom.Date",
+      "kind": "DATE",
+      "year": "1995",
+      "begin": 539,
+      "end": 543,
+      "@sofa": 1
+    },
+    {
+      "%ID": 10,
+      "%TYPE": "webanno.custom.Date",
+      "kind": "DATE",
+      "year": "1995",
+      "begin": 625,
+      "end": 629,
+      "@sofa": 1
+    },
+    {
+      "%ID": 11,
+      "%TYPE": "webanno.custom.Date",
+      "kind": "DATE",
+      "month": "4",
+      "year": "2029",
+      "begin": 700,
+      "end": 707,
+      "@sofa": 1
+    },
+    {
+      "%ID": 12,
+      "%TYPE": "webanno.custom.Date",
+      "kind": "DATE",
+      "day": "23",
+      "month": "4",
+      "year": "2029",
+      "begin": 771,
+      "end": 780,
+      "@sofa": 1
+    },
+    {
+      "%ID": 13,
+      "%TYPE": "webanno.custom.Date",
+      "kind": "DATE",
+      "month": "6",
+      "year": "29",
+      "begin": 835,
+      "end": 840,
+      "@sofa": 1
+    },
+    {
+      "%ID": 14,
+      "%TYPE": "webanno.custom.Date",
+      "kind": "DATE",
+      "day": "3",
+      "month": "8",
+      "year": "2033",
+      "begin": 1228,
+      "end": 1236,
+      "@sofa": 1
+    },
+    {
+      "%ID": 15,
+      "%TYPE": "webanno.custom.Date",
+      "kind": "DATE",
+      "day": "13",
+      "month": "1",
+      "year": "2030",
+      "begin": 2568,
+      "end": 2577,
+      "@sofa": 1
+    },
+    {
+      "%ID": 16,
+      "%TYPE": "webanno.custom.ID",
+      "kind": "PATIENTID",
+      "begin": 183,
+      "end": 192,
+      "@sofa": 1
+    },
+    {
+      "%ID": 17,
+      "%TYPE": "webanno.custom.Location",
+      "kind": "CITY",
+      "begin": 35,
+      "end": 42,
+      "@sofa": 1
+    },
+    {
+      "%ID": 18,
+      "%TYPE": "webanno.custom.Name",
+      "kind": "PATIENT",
+      "begin": 152,
+      "end": 169,
+      "@sofa": 1
+    },
+    {
+      "%ID": 19,
+      "%TYPE": "webanno.custom.Name",
+      "kind": "DOCTOR",
+      "begin": 2724,
+      "end": 2740,
+      "@sofa": 1
+    },
+    {
+      "%ID": 20,
+      "%TYPE": "webanno.custom.Name",
+      "kind": "DOCTOR",
+      "begin": 2749,
+      "end": 2777,
+      "@sofa": 1
+    },
+    {
+      "%ID": 21,
+      "%TYPE": "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Sentence",
+      "begin": 0,
+      "end": 33,
+      "@sofa": 1
+    },
+    {
+      "%ID": 22,
+      "%TYPE": "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Sentence",
+      "begin": 35,
+      "end": 57,
+      "@sofa": 1
+    },
+    {
+      "%ID": 23,
+      "%TYPE": "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Sentence",
+      "begin": 61,
+      "end": 116,
+      "@sofa": 1
+    },
+    {
+      "%ID": 24,
+      "%TYPE": "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Sentence",
+      "begin": 119,
+      "end": 279,
+      "@sofa": 1
+    },
+    {
+      "%ID": 25,
+      "%TYPE": "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Sentence",
+      "begin": 283,
+      "end": 455,
+      "@sofa": 1
+    },
+    {
+      "%ID": 26,
+      "%TYPE": "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Sentence",
+      "begin": 456,
+      "end": 510,
+      "@sofa": 1
+    },
+    {
+      "%ID": 27,
+      "%TYPE": "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Sentence",
+      "begin": 511,
+      "end": 629,
+      "@sofa": 1
+    },
+    {
+      "%ID": 28,
+      "%TYPE": "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Sentence",
+      "begin": 632,
+      "end": 781,
+      "@sofa": 1
+    },
+    {
+      "%ID": 29,
+      "%TYPE": "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Sentence",
+      "begin": 783,
+      "end": 816,
+      "@sofa": 1
+    },
+    {
+      "%ID": 30,
+      "%TYPE": "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Sentence",
+      "begin": 817,
+      "end": 859,
+      "@sofa": 1
+    },
+    {
+      "%ID": 31,
+      "%TYPE": "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Sentence",
+      "begin": 861,
+      "end": 987,
+      "@sofa": 1
+    },
+    {
+      "%ID": 32,
+      "%TYPE": "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Sentence",
+      "begin": 989,
+      "end": 1175,
+      "@sofa": 1
+    },
+    {
+      "%ID": 33,
+      "%TYPE": "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Sentence",
+      "begin": 1178,
+      "end": 1558,
+      "@sofa": 1
+    },
+    {
+      "%ID": 34,
+      "%TYPE": "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Sentence",
+      "begin": 1560,
+      "end": 1664,
+      "@sofa": 1
+    },
+    {
+      "%ID": 35,
+      "%TYPE": "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Sentence",
+      "begin": 1665,
+      "end": 1896,
+      "@sofa": 1
+    },
+    {
+      "%ID": 36,
+      "%TYPE": "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Sentence",
+      "begin": 1898,
+      "end": 2070,
+      "@sofa": 1
+    },
+    {
+      "%ID": 37,
+      "%TYPE": "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Sentence",
+      "begin": 2071,
+      "end": 2296,
+      "@sofa": 1
+    },
+    {
+      "%ID": 38,
+      "%TYPE": "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Sentence",
+      "begin": 2298,
+      "end": 2556,
+      "@sofa": 1
+    },
+    {
+      "%ID": 39,
+      "%TYPE": "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Sentence",
+      "begin": 2558,
+      "end": 2675,
+      "@sofa": 1
+    },
+    {
+      "%ID": 40,
+      "%TYPE": "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Sentence",
+      "begin": 2680,
+      "end": 2715,
+      "@sofa": 1
+    },
+    {
+      "%ID": 41,
+      "%TYPE": "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Sentence",
+      "begin": 2717,
+      "end": 2777,
+      "@sofa": 1
+    }
+  ],
+  "%VIEWS": {
+    "_InitialView": {
+      "%SOFA": 1,
+      "%MEMBERS": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41
+      ]
+    }
+  }
+}

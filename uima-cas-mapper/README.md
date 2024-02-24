@@ -65,7 +65,7 @@ Dabei gibt es folgende festgelegte Struktur:
 
 
 #### MAPPING: ENTRIES
-Die erste Ebene enthält die Typen die im neuen CAS erstellt werden sollen.
+Die erste Ebene enthält die Typen die in der neuen CAS erstellt werden sollen.
 ```
 "Age": {
   "layer": {}, (i)
@@ -74,13 +74,85 @@ Die erste Ebene enthält die Typen die im neuen CAS erstellt werden sollen.
 ```
 
 ##### (i) layer
-Wenn der ``layer`` Eintrag leer gelassen wird, werden die unter *(b)* definierten Standard-Layer-Definitionen und der Name des `keys` verwendet.
+Wenn der Wert des ``layer`` Eintrags leer gelassen wird (leeres `Object`), werden die unter *(b)* definierten Standard-Layer-Definitionen und der Name des `keys` verwendet.
 Wenn also:
-``"MAPPING" -> "IDENTIFIER" -> "target_default": "de.beispiel"``
-und ``"MAPPING" -> "IDENTIFIER" -> "source_default": "com.example"``,
-würde in der Quell CAS jeder Type `com.example.Age` in der Ziel CAS in ein `de.beispiel.Age` umgewandelt.  
+``"MAPPING" -> "IDENTIFIER" -> "target_default": "de.beispiel"`` und
+``"MAPPING" -> "IDENTIFIER" -> "source_default": "com.example"``,
+würde in der Quell-CAS jedes Layer `com.example.Age` in der Ziel CAS in ein `de.beispiel.Age` umgewandelt.  
 Alternativ kann ein explizites Mapping angegeben werden:
 ``"layer": { "de.beispiel.Alter": "com.example.Age" }``; der `key` ist dann nur für die interne Referenz und wird nicht beachtet.
-Wichtig ist außerdem, dass der Ziel-Typ auf der linken Seite steht.
+Wichtig ist außerdem, dass der Ziel-Layer auf der linken Seite steht.  
+Falls der `layer` Eintrag hingegen ganz weggelassen würde oder einfach nur ein ``String`` ist, wird **nicht** nach einem entsprechenden Typ in der Quell-CAS gesucht, sondern das Mapping wird im `feature`-Eintrag genauer spezifiziert.
 
 ##### (ii) features
+Definiert die `features`, die in der Ziel-CAS für das entsprechende Layer erstellt werden und was die Bedingungen in der Quell-CAS sind um entsprechendes `feature` mit einem/welchem Wert zu versehen.
+Die einfachste Möglichkeit besteht aus zwei Varianten (wenn der Wert des `layer`-Eintrags entweder leer ist, oder ein explizites Mapping definiert wurde):
+```
+"Age": {
+  "layer": {},
+  "features": {
+    "kind": "$DATE"
+  }
+},
+```
+Wenn also wieder gegeben:
+``"MAPPING" -> "IDENTIFIER" -> "target_default": "de.beispiel"`` und
+``"MAPPING" -> "IDENTIFIER" -> "source_default": "com.example"``,
+würde durch die oben angegebene Definition in der Ziel-CAS ein `de.beispiel.Age` Layer erstellt für jedes `com.Example.Age` Layer in der Quell-CAS.
+Des Weiteren würde jedem dieser `de.beispiel.Age` Layer ein `kind` Feature hinzugefügt, dass einen konstanten Wert besitzt (durch das '$' angegeben); in diesem Fall `DATE`.
+```
+"Contact": {
+  "layer": {
+    "de.beispiel.Kontakt": "com.example.Contact"
+  },
+  "features": {
+    "kind": "kind"
+  }
+},
+```
+Zuallererst würden in diesem Beispiel etwaige Werte für `target_default` und `source_default` nicht beachtet und
+für jedes Layer in der Quell-CAS mit dem Wert `com.example.Contact` würde ein `de.beispiel.Kontakt` Layer in der Ziel-CAS erstellt.
+Außerdem würde jedes der neu erstellten Layer ein `kind` Feature bekommen, dass den Wert des `kind` Features aus dem Quell-CAS bekäme.  
+``features`` kann ganz weggelassen oder der Wert (das ``Object``) leergelassen werden. *[Hier bestünde die Möglichkeit einer Implementation für 'übernehme alle features wenn `Object` ist leer', o.ä.]*
+```
+"PHI": {
+  "features": {
+    "kind": {
+      "AGE": { (a)
+        "layer": ".Age"
+      },
+      "CONTACT_FAX": { (b)
+        "layer": ".Contact",
+        "feature": "@kind==fax"
+      },
+      "CONTACT_OTHER": { (c)
+        "layer": "org.example.Contact",
+        "feature": "@kind==other|none"
+      }
+    }
+  }
+}
+```
+Dieses Beispiel beschreibt den Fall, dass die zugehörige `layer`-Definition ganz weggelassen würde (also nicht einfach nur leer) oder ein ``String`` ist.
+Das erlaubt ein Mapping bei dem nach bestimmten Layern in der Quell-CAS gesucht wird um sie dem definierten Layer in der Ziel-CAS als Feature zuzuordnen.
+Das Ziel-Layer würde im Beispiel den Wert aus `"MAPPING" -> "IDENTIFIER" -> "target_default"` annehmen (bis jetzt immer `de.beispiel`) zuzüglich des Layer-Namen aus der Definition (`PHI` hier):
+``de.beispiel.PHI``. Ist ein `layer` Wert als ``String`` angegeben, wird dieser konkrete `String` als Ziel-Layer-Name erstellt.  
+In obigen Beispiel wird ein Layer in der Ziel-CAS mit einem `kind` Feature angelegt, wenn:  
+<ol type="a">
+  <li>
+    ein Layer in der Quell-CAS mit dem Wert 'com.example.Age' gefunden wird.
+    Zuerst wird der Ausdruck '.Age' übersetzt in 'com.example.Age' (also wenn wir für `source_default` den Wert aus den bisherigen Beispielen annehmen).
+    Der '.' am Anfang eines Wertes ist eine Möglichkeit der Shorthand-Notation.
+    Der Wert des `kind` Features wäre dann 'AGE'.
+  </li>
+  <li>
+    ein Layer in der Quell-CAS mit dem Wert 'com.example.Contact' gefunden wird,
+    das zusäzlich ein 'kind' Feature besitzt mit dem Wert 'fax'. Das '@'-Zeichen startet eine simple Bool'sche Abfrage.
+    Der Wert des `kind` Features der Ziel-CAS wäre dann 'CONTACT_FAX'.
+  </li>
+  <li>
+    ein Layer in der Quell-CAS mit dem Wert 'org.example.Contact' gefunden wird (startet nicht mit einem Punkt, weshalb der String ohne zusätzliche Auflösung genommen wird).
+    Wieder wird eine Bool'sche Abfrage gestartet: der 'kind' Wert ist entweder 'other' oder 'none'.
+    Der Wert des `kind` Features wäre in diesem Fall 'CONTACT_OTHER'.
+  </li>
+</ol>
