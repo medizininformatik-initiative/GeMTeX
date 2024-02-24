@@ -1,6 +1,7 @@
 # GeMTeX
-Dieses Repositorium umfasst zusätzliche Arbeiten (vorwiegend Code?), die nicht vernünftig auf
-[Confluence](https://confluence.imi.med.fau.de) abgelegt werden können.
+
+Dieses Repositorium umfasst  Arbeiten (Code u.a.) zum Projekt [GeMTeX](https://www.smith.care/de/gemtex_mii/ueber-gemtex/), 
+die nicht gut im Projekt [Confluence](https://confluence.imi.med.fau.de) abgelegt werden können.
 
 ### `inception-projects`
 Beinhaltet exportierte Basis-Projekte (also im Grunde Konfigurationen der Layer etc.) für
@@ -18,4 +19,4 @@ Dabei werden die entsprechenden Mapping-Anweisungen im `json`-Format angegeben. 
 Unterverzeichnis zu finden.
 
 ### `cda-transform`
-Eine Demo/Machbarkeitsnachweis wie CDA Dokumente Level One in HTML oder Plain-Text gewandelt werden können. Kein eigener Code, sondern nur Nutzung einer java-Library.
+Eine Demo/Machbarkeitsnachweis wie CDA Dokumente Level One über XSLT Sytlesheets in HTML oder Plain-Text gewandelt werden können.
