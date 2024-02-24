@@ -1,3 +1,13 @@
+"""
+File: main.py
+Author: Franz Matthies
+Email: franz.matthies@imise.uni-leipzig.de
+Date: February 24, 2024
+
+Description: Starts a cli program, which takes UIMA CAS XMI
+    and replaces Layers with different ones depending on a mapping file.
+"""
+
 import argparse
 import enum
 import logging

@@ -1,3 +1,12 @@
+"""
+File: main.py
+Author: Franz Matthies
+Email: franz.matthies@imise.uni-leipzig.de
+Date: February 24, 2024
+
+Description: Contains a class that interprets a mapping file and provides the mapping methods.
+"""
+
 import enum
 import json
 import pathlib

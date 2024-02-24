@@ -49,7 +49,7 @@ Dabei gibt es folgende festgelegte Struktur:
     Ein '.' darf dabei nicht verwendet werden, da dieser im Weiteren als Trennstelle interpretiert wird. 
   </li>
   <li>
-    Hier sind z.Z. nur zwei Einträge vorgesehen;
+    Hier sind z.Z. nur zwei Einträge vorgesehen:
     die Standard-Namensräume, die verwendet werden wenn im Folgenden Werte mit lediglich einem '.' beginnen.
   </li>
   <li>
@@ -59,5 +59,28 @@ Dabei gibt es folgende festgelegte Struktur:
 </ol>
 
 #### IDENTIFIER MACROS
+
+
 #### MAPPING: IDENTIFIER
+
+
 #### MAPPING: ENTRIES
+Die erste Ebene enthält die Typen die im neuen CAS erstellt werden sollen.
+```
+"Age": {
+  "layer": {}, (i)
+  "features": { [...] } (ii)
+}
+```
+
+##### (i) layer
+Wenn der ``layer`` Eintrag leer gelassen wird, werden die unter *(b)* definierten Standard-Layer-Definitionen und der Name des `keys` verwendet.
+Wenn also:
+``"MAPPING" -> "IDENTIFIER" -> "target_default": "de.beispiel"``
+und ``"MAPPING" -> "IDENTIFIER" -> "source_default": "com.example"``,
+würde in der Quell CAS jeder Type `com.example.Age` in der Ziel CAS in ein `de.beispiel.Age` umgewandelt.  
+Alternativ kann ein explizites Mapping angegeben werden:
+``"layer": { "de.beispiel.Alter": "com.example.Age" }``; der `key` ist dann nur für die interne Referenz und wird nicht beachtet.
+Wichtig ist außerdem, dass der Ziel-Typ auf der linken Seite steht.
+
+##### (ii) features
