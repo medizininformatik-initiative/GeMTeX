@@ -29,7 +29,7 @@ Eine Mapping Datei ist in JSON geschrieben und gibt an, wie die verschiedenen La
 Dabei gibt es folgende festgelegte Struktur:
 ```
 {
-  "IDENTIFIER_MACROS": {
+  "IDENTIFIER_CONSTANTS": {
       [...] (a)
   },
   "MAPPING": {
@@ -58,11 +58,31 @@ Dabei gibt es folgende festgelegte Struktur:
   </li>
 </ol>
 
-#### IDENTIFIER MACROS
-
+#### IDENTIFIER CONSTANTS
+Hier können mit einfachen `key`-`value` Paaren Konstanten für bestimmte Namensräume vergeben werden.
+Im weiteren Verlauf der Konfigurationsdatei können diese dann mittels `#` referenziert werden.
+```
+{
+  "IDENTIFIER_CONSTANTS": {
+      "beispiel_constant": "ein.langer.Namensraum.der.nicht.ständig.ausgeschrieben.werden.soll"
+  },
+  "MAPPING": {
+    "IDENTIFIER": {
+      "target_default": "de.beispiel"
+      "source_default": "#beispiel_constant"
+    },
+```
+Wichtig ist dabei, darauf zu achten, dann der Referenz-Name (also hier 'beispiel_constant') keinen `.` enthält,
+da bei der Auflösung Punkte als Trennzeichen interpretiert werden:
+`#beispiel.constant` würde nur `#beispiel` versuchen in den `IDENTIFIER_CONSTANTS` zu finden.
 
 #### MAPPING: IDENTIFIER
-
+Hier sind derzeit nur die beiden Einträge für ``target_default`` und `source_default` vorgesehen.
+Wie im obigen Beispiel ersichtlich, können Referenzen oder ausgeschriebene Werte verwendet werden.
+Dabei bezeichnet ``target_default`` den Standard-Namensraum der Typen im Ziel-CAS und
+`source_default` den Standard-Namensraum der Typen im Quell-CAS.
+Diese Standardwerte die Kurz-Notation im weiteren Verlauf der Konfigurationsdatei und
+werden verwendet wenn Typen mit einem ``.`` beginnen. (siehe Abschnitt `MAPPING: ENTRIES`)
 
 #### MAPPING: ENTRIES
 Die erste Ebene enthält die Typen die in der neuen CAS erstellt werden sollen.

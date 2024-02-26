@@ -63,7 +63,7 @@ class AnnotationMapping(dict):
 
 
 class MappingConfig:
-    macros: dict
+    constants: dict
     identifier: SimpleNamespace
     entries: SimpleNamespace
     annotation_mapping: Dict[str, AnnotationMapping]
@@ -78,7 +78,7 @@ class MappingConfig:
                 target_layer = f"{self.identifier.target_default}.{layer_suffix}"
             elif isinstance(layer_dict.get("layer"), str):
                 source_layer = None
-                target_layer = self.get_macro_value(layer_dict.get("layer"))
+                target_layer = self.get_expression_value(layer_dict.get("layer"))
             else:
                 source_layer = list(layer_dict.get("layer").values())[0]
                 target_layer = list(layer_dict.get("layer").keys())[0]
@@ -99,7 +99,7 @@ class MappingConfig:
                     if isinstance(feat_val, dict):
                         for key, val in feat_val.items():
                             if isinstance(val, dict):
-                                source_layer = self.get_macro_value(val.get("layer", None), ArchitectureEnum.SOURCE)
+                                source_layer = self.get_expression_value(val.get("layer", None), ArchitectureEnum.SOURCE)
                                 check_fs = MappingConfig.resolve_simple_bool(val.get("feature", lambda x: True))
                                 if source_layer not in self.annotation_mapping:
                                     self.annotation_mapping[source_layer] = AnnotationMapping(
@@ -109,16 +109,16 @@ class MappingConfig:
                                     )
                                 self.annotation_mapping[source_layer][key] = check_fs
 
-    def get_macro_value(self, macro: Union[str, dict], architecture: ArchitectureEnum = ArchitectureEnum.TARGET):
-        value = macro
-        if isinstance(macro, str):
-            if macro.startswith("#"):
+    def get_expression_value(self, expression: Union[str, dict], architecture: ArchitectureEnum = ArchitectureEnum.TARGET):
+        value = expression
+        if isinstance(expression, str):
+            if expression.startswith("#"):
                 _list = value.split(".")
-                value = (f"{self.macros.get(_list[0][1:])}"
+                value = (f"{self.constants.get(_list[0][1:])}"
                          f"{'.' if len(_list) > 1 else ''}"
                          f"{'.'.join(_list[1:])}")
-            elif macro.startswith("."):
-                return f"{self.identifier.source_default if architecture == ArchitectureEnum.SOURCE else self.identifier.target_default}{macro}"
+            elif expression.startswith("."):
+                return f"{self.identifier.source_default if architecture == ArchitectureEnum.SOURCE else self.identifier.target_default}{expression}"
         return value
 
     @staticmethod
@@ -145,11 +145,11 @@ class MappingConfig:
         if config is None or config_file is None:
             return
 
-        mapping_config.macros = config.get("IDENTIFIER_MACROS", {})
+        mapping_config.constants = config.get("IDENTIFIER_CONSTANTS", {})
 
         _identifier_dict = {}
         for key, value in config.get("MAPPING", {}).get("IDENTIFIER", {}).items():
-            _identifier_dict[key] = mapping_config.get_macro_value(value)
+            _identifier_dict[key] = mapping_config.get_expression_value(value)
         mapping_config.identifier = SimpleNamespace(**_identifier_dict)
 
         _entries_dict = {}
@@ -158,7 +158,7 @@ class MappingConfig:
             for layer_feature, _dict in entry_values.items():
                 _entries_dict[entry][layer_feature] = {}
                 for key, value in _dict.items():
-                    _entries_dict[entry][layer_feature][mapping_config.get_macro_value(key)] = mapping_config.get_macro_value(value)
+                    _entries_dict[entry][layer_feature][mapping_config.get_expression_value(key)] = mapping_config.get_expression_value(value)
         mapping_config.entries = SimpleNamespace(**_entries_dict)
 
         mapping_config._build_annotation_mapping()
