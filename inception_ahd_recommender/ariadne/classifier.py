@@ -21,8 +21,8 @@ from typing import List, Optional, Any
 import joblib
 from cassis import Cas
 
-from inception_ahd_recommender import ariadne
-from inception_ahd_recommender.ariadne.protocol import TrainingDocument
+import ariadne
+from ariadne.protocol import TrainingDocument
 
 logger = logging.getLogger(__file__)
 

@@ -23,8 +23,8 @@ from typing import Dict
 from filelock import Timeout, FileLock
 from flask import Flask, request, jsonify
 
-from inception_ahd_recommender.ariadne.classifier import Classifier
-from inception_ahd_recommender.ariadne.protocol import parse_prediction_request, parse_training_request
+from ariadne.classifier import Classifier
+from ariadne.protocol import parse_prediction_request, parse_training_request
 
 logger = logging.getLogger(__name__)
 

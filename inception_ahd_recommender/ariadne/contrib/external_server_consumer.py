@@ -2,7 +2,7 @@ import logging
 import pathlib
 from collections import namedtuple
 
-from inception_ahd_recommender.ariadne.contrib.uima_cas_mapper.mapping_reader import MappingConfig
+from ariadne.contrib.uima_cas_mapper.mapping_reader import MappingConfig
 
 response_consumer_return_value = namedtuple("response_consumer_return_value",
                                             ['offsets', 'labels', 'count', 'score'])

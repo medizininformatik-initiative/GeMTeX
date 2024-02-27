@@ -1,8 +1,8 @@
 import logging
 import os
 
-from inception_ahd_recommender.ariadne.contrib.external_uima_classifier import ExternalUIMAClassifier
-from inception_ahd_recommender.ariadne.server import Server
+from ariadne.contrib.external_uima_classifier import ExternalUIMAClassifier
+from ariadne.server import Server
 
 _config = {
   "address": os.getenv("EXTERNAL_SERVER_ADDRESS", "http://localhost:8080"),
