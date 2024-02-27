@@ -7,6 +7,7 @@ Dieses Repositorium ist eine abgespeckte Variante des
 Für GeMTeX-Zwecke wurden alle überflüssigen Dateien/Abhängigkeiten entfernt,
 um das resultierende Docker Image nicht unnötig aufzublähen.  
 
+### Konfiguration
 ```
 [...]
 environment:
