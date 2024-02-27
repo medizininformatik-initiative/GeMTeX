@@ -1,15 +1,15 @@
 import logging
 import os
 
-from ariadne.contrib.external_uima_classifier import ExternalUIMAClassifier
-from ariadne.server import Server
+from inception_ahd_recommender.ariadne.contrib.external_uima_classifier import ExternalUIMAClassifier
+from inception_ahd_recommender.ariadne.server import Server
 
 _config = {
   "address": os.getenv("EXTERNAL_SERVER_ADDRESS", "http://localhost:8080"),
   "security_token": os.getenv("EXTERNAL_SERVER_TOKEN", ""),
   "endpoint": os.getenv("PIPELINE_ENDPOINT",
                         "/health-discovery/rest/v1/textanalysis/projects/GeMTeX/pipelines/deid/analyseText"),
-  "response_consumer": os.getenv("CONSUMER", "ariadne.contrib.external_uima_classifier.DeidConsumer")
+  "response_consumer": os.getenv("CONSUMER", "inception_ahd_recommender.ariadne.contrib.external_uima_classifier.DeidConsumer")
 }
 
 _server_handle = os.getenv("SERVER_HANDLE", "deid_recommender")
