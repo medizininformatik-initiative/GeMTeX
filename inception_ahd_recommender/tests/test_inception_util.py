@@ -13,7 +13,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from ariadne.contrib.inception_util import *
+from inception_ahd_recommender.ariadne.contrib.inception_util import *
 
 from cassis import Cas, TypeSystem
 
