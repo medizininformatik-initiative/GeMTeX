@@ -20,8 +20,8 @@ from cassis.typesystem import TYPE_NAME_STRING, TYPE_NAME_BOOLEAN
 
 from sklearn.datasets import fetch_20newsgroups
 
-from ariadne.contrib.inception_util import SENTENCE_TYPE, IS_PREDICTION
-from ariadne.protocol import TrainingDocument
+from inception_ahd_recommender.ariadne.contrib.inception_util import SENTENCE_TYPE, IS_PREDICTION
+from inception_ahd_recommender.ariadne.protocol import TrainingDocument
 
 PREDICTED_TYPE = "ariadne.testtype"
 PREDICTED_FEATURE = "value"
