@@ -20,7 +20,7 @@ from typing import List
 import wget
 from cassis import TypeSystem, Cas
 
-from ariadne.constants import SENTENCE_TYPE
+from inception_ahd_recommender.ariadne.constants import SENTENCE_TYPE
 
 
 def download_file(url: str, target_path: Path):
