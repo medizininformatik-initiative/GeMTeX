@@ -1,0 +1,26 @@
+services:
+  ahd-deid-recommender:
+    build:
+      context: .
+    image: ahd-deid-recommender
+    restart: unless-stopped
+    environment:
+      - EXTERNAL_SERVER_ADDRESS=http://172.23.0.2:8080
+      - EXTERNAL_SERVER_TOKEN=401e49481ee7db5d87c64ab4ae1354b2ab5a57b59beb59015caca37668870a7f
+      - PIPELINE_ENDPOINT=/health-discovery/rest/v1/textanalysis/projects/RemoteRecommender/pipelines/deid/analyseText
+      - CONSUMER=inception_ahd_recommender.ariadne.contrib.external_server_consumer.MappingConsumer::/mapping_files/deid_mapping_singlelayer.json
+      - SERVER_HANDLE=deid_recommender
+      - RECOMMENDER_WORKERS=4
+      - RECOMMENDER_ADDRESS=:5000
+    ports:
+      - 5000:5000
+    networks:
+      - recommender-network
+    volumes:
+      - type: bind
+        source: ../mapping_files
+        target: /mapping_files
+networks:
+  recommender-network:
+    external: true
+    name: recommender-network
