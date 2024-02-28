@@ -26,7 +26,7 @@ Analysen der
 [Averbis Health Discovery](https://averbis.com/health-discovery/) in eine Layer-Modellierung in
 [INCEpTION](https://inception-project.github.io/)).
 Dabei werden die entsprechenden Mapping-Anweisungen im `json`-Format angegeben. Eine genauere Beschreibung ist
-[Unterverzeichnis](https://github.com/medizininformatik-initiative/GeMTeX/blob/main/uima-cas-mapper/README.md) zu finden.
+[Unterverzeichnis](https://github.com/medizininformatik-initiative/GeMTeX/blob/main/uima_cas_mapper/README.md) zu finden.
 
 
 ### Hinweis
