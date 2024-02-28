@@ -1,0 +1,6 @@
+{
+  "address": "http://localhost:8081",
+  "security_token": "a72c80319b27199d81c939c210a646ca8d1aa76840a0cda62a6a91dc192ab7dd",
+  "endpoint": "/health-discovery/rest/v1/textanalysis/projects/GeMTeX/pipelines/deid/analyseText",
+  "response_consumer": "inception_ahd_recommender.ariadne.contrib.external_server_consumer.MappingConsumer::../../tests/resources/deid_mapping_singlelayer.json"
+}
