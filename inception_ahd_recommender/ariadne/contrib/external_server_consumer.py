@@ -2,7 +2,11 @@ import logging
 import pathlib
 from collections import namedtuple
 
+<<<<<<< HEAD
 from ariadne.contrib.uima_cas_mapper.mapping_reader import MappingConfig
+=======
+from inception_ahd_recommender.ariadne.contrib.uima_cas_mapper.mapping_reader import MappingConfig
+>>>>>>> 008b9d2... init external ahd recommender for inception
 
 response_consumer_return_value = namedtuple("response_consumer_return_value",
                                             ['offsets', 'labels', 'count', 'score'])
