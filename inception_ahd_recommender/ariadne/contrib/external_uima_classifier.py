@@ -9,10 +9,17 @@ from typing import Any, Optional, List, Union
 import requests
 from cassis import Cas
 
+<<<<<<< HEAD
 from ariadne.classifier import Classifier
 from ariadne.contrib.external_server_consumer import ResponseConsumer
 from ariadne.contrib.inception_util import create_span_prediction
 from ariadne.protocol import TrainingDocument
+=======
+from inception_ahd_recommender.ariadne.classifier import Classifier
+from inception_ahd_recommender.ariadne.contrib.external_server_consumer import ResponseConsumer
+from inception_ahd_recommender.ariadne.contrib.inception_util import create_span_prediction
+from inception_ahd_recommender.ariadne.protocol import TrainingDocument
+>>>>>>> 008b9d2... init external ahd recommender for inception
 
 logging.basicConfig(level=logging.INFO)
 config_object = namedtuple('server_config',

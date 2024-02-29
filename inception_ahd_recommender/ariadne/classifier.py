@@ -21,8 +21,13 @@ from typing import List, Optional, Any
 import joblib
 from cassis import Cas
 
+<<<<<<< HEAD
 import ariadne
 from ariadne.protocol import TrainingDocument
+=======
+from inception_ahd_recommender import ariadne
+from inception_ahd_recommender.ariadne.protocol import TrainingDocument
+>>>>>>> 008b9d2... init external ahd recommender for inception
 
 logger = logging.getLogger(__file__)
 
