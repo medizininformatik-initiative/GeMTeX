@@ -18,7 +18,9 @@ Das ganze lässt sich aber auch mit dem normalen `docker` Client bzw. über `doc
 Wenn die Services neu gestartet werden, ist es vorzuziehen, wenn die `Averbis HD` als erstes gestartet wird,
 da der `Recommender` testet ob eine Verbindung zur angegebenen `<EXTERNAL_SERVER_ADRESS>` besteht.  
 
-Des Weiteren ist unter dem entsprechenden Projekt in der `AHD` ein entsprechend gestartete Pipeline notwendig (siehe `PIPELINE_ENDPOINT` weiter unten).
+Des Weiteren ist unter dem entsprechenden Projekt in der `AHD` ein entsprechend gestartete Pipeline notwendig (siehe `PIPELINE_ENDPOINT` weiter unten).  
+
+Wenn `docker compose` verwendet werden soll, muss die `docker-compose.yml` noch geändert werden (siehe die folgenden Anweisungen), da u.a. ``EXTERNAL_SERVER_TOKEN`` gesetzt werden muss.
 
 ## Konfiguration
 Der `Recommender` benötigt ein paar Einstellungen, die über `environment variables` gesetzt werden;
@@ -30,7 +32,7 @@ Im Weiteren wird auf den folgenden Ausschnitt einer `docker compose` Datei Bezug
       - EXTERNAL_SERVER_ADDRESS=http://<ADRESSE_DER_AVERBIS_HD_IM_DOCKER_NETZWERK>:8080
       - EXTERNAL_SERVER_TOKEN=<API_TOKEN_DER_AVERBIS_HD>
       - PIPELINE_ENDPOINT=/health-discovery/rest/v1/textanalysis/projects/<PROEJKT_NAME_IN_AVERBIS_HD>/pipelines/<PIPELINE_NAME>/analyseText
-      - CONSUMER=ariadne.contrib.external_server_consumer.<CONSUMER_CLASS>::<MAPPING_FILE>
+      - CONSUMER=ariadne.contrib.external_server_consumer.<CONSUMER_CLASS>[::<MAPPING_FILE>]
       - SERVER_HANDLE=<NAME_OF_RECOMMENDER>
       - RECOMMENDER_WORKERS=4
       - RECOMMENDER_ADDRESS=:5000
@@ -87,10 +89,37 @@ und mit `ADDRESS` unter welcher Adresse der Recommender von [INCEpTION](https://
 
 ### Andere Einstellungen in der docker-compose.yml
 ##### ports
+```
+    ports:
+      - 5000:5000
+```
 Hier muss nur sichergestellt werden, dass der PORT mit dem der `<RECOMMENDER_ADDRESS>` übereinstimmt.
 ##### networks
+```
+    networks:
+      - recommender-network
+[...]
+networks:
+  recommender-network:
+    external: true
+    name: recommender-network
+```
 Wie auch immer das `docker` Netzwerk dann jeweils erstellt/behandelt wird; wichtig ist nur, dass alle drei Services im selben Netzwerk sind.
 In diesem Beispiel wurde das `recommender-network` Netzwerk mittels des `docker` Clients erstellt und zudem in den entsprechenden `docker compose` Dateien der `AHD` und `INCEpTION` auch als `external: true` hinzugefügt.
 Die entsprechenden IP-Adressen (für `<EXTERNAL_SERVER_ADDRESS>` und zur Referenz des `Recommenders` in `INCEpTION`) können mit `docker inspect recommender-network` abgelesen werden, wenn alle Services gestartet sind.
 (Oder man weist den Services statische IPs zu, was im Zweifel in der `docker` Dokumentation nachgelesen werden kann.)
 ##### volumes
+```
+    volumes:
+      - type: bind
+        source: ../uima_cas_mapper/mapping-files
+        target: /mapping_files
+```
+Wenn für `<CONSUMER_CLASS>` der ``MappingConsumer`` verwendet wird, braucht es eine Mapping Datei die mit `<MAPPING_FILE>` angegeben wird.
+Dabei müssen dann die entsprechenden Dateien dem ``docker`` Container zur Verfügung gestellt werden (`source`) und `<MAPPING_FILE>` dann relativ zu `target` spezifiziert werden.
+Anhand des Beispiels und einer Mapping Datei `../uima_cas_mapper/mapping-files/deid_mapping_singlelayer.json` wäre ``<MAPPING_FILE>`` dann als `/mapping-files/deid_mapping_singlelayer.json` anzugeben.  
+Der Recommender `docker` Container (wenn das `RECOMMENDER_WORKDIR` in der `docker` Datei nicht geändert wird) beinhaltet aber auch zwei vorgefertigte Mapping Dateien unter `/inception_ahd_recommender/prefab-mapping-files`:
+* `deid_mapping_singlelayer.json`
+* `deid_mapping_multilayer.json`
+
+Eine von denen kann dann auch mit ``<MAPPING_FILE>``=`/inception_ahd_recommender/prefab-mapping-files/<FILE>` referenziert werden.
