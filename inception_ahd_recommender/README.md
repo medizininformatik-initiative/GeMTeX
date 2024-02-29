@@ -26,22 +26,26 @@ ansonsten würden die Standard-Einstellungen verwendet, was größtenteils nicht
 Im Weiteren wird auf den folgenden Ausschnitt einer `docker compose` Datei Bezug genommen.
 ```
 [...]
-environment:
-  - EXTERNAL_SERVER_ADDRESS=http://<ADRESSE_DER_AVERBIS_HD_IM_DOCKER_NETZWERK>:8080
-  - EXTERNAL_SERVER_TOKEN=<API_TOKEN_DER_AVERBIS_HD>
-  - PIPELINE_ENDPOINT=/health-discovery/rest/v1/textanalysis/projects/<PROEJKT_NAME_IN_AVERBIS_HD>/pipelines/<PIPELINE_NAME>/analyseText
-  - CONSUMER=ariadne.contrib.external_server_consumer.<CONSUMER_CLASS>::<MAPPING_FILE>
-  - SERVER_HANDLE=<NAME_OF_RECOMMENDER>
-  - RECOMMENDER_WORKERS=4
-  - RECOMMENDER_ADDRESS=:5000
-ports:
-  - 5000:5000
+    environment:
+      - EXTERNAL_SERVER_ADDRESS=http://<ADRESSE_DER_AVERBIS_HD_IM_DOCKER_NETZWERK>:8080
+      - EXTERNAL_SERVER_TOKEN=<API_TOKEN_DER_AVERBIS_HD>
+      - PIPELINE_ENDPOINT=/health-discovery/rest/v1/textanalysis/projects/<PROEJKT_NAME_IN_AVERBIS_HD>/pipelines/<PIPELINE_NAME>/analyseText
+      - CONSUMER=ariadne.contrib.external_server_consumer.<CONSUMER_CLASS>::<MAPPING_FILE>
+      - SERVER_HANDLE=<NAME_OF_RECOMMENDER>
+      - RECOMMENDER_WORKERS=4
+      - RECOMMENDER_ADDRESS=:5000
+    ports:
+      - 5000:5000
+    networks:
+      - recommender-network
+    volumes:
+      - type: bind
+        source: ../uima_cas_mapper/mapping-files
+        target: /mapping_files
 networks:
-  - recommender-network
-volumes:
-  - type: bind
-    source: ../uima_cas_mapper/mapping-files
-    target: /mapping_files
+  recommender-network:
+    external: true
+    name: recommender-network
 [...]
 ```
 
@@ -82,3 +86,11 @@ Diese beiden Werte werden an den WSGI Server (`gunicorn`) übergeben und bestimm
 und mit `ADDRESS` unter welcher Adresse der Recommender von [INCEpTION](https://inception-project.github.io) erreicht werden kann.
 
 ### Andere Einstellungen in der docker-compose.yml
+##### ports
+Hier muss nur sichergestellt werden, dass der PORT mit dem der `<RECOMMENDER_ADDRESS>` übereinstimmt.
+##### networks
+Wie auch immer das `docker` Netzwerk dann jeweils erstellt/behandelt wird; wichtig ist nur, dass alle drei Services im selben Netzwerk sind.
+In diesem Beispiel wurde das `recommender-network` Netzwerk mittels des `docker` Clients erstellt und zudem in den entsprechenden `docker compose` Dateien der `AHD` und `INCEpTION` auch als `external: true` hinzugefügt.
+Die entsprechenden IP-Adressen (für `<EXTERNAL_SERVER_ADDRESS>` und zur Referenz des `Recommenders` in `INCEpTION`) können mit `docker inspect recommender-network` abgelesen werden, wenn alle Services gestartet sind.
+(Oder man weist den Services statische IPs zu, was im Zweifel in der `docker` Dokumentation nachgelesen werden kann.)
+##### volumes
