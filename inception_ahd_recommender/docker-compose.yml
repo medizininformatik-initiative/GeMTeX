@@ -8,7 +8,7 @@ services:
       - EXTERNAL_SERVER_ADDRESS=http://198.168.10.2:8080
       - EXTERNAL_SERVER_TOKEN=a72c80319b27199d81c939c210a646ca8d1aa76840a0cda62a6a91dc192ab7dd
       - PIPELINE_ENDPOINT=/health-discovery/rest/v1/textanalysis/projects/GeMTeX/pipelines/deid/analyseText
-      - CONSUMER=ariadne.contrib.external_server_consumer.MappingConsumer::/mapping_files/deid_mapping_singlelayer.json
+      - CONSUMER=ariadne.contrib.external_server_consumer.MappingConsumer::/inception_ahd_recommender/prefab-mapping_files/deid_mapping_singlelayer.json
       - SERVER_HANDLE=deid_recommender
       - RECOMMENDER_WORKERS=4
       - RECOMMENDER_ADDRESS=:5000
@@ -16,10 +16,6 @@ services:
       - 5000:5000
     networks:
       - recommender-network
-    volumes:
-      - type: bind
-        source: ../uima_cas_mapper/mapping-files
-        target: /mapping_files
 networks:
   recommender-network:
     external: true
