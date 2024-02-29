@@ -28,7 +28,7 @@ def _as_named_tuple(dct: dict):
         logging.warning(
             f"There are missing keys in the server config:"
             f" {set(config_object._fields).difference(lower_dict.keys())}."
-            f' They will be treated the as "None"'
+            f' They will be treated as "None"'
         )
 
     _response_consumer = lower_dict.get("response_consumer", "").split("::")
@@ -87,7 +87,7 @@ class ExternalUIMAClassifier(Classifier):
         self._server = None
         try:
             response = requests.get(self._config.address)
-            logging.info(f"Server accessible: '{response.text}'")
+            logging.info(f"Server accessible: '{response.status_code}'")
             self._server = f"{self._config.address}/{self._config.endpoint if not self._config.endpoint.startswith('/') else self._config.endpoint[1:]}"
         except (requests.exceptions.HTTPError, requests.exceptions.ConnectionError):
             logging.error(f"No server reachable under '{self._config.address}'")
