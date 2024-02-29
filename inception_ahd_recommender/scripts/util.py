@@ -33,13 +33,19 @@ def download_file(url: str, target_path: Path):
     wget.download(url, str(target_path.resolve()))
 
 
-def write_sentence_documents(sentences: List[str], labels: List[str], path: Path, labeled=True):
+def write_sentence_documents(
+    sentences: List[str], labels: List[str], path: Path, labeled=True
+):
     typesystem = TypeSystem()
     cas = Cas(typesystem=typesystem)
 
-    SentenceType = typesystem.create_type("de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Sentence")
+    SentenceType = typesystem.create_type(
+        "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Sentence"
+    )
     SentimentType = typesystem.create_type("webanno.custom.Sentiment")
-    typesystem.add_feature(type_=SentimentType, name="value", rangeTypeName="uima.cas.String")
+    typesystem.add_feature(
+        type_=SentimentType, name="value", rangeTypeName="uima.cas.String"
+    )
 
     cas.sofa_string = " ".join(sentences)
 

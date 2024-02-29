@@ -49,20 +49,32 @@ def send_predict_request(path_to_json: str, user: str):
 
     for prediction in cas.select(layer):
         if prediction.inception_internal_predicted:
-            print(f"{getattr(prediction, feature)}\t\t {cas.get_covered_text(prediction)}")
+            print(
+                f"{getattr(prediction, feature)}\t\t {cas.get_covered_text(prediction)}"
+            )
 
 
 def _send_json(url: str, body: Any) -> HTTPResponse:
     req = urllib.request.Request(
-        url, data=json.dumps(body).encode("utf-8"), headers={"content-type": "application/json"}
+        url,
+        data=json.dumps(body).encode("utf-8"),
+        headers={"content-type": "application/json"},
     )
     return urllib.request.urlopen(req)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Test your INCEpTION external recommender.")
-    parser.add_argument("request_type", choices=["train", "predict"], help="The request type you want to use.")
-    parser.add_argument("-u", "--user", default="admin", help="The user issuing the request.")
+    parser = argparse.ArgumentParser(
+        description="Test your INCEpTION external recommender."
+    )
+    parser.add_argument(
+        "request_type",
+        choices=["train", "predict"],
+        help="The request type you want to use.",
+    )
+    parser.add_argument(
+        "-u", "--user", default="admin", help="The user issuing the request."
+    )
     args = parser.parse_args()
 
     if args.request_type == "train":

@@ -15,7 +15,13 @@
 # limitations under the License.
 from typing import List
 
-from cassis import Cas, TypeSystem, merge_typesystems, load_typesystem, load_cas_from_xmi
+from cassis import (
+    Cas,
+    TypeSystem,
+    merge_typesystems,
+    load_typesystem,
+    load_cas_from_xmi,
+)
 from cassis.typesystem import TYPE_NAME_STRING, TYPE_NAME_BOOLEAN
 
 from sklearn.datasets import fetch_20newsgroups
@@ -27,11 +33,18 @@ PREDICTED_TYPE = "ariadne.testtype"
 PREDICTED_FEATURE = "value"
 USER = "test_user"
 PROJECT_ID = "test_project"
-NEWSGROUP_CATEGORIES = ["alt.atheism", "soc.religion.christian", "comp.graphics", "sci.med"]
+NEWSGROUP_CATEGORIES = [
+    "alt.atheism",
+    "soc.religion.christian",
+    "comp.graphics",
+    "sci.med",
+]
 
 
 def load_newsgroup_training_data() -> List[TrainingDocument]:
-    twenty_train = fetch_20newsgroups(subset="train", categories=NEWSGROUP_CATEGORIES, shuffle=True, random_state=42)
+    twenty_train = fetch_20newsgroups(
+        subset="train", categories=NEWSGROUP_CATEGORIES, shuffle=True, random_state=42
+    )
     target_names = twenty_train.target_names
 
     typesystem = build_typesystem()
@@ -55,7 +68,9 @@ def load_newsgroup_training_data() -> List[TrainingDocument]:
 
 
 def load_newsgroup_test_data() -> List[Cas]:
-    twenty_test = fetch_20newsgroups(subset="test", categories=NEWSGROUP_CATEGORIES, shuffle=True, random_state=42)
+    twenty_test = fetch_20newsgroups(
+        subset="test", categories=NEWSGROUP_CATEGORIES, shuffle=True, random_state=42
+    )
 
     typesystem = build_typesystem()
     Sentence = typesystem.get_type(SENTENCE_TYPE)

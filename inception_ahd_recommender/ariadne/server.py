@@ -23,13 +23,8 @@ from typing import Dict
 from filelock import Timeout, FileLock
 from flask import Flask, request, jsonify
 
-<<<<<<< HEAD
 from ariadne.classifier import Classifier
 from ariadne.protocol import parse_prediction_request, parse_training_request
-=======
-from inception_ahd_recommender.ariadne.classifier import Classifier
-from inception_ahd_recommender.ariadne.protocol import parse_prediction_request, parse_training_request
->>>>>>> 008b9d2... init external ahd recommender for inception
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +35,12 @@ class Server:
         self._classifiers: Dict[str, Classifier] = {}
         self._lock_directory: Path = Path(tempfile.gettempdir()) / ".ariadne_locks"
 
-        self._app.add_url_rule("/<classifier_name>/predict", "predict", self._predict, methods=["POST"])
-        self._app.add_url_rule("/<classifier_name>/train", "train", self._train, methods=["POST"])
+        self._app.add_url_rule(
+            "/<classifier_name>/predict", "predict", self._predict, methods=["POST"]
+        )
+        self._app.add_url_rule(
+            "/<classifier_name>/train", "train", self._train, methods=["POST"]
+        )
 
     def add_classifier(self, name: str, classifier: Classifier):
         self._classifiers[name] = classifier
@@ -53,13 +52,23 @@ class Server:
         logger.info("Got prediction request for [%s]", classifier_name)
 
         if classifier_name not in self._classifiers:
-            return "Classifier with name [{0}] not found!".format(classifier_name), HTTPStatus.NOT_FOUND.value
+            return (
+                "Classifier with name [{0}] not found!".format(classifier_name),
+                HTTPStatus.NOT_FOUND.value,
+            )
 
         json_data = request.get_json()
 
         req = parse_prediction_request(json_data)
         classifier = self._classifiers[classifier_name]
-        classifier.predict(req.cas, req.layer, req.feature, req.project_id, req.document_id, req.user_id)
+        classifier.predict(
+            req.cas,
+            req.layer,
+            req.feature,
+            req.project_id,
+            req.document_id,
+            req.user_id,
+        )
 
         result = jsonify(document=req.cas.to_xmi())
         return result
@@ -68,7 +77,10 @@ class Server:
         logger.info("Got training request for [%s]", classifier_name)
 
         if classifier_name not in self._classifiers:
-            return "Classifier with name [{0}] not found!".format(classifier_name), HTTPStatus.NOT_FOUND.value
+            return (
+                "Classifier with name [{0}] not found!".format(classifier_name),
+                HTTPStatus.NOT_FOUND.value,
+            )
 
         json_data = request.get_json()
         req = parse_training_request(json_data)
@@ -83,7 +95,9 @@ class Server:
 
             def _fn():
                 try:
-                    classifier.fit(req.documents, req.layer, req.feature, req.project_id, user_id)
+                    classifier.fit(
+                        req.documents, req.layer, req.feature, req.project_id, user_id
+                    )
                 finally:
                     lock.release()
 
@@ -91,8 +105,15 @@ class Server:
             threading.Thread(target=_fn, daemon=True).start()
             return HTTPStatus.NO_CONTENT.description, HTTPStatus.NO_CONTENT.value
         except Timeout:
-            logger.info("Already training [%s] for user [%s], skipping!", classifier_name, user_id)
-            return HTTPStatus.TOO_MANY_REQUESTS.description, HTTPStatus.TOO_MANY_REQUESTS.value
+            logger.info(
+                "Already training [%s] for user [%s], skipping!",
+                classifier_name,
+                user_id,
+            )
+            return (
+                HTTPStatus.TOO_MANY_REQUESTS.description,
+                HTTPStatus.TOO_MANY_REQUESTS.value,
+            )
 
     def _get_lock(self, classifier_name: str, user_id: str) -> FileLock:
         self._lock_directory.mkdir(parents=True, exist_ok=True)

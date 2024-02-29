@@ -39,7 +39,9 @@ def create_prediction(
     score_explanation: Optional[str] = None,
     auto_accept: Optional[bool] = None,
 ) -> FeatureStructure:
-    return create_span_prediction(cas, layer, feature, begin, end, label, score, score_explanation, auto_accept)
+    return create_span_prediction(
+        cas, layer, feature, begin, end, label, score, score_explanation, auto_accept
+    )
 
 
 def create_span_prediction(
@@ -76,7 +78,9 @@ def create_span_prediction(
         prediction[f"{feature}{FEATURE_NAME_SCORE_SUFFIX}"] = score
 
     if score_explanation is not None:
-        prediction[f"{feature}{FEATURE_NAME_SCORE_EXPLANATION_SUFFIX}"] = score_explanation
+        prediction[f"{feature}{FEATURE_NAME_SCORE_EXPLANATION_SUFFIX}"] = (
+            score_explanation
+        )
 
     if auto_accept is not None:
         prediction[f"{feature}{FEATURE_NAME_AUTO_ACCEPT_MODE_SUFFIX}"] = auto_accept
@@ -125,7 +129,9 @@ def create_relation_prediction(
         prediction[f"{feature}{FEATURE_NAME_SCORE_SUFFIX}"] = score
 
     if score_explanation is not None:
-        prediction[f"{feature}{FEATURE_NAME_SCORE_EXPLANATION_SUFFIX}"] = score_explanation
+        prediction[f"{feature}{FEATURE_NAME_SCORE_EXPLANATION_SUFFIX}"] = (
+            score_explanation
+        )
 
     if auto_accept is not None:
         prediction[f"{feature}{FEATURE_NAME_AUTO_ACCEPT_MODE_SUFFIX}"] = auto_accept

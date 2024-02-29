@@ -28,7 +28,15 @@ def test_create_prediction():
     typesystem.create_feature(Span, "value_auto_accept", "uima.cas.Boolean")
     cas = Cas(typesystem=typesystem)
     prediction = create_prediction(
-        cas, "custom.Span", "value", 0, 4, "label", score=0.1, score_explanation="blah", auto_accept=True
+        cas,
+        "custom.Span",
+        "value",
+        0,
+        4,
+        "label",
+        score=0.1,
+        score_explanation="blah",
+        auto_accept=True,
     )
     assert prediction.get("begin") == 0
     assert prediction.get("end") == 4

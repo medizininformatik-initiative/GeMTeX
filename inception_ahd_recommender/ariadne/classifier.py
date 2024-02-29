@@ -21,25 +21,37 @@ from typing import List, Optional, Any
 import joblib
 from cassis import Cas
 
-<<<<<<< HEAD
 import ariadne
 from ariadne.protocol import TrainingDocument
-=======
-from inception_ahd_recommender import ariadne
-from inception_ahd_recommender.ariadne.protocol import TrainingDocument
->>>>>>> 008b9d2... init external ahd recommender for inception
 
 logger = logging.getLogger(__file__)
 
 
 class Classifier:
     def __init__(self, model_directory: Path = None):
-        self.model_directory = ariadne.model_directory if model_directory is None else model_directory
+        self.model_directory = (
+            ariadne.model_directory if model_directory is None else model_directory
+        )
 
-    def fit(self, documents: List[TrainingDocument], layer: str, feature: str, project_id, user_id: str):
+    def fit(
+        self,
+        documents: List[TrainingDocument],
+        layer: str,
+        feature: str,
+        project_id,
+        user_id: str,
+    ):
         pass
 
-    def predict(self, cas: Cas, layer: str, feature: str, project_id: str, document_id: str, user_id: str):
+    def predict(
+        self,
+        cas: Cas,
+        layer: str,
+        feature: str,
+        project_id: str,
+        document_id: str,
+        user_id: str,
+    ):
         raise NotImplementedError()
 
     def _load_model(self, user_id: str) -> Optional[Any]:

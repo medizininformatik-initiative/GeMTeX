@@ -37,12 +37,10 @@ install_requires = [
     "joblib",
     "gunicorn",
     "deprecation",
-]
-
-contrib_dependencies = [
-    "scikit-learn>=1.0.1",
     "requests"
 ]
+
+contrib_dependencies = ["scikit-learn>=1.0.1", "requests"]
 
 test_dependencies = [
     "tox",
@@ -51,22 +49,15 @@ test_dependencies = [
     "pytest-cov",
 ]
 
-dev_dependencies = [
-    "black",
-    "wget"
-]
+dev_dependencies = ["black", "wget"]
 
-doc_dependencies = [
-    "sphinx",
-    "sphinx-autodoc-typehints",
-    "sphinx-rtd-theme"
-]
+doc_dependencies = ["sphinx", "sphinx-autodoc-typehints", "sphinx-rtd-theme"]
 
 extras = {
     "test": test_dependencies,
     "dev": dev_dependencies,
     "doc": doc_dependencies,
-    "contrib": contrib_dependencies
+    "contrib": contrib_dependencies,
 }
 
 here = os.path.abspath(os.path.dirname(__file__))
@@ -98,19 +89,15 @@ setup(
     url=HOMEPAGE,
     packages=find_packages(exclude="tests"),
     keywords="uima dkpro inception nlp",
-
     project_urls={
         "Bug Tracker": "https://github.com/inception-project/inception-external-recommender/issues",
         "Documentation": "https://github.com/inception-project/inception-external-recommender",
         "Source Code": "https://github.com/inception-project/inception-external-recommender",
     },
-
     install_requires=install_requires,
     test_suite="tests",
-
     tests_require=test_dependencies,
     extras_require=extras,
-
     include_package_data=True,
     license="Apache License 2.0",
     classifiers=[
@@ -126,7 +113,6 @@ setup(
         "Programming Language :: Python :: 3.7",
         "Topic :: Software Development :: Libraries",
         "Topic :: Scientific/Engineering :: Human Machine Interfaces",
-        "Topic :: Text Processing :: Linguistic"
+        "Topic :: Text Processing :: Linguistic",
     ],
-
 )
