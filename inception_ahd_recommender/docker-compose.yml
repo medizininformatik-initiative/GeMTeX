@@ -10,6 +10,7 @@ services:
       - PIPELINE_ENDPOINT=/health-discovery/rest/v1/textanalysis/projects/GeMTeX/pipelines/deid/analyseText
       - CONSUMER=ariadne.contrib.external_server_consumer.MappingConsumer::/inception_ahd_recommender/prefab-mapping-files/deid_mapping_singlelayer.json
       - SERVER_HANDLE=deid_recommender
+      - MODEL_DIR=/models
       - RECOMMENDER_WORKERS=4
       - RECOMMENDER_ADDRESS=:5000
     ports:

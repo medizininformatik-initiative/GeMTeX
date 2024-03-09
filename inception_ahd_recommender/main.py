@@ -17,6 +17,7 @@ _config = {
 }
 
 _server_handle = os.getenv("SERVER_HANDLE", "deid_recommender")
+_model_folder = os.getenv("MODEL_DIR", None)
 
 logging.info(
     f"\nUsing the following address: {_config['address']}{_config['endpoint']}\n"
@@ -24,7 +25,7 @@ logging.info(
 )
 
 server = Server()
-server.add_classifier(_server_handle, ExternalUIMAClassifier(server_config=_config))
+server.add_classifier(_server_handle, ExternalUIMAClassifier(server_config=_config, model_directory=_model_folder))
 
 app = server._app
 
