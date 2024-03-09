@@ -83,6 +83,10 @@ Der Standard-Wert ist für <CONSUMER_CLASS> der `SimpleDeidConsumer`, da dieser 
 Das bezeichnet nur den Endpoint unter dem [INCEpTION](https://inception-project.github.io) den Recommender zusammen mit IP und PORT ansprechen kann.
 Der Standard-Wert ist `deid_recommender`.
 
+###### MODEL_DIR
+Konfiguriert den Ordner unter dem Modelle gespeichert oder von dem Modelle geladen werden.
+Nutzt den Standard-Ordner, wenn nicht gesetzt. 
+
 ###### RECOMMENDER_WORKERS & RECOMMENDER_ADDRESS
 Diese beiden Werte werden an den WSGI Server (`gunicorn`) übergeben und bestimmen mit `WORKERS` wieviele Benutzer*innen gleichzeitig den Recommender verwenden können
 und mit `ADDRESS` unter welcher Adresse der Recommender von [INCEpTION](https://inception-project.github.io) erreicht werden kann.

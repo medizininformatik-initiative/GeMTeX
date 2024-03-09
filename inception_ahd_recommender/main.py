@@ -1,5 +1,6 @@
 import logging
 import os
+import pathlib
 
 from ariadne.contrib.external_uima_classifier import ExternalUIMAClassifier
 from ariadne.server import Server
@@ -18,6 +19,11 @@ _config = {
 
 _server_handle = os.getenv("SERVER_HANDLE", "deid_recommender")
 _model_folder = os.getenv("MODEL_DIR", None)
+try:
+    _model_folder = pathlib.Path(_model_folder)
+    _model_folder.mkdir(parents=True, exist_ok=True)
+except:
+    _model_folder = None
 
 logging.info(
     f"\nUsing the following address: {_config['address']}{_config['endpoint']}\n"
