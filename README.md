@@ -7,7 +7,7 @@ die nicht gut im Projekt-[Confluence](https://confluence.imi.med.fau.de) abgeleg
 Eine Demo/Machbarkeitsnachweis wie CDA Dokumente Level One über XSLT Sytlesheets in HTML oder Plain-Text gewandelt werden können.
 
 ### `inception-reporting-dashboard`
-ToDo
+Das Dashboard generiert verschiedene Diagramme für ein INCEpTION-Projekt. In seiner aktuellen Form kann es vom Projektmanager vor Ort verwendet werden, um verschiedene Metriken bezüglich des Fortschritts des Projekts und der Art der Annotationen zu visualisieren. Diese können dann exportiert und an die zentrale Projektleitung geschickt werden. Die Projektleitung kann dann anhand des Dashboards den Fortschritt der Projekte an den unterschiedlichen Standorten vergleichen und nachvollziehen.
 
 ### `inception-projects`
 Beinhaltet exportierte Basis-Projekte (also im Grunde Konfigurationen der Layer etc.) für
