@@ -91,6 +91,7 @@ class Server:
             # The lock needs to be acquired out here, not in the fn scope, else it would
             # just throw the Timeout inside fn.
             lock = self._get_lock(classifier.name, user_id)
+            logger.debug(f'Acquiring lock for [{user_id}, {classifier.name}]')
             lock.acquire()
 
             def _fn():
@@ -99,6 +100,7 @@ class Server:
                         req.documents, req.layer, req.feature, req.project_id, user_id
                     )
                 finally:
+                    logger.debug(f'Releasing lock for [{user_id}, {classifier.name}]')
                     lock.release()
 
             # We spawn a thread and run the training in there so that this HTTP request can return directly
@@ -118,4 +120,4 @@ class Server:
     def _get_lock(self, classifier_name: str, user_id: str) -> FileLock:
         self._lock_directory.mkdir(parents=True, exist_ok=True)
         lock_path = self._lock_directory / f"{classifier_name}_{user_id}.lock"
-        return FileLock(lock_path, timeout=1)
+        return FileLock(lock_path, timeout=1, thread_local=False)
