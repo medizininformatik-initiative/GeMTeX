@@ -153,6 +153,23 @@ class ExternalUIMAClassifier(Classifier):
             )
             cas.add(prediction)
 
+
+class ExternalUIMAWriter(Classifier):
+
+    def __init__(self, model_directory: Path = None):
+        super().__init__(model_directory)
+
+    def predict(
+        self,
+        cas: Cas,
+        layer: str,
+        feature: str,
+        project_id: str,
+        document_id: str,
+        user_id: str,
+    ):
+        pass
+
     def fit(
         self,
         documents: List[TrainingDocument],
@@ -168,10 +185,16 @@ class ExternalUIMAClassifier(Classifier):
 if __name__ == "__main__":
     from ariadne.server import Server
 
+    tmp_path = pathlib.Path("../../tmp/models")
+
     server = Server()
     server.add_classifier(
         "ahd_deid",
-        ExternalUIMAClassifier(pathlib.Path("../../tests/resources/test_config.json")),
+        ExternalUIMAClassifier(pathlib.Path("../../tests/resources/test_config.json"), tmp_path),
+    )
+    server.add_classifier(
+        "ahd_deid_out",
+        ExternalUIMAWriter(tmp_path)
     )
 
     server.start()
