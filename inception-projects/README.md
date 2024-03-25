@@ -7,7 +7,7 @@ Eine Layer-Definition, die auf Grundlage des aktuellen
 Enthält außerdem die durch die `deid`-Pipeline der
 [Averbis Health Discovery](https://averbis.com/health-discovery/) vorannotierten Dokumente des `GRASSCO`-Korpus'.¹
 
-### `inception-gemtex-deid-base_project`
+### `inception-gemtex-deid-base_project-grascco_raw`
 Eine Layer-Definition, die auf Grundlage des aktuellen
 [De-Identifikations-Guide](https://confluence.imi.med.fau.de/display/GEM/De-Identifikation) erstellt wurde.
 Enthält außerdem unannotierte ("leere") Dateien des `GRASSCO`-Korpus'.¹
