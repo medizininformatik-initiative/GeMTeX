@@ -3,9 +3,15 @@ Konfigurationen für [INCEpTION](https://inception-project.github.io/) in Form e
 
 ### `inception-gemtex-deid-base_project`
 Eine Layer-Definition, die auf Grundlage des aktuellen
-[De-Identifikations-Guide](https://confluence.imi.med.fau.de/display/GEM/De-Identifikation) erstellt wurde.
+[De-Identifikations-Guide](https://confluence.imi.med.fau.de/display/GEM/De-Identifikation) (v2) erstellt wurde.
 Enthält außerdem die durch die `deid`-Pipeline der
 [Averbis Health Discovery](https://averbis.com/health-discovery/) vorannotierten Dokumente des `GRASSCO`-Korpus'.¹
+
+### `inception-gemtex-deid-base_project`
+Eine Layer-Definition, die auf Grundlage des aktuellen
+[De-Identifikations-Guide](https://confluence.imi.med.fau.de/display/GEM/De-Identifikation) erstellt wurde.
+Enthält außerdem unannotierte ("leere") Dateien des `GRASSCO`-Korpus'.¹
+(Sinnvoll, wenn ein Recommender Ansatz benutzt werden soll.)
 
 ## Verweise
 [1] Modersohn L, Schulz S, Lohr C, Hahn U.
