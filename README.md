@@ -4,7 +4,7 @@ Dieses Repositorium umfasst  Arbeiten (Code u.a.) zum Projekt [GeMTeX](https://w
 die nicht gut im Projekt-[Confluence](https://confluence.imi.med.fau.de) abgelegt werden können.
 
 ### `cda-transform`
-Eine Demo/Machbarkeitsnachweis wie CDA Dokumente Level One über XSLT Sytlesheets in HTML oder Plain-Text gewandelt werden können.
+Eine Demo bzw. Machbarkeitsnachweis wie CDA Dokumente Level One über XSLT Stylesheets in HTML oder Plain-Text gewandelt werden können.
 
 ### `inception-reporting-dashboard`
 Das Dashboard generiert verschiedene Diagramme für ein INCEpTION-Projekt. In seiner aktuellen Form kann es vom Projektmanager vor Ort verwendet werden, um verschiedene Metriken bezüglich des Fortschritts des Projekts und der Art der Annotationen zu visualisieren. Diese können dann exportiert und an die zentrale Projektleitung geschickt werden. Die Projektleitung kann dann anhand des Dashboards den Fortschritt der Projekte an den unterschiedlichen Standorten vergleichen und nachvollziehen.
