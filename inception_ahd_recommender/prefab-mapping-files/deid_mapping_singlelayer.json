@@ -40,13 +40,8 @@
             "DATE": {
               "layer": ".Date"
             },
-            "ID_OTHER": {
-              "layer": ".ID",
-              "feature": "@kind==other|none"
-            },
-            "ID_PATIENT": {
-              "layer": ".ID",
-              "feature": "@kind==patientid"
+            "ID": {
+              "layer": ".ID"
             },
             "LOCATION_CITY": {
               "layer": ".Location",
