@@ -1,216 +1,213 @@
 {
-  "payload": {
-    "schemaVersion": "2.0",
-    "pipelineName": "deid-title-norules",
-    "description": "no description",
-    "numberOfInstances": 1,
-    "annotators": [
-      {
-        "identifier": "HealthPreprocessing",
-        "displayName": "HealthPreprocessing",
-        "bundle": "de.averbis.textanalysis.health-discovery-textanalysis-plugin",
-        "parameters": [
-          {
-            "key": "DocumentValidator/maxDocumentLength",
-            "values": [
-              "100000"
-            ]
-          },
-          {
-            "key": "LanguageCategorizer/allowedLanguages",
-            "values": [
-              "en",
-              "de",
-              "pt"
-            ]
-          },
-          {
-            "key": "LanguageSetter/language",
-            "values": [
-              "de"
-            ]
-          },
-          {
-            "key": "LanguageSetter/overwriteExisting",
-            "values": [
-              "false"
-            ]
-          }
-        ]
-      },
-      {
-        "identifier": "ClinicalSections",
-        "displayName": "ClinicalSections",
-        "bundle": "de.averbis.textanalysis.health-discovery-textanalysis-plugin",
-        "parameters": []
-      },
-      {
-        "identifier": "Laterality",
-        "displayName": "Laterality",
-        "bundle": "de.averbis.textanalysis.health-discovery-textanalysis-plugin",
-        "parameters": []
-      },
-      {
-        "identifier": "PatientInformation",
-        "displayName": "PatientInformation",
-        "bundle": "de.averbis.textanalysis.health-discovery-textanalysis-plugin",
-        "parameters": []
-      },
-      {
-        "identifier": "PHI",
-        "displayName": "PHI",
-        "bundle": "de.averbis.textanalysis.health-discovery-textanalysis-plugin",
-        "parameters": [
-          {
-            "key": "PHIAnnotator/useRules",
-            "values": [
-              "false"
-            ]
-          },
-          {
-            "key": "PHIAnnotator/useLSTM",
-            "values": [
-              "true"
-            ]
-          },
-          {
-            "key": "PHIAnnotator/useTransformer",
-            "values": [
-              "false"
-            ]
-          },
-          {
-            "key": "PHIAnnotator/detectPHISentences",
-            "values": [
-              "false"
-            ]
-          },
-          {
-            "key": "PHIDeidentifier/deidentificationMethod",
-            "values": [
-              "crossout"
-            ]
-          }
-        ]
-      },
-      {
-        "identifier": "WordlistAnnotator",
-        "displayName": "WordlistAnnotator",
-        "bundle": "de.averbis.textanalysis.health-discovery-textanalysis-plugin",
-        "parameters": [
-          {
-            "key": "wordlist",
-            "values": [
-              "de.averbis.textanalysis.components.health.phiannotator.Dictionary.PHITitleInd\nPriv.\nDoz.\nDrs.\nDrs\nOA\nOÄ\nBiol.\nBischof\nDipl.\nDr\nDr.\nDres.\n(FH)\nh.c.\nhc\nhc.\nInf.\nIng.\nmed.\nmed\ndent\ndent.\nnat.\nPäd.\nphil.\nPhil.\nProf.\nProf\nrer.\nsoc.\nSoz.\nUniv.-\nPD\nPD.\nBaron\nBaronesse\nBaronin\nBischof\nBruder\nDame\nEdler\nFreifrau\nFreiherr\nFreiin\nFürst\nFürstin\nGraf\nGräfin\nHofrat\nKonsul\nLord\nPrinz\nPrinzessin\nSchwester\nhc.\nh.c.\nPhD\nMD\nM.D.\nMD."
-            ]
-          },
-          {
-            "key": "delimiter",
-            "values": [
-              ";"
-            ]
-          },
-          {
-            "key": "ignoreCase",
-            "values": [
-              "true"
-            ]
-          },
-          {
-            "key": "onlyLongest",
-            "values": [
-              "true"
-            ]
-          }
-        ]
-      },
-      {
-        "identifier": "AdvancedRutaEngine",
-        "displayName": "AdvancedRutaEngine",
-        "bundle": "de.averbis.textanalysis.health-discovery-textanalysis-plugin",
-        "parameters": [
-          {
-            "key": "rules",
-            "values": [
-              "PACKAGE de.averbis.types.health;\n// TYPESYSTEM de.averbis.types.health.SimplifiedHealthTypeSystem;\n// TYPESYSTEM de.averbis.textanalysis.typesystems.health.CompleteInternalHealthTypeSystem;\n\n// merge titles\n((t:PHITitleInd{-> UNMARK(t)})[2,100]){-> PHITitleInd};\n// med. alone is rather an adjective, TODO extract to list?\nt:PHITitleInd{REGEXP(\"med\\\\.?|inf\\\\.?|hc\\\\.?|dent\\\\.?\", true) -> UNMARK(t)};\n\nDECLARE PHINameTitle;\n\nPHITitleInd{-PARTOF(PHINameTitle)-> PHINameTitle} SW?{-PARTOF(PHITitleInd)} @PHIName;\n@PHIName COMMA? PHITitleInd{-PARTOF(PHINameTitle)-> PHINameTitle};\n"
-            ]
-          },
-          {
-            "key": "rulesScriptName",
-            "values": [
-              ""
-            ]
-          },
-          {
-            "key": "removeBasics",
-            "values": [
-              "false"
-            ]
-          },
-          {
-            "key": "debug",
-            "values": [
-              "false"
-            ]
-          },
-          {
-            "key": "debugWithMatches",
-            "values": [
-              "false"
-            ]
-          },
-          {
-            "key": "profile",
-            "values": [
-              "false"
-            ]
-          },
-          {
-            "key": "createdBy",
-            "values": [
-              "false"
-            ]
-          },
-          {
-            "key": "strictImports",
-            "values": [
-              "false"
-            ]
-          },
-          {
-            "key": "varNames",
-            "values": []
-          },
-          {
-            "key": "varValues",
-            "values": []
-          },
-          {
-            "key": "reindexUpdateMode",
-            "values": [
-              "ADDITIVE"
-            ]
-          }
-        ]
-      },
-      {
-        "identifier": "HealthPostprocessing",
-        "displayName": "HealthPostprocessing",
-        "bundle": "de.averbis.textanalysis.health-discovery-textanalysis-plugin",
-        "parameters": [
-          {
-            "key": "BlacklistAnnotationRemover/blacklist",
-            "values": []
-          },
-          {
-            "key": "BlacklistAnnotationRemover/ignoreCase",
-            "values": [
-              "true"
-            ]
-          }
-        ]
-      }
-    ]
-  },
-  "errorMessages": []
+  "schemaVersion": "2.0",
+  "pipelineName": "deid-custom",
+  "description": "no description",
+  "numberOfInstances": 1,
+  "annotators": [
+    {
+      "identifier": "HealthPreprocessing",
+      "displayName": "HealthPreprocessing",
+      "bundle": "de.averbis.textanalysis.health-discovery-textanalysis-plugin",
+      "parameters": [
+        {
+          "key": "DocumentValidator/maxDocumentLength",
+          "values": [
+            "150000"
+          ]
+        },
+        {
+          "key": "LanguageCategorizer/allowedLanguages",
+          "values": [
+            "en",
+            "de",
+            "pt"
+          ]
+        },
+        {
+          "key": "LanguageSetter/language",
+          "values": [
+            "de"
+          ]
+        },
+        {
+          "key": "LanguageSetter/overwriteExisting",
+          "values": [
+            "false"
+          ]
+        }
+      ]
+    },
+    {
+      "identifier": "ClinicalSections",
+      "displayName": "ClinicalSections",
+      "bundle": "de.averbis.textanalysis.health-discovery-textanalysis-plugin",
+      "parameters": []
+    },
+    {
+      "identifier": "Laterality",
+      "displayName": "Laterality",
+      "bundle": "de.averbis.textanalysis.health-discovery-textanalysis-plugin",
+      "parameters": []
+    },
+    {
+      "identifier": "PatientInformation",
+      "displayName": "PatientInformation",
+      "bundle": "de.averbis.textanalysis.health-discovery-textanalysis-plugin",
+      "parameters": []
+    },
+    {
+      "identifier": "PHI",
+      "displayName": "PHI",
+      "bundle": "de.averbis.textanalysis.health-discovery-textanalysis-plugin",
+      "parameters": [
+        {
+          "key": "PHIAnnotator/useRules",
+          "values": [
+            "false"
+          ]
+        },
+        {
+          "key": "PHIAnnotator/useLSTM",
+          "values": [
+            "true"
+          ]
+        },
+        {
+          "key": "PHIAnnotator/useTransformer",
+          "values": [
+            "false"
+          ]
+        },
+        {
+          "key": "PHIAnnotator/detectPHISentences",
+          "values": [
+            "false"
+          ]
+        },
+        {
+          "key": "PHIDeidentifier/deidentificationMethod",
+          "values": [
+            "crossout"
+          ]
+        }
+      ]
+    },
+    {
+      "identifier": "WordlistAnnotator",
+      "displayName": "WordlistAnnotator",
+      "bundle": "de.averbis.textanalysis.health-discovery-textanalysis-plugin",
+      "parameters": [
+        {
+          "key": "wordlist",
+          "values": [
+            "de.averbis.textanalysis.components.health.phiannotator.Dictionary.PHITitleInd\nPriv.\nDoz.\nDrs.\nDrs\nOA\nOÄ\nBiol.\nBischof\nDipl.\nDr\nDr.\nDres.\n(FH)\nh.c.\nhc\nhc.\nInf.\nIng.\nmed.\nmed\ndent\ndent.\nnat.\nPäd.\nphil.\nPhil.\nProf.\nProf\nrer.\nsoc.\nSoz.\nUniv.-\nPD\nPD.\nBaron\nBaronesse\nBaronin\nBischof\nBruder\nDame\nEdler\nFreifrau\nFreiherr\nFreiin\nFürst\nFürstin\nGraf\nGräfin\nHofrat\nKonsul\nLord\nPrinz\nPrinzessin\nSchwester\nhc.\nh.c.\nPhD\nMD\nM.D.\nMD."
+          ]
+        },
+        {
+          "key": "delimiter",
+          "values": [
+            ";"
+          ]
+        },
+        {
+          "key": "ignoreCase",
+          "values": [
+            "true"
+          ]
+        },
+        {
+          "key": "onlyLongest",
+          "values": [
+            "true"
+          ]
+        }
+      ]
+    },
+    {
+      "identifier": "AdvancedRutaEngine",
+      "displayName": "AdvancedRutaEngine",
+      "bundle": "de.averbis.textanalysis.health-discovery-textanalysis-plugin",
+      "parameters": [
+        {
+          "key": "rules",
+          "values": [
+            "PACKAGE de.averbis.types.health;\n// TYPESYSTEM de.averbis.types.health.SimplifiedHealthTypeSystem;\n// TYPESYSTEM de.averbis.textanalysis.typesystems.health.CompleteInternalHealthTypeSystem;\n\n// merge titles\n((t:PHITitleInd{-> UNMARK(t)})[2,100]){-> PHITitleInd};\n// med. alone is rather an adjective, TODO extract to list?\nt:PHITitleInd{REGEXP(\"med\\\\.?|inf\\\\.?|hc\\\\.?|dent\\\\.?\", true) -> UNMARK(t)};\n\nDECLARE PHINameTitle;\n\nPHITitleInd{-PARTOF(PHINameTitle)-> PHINameTitle} SW?{-PARTOF(PHITitleInd)} @PHIName;\n@PHIName COMMA? PHITitleInd{-PARTOF(PHINameTitle)-> PHINameTitle};\n"
+          ]
+        },
+        {
+          "key": "rulesScriptName",
+          "values": [
+            ""
+          ]
+        },
+        {
+          "key": "removeBasics",
+          "values": [
+            "false"
+          ]
+        },
+        {
+          "key": "debug",
+          "values": [
+            "false"
+          ]
+        },
+        {
+          "key": "debugWithMatches",
+          "values": [
+            "false"
+          ]
+        },
+        {
+          "key": "profile",
+          "values": [
+            "false"
+          ]
+        },
+        {
+          "key": "createdBy",
+          "values": [
+            "false"
+          ]
+        },
+        {
+          "key": "strictImports",
+          "values": [
+            "false"
+          ]
+        },
+        {
+          "key": "varNames",
+          "values": []
+        },
+        {
+          "key": "varValues",
+          "values": []
+        },
+        {
+          "key": "reindexUpdateMode",
+          "values": [
+            "ADDITIVE"
+          ]
+        }
+      ]
+    },
+    {
+      "identifier": "HealthPostprocessing",
+      "displayName": "HealthPostprocessing",
+      "bundle": "de.averbis.textanalysis.health-discovery-textanalysis-plugin",
+      "parameters": [
+        {
+          "key": "BlacklistAnnotationRemover/blacklist",
+          "values": []
+        },
+        {
+          "key": "BlacklistAnnotationRemover/ignoreCase",
+          "values": [
+            "true"
+          ]
+        }
+      ]
+    }
+  ]
 }
