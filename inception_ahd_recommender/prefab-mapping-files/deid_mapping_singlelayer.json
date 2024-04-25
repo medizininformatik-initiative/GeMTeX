@@ -87,6 +87,9 @@
               "layer": ".Name",
               "feature": "@kind==patient"
             },
+            "NAME_TITLE": {
+              "layer": ".PHINameTitle"
+            },
             "PROFESSION": {
               "layer": ".Profession"
             },
