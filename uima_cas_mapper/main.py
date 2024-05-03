@@ -122,11 +122,12 @@ def mark_new(
         duplicate_check = defaultdict(dict)
         try:
             for layer_instance in old_cas.select(source_layer):
-                feat = mapping_dict
+                feat = {mapping_dict.target_feature: 'none'}
                 if mapping_dict.mapping_type == MappingTypeEnum.SINGLELAYER:
                     for k, v in mapping_dict.items():
                         if v(layer_instance):
                             feat = {mapping_dict.target_feature: k}
+                            break
                 else:
                     feat = {tf: sf[0](layer_instance, sf[1]) for tf, sf in mapping_dict.items()}
                 check_for_more_specific(duplicate_check, layer_instance, feat)

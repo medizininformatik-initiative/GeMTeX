@@ -130,7 +130,7 @@ class MappingConfig:
                 _check = _expr[1]
             else:
                 return lambda x: x.get(_expr[0]) is not None
-            return lambda x: (x.get(_target) if x.get(_target) is not None else "none").lower() in _check.split("|")
+            return lambda x: (x.get(_target) if (x.get(_target) is not None and len(x.get(_target)) > 0) else "none").lower() in [c.lower() for c in _check.split("|")]
         else:
             return check
 

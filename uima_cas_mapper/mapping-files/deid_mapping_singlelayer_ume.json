@@ -2,8 +2,8 @@
   "IDENTIFIER_CONSTANTS": {
     "target_deid": "webanno.custom",
     "target_segment": "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type",
-    "source_deid": "de.averbis.types.health",
-    "source_segment": "de.averbis.extraction.types"
+    "source_deid": "de.ume.ner.type",
+    "source_segment": "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type"
   },
   "MAPPING": {
     "IDENTIFIER": {
@@ -19,23 +19,23 @@
             },
             "CONTACT_EMAIL": {
               "layer": ".Contact",
-              "feature": "@kind==email"
+              "feature": "@entityType==EMAIL"
             },
             "CONTACT_FAX": {
               "layer": ".Contact",
-              "feature": "@kind==fax"
+              "feature": "@entityType==FAX"
             },
             "CONTACT_OTHER": {
               "layer": ".Contact",
-              "feature": "@kind==other|none"
+              "feature": "@entityType==IPADDRESS|none"
             },
             "CONTACT_PHONE": {
               "layer": ".Contact",
-              "feature": "@kind==phone"
+              "feature": "@entityType==PHONE"
             },
             "CONTACT_URL": {
               "layer": ".Contact",
-              "feature": "@kind==url"
+              "feature": "@entityType==URL"
             },
             "DATE": {
               "layer": ".Date"
@@ -45,56 +45,56 @@
             },
             "LOCATION_CITY": {
               "layer": ".Location",
-              "feature": "@kind==city"
+              "feature": "@entityType==CITY"
             },
             "LOCATION_COUNTRY": {
               "layer": ".Location",
-              "feature": "@kind==country"
+              "feature": "@entityType==COUNTRY"
             },
             "LOCATION_HOSPITAL": {
               "layer": ".Location",
-              "feature": "@kind==hospital"
+              "feature": "@entityType==HOSPITAL"
             },
             "LOCATION_ORGANIZATION": {
               "layer": ".Location",
-              "feature": "@kind==organization"
+              "feature": "@entityType==ORGANIZATION"
             },
             "LOCATION_OTHER": {
               "layer": ".Location",
-              "feature": "@kind==other|none"
+              "feature": "@entityType==OTHER|none"
             },
             "LOCATION_STATE": {
               "layer": ".Location",
-              "feature": "@kind==state"
+              "feature": "@entityType==STATE"
             },
             "LOCATION_STREET": {
               "layer": ".Location",
-              "feature": "@kind==street"
+              "feature": "@entityType==STREET"
             },
             "LOCATION_ZIP": {
               "layer": ".Location",
-              "feature": "@kind==zip"
+              "feature": "@entityType==ZIP"
             },
             "NAME_DOCTOR": {
               "layer": ".Name",
-              "feature": "@kind==doctor"
+              "feature": "@entityType==STAFF"
             },
             "NAME_OTHER": {
               "layer": ".Name",
-              "feature": "@kind==other|none"
+              "feature": "@entityType==OTHER|none"
             },
             "NAME_PATIENT": {
               "layer": ".Name",
-              "feature": "@kind==patient"
+              "feature": "@entityType==PATIENT"
             },
             "NAME_TITLE": {
-              "layer": ".PHINameTitle"
+              "layer": ".Profession"
             },
             "PROFESSION": {
               "layer": ".Profession"
             },
             "OTHER": {
-              "layer": ".PHIOther"
+              "layer": ".Other"
             }
           }
         }

@@ -26,12 +26,11 @@ class MappingTypeEnum(enum.Enum):
 
 class AnnotationMapping(dict):
     def __init__(
-        self,
-        target_layer: str,
-        target_feature: str,
-        mapping_type: MappingTypeEnum = MappingTypeEnum.SINGLELAYER,
-        *args,
-        **kwargs,
+            self,
+            target_layer: str,
+            target_feature: str,
+            mapping_type: MappingTypeEnum = MappingTypeEnum.SINGLELAYER,
+            *args, **kwargs
     ):
         super().__init__(*args, **kwargs)
         self.mapping_type = mapping_type
@@ -93,50 +92,31 @@ class MappingConfig:
                     target_layer,
                     None,
                     MappingTypeEnum.MULTILAYER,
-                    {
-                        tf: (
-                            ((lambda x, y: sf[1:]), sf[1:])
-                            if sf.startswith("$")
-                            else ((lambda x, y: x.get(y)), sf)
-                        )
-                        for tf, sf in layer_dict.get("features", {}).items()
-                    },
+                    {tf: ((lambda x, y: sf[1:]), sf[1:]) if sf.startswith("$") else ((lambda x, y: x.get(y)), sf) for tf, sf in layer_dict.get("features", {}).items()}
                 )
             else:
                 for feat, feat_val in layer_dict.get("features", {}).items():
                     if isinstance(feat_val, dict):
                         for key, val in feat_val.items():
                             if isinstance(val, dict):
-                                source_layer = self.get_expression_value(
-                                    val.get("layer", None), ArchitectureEnum.SOURCE
-                                )
-                                check_fs = MappingConfig.resolve_simple_bool(
-                                    val.get("feature", lambda x: True)
-                                )
+                                source_layer = self.get_expression_value(val.get("layer", None), ArchitectureEnum.SOURCE)
+                                check_fs = MappingConfig.resolve_simple_bool(val.get("feature", lambda x: True))
                                 if source_layer not in self.annotation_mapping:
-                                    self.annotation_mapping[source_layer] = (
-                                        AnnotationMapping(
-                                            target_layer=target_layer,
-                                            target_feature=feat,
-                                            mapping_type=MappingTypeEnum.SINGLELAYER,
-                                        )
+                                    self.annotation_mapping[source_layer] = AnnotationMapping(
+                                        target_layer=target_layer,
+                                        target_feature=feat,
+                                        mapping_type=MappingTypeEnum.SINGLELAYER
                                     )
                                 self.annotation_mapping[source_layer][key] = check_fs
 
-    def get_expression_value(
-        self,
-        expression: Union[str, dict],
-        architecture: ArchitectureEnum = ArchitectureEnum.TARGET,
-    ):
+    def get_expression_value(self, expression: Union[str, dict], architecture: ArchitectureEnum = ArchitectureEnum.TARGET):
         value = expression
         if isinstance(expression, str):
             if expression.startswith("#"):
                 _list = value.split(".")
-                value = (
-                    f"{self.constants.get(_list[0][1:])}"
-                    f"{'.' if len(_list) > 1 else ''}"
-                    f"{'.'.join(_list[1:])}"
-                )
+                value = (f"{self.constants.get(_list[0][1:])}"
+                         f"{'.' if len(_list) > 1 else ''}"
+                         f"{'.'.join(_list[1:])}")
             elif expression.startswith("."):
                 return f"{self.identifier.source_default if architecture == ArchitectureEnum.SOURCE else self.identifier.target_default}{expression}"
         return value
@@ -150,9 +130,7 @@ class MappingConfig:
                 _check = _expr[1]
             else:
                 return lambda x: x.get(_expr[0]) is not None
-            return lambda x: (
-                x.get(_target) if x.get(_target) is not None else "none"
-            ).lower() in _check.split("|")
+            return lambda x: (x.get(_target) if (x.get(_target) is not None and len(x.get(_target)) > 0) else "none").lower() in [c.lower() for c in _check.split("|")]
         else:
             return check
 
@@ -161,7 +139,7 @@ class MappingConfig:
         mapping_config = MappingConfig()
         config = None
         if isinstance(config_file, pathlib.Path):
-            with config_file.open("rb") as fi:
+            with config_file.open('rb') as fi:
                 config = json.load(fi)
 
         if config is None or config_file is None:
@@ -180,9 +158,7 @@ class MappingConfig:
             for layer_feature, _dict in entry_values.items():
                 _entries_dict[entry][layer_feature] = {}
                 for key, value in _dict.items():
-                    _entries_dict[entry][layer_feature][
-                        mapping_config.get_expression_value(key)
-                    ] = mapping_config.get_expression_value(value)
+                    _entries_dict[entry][layer_feature][mapping_config.get_expression_value(key)] = mapping_config.get_expression_value(value)
         mapping_config.entries = SimpleNamespace(**_entries_dict)
 
         mapping_config._build_annotation_mapping()
