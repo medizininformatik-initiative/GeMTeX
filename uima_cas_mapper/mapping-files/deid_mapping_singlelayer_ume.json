@@ -81,7 +81,11 @@
             },
             "NAME_OTHER": {
               "layer": ".Name",
-              "feature": "@entityType==OTHER|none"
+              "feature": "@entityType==none"
+            },
+            "NAME_RELATIVE": {
+              "layer": ".Name",
+              "feature": "@entityType==OTHER"
             },
             "NAME_PATIENT": {
               "layer": ".Name",
