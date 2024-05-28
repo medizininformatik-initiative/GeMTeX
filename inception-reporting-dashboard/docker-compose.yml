@@ -1,0 +1,10 @@
+services:
+  inception-reporting:
+    build: .
+    image: inception-reporting
+    restart: unless-stopped
+    ports:
+      - 9011:8501
+
+volumes:
+  results:

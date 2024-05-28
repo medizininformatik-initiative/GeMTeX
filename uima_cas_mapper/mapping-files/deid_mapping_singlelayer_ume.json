@@ -87,9 +87,6 @@
               "layer": ".Name",
               "feature": "@entityType==PATIENT"
             },
-            "NAME_TITLE": {
-              "layer": ".Profession"
-            },
             "PROFESSION": {
               "layer": ".Profession"
             },
