@@ -8,15 +8,16 @@ from typing import Any, Optional, List, Union
 
 import requests
 from cassis import Cas
+from averbis import Client as AHDClient
 
 from ariadne.classifier import Classifier
-from ariadne.contrib.external_server_consumer import ResponseConsumer
+from ariadne.contrib.external_server_consumer import JsonResponseConsumer
 from ariadne.contrib.inception_util import create_span_prediction
 from ariadne.protocol import TrainingDocument
 
 logging.basicConfig(level=logging.INFO)
 config_object = namedtuple(
-    "server_config", ["address", "security_token", "endpoint", "response_consumer"]
+    "server_config", ["address", "security_token", "pipeline_project", "pipeline_name", "response_consumer"]
 )
 
 
@@ -42,7 +43,8 @@ def _as_named_tuple(dct: dict):
 
     return config_object(
         address=lower_dict.get("address", None),
-        endpoint=lower_dict.get("endpoint", None),
+        pipeline_name=lower_dict.get("pipeline_name", None),
+        pipeline_project=lower_dict.get("pipeline_project", None),
         security_token=lower_dict.get("security_token", None),
         response_consumer={
             "name": _response_consumer_name,
@@ -56,7 +58,7 @@ class ExternalUIMAClassifier(Classifier):
         super().__init__(model_directory)
 
         self._config = config_object(
-            address=None, security_token=None, endpoint=None, response_consumer=None
+            address=None, security_token=None, pipeline_name=None, pipeline_project=None, response_consumer=None
         )
         if isinstance(server_config, Path):
             try:
@@ -74,9 +76,9 @@ class ExternalUIMAClassifier(Classifier):
                 f"Server configuration is neither a path to a json file nor a dict: {server_config.__class__}."
             )
 
-        if self._config.address is None or self._config.endpoint is None:
+        if self._config.address is None or self._config.pipeline_name is None or self._config.pipeline_name is None:
             logging.error(
-                f"Neither address nor endpoint couldn't be defined for the provided config file:"
+                f"Either address or project/pipeline name couldn't be defined for the provided config file:"
                 f" {json.load(server_config.open('rb'))}"
             )
 
@@ -88,12 +90,13 @@ class ExternalUIMAClassifier(Classifier):
         try:
             response = requests.get(self._config.address)
             logging.info(f"Server accessible: '{response.status_code}'")
-            self._server = f"{self._config.address}/{self._config.endpoint if not self._config.endpoint.startswith('/') else self._config.endpoint[1:]}"
+            _endpoint = f"health-discovery/rest/v1/textanalysis/projects/{self._config.pipeline_project}/pipelines/{self._config.pipeline_name}/analyseText"
+            self._server = f"{self._config.address}/{_endpoint}"
         except (requests.exceptions.HTTPError, requests.exceptions.ConnectionError):
             logging.error(f"No server reachable under '{self._config.address}'")
 
     def _create_response_consumer(self):
-        self.response_consumer: Optional[ResponseConsumer] = None
+        self.response_consumer: Optional[JsonResponseConsumer] = None
         _response_consumer = self._config.response_consumer
         if _response_consumer is not None:
             self.response_consumer = locate(f"{_response_consumer.get('name')}")(
@@ -163,6 +166,65 @@ class ExternalUIMAClassifier(Classifier):
     ):
         for doc in documents:
             logging.info(doc.document_id)
+
+
+class AHDClassifier(Classifier):
+
+    def __init__(self, server_config: Union[Path, dict], model_directory: Path = None):
+        super().__init__(model_directory)
+
+        self._config = config_object(
+            address=None, security_token=None, pipeline_name=None, pipeline_project=None, response_consumer=None
+        )
+        if isinstance(server_config, Path):
+            try:
+                self._config = json.load(
+                    server_config.open("br"), object_hook=_as_named_tuple
+                )
+            except OSError:
+                logging.error(
+                    f"Couldn't find/read server config file at the specified path: {server_config.resolve()}"
+                )
+        elif isinstance(server_config, dict):
+            self._config = _as_named_tuple(server_config)
+        else:
+            raise ValueError(
+                f"Server configuration is neither a path to a json file nor a dict: {server_config.__class__}."
+            )
+
+        if self._config.address is None or self._config.pipeline_name is None or self._config.pipeline_name is None:
+            raise ValueError(
+                f"Either address or project/pipeline name couldn't be defined for the provided config file:"
+                f"\n{json.load(server_config.open('rb'))}")
+
+        self._connect_to_server()
+
+    def _connect_to_server(self):
+        self._server = None
+        try:
+            self._server = AHDClient(f"{self._config.address}/health-discovery", api_token='YOUR_API_TOKEN')
+            project = AHDClient.get_project(self._config.pipeline_project)
+            pipeline = project.get_pipeline(self._config.pipeline_name)
+            pipeline.ensure_started()
+            self._pipeline = pipeline
+        except Exception as e:
+            logging.error(e)
+
+    def _load_model(self, user_id: str) -> Optional[Any]:
+        return super()._load_model(user_id)
+
+    def _save_model(self, user_id: str, model: Any):
+        super()._save_model(user_id, model)
+
+    def _get_model_path(self, user_id: str) -> Path:
+        return super()._get_model_path(user_id)
+
+    def fit(self, documents: List[TrainingDocument], layer: str, feature: str, project_id, user_id: str):
+        super().fit(documents, layer, feature, project_id, user_id)
+
+    def predict(self, cas: Cas, layer: str, feature: str, project_id: str, document_id: str, user_id: str):
+        _cas = self._pipeline.analyse_text_to_cas(cas.sofa_string, cas.document_language)
+        _cas.select()
 
 
 if __name__ == "__main__":

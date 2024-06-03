@@ -8,10 +8,8 @@ from ariadne.server import Server
 _config = {
     "address": os.getenv("EXTERNAL_SERVER_ADDRESS", "http://localhost:8080"),
     "security_token": os.getenv("EXTERNAL_SERVER_TOKEN", ""),
-    "endpoint": os.getenv(
-        "PIPELINE_ENDPOINT",
-        "/health-discovery/rest/v1/textanalysis/projects/GeMTeX/pipelines/deid/analyseText",
-    ),
+    "pipeline_project": os.getenv("PIPELINE_PROJECT", "GeMTeX"),
+    "pipeline_name": os.getenv("PIPELINE_NAME", "deid"),
     "response_consumer": os.getenv(
         "CONSUMER", "ariadne.contrib.external_uima_classifier.SimpleDeidConsumer"
     ),
