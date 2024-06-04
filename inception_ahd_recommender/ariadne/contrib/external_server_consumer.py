@@ -6,6 +6,7 @@ from collections import namedtuple
 from dataclasses import dataclass
 
 import cassis
+from cassis.typesystem import TypeNotFoundError
 
 from ariadne.contrib.uima_cas_mapper.mapping_reader import MappingConfig
 
@@ -18,17 +19,16 @@ response_consumer_return_value = namedtuple(
 class Annotation:
     begin: int
     end: int
-    layer: str
     score: float
     src: object
 
     def get(self, attr: str):
-        if attr not in ["begin", "end", "layer", "score"]:
+        if attr not in ["begin", "end", "score"]:
             if isinstance(self.src, dict):
-                return self.src.get(attr)
+                return self.src.get(attr, None)
             elif isinstance(self.src, object):
-                return getattr(self.src, attr)
-        return getattr(self, attr)
+                return getattr(self.src, attr, None)
+        return getattr(self, attr, None)
 
 
 class Processor(ABC):
@@ -43,7 +43,7 @@ class Processor(ABC):
         consumer.scores = []
 
     @abstractmethod
-    def get_next(self) -> Annotation: raise NotImplementedError
+    def get_next(self, layer) -> Annotation: raise NotImplementedError
 
 
 class JsonProcessor(Processor):
@@ -58,16 +58,16 @@ class JsonProcessor(Processor):
         self.json_data = json_response.get("payload", [])
         return self
 
-    def get_next(self) -> Annotation:
+    def get_next(self, layer) -> Annotation:
         for anno in self.json_data:
             _begin = anno.get("begin", None)
             _end = anno.get("end", None)
             _layer = anno.get("type", None)
-            _score = 0.0   # ToDo: get real score if available
+            _score = anno.get("score", 0.0)
 
-            if _begin is None or _end is None or _layer is None:
+            if _begin is None or _end is None or _layer is None or layer != _layer:
                 continue
-            yield Annotation(begin=_begin, end=_end, layer=_layer, score=_score, src=anno)
+            yield Annotation(begin=_begin, end=_end, score=_score, src=anno)
 
 
 class CasProcessor(Processor):
@@ -80,8 +80,20 @@ class CasProcessor(Processor):
         self.cas_data = cas
         return self
 
-    def get_next(self) -> Annotation:
-        for anno in self.cas_data.select()
+    def get_next(self, layer) -> Annotation:
+        try:
+            for anno in self.cas_data.select(layer):
+                result_anno = Annotation(
+                    begin=anno.get("begin"),
+                    end=anno.get("end"),
+                    score=anno.get("score") if anno.get("score") is not None else 0.0,
+                    src=anno
+                )
+                if result_anno.begin is None or result_anno.end is None:
+                    continue
+                yield result_anno
+        except TypeNotFoundError:
+            yield
 
 
 class ResponseConsumer(ABC):
@@ -106,22 +118,22 @@ class MappingConsumer(ResponseConsumer):
     def process(self, response) -> "response_consumer_return_value":
         _processor = self.processor.init(response, self)
 
-        for anno in _processor.get_next():
-            for source_layer, check_dict in self.mapper.annotation_mapping.items():
-                if anno.layer == source_layer:
-                    for _label, _check_call in check_dict.items():
-                        if _check_call(anno):
-                            self.labels.append(_label)
-                            self.offsets.append(
-                                (
-                                    anno.begin,
-                                    anno.end,
-                                )
-                            )
-                            self.scores.append(anno.score)
-                            self.count += 1
-                            continue
+        for source_layer, check_dict in self.mapper.annotation_mapping.items():
+            for anno in _processor.get_next(source_layer):
+                if anno is None:
                     continue
+                for _label, _check_call in check_dict.items():
+                    if _check_call(anno):
+                        self.labels.append(_label)
+                        self.offsets.append(
+                            (
+                                anno.begin,
+                                anno.end,
+                            )
+                        )
+                        self.scores.append(anno.score)
+                        self.count += 1
+                        continue
         return response_consumer_return_value(self.offsets, self.labels, self.count, self.scores)
 
 
@@ -160,9 +172,15 @@ class SimpleDeidConsumer(ResponseConsumer):
 
 
 if __name__ == "__main__":
-    response_path = pathlib.Path(pathlib.Path(__file__).parent.parent.parent / pathlib.Path("tests/resources/albers_response.json"))
+    response_path_json = pathlib.Path(pathlib.Path(__file__).parent.parent.parent / pathlib.Path("tests/resources/albers_response.json"))
+    response_path_xmi = pathlib.Path(pathlib.Path(__file__).parent.parent.parent / pathlib.Path("tests/resources/Albers.txt.xmi"))
+    typesystem_path = pathlib.Path(pathlib.Path(__file__).parent.parent.parent / pathlib.Path("tests/resources/albers_TypeSystem.xml"))
     config_path = pathlib.Path(pathlib.Path(__file__).parent.parent.parent / pathlib.Path("prefab-mapping-files/deid_mapping_singlelayer.json"))
 
-    deid_consumer = MappingConsumer(str(config_path.resolve()), JsonProcessor())
-    processed = deid_consumer.process(json.load(response_path.open('rb')))
-    print(processed)
+    deid_consumer_json = MappingConsumer(str(config_path.resolve()), JsonProcessor())
+    processed_json = deid_consumer_json.process(json.load(response_path_json.open('rb')))
+
+    deid_consumer_xmi = MappingConsumer(str(config_path.resolve()), CasProcessor())
+    ts = cassis.load_typesystem(typesystem_path)
+    processed_xmi = deid_consumer_xmi.process(cassis.load_cas_from_xmi(response_path_xmi, ts, lenient=True))
+    print(processed_xmi)

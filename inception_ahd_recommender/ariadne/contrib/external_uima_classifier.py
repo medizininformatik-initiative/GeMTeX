@@ -1,6 +1,7 @@
 import json
 import logging
 import pathlib
+from abc import abstractmethod, ABC
 from collections import namedtuple
 from pathlib import Path
 from pydoc import locate
@@ -10,8 +11,8 @@ import requests
 from cassis import Cas
 from averbis import Client as AHDClient
 
-from ariadne.classifier import Classifier
-from ariadne.contrib.external_server_consumer import JsonResponseConsumer
+from ariadne.classifier import Classifier as AriadneClassifier
+from ariadne.contrib.external_server_consumer import ResponseConsumer
 from ariadne.contrib.inception_util import create_span_prediction
 from ariadne.protocol import TrainingDocument
 
@@ -53,76 +54,86 @@ def _as_named_tuple(dct: dict):
     )
 
 
-class ExternalUIMAClassifier(Classifier):
-    def __init__(self, server_config: Union[Path, dict], model_directory: Path = None):
-        super().__init__(model_directory)
+class ExternalClassifier(ABC):
+    def __init__(self, config, classifier_type):
+        self._classifier_type = classifier_type
+        self._config: Optional["config_object"] = None
+        self._server = None
+        self._response_consumer: Optional[ResponseConsumer] = None
 
+        self._initialize_configuration(config)
+        self._initialize_server()
+        self._initialize_response_consumer()
+
+    def _initialize_configuration(self, config):
         self._config = config_object(
             address=None, security_token=None, pipeline_name=None, pipeline_project=None, response_consumer=None
         )
-        if isinstance(server_config, Path):
+        if isinstance(config, Path):
             try:
                 self._config = json.load(
-                    server_config.open("br"), object_hook=_as_named_tuple
+                    config.open("br"), object_hook=_as_named_tuple
                 )
             except OSError:
                 logging.error(
-                    f"Couldn't find/read server config file at the specified path: {server_config.resolve()}"
+                    f"Couldn't find/read server config file at the specified path: {config.resolve()}"
                 )
-        elif isinstance(server_config, dict):
-            self._config = _as_named_tuple(server_config)
+        elif isinstance(config, dict):
+            self._config = _as_named_tuple(config)
         else:
             logging.error(
-                f"Server configuration is neither a path to a json file nor a dict: {server_config.__class__}."
+                f"Server configuration is neither a path to a json file nor a dict: {config.__class__}."
             )
 
-        if self._config.address is None or self._config.pipeline_name is None or self._config.pipeline_name is None:
+        if (self.get_configuration().address is None
+                or self.get_configuration().pipeline_name is None
+                or self.get_configuration().pipeline_name is None):
             logging.error(
                 f"Either address or project/pipeline name couldn't be defined for the provided config file:"
-                f" {json.load(server_config.open('rb'))}"
+                f" {json.load(config.open('rb'))}"
             )
 
-        self._connect_to_server()
-        self._create_response_consumer()
+    def get_configuration(self) -> "config_object": return self._config if self._config is not None else config_object(None, None, None, None, None)
 
-    def _connect_to_server(self):
-        self._server = None
-        try:
-            response = requests.get(self._config.address)
-            logging.info(f"Server accessible: '{response.status_code}'")
-            _endpoint = f"health-discovery/rest/v1/textanalysis/projects/{self._config.pipeline_project}/pipelines/{self._config.pipeline_name}/analyseText"
-            self._server = f"{self._config.address}/{_endpoint}"
-        except (requests.exceptions.HTTPError, requests.exceptions.ConnectionError):
-            logging.error(f"No server reachable under '{self._config.address}'")
+    @abstractmethod
+    def _initialize_server(self): raise NotImplementedError
 
-    def _create_response_consumer(self):
-        self.response_consumer: Optional[JsonResponseConsumer] = None
-        _response_consumer = self._config.response_consumer
-        if _response_consumer is not None:
-            self.response_consumer = locate(f"{_response_consumer.get('name')}")(
-                config=_response_consumer.get("config")
+    def get_server(self): return self._server
+
+    def _initialize_response_consumer(self):
+        if self.get_configuration().response_consumer is not None:
+            self.response_consumer = locate(f"{self.get_configuration().response_consumer.get('name')}")(
+                config=self.get_configuration().response_consumer.get("config")
             )
         else:
             logging.error(
-                f"Couldn't find response consumer '{_response_consumer.get('name')}'"
-                f"{' with config: ' if _response_consumer.get('config', False) else '.'}"
-                f"{_response_consumer.get('config') if _response_consumer.get('config', False) else ''}"
+                f"Couldn't find response consumer '{self.get_configuration().response_consumer.get('name')}'"
+                f"{' with config: ' if self.get_configuration().response_consumer.get('config', False) else '.'}"
+                f"{self.get_configuration().response_consumer.get('config') if self.get_configuration().response_consumer.get('config', False) else ''}"
             )
 
-    def _post_text(self, text: str):
-        if self._server is not None and self.response_consumer is not None:
-            response = requests.post(
-                self._server,
-                data=text.encode("utf-8"),
-                headers={
-                    "Content-Type": "text/plain; charset=utf-8",
-                    "api-token": self._config.security_token,
-                },
-            )
-            _parsed_response = self.response_consumer.parse_json(response.json())
-            return _parsed_response
-        else:
-            return None
+    def get_response_consumer(self) -> ResponseConsumer: return self._response_consumer
+
+    @abstractmethod
+    def process_text(self, text: str): raise NotImplementedError
+
+
+class ExternalUIMAClassifier(AriadneClassifier, ExternalClassifier):
+    def __init__(self, config: Union[Path, dict], model_directory: Path = None):
+        super().__init__(model_directory)
+        super(AriadneClassifier, self).__init__(config, self.__class__.__name__)
+
+    def _initialize_server(self):
+        try:
+            if self.get_configuration().address is None:
+                raise RuntimeError("Configuration has seemingly failed")
+            response = requests.get(self.get_configuration().address)
+            logging.info(f"Server accessible: '{response.status_code}'")
+            _endpoint = (f"health-discovery/rest/v1/textanalysis/projects/{self.get_configuration().pipeline_project}"
+                         f"/pipelines/{self.get_configuration().pipeline_name}/analyseText")
+            self._server = f"{self.get_configuration().address}/{_endpoint}"
+        except (requests.exceptions.HTTPError, requests.exceptions.ConnectionError):
+            logging.error(f"No server reachable under '{self.get_configuration().address}'")
 
     def _load_model(self, user_id: str) -> Optional[Any]:
         return super()._load_model(user_id)
@@ -133,6 +144,21 @@ class ExternalUIMAClassifier(Classifier):
     def _get_model_path(self, user_id: str) -> Path:
         return super()._get_model_path(user_id)
 
+    def process_text(self, text: str):
+        if self.get_server() is not None and self.get_response_consumer() is not None:
+            response = requests.post(
+                self.get_server(),
+                data=text.encode("utf-8"),
+                headers={
+                    "Content-Type": "text/plain; charset=utf-8",
+                    "api-token": self.get_configuration().security_token,
+                },
+            )
+            _parsed_response = self.get_response_consumer().process(response.json())
+            return _parsed_response
+        else:
+            return None
+
     def predict(
         self,
         cas: Cas,
@@ -142,7 +168,7 @@ class ExternalUIMAClassifier(Classifier):
         document_id: str,
         user_id: str,
     ):
-        _server_response = self._post_text(cas.sofa_string)
+        _server_response = self.process_text(cas.sofa_string)
         for i in range(_server_response.count):
             _begin, _end = _server_response.offsets[i]
             prediction = create_span_prediction(
@@ -168,47 +194,32 @@ class ExternalUIMAClassifier(Classifier):
             logging.info(doc.document_id)
 
 
-class AHDClassifier(Classifier):
+class AHDClassifier(AriadneClassifier, ExternalClassifier):
 
-    def __init__(self, server_config: Union[Path, dict], model_directory: Path = None):
+    def __init__(self, config: Union[Path, dict], model_directory: Path = None):
         super().__init__(model_directory)
+        super(AriadneClassifier, self).__init__(config, self.__class__.__name__)
 
-        self._config = config_object(
-            address=None, security_token=None, pipeline_name=None, pipeline_project=None, response_consumer=None
-        )
-        if isinstance(server_config, Path):
-            try:
-                self._config = json.load(
-                    server_config.open("br"), object_hook=_as_named_tuple
-                )
-            except OSError:
-                logging.error(
-                    f"Couldn't find/read server config file at the specified path: {server_config.resolve()}"
-                )
-        elif isinstance(server_config, dict):
-            self._config = _as_named_tuple(server_config)
-        else:
-            raise ValueError(
-                f"Server configuration is neither a path to a json file nor a dict: {server_config.__class__}."
-            )
+        self._pipeline = None
 
-        if self._config.address is None or self._config.pipeline_name is None or self._config.pipeline_name is None:
-            raise ValueError(
-                f"Either address or project/pipeline name couldn't be defined for the provided config file:"
-                f"\n{json.load(server_config.open('rb'))}")
+    def get_pipeline(self):
+        return self._pipeline
 
-        self._connect_to_server()
-
-    def _connect_to_server(self):
+    def _initialize_server(self):
         self._server = None
         try:
-            self._server = AHDClient(f"{self._config.address}/health-discovery", api_token='YOUR_API_TOKEN')
-            project = AHDClient.get_project(self._config.pipeline_project)
-            pipeline = project.get_pipeline(self._config.pipeline_name)
+            self._server = AHDClient(
+                f"{self.get_configuration().address}/health-discovery",
+                api_token=self.get_configuration().security_token)
+            project = self.get_server().get_project(name=self.get_configuration().pipeline_project)
+            pipeline = project.get_pipeline(self.get_configuration().pipeline_name)
             pipeline.ensure_started()
             self._pipeline = pipeline
         except Exception as e:
             logging.error(e)
+
+    def _initialize_response_consumer(self):
+        pass
 
     def _load_model(self, user_id: str) -> Optional[Any]:
         return super()._load_model(user_id)
@@ -219,12 +230,14 @@ class AHDClassifier(Classifier):
     def _get_model_path(self, user_id: str) -> Path:
         return super()._get_model_path(user_id)
 
+    def process_text(self, text: str):
+        pass
+
     def fit(self, documents: List[TrainingDocument], layer: str, feature: str, project_id, user_id: str):
         super().fit(documents, layer, feature, project_id, user_id)
 
     def predict(self, cas: Cas, layer: str, feature: str, project_id: str, document_id: str, user_id: str):
-        _cas = self._pipeline.analyse_text_to_cas(cas.sofa_string, cas.document_language)
-        _cas.select()
+        pass
 
 
 if __name__ == "__main__":

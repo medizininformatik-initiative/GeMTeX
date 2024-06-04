@@ -29,7 +29,7 @@ logging.info(
 )
 
 server = Server()
-server.add_classifier(_server_handle, ExternalUIMAClassifier(server_config=_config, model_directory=_model_folder))
+server.add_classifier(_server_handle, ExternalUIMAClassifier(config=_config, model_directory=_model_folder))
 
 app = server._app
 
