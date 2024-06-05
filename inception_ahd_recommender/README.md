@@ -31,9 +31,13 @@ Im Weiteren wird auf den folgenden Ausschnitt einer `docker compose` Datei Bezug
     environment:
       - EXTERNAL_SERVER_ADDRESS=http://<ADRESSE_DER_AVERBIS_HD_IM_DOCKER_NETZWERK>:8080
       - EXTERNAL_SERVER_TOKEN=<API_TOKEN_DER_AVERBIS_HD>
-      - PIPELINE_ENDPOINT=/health-discovery/rest/v1/textanalysis/projects/<PROEJKT_NAME_IN_AVERBIS_HD>/pipelines/<PIPELINE_NAME>/analyseText
+      - PIPELINE_PROJECT=<PROEJKT_NAME_IN_AVERBIS_HD>
+      - PIPELINE_NAME=<PIPELINE_NAME>
       - CONSUMER=ariadne.contrib.external_server_consumer.<CONSUMER_CLASS>[::<MAPPING_FILE>]
+      [- CLASSIFIER=ariadne.contrib.external_uima_classifier.<CLASSIFIER_CLASS>]
+      [- PROCESSOR={json | cas}]
       - SERVER_HANDLE=<NAME_OF_RECOMMENDER>
+      - MODEL_DIR=<PATH_TO_MODELS>
       - RECOMMENDER_WORKERS=4
       - RECOMMENDER_ADDRESS=:5000
     ports:
@@ -61,14 +65,24 @@ Die `AHD` benötigt ein Token für API-Zugriffe. Dieses muss entsprechend erst i
 [AHD-Help: API Token](https://help.averbis.com/health-discovery/user-manual/#HealthDiscoveryUserManualVersion6.20-ApplicationInterface:RESTAPI)
 Es gibt für diese Variable keine Standard-Einstellung.
 
-###### PIPELINE_ENDPOINT
-Das ist der API-Endpunkt relativ zur `<EXTERNAL_SERVER_ADDRESS>`. Prinzipiell sollte sich da außer die Werte für
-`<PROEJKT_NAME_IN_AVERBIS_HD>` und `<PIPELINE_NAME>` nichts ändern. Diese beiden Werte sind abhängig vom
-[erstellten Projekt](https://help.averbis.com/health-discovery/user-manual/#HealthDiscoveryUserManualVersion6.20-LogintoHealthDiscoveryandcreateaproject)
-in der `AHD` bzw. der zu verwendenden
-[Pipeline](https://help.averbis.com/health-discovery/user-manual/#HealthDiscoveryUserManualVersion6.20-PipelineConfiguration).  
-Standard-Wert ist: `/health-discovery/rest/v1/textanalysis/projects/GeMTeX/pipelines/deid/analyseText`.
-Das hieße, es wird ein Projekt `GeMTeX` vorausgesetzt mit einer gestarteten `deid`-Pipeline.
+###### PIPELINE_PROJECT
+Das
+[erstellte Projekt](https://help.averbis.com/health-discovery/user-manual/#HealthDiscoveryUserManualVersion6.20-LogintoHealthDiscoveryandcreateaproject)
+in der `AHD`
+  
+###### PIPELINE_NAME
+Die zu verwendende
+[Pipeline](https://help.averbis.com/health-discovery/user-manual/#HealthDiscoveryUserManualVersion6.20-PipelineConfiguration).
+in der `AHD`
+
+###### (deprecated) PIPELINE_ENDPOINT
+Mittlerweile wird standardmäßig die von Averbis zur Verfügung gestellte Python-API für die `AHD` benutzt, 
+weshalb die explizite Angabe des Endpunkts nicht mehr benötigt wird. Sollte dennoch im Hintergrund der `JsonProcessor` benutzt werden
+(und damit die `AHD` per `requests` angesprochen werden), werden die beiden Variablen `PIPELINE_PROJECT` und `PIPELINE_NAME`
+aufgelöst nach:
+```
+/health-discovery/rest/v1/textanalysis/projects/<PIPELINE_PROJECT>/pipelines/<PIPELINE_NAME>/analyseText
+```
 
 ###### CONSUMER_CLASS
 Diese Variable bestimmt/konfiguriert den `Consumer`, der vorgibt wie die `JSON` Response der `AHD` verarbeitet wird.
@@ -78,6 +92,12 @@ Unter `ariadne.contrib.external_server_consumer` sind derzeit zwei `Consumer` im
 * `MappingConsumer`: dieser implementiert das Mapping vom [uima-cas-mapper](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/uima-cas-mapper).
     Ein entsprechendes <MAPPING_FILE> muss hinter dem doppelten Doppelpunkt angegeben werden. Die Mapping files müssen über `docker volumes` zur Verfügung gestellt werden.
 Der Standard-Wert ist für <CONSUMER_CLASS> der `SimpleDeidConsumer`, da dieser nicht weiter konfiguriert werden muss.
+
+###### (optional/expert-mode) CLASSIFIER
+Desc
+
+###### (optional/expert-mode) PROCESSOR
+Desc
 
 ###### SERVER_HANDLE
 Das bezeichnet nur den Endpoint unter dem [INCEpTION](https://inception-project.github.io) den Recommender zusammen mit IP und PORT ansprechen kann.

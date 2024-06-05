@@ -4,6 +4,7 @@ import pathlib
 from abc import ABC, abstractmethod
 from collections import namedtuple
 from dataclasses import dataclass
+from enum import Enum
 
 import cassis
 from cassis.typesystem import TypeNotFoundError
@@ -13,6 +14,11 @@ from ariadne.contrib.uima_cas_mapper.mapping_reader import MappingConfig
 response_consumer_return_value = namedtuple(
     "response_consumer_return_value", ["offsets", "labels", "count", "score"]
 )
+
+
+class ProcessorType(Enum):
+    CAS = "cas"
+    JSON = "json"
 
 
 @dataclass
@@ -97,22 +103,26 @@ class CasProcessor(Processor):
 
 
 class ResponseConsumer(ABC):
-    def __init__(self, name: str, processor: Processor):
+    def __init__(self, name: str, processor: ProcessorType):
+        self.processor_types = {ProcessorType.CAS: CasProcessor, ProcessorType.JSON: JsonProcessor}
         self.name = name
-        self.processor = processor
+        self.processor = self.processor_types.get(processor, CasProcessor)()
         self.count = 0
         self.labels = []
         self.offsets = []
         self.scores = []
 
-    def process(self, response) -> "response_consumer_return_value":
-        raise NotImplementedError
+    @abstractmethod
+    def process(self, response) -> "response_consumer_return_value": raise NotImplementedError
 
 
 class MappingConsumer(ResponseConsumer):
 
-    def __init__(self, config: str, processor: Processor):
-        super().__init__(self.__class__.__name__, processor)
+    def __init__(self, config: str, processor: ProcessorType = ProcessorType.CAS):
+        super().__init__(
+            name=self.__class__.__name__,
+            processor=processor
+        )
         self.mapper = MappingConfig.build(pathlib.Path(config))
 
     def process(self, response) -> "response_consumer_return_value":
@@ -138,8 +148,11 @@ class MappingConsumer(ResponseConsumer):
 
 
 class SimpleDeidConsumer(ResponseConsumer):
-    def __init__(self, processor: Processor = None):
-        super().__init__(self.__class__.__name__, JsonProcessor() if processor is None else processor)
+    def __init__(self, processor: ProcessorType = ProcessorType.JSON):
+        super().__init__(
+            name=self.__class__.__name__,
+            processor=processor
+        )
         self.namespace = "de.averbis.types.health."
         self.deid_types = [
             "Date",
@@ -152,7 +165,7 @@ class SimpleDeidConsumer(ResponseConsumer):
             "PHIOther",
         ]
 
-    def process(self, response):
+    def process(self, response) -> "response_consumer_return_value":
         _processor = self.processor.init(response, self)
 
         for anno in _processor.get_next():
