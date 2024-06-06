@@ -13,15 +13,27 @@ from cassis import Cas
 from averbis import Client as AHDClient
 
 from ariadne.classifier import Classifier as AriadneClassifier
-from ariadne.contrib.external_server_consumer import ResponseConsumer, response_consumer_return_value, ProcessorType, \
-    CasProcessor
+from ariadne.contrib.external_server_consumer import (
+    ResponseConsumer,
+    response_consumer_return_value,
+    ProcessorType,
+    CasProcessor,
+)
 from ariadne.contrib.inception_util import create_span_prediction
 from ariadne.protocol import TrainingDocument
 
 logging.basicConfig(level=logging.INFO)
 config_object = namedtuple(
     "server_config",
-    ["address", "security_token", "pipeline_project", "pipeline_name", "response_consumer", "classifier", "processor"]
+    [
+        "address",
+        "security_token",
+        "pipeline_project",
+        "pipeline_name",
+        "response_consumer",
+        "classifier",
+        "processor",
+    ],
 )
 
 
@@ -55,7 +67,7 @@ def _as_named_tuple(dct: dict):
             "config": _response_consumer_config,
         },
         classifier=lower_dict.get("classifier"),
-        processor=lower_dict.get("processor")
+        processor=lower_dict.get("processor"),
     )
 
 
@@ -72,14 +84,17 @@ class ExternalClassifier(ABC):
 
     def _initialize_configuration(self, config):
         self._config = config_object(
-            address=None, security_token=None, pipeline_name=None, pipeline_project=None, response_consumer=None,
-            classifier=None, processor=None
+            address=None,
+            security_token=None,
+            pipeline_name=None,
+            pipeline_project=None,
+            response_consumer=None,
+            classifier=None,
+            processor=None,
         )
         if isinstance(config, Path):
             try:
-                self._config = json.load(
-                    config.open("br"), object_hook=_as_named_tuple
-                )
+                self._config = json.load(config.open("br"), object_hook=_as_named_tuple)
             except OSError:
                 logging.error(
                     f"Couldn't find/read server config file at the specified path: {config.resolve()}"
@@ -91,31 +106,44 @@ class ExternalClassifier(ABC):
                 f"Server configuration is neither a path to a json file nor a dict: {config.__class__}."
             )
 
-        if (self.get_configuration().address is None
-                or self.get_configuration().pipeline_name is None
-                or self.get_configuration().pipeline_name is None):
+        if (
+            self.get_configuration().address is None
+            or self.get_configuration().pipeline_name is None
+            or self.get_configuration().pipeline_name is None
+        ):
             logging.error(
                 f"Either address or project/pipeline name couldn't be defined for the provided config file:"
                 f" {json.load(config.open('rb'))}"
             )
 
-    def get_configuration(self) -> "config_object": return self._config if self._config is not None else config_object(None, None, None, None, None)
+    def get_configuration(self) -> "config_object":
+        return (
+            self._config
+            if self._config is not None
+            else config_object(None, None, None, None, None)
+        )
 
     @abstractmethod
-    def _initialize_server(self): raise NotImplementedError
+    def _initialize_server(self):
+        raise NotImplementedError
 
-    def get_server(self): return self._server
+    def get_server(self):
+        return self._server
 
     def _initialize_response_consumer(self):
         try:
             _processor_type = ProcessorType(self.get_configuration().processor)
         except ValueError:
-            logging.warning(f"Processor type {self.get_configuration().processor} not found, using default 'cas'.")
+            logging.warning(
+                f"Processor type {self.get_configuration().processor} not found, using default 'cas'."
+            )
             _processor_type = ProcessorType.CAS
         if self.get_configuration().response_consumer is not None:
-            self._response_consumer = locate(f"{self.get_configuration().response_consumer.get('name')}")(
+            self._response_consumer = locate(
+                f"{self.get_configuration().response_consumer.get('name')}"
+            )(
                 config=self.get_configuration().response_consumer.get("config"),
-                processor=_processor_type
+                processor=_processor_type,
             )
         else:
             logging.error(
@@ -124,10 +152,12 @@ class ExternalClassifier(ABC):
                 f"{self.get_configuration().response_consumer.get('config') if self.get_configuration().response_consumer.get('config', False) else ''}"
             )
 
-    def get_response_consumer(self) -> ResponseConsumer: return self._response_consumer
+    def get_response_consumer(self) -> ResponseConsumer:
+        return self._response_consumer
 
     @abstractmethod
-    def process_text(self, text: str, language: str = None): raise NotImplementedError
+    def process_text(self, text: str, language: str = None):
+        raise NotImplementedError
 
 
 class ExternalUIMAClassifier(AriadneClassifier, ExternalClassifier):
@@ -141,11 +171,15 @@ class ExternalUIMAClassifier(AriadneClassifier, ExternalClassifier):
                 raise RuntimeError("Configuration has seemingly failed")
             response = requests.get(self.get_configuration().address)
             logging.info(f"Server accessible: '{response.status_code}'")
-            _endpoint = (f"health-discovery/rest/v1/textanalysis/projects/{self.get_configuration().pipeline_project}"
-                         f"/pipelines/{self.get_configuration().pipeline_name}/analyseText")
+            _endpoint = (
+                f"health-discovery/rest/v1/textanalysis/projects/{self.get_configuration().pipeline_project}"
+                f"/pipelines/{self.get_configuration().pipeline_name}/analyseText"
+            )
             self._server = f"{self.get_configuration().address}/{_endpoint}"
         except (requests.exceptions.HTTPError, requests.exceptions.ConnectionError):
-            logging.error(f"No server reachable under '{self.get_configuration().address}'")
+            logging.error(
+                f"No server reachable under '{self.get_configuration().address}'"
+            )
 
     def _load_model(self, user_id: str) -> Optional[Any]:
         return super()._load_model(user_id)
@@ -169,8 +203,12 @@ class ExternalUIMAClassifier(AriadneClassifier, ExternalClassifier):
             _parsed_response = self.get_response_consumer().process(response.json())
             return _parsed_response
         else:
-            _faulty_config = "server" if self.get_server() is None else "response consumer"
-            logging.warning(f"Configuration for at least the '{_faulty_config}' went wrong.")
+            _faulty_config = (
+                "server" if self.get_server() is None else "response consumer"
+            )
+            logging.warning(
+                f"Configuration for at least the '{_faulty_config}' went wrong."
+            )
             return None
 
     def predict(
@@ -183,7 +221,16 @@ class ExternalUIMAClassifier(AriadneClassifier, ExternalClassifier):
         user_id: str,
     ):
         _server_response = self.process_text(cas.sofa_string)
-        add_prediction_to_cas(cas, layer, feature, project_id, document_id, user_id, _server_response, self.__class__.__name__)
+        add_prediction_to_cas(
+            cas,
+            layer,
+            feature,
+            project_id,
+            document_id,
+            user_id,
+            _server_response,
+            self.__class__.__name__,
+        )
 
     def fit(
         self,
@@ -212,12 +259,17 @@ class AHDClassifier(AriadneClassifier, ExternalClassifier):
         try:
             self._server = AHDClient(
                 f"{self.get_configuration().address}/health-discovery",
-                api_token=self.get_configuration().security_token)
-            project = self.get_server().get_project(name=self.get_configuration().pipeline_project)
+                api_token=self.get_configuration().security_token,
+            )
+            project = self.get_server().get_project(
+                name=self.get_configuration().pipeline_project
+            )
             pipeline = project.get_pipeline(self.get_configuration().pipeline_name)
             pipeline.ensure_started()
             self._pipeline = pipeline
-            logging.info(f"Pipeline '{self.get_configuration().pipeline_name}' in project '{self.get_configuration().pipeline_project}' successfully assigned.")
+            logging.info(
+                f"Pipeline '{self.get_configuration().pipeline_name}' in project '{self.get_configuration().pipeline_project}' successfully assigned."
+            )
         except Exception as e:
             logging.error(e)
 
@@ -235,25 +287,51 @@ class AHDClassifier(AriadneClassifier, ExternalClassifier):
             self.get_pipeline().analyse_text_to_cas(source=text, language=language)
         )
 
-    def fit(self, documents: List[TrainingDocument], layer: str, feature: str, project_id, user_id: str):
+    def fit(
+        self,
+        documents: List[TrainingDocument],
+        layer: str,
+        feature: str,
+        project_id,
+        user_id: str,
+    ):
         super().fit(documents, layer, feature, project_id, user_id)
 
-    def predict(self, cas: Cas, layer: str, feature: str, project_id: str, document_id: str, user_id: str):
-        _server_response = self.process_text(cas.sofa_string, cas.document_language)
-        add_prediction_to_cas(cas, layer, feature, project_id, document_id, user_id, _server_response, self.__class__.__name__)
-
-
-def add_prediction_to_cas(
+    def predict(
+        self,
         cas: Cas,
         layer: str,
         feature: str,
         project_id: str,
         document_id: str,
         user_id: str,
-        response: response_consumer_return_value,
-        class_name: Optional[str] = None
+    ):
+        _server_response = self.process_text(cas.sofa_string, cas.document_language)
+        add_prediction_to_cas(
+            cas,
+            layer,
+            feature,
+            project_id,
+            document_id,
+            user_id,
+            _server_response,
+            self.__class__.__name__,
+        )
+
+
+def add_prediction_to_cas(
+    cas: Cas,
+    layer: str,
+    feature: str,
+    project_id: str,
+    document_id: str,
+    user_id: str,
+    response: response_consumer_return_value,
+    class_name: Optional[str] = None,
 ):
-    if isinstance(response, response_consumer_return_value) and isinstance(response.count, int):
+    if isinstance(response, response_consumer_return_value) and isinstance(
+        response.count, int
+    ):
         for i in range(response.count):
             _begin, _end = response.offsets[i]
             prediction = create_span_prediction(
@@ -269,7 +347,8 @@ def add_prediction_to_cas(
     else:
         logging.error(
             f"Failed to predict document with id: {document_id} (response from 'process_text' seems to be faulty)."
-            f"--> In classifier: '{class_name}'.")
+            f"--> In classifier: '{class_name}'."
+        )
 
 
 if __name__ == "__main__":

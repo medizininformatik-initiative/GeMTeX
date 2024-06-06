@@ -49,7 +49,8 @@ class Processor(ABC):
         consumer.scores = []
 
     @abstractmethod
-    def get_next(self, layer) -> Annotation: raise NotImplementedError
+    def get_next(self, layer) -> Annotation:
+        raise NotImplementedError
 
 
 class JsonProcessor(Processor):
@@ -96,7 +97,7 @@ class CasProcessor(Processor):
                     begin=anno.get("begin"),
                     end=anno.get("end"),
                     score=anno.get("score") if anno.get("score") is not None else 0.0,
-                    src=anno
+                    src=anno,
                 )
                 if result_anno.begin is None or result_anno.end is None:
                     continue
@@ -108,7 +109,10 @@ class CasProcessor(Processor):
 
 class ResponseConsumer(ABC):
     def __init__(self, name: str, processor: ProcessorType):
-        self.processor_types = {ProcessorType.CAS: CasProcessor, ProcessorType.JSON: JsonProcessor}
+        self.processor_types = {
+            ProcessorType.CAS: CasProcessor,
+            ProcessorType.JSON: JsonProcessor,
+        }
         self.name = name
         self.processor = self.processor_types.get(processor, CasProcessor)()
         self.count = 0
@@ -117,16 +121,14 @@ class ResponseConsumer(ABC):
         self.scores = []
 
     @abstractmethod
-    def process(self, response) -> "response_consumer_return_value": raise NotImplementedError
+    def process(self, response) -> "response_consumer_return_value":
+        raise NotImplementedError
 
 
 class MappingConsumer(ResponseConsumer):
 
     def __init__(self, config: str, processor: ProcessorType = ProcessorType.CAS):
-        super().__init__(
-            name=self.__class__.__name__,
-            processor=processor
-        )
+        super().__init__(name=self.__class__.__name__, processor=processor)
         self.mapper = MappingConfig.build(pathlib.Path(config))
 
     def process(self, response) -> "response_consumer_return_value":
@@ -148,15 +150,14 @@ class MappingConsumer(ResponseConsumer):
                         self.scores.append(anno.score)
                         self.count += 1
                         continue
-        return response_consumer_return_value(self.offsets, self.labels, self.count, self.scores)
+        return response_consumer_return_value(
+            self.offsets, self.labels, self.count, self.scores
+        )
 
 
 class SimpleDeidConsumer(ResponseConsumer):
     def __init__(self, processor: ProcessorType = ProcessorType.JSON):
-        super().__init__(
-            name=self.__class__.__name__,
-            processor=processor
-        )
+        super().__init__(name=self.__class__.__name__, processor=processor)
         self.namespace = "de.averbis.types.health."
         self.deid_types = [
             "Date",
@@ -174,7 +175,7 @@ class SimpleDeidConsumer(ResponseConsumer):
 
         for anno in _processor.get_next():
             if anno.layer.startswith(self.namespace):
-                _anno_label = anno.layer[len(self.namespace):]
+                _anno_label = anno.layer[len(self.namespace) :]
                 if _anno_label not in self.deid_types:
                     continue
                 self.count += 1
@@ -185,21 +186,39 @@ class SimpleDeidConsumer(ResponseConsumer):
                     )
                 )
                 self.labels.append(_anno_label)
-        return response_consumer_return_value(self.offsets, self.labels, self.count, self.scores)
+        return response_consumer_return_value(
+            self.offsets, self.labels, self.count, self.scores
+        )
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
-    response_path_json = pathlib.Path(pathlib.Path(__file__).parent.parent.parent / pathlib.Path("tests/resources/albers_response.json"))
-    response_path_xmi = pathlib.Path(pathlib.Path(__file__).parent.parent.parent / pathlib.Path("tests/resources/Albers.txt.xmi"))
-    typesystem_path = pathlib.Path(pathlib.Path(__file__).parent.parent.parent / pathlib.Path("tests/resources/albers_TypeSystem.xml"))
-    config_path = pathlib.Path(pathlib.Path(__file__).parent.parent.parent / pathlib.Path("prefab-mapping-files/deid_mapping_singlelayer.json"))
+    response_path_json = pathlib.Path(
+        pathlib.Path(__file__).parent.parent.parent
+        / pathlib.Path("tests/resources/albers_response.json")
+    )
+    response_path_xmi = pathlib.Path(
+        pathlib.Path(__file__).parent.parent.parent
+        / pathlib.Path("tests/resources/Albers.txt.xmi")
+    )
+    typesystem_path = pathlib.Path(
+        pathlib.Path(__file__).parent.parent.parent
+        / pathlib.Path("tests/resources/albers_TypeSystem.xml")
+    )
+    config_path = pathlib.Path(
+        pathlib.Path(__file__).parent.parent.parent
+        / pathlib.Path("prefab-mapping-files/deid_mapping_singlelayer.json")
+    )
 
     deid_consumer_json = MappingConsumer(str(config_path.resolve()), ProcessorType.JSON)
-    processed_json = deid_consumer_json.process(json.load(response_path_json.open('rb')))
+    processed_json = deid_consumer_json.process(
+        json.load(response_path_json.open("rb"))
+    )
     print(processed_json)
 
-    # deid_consumer_xmi = MappingConsumer(str(config_path.resolve()), ProcessorType.CAS)
-    # ts = cassis.load_typesystem(typesystem_path)
-    # processed_xmi = deid_consumer_xmi.process(cassis.load_cas_from_xmi(response_path_xmi, ts, lenient=True))
-    # print(processed_xmi)
+    deid_consumer_xmi = MappingConsumer(str(config_path.resolve()), ProcessorType.CAS)
+    ts = cassis.load_typesystem(typesystem_path)
+    processed_xmi = deid_consumer_xmi.process(
+        cassis.load_cas_from_xmi(response_path_xmi, ts, lenient=True)
+    )
+    print(processed_xmi)

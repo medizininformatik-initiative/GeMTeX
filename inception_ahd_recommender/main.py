@@ -17,7 +17,7 @@ _config = {
         "CONSUMER", "ariadne.contrib.external_server_consumer.SimpleDeidConsumer"
     ),
     "classifier": os.getenv("CLASSIFIER", False),
-    "processor": os.getenv("PROCESSOR", ProcessorType.CAS)
+    "processor": os.getenv("PROCESSOR", ProcessorType.CAS),
 }
 
 _server_handle = os.getenv("SERVER_HANDLE", "deid_recommender")
@@ -36,13 +36,17 @@ logging.info(
 )
 
 try:
-    _classifier = AHDClassifier if not _config["classifier"] else locate(_config["classifier"])
+    _classifier = (
+        AHDClassifier if not _config["classifier"] else locate(_config["classifier"])
+    )
 except Exception as e:
     logging.error(e)
     sys.exit(-1)
 
 server = Server()
-server.add_classifier(_server_handle, _classifier(config=_config, model_directory=_model_folder))
+server.add_classifier(
+    _server_handle, _classifier(config=_config, model_directory=_model_folder)
+)
 
 app = server._app
 

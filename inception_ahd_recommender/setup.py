@@ -38,7 +38,7 @@ install_requires = [
     "gunicorn",
     "deprecation",
     "requests",
-    "averbis-python-api"
+    "averbis-python-api",
 ]
 
 contrib_dependencies = ["scikit-learn>=1.0.1", "requests"]
