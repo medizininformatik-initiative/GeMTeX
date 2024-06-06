@@ -65,6 +65,7 @@ class JsonProcessor(Processor):
         return self
 
     def get_next(self, layer) -> Annotation:
+        logging.debug(f"Getting next for layer {layer}")
         for anno in self.json_data:
             _begin = anno.get("begin", None)
             _end = anno.get("end", None)
@@ -73,6 +74,7 @@ class JsonProcessor(Processor):
 
             if _begin is None or _end is None or _layer is None or layer != _layer:
                 continue
+            logging.debug(f"Yielding result for {anno.get('id')}")
             yield Annotation(begin=_begin, end=_end, score=_score, src=anno)
 
 
@@ -87,6 +89,7 @@ class CasProcessor(Processor):
         return self
 
     def get_next(self, layer) -> Annotation:
+        logging.debug(f"Getting next for layer {layer}")
         try:
             for anno in self.cas_data.select(layer):
                 result_anno = Annotation(
@@ -97,6 +100,7 @@ class CasProcessor(Processor):
                 )
                 if result_anno.begin is None or result_anno.end is None:
                     continue
+                logging.debug(f"Yielding result for {anno.xmiID}")
                 yield result_anno
         except TypeNotFoundError:
             yield
@@ -185,15 +189,17 @@ class SimpleDeidConsumer(ResponseConsumer):
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.DEBUG)
     response_path_json = pathlib.Path(pathlib.Path(__file__).parent.parent.parent / pathlib.Path("tests/resources/albers_response.json"))
     response_path_xmi = pathlib.Path(pathlib.Path(__file__).parent.parent.parent / pathlib.Path("tests/resources/Albers.txt.xmi"))
     typesystem_path = pathlib.Path(pathlib.Path(__file__).parent.parent.parent / pathlib.Path("tests/resources/albers_TypeSystem.xml"))
     config_path = pathlib.Path(pathlib.Path(__file__).parent.parent.parent / pathlib.Path("prefab-mapping-files/deid_mapping_singlelayer.json"))
 
-    deid_consumer_json = MappingConsumer(str(config_path.resolve()), JsonProcessor())
+    deid_consumer_json = MappingConsumer(str(config_path.resolve()), ProcessorType.JSON)
     processed_json = deid_consumer_json.process(json.load(response_path_json.open('rb')))
+    print(processed_json)
 
-    deid_consumer_xmi = MappingConsumer(str(config_path.resolve()), CasProcessor())
-    ts = cassis.load_typesystem(typesystem_path)
-    processed_xmi = deid_consumer_xmi.process(cassis.load_cas_from_xmi(response_path_xmi, ts, lenient=True))
-    print(processed_xmi)
+    # deid_consumer_xmi = MappingConsumer(str(config_path.resolve()), ProcessorType.CAS)
+    # ts = cassis.load_typesystem(typesystem_path)
+    # processed_xmi = deid_consumer_xmi.process(cassis.load_cas_from_xmi(response_path_xmi, ts, lenient=True))
+    # print(processed_xmi)

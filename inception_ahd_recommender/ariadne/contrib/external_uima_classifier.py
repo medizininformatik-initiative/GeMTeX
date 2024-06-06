@@ -183,21 +183,7 @@ class ExternalUIMAClassifier(AriadneClassifier, ExternalClassifier):
         user_id: str,
     ):
         _server_response = self.process_text(cas.sofa_string)
-        if isinstance(_server_response, response_consumer_return_value) and isinstance(_server_response.count, int):
-            for i in range(_server_response.count):
-                _begin, _end = _server_response.offsets[i]
-                prediction = create_span_prediction(
-                    cas,
-                    layer,
-                    feature,
-                    _begin,
-                    _end,
-                    _server_response.labels[i],
-                    _server_response.score[i],
-                )
-                cas.add(prediction)
-        else:
-            logging.error(f"Failed to predict document with id: {document_id} (response from 'process_text' seems to be faulty)")
+        add_prediction_to_cas(cas, layer, feature, project_id, document_id, user_id, _server_response, self.__class__.__name__)
 
     def fit(
         self,
@@ -254,21 +240,37 @@ class AHDClassifier(AriadneClassifier, ExternalClassifier):
 
     def predict(self, cas: Cas, layer: str, feature: str, project_id: str, document_id: str, user_id: str):
         _server_response = self.process_text(cas.sofa_string, cas.document_language)
-        if isinstance(_server_response, response_consumer_return_value) and isinstance(_server_response.count, int):
-            for i in range(_server_response.count):
-                _begin, _end = _server_response.offsets[i]
-                prediction = create_span_prediction(
-                    cas,
-                    layer,
-                    feature,
-                    _begin,
-                    _end,
-                    _server_response.labels[i],
-                    _server_response.score[i],
-                )
-                cas.add(prediction)
-        else:
-            logging.error(f"Failed to predict document with id: {document_id} (response from 'process_text' seems to be faulty)")
+        add_prediction_to_cas(cas, layer, feature, project_id, document_id, user_id, _server_response, self.__class__.__name__)
+
+
+def add_prediction_to_cas(
+        cas: Cas,
+        layer: str,
+        feature: str,
+        project_id: str,
+        document_id: str,
+        user_id: str,
+        response: response_consumer_return_value,
+        class_name: Optional[str] = None
+):
+    if isinstance(response, response_consumer_return_value) and isinstance(response.count, int):
+        for i in range(response.count):
+            _begin, _end = response.offsets[i]
+            prediction = create_span_prediction(
+                cas,
+                layer,
+                feature,
+                _begin,
+                _end,
+                response.labels[i],
+                response.score[i],
+            )
+            cas.add(prediction)
+    else:
+        logging.error(
+            f"Failed to predict document with id: {document_id} (response from 'process_text' seems to be faulty)."
+            f"--> In classifier: '{class_name}'.")
+
 
 if __name__ == "__main__":
     from ariadne.server import Server
