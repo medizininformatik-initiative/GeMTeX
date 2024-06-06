@@ -5,7 +5,8 @@ Konfigurationen können per
 [Hilfe zu REST API](https://help.averbis.com/health-discovery/user-manual/#HealthDiscoveryUserManualVersion6.20-ApplicationInterface:RESTAPI)
 der ``AHD``)  
 Alternativ (und vielleicht einfacher) kann eine REST-Anfrage auch über das AHD-User-Interface gestellt werden:
-![](picture-here)
+![ahd](https://github.com/medizininformatik-initiative/GeMTeX/assets/4722688/81b4da1d-2821-4b03-ac56-f6af21d60ba0)
+
 ```
 REST API v1 → Text Analysis → Change pipeline configuration
 ```
