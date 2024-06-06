@@ -33,4 +33,5 @@ Dabei werden die entsprechenden Mapping-Anweisungen im `json`-Format angegeben. 
 
 
 ### Hinweis
-Änderungen am ``main`` branch dieses Repositoriums sind nur durch einen entsprechenden ``pull request`` durchführbar.
+Änderungen am ``main`` branch dieses Repositoriums sind nur durch einen entsprechenden ``pull request`` durchführbar.  
+Fragen oder Anmerkungen zum Repositorium bitte an: franz.matthies@imise.uni-leipzig.de
