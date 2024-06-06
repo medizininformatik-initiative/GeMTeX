@@ -37,7 +37,8 @@ install_requires = [
     "joblib",
     "gunicorn",
     "deprecation",
-    "requests"
+    "requests",
+    "averbis-python-api",
 ]
 
 contrib_dependencies = ["scikit-learn>=1.0.1", "requests"]
