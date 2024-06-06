@@ -99,9 +99,9 @@ Der Standard-Wert für <CONSUMER_CLASS> ist der `SimpleDeidConsumer`, da dieser 
 ###### (optional/expert-mode) CLASSIFIER & PROCESSOR
 Diese Variablen sollten nicht gesetzt werden und sind nur der Vollständigkeit halber konfigurierbar,
 falls es Änderungen in der `AHD` oder der Python-API gibt, die einen kurzfristigen Einstellungspatch benötigen.  
-Mit `CLASSIFIER` kann eine bestimmte Implementation des `external_uima_classifier` erzwungen werden.
-Es wird die dot-notierte Schreibweise erwartet (default: `ariadne.contrib.external_uima_classifier.AHDClassifier`)  
-`PROCESSOR` kann i.M. zwei Werte annehmen (und muss einem String-Wert vom Typ `ariadne.contrib.external_server_consumer.ProcessorType`) entsprechen -
+* Mit `CLASSIFIER` kann eine bestimmte Implementation des `external_uima_classifier` erzwungen werden.
+Es wird die dot-notierte Schreibweise erwartet (default: `ariadne.contrib.external_uima_classifier.AHDClassifier`).
+* `PROCESSOR` kann i.M. zwei Werte annehmen und muss einem String-Wert vom Typ `ariadne.contrib.external_server_consumer.ProcessorType` entsprechen -
 derzeit `cas` oder `json` (default: `cas`).
 
 ###### SERVER_HANDLE

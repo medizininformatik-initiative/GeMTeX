@@ -4,7 +4,7 @@ Dieses Repositorium umfasst  Arbeiten (v.a. Code) zum Projekt [GeMTeX](https://w
 die nicht gut im Projekt-[Confluence](https://confluence.imi.med.fau.de) abgelegt werden können.
 
 ### [`averbis-custom-configs`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/averbis-custom-configs)
-ToDo
+Verschiedene Konfigurationen (`json` Format), mit denen `AHD` Pipelines angepasst werden können.
 
 ### [`cda-transform`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/cda-transform)
 Eine Demo bzw. Machbarkeitsnachweis wie CDA Dokumente Level One über XSLT Stylesheets in HTML oder Plain-Text gewandelt werden können.
@@ -28,7 +28,7 @@ Ein `Python`-Programm um `xmi` im
 Analysen der
 [Averbis Health Discovery](https://averbis.com/health-discovery/) in eine Layer-Modellierung in
 [INCEpTION](https://inception-project.github.io/)).
-Dabei werden die entsprechenden Mapping-Anweisungen im `json`-Format angegeben. Eine genauere Beschreibung ist
+Dabei werden die entsprechenden Mapping-Anweisungen im `json`-Format angegeben. Eine genauere Beschreibung ist im
 [Unterverzeichnis](https://github.com/medizininformatik-initiative/GeMTeX/blob/main/uima_cas_mapper/README.md) zu finden.
 
 
