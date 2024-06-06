@@ -1,4 +1,8 @@
 {
+  "VERSION": {
+    "mapping_file": "1.0.0",
+    "mapping_reader": "1.0.0"
+  },
   "IDENTIFIER_CONSTANTS": {
     "target_deid": "webanno.custom",
     "target_segment": "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type",

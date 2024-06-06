@@ -2,7 +2,7 @@ services:
   ahd-deid-recommender:
     build:
       context: .
-    image: ahd-deid-recommender
+    image: ahd-deid-recommender:1.0.0
     restart: unless-stopped
     environment:
       - EXTERNAL_SERVER_ADDRESS=http://198.168.10.2:8080

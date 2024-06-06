@@ -6,6 +6,7 @@ Date: February 27, 2024
 
 Description: Contains a class that interprets a mapping file and provides the mapping methods.
 """
+__version__ = "1.0.0"
 
 import enum
 import json
