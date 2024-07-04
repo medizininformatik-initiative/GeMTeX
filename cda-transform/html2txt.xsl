@@ -10,11 +10,32 @@
 </xsl:text></xsl:variable>
 
 <xsl:template match="/">
-	<xsl:apply-templates />
+	<xsl:apply-templates/>
+</xsl:template>
+
+<xsl:template match="li">
+	<xsl:param name="indent"/>
+	<xsl:value-of select="concat($indent,'*')"/>
+	<xsl:apply-templates>
+		<xsl:with-param name="indent" select="$indent"/>
+	</xsl:apply-templates>
+	<xsl:value-of select="$newline"/>
+</xsl:template>
+
+<xsl:template match="ol">
+	<xsl:param name="indent" select="'xxxx'"/>
+	<xsl:value-of select="$newline"/>
+	<xsl:apply-templates select="li">
+		<xsl:with-param name="indent" select="concat($indent,'  ')"/>
+	</xsl:apply-templates>
+</xsl:template>
+
+<xsl:template match="strong">
+	<xsl:value-of select="text()"/>
 </xsl:template>
 
 <xsl:template match="h1">
-	<xsl:value-of select="concat($newline,text(),': ')"/>
+	<xsl:value-of select="concat($newline,text(),$newline)"/>
 </xsl:template>
 
 <xsl:template match="table">
@@ -22,8 +43,7 @@
 	<xsl:apply-templates/>
 </xsl:template>
 
-<xsl:template match="td[@colspan='8']">
-</xsl:template>
+<xsl:template match="td[@colspan]"/>
 
 <xsl:template match="td">
 		<xsl:value-of select="normalize-space(.)"/><xsl:value-of select="' | '"/>

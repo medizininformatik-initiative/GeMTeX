@@ -8,31 +8,20 @@
 <xsl:output method="xml" indent="yes"/>
 <xsl:mode on-no-match="shallow-skip"/>
 
-<xsl:variable name="newline"><xsl:text>
-</xsl:text></xsl:variable>
-
 <xsl:template match="/">
 	<html>
-		<xsl:apply-templates select="//section"/>
+		<xsl:apply-templates select="//content" />
 	</html>
 </xsl:template>
 
-
-<xsl:template match="content" mode="x" >
-	<xsl:variable name="s">
-		<xsl:value-of select="text()" />
-	</xsl:variable>
-	<!-- remove strange pt? at end of font tag - this makes content non-xml-->
-	<xsl:value-of select="normalize-space(replace($s,'pt\?',''))" disable-output-escaping="yes"/>
+<xsl:template match="content" >
+	<xsl:variable name="s" select="normalize-space(replace(replace(replace(.,'pt\?',''),'&#160;',' '),'&amp;#160;',' '))"/>
+	<xsl:if test="$s != ''">
+		<h1>
+			<xsl:value-of select="../../caption/."/>
+		</h1>
+		<xsl:value-of select="$s" disable-output-escaping="yes"/>
+	</xsl:if>
 </xsl:template>
-
-
-<xsl:template match="section" >
-	<h1>
-		<xsl:value-of select="caption/."/>
-	</h1>
-	<xsl:apply-templates select=".//content" mode="x"/>
-</xsl:template>
-
 
 </xsl:stylesheet>
