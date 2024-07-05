@@ -28,12 +28,13 @@ try:
 except:
     _model_folder = None
 
-logging.info(
-    f"\nUsing the following address: {_config['address']}\n"
-    f"with project: {_config['pipeline_project']} and\n"
-    f"pipeline: {_config['pipeline_name']} and\n"
-    f"with ResponseConsumer: '{_config['response_consumer']}'"
-)
+if __name__ != "__main__":
+    logging.info(
+        f"\nUsing the following address: {_config['address']}\n"
+        f"with project: {_config['pipeline_project']} and\n"
+        f"pipeline: {_config['pipeline_name']} and\n"
+        f"with ResponseConsumer: '{_config['response_consumer']}'"
+    )
 
 try:
     _classifier = (
@@ -44,15 +45,31 @@ except Exception as e:
     sys.exit(-1)
 
 server = Server()
-server.add_classifier(
-    _server_handle, _classifier(config=_config, model_directory=_model_folder)
-)
-
-app = server._app
 
 if __name__ == "__main__":
+    _config = {
+        "address": "http://nlp-prod:9010",
+        "security_token": "401e49481ee7db5d87c64ab4ae1354b2ab5a57b59beb59015caca37668870a7f",
+        "pipeline_project": "RemoteRecommender",
+        "pipeline_name": "deid",
+        "response_consumer": "ariadne.contrib.external_server_consumer.MappingConsumer::"
+                             "./prefab-mapping-files/deid_mapping_singlelayer.json",
+        "classifier": os.getenv("CLASSIFIER", False),
+        "processor": os.getenv("PROCESSOR", ProcessorType.CAS),
+    }
+    _classifier = (
+        AHDClassifier if not _config["classifier"] else locate(_config["classifier"])
+    )
+    server.add_classifier(
+        _server_handle, _classifier(config=_config, model_directory=_model_folder)
+    )
     server.start()
 elif __name__ != "__main__":
+    server.add_classifier(
+        _server_handle, _classifier(config=_config, model_directory=_model_folder)
+    )
+    app = server._app
+
     gunicorn_logger = logging.getLogger("gunicorn.error")
     app.logger.handlers = gunicorn_logger.handlers
     app.logger.setLevel(gunicorn_logger.level)

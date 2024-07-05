@@ -6,7 +6,7 @@ Date: February 27, 2024
 
 Description: Contains a class that interprets a mapping file and provides the mapping methods.
 """
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 import enum
 import json
@@ -30,6 +30,7 @@ class AnnotationMapping(dict):
         self,
         target_layer: str,
         target_feature: str,
+        entry_name: str,
         mapping_type: MappingTypeEnum = MappingTypeEnum.SINGLELAYER,
         *args,
         **kwargs,
@@ -38,6 +39,7 @@ class AnnotationMapping(dict):
         self.mapping_type = mapping_type
         self.target_layer = target_layer
         self.target_feature = target_feature
+        self.entry_name = entry_name
 
     @property
     def mapping_type(self):
@@ -84,15 +86,16 @@ class MappingConfig:
             else:
                 source_layer = list(layer_dict.get("layer").values())[0]
                 target_layer = list(layer_dict.get("layer").keys())[0]
-            yield source_layer, target_layer, layer_dict
+            yield source_layer, target_layer, layer_dict, layer_suffix
 
     def _build_annotation_mapping(self):
         self.annotation_mapping = {}
-        for source_layer, target_layer, layer_dict in self._layer_iterator():
+        for source_layer, target_layer, layer_dict, entry_name in self._layer_iterator():
             if source_layer is not None:
                 self.annotation_mapping[source_layer] = AnnotationMapping(
                     target_layer,
                     None,
+                    entry_name,
                     MappingTypeEnum.MULTILAYER,
                     {
                         tf: (
@@ -119,6 +122,7 @@ class MappingConfig:
                                         AnnotationMapping(
                                             target_layer=target_layer,
                                             target_feature=feat,
+                                            entry_name=entry_name,
                                             mapping_type=MappingTypeEnum.SINGLELAYER,
                                         )
                                     )

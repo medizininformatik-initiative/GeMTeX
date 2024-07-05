@@ -1,18 +1,19 @@
 import json
 import logging
 import pathlib
+import sys
 from abc import ABC, abstractmethod
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 from dataclasses import dataclass
 from enum import Enum
 
 import cassis
-from cassis.typesystem import TypeNotFoundError
+from cassis.typesystem import TypeNotFoundError, FeatureStructure
 
-from ariadne.contrib.uima_cas_mapper.mapping_reader import MappingConfig
+from ariadne.contrib.uima_cas_mapper.mapping_reader import MappingConfig, MappingTypeEnum
 
 response_consumer_return_value = namedtuple(
-    "response_consumer_return_value", ["offsets", "labels", "count", "score"]
+    "response_consumer_return_value", ["offsets", "labels", "count", "score", "features"]
 )
 
 
@@ -119,6 +120,7 @@ class ResponseConsumer(ABC):
         self.labels = []
         self.offsets = []
         self.scores = []
+        self.features = []
 
     @abstractmethod
     def process(self, response) -> "response_consumer_return_value":
@@ -127,36 +129,82 @@ class ResponseConsumer(ABC):
 
 class MappingConsumer(ResponseConsumer):
 
-    def __init__(self, config: str, processor: ProcessorType = ProcessorType.CAS):
+    def __init__(self, config: str, processor: ProcessorType = ProcessorType.CAS, **kwargs):
         super().__init__(name=self.__class__.__name__, processor=processor)
         self.mapper = MappingConfig.build(pathlib.Path(config))
+        self._check_target_layers()
+
+    def _check_target_layers(self):
+        _target_layers = defaultdict(list)
+        _problematic_layers = defaultdict(set)
+        for k, v in self.mapper.annotation_mapping.items():
+            _target_layers[v.target_layer].append(k)
+            if v.mapping_type == MappingTypeEnum.SINGLELAYER:
+                _problematic_layers[v.target_layer].add(v.entry_name)
+        if len(_target_layers) > 1:
+            _pre = (f"The mapping file seems to be configured for more than one target layer:"
+                    f" {list(_target_layers.keys())}.")
+            if len(_problematic_layers) > 1:
+                logging.error(f"{_pre}\n"
+                              f"\tAdditionally, {len(_problematic_layers)} of them compete for the recommender"
+                              f" assignment, but only one layer is allowed for each recommender.\n"
+                              f"\tPlease rewrite the mapping file or delete/check one or more of the entries:"
+                              f" {set([v for v in _problematic_layers.values()])}.")
+                sys.exit(-1)
+            logging.warning(f"{_pre}\n\tBut right now, nothing needs to be done about it.")
+        elif len(_target_layers) < 1:
+            logging.error(f"The mapping file seems to be configured badly since there is no target layer.")
+            sys.exit(-1)
 
     def process(self, response) -> "response_consumer_return_value":
         _processor = self.processor.init(response, self)
 
         for source_layer, check_dict in self.mapper.annotation_mapping.items():
+            # Multilayer is not allowed for Recommender since a single Recommender is configured for an INCEpTION layer
+            if check_dict.mapping_type == MappingTypeEnum.MULTILAYER:
+                logging.warning(f"An INCEpTION Recommender is only configured for a single layer."
+                                f" It appears your configuration file has an entry for Multilayer processing."
+                                f" Skipping the entry in question:\n{check_dict}")
+                continue
+
             for anno in _processor.get_next(source_layer):
+                _final_label = None
+                _final_features = None
+
                 if anno is None:
                     continue
+                # if check_dict.mapping_type == MappingTypeEnum.SINGLELAYER:
                 for _label, _check_call in check_dict.items():
                     if _check_call(anno):
-                        self.labels.append(_label)
-                        self.offsets.append(
-                            (
-                                anno.begin,
-                                anno.end,
-                            )
-                        )
-                        self.scores.append(anno.score)
+                        _final_label = _label
+                        _final_features = {check_dict.target_feature: _label}
                         self.count += 1
-                        continue
+                        break  # Stacking layers is not allowed
+                # else:
+                #     logging.warning(f"An INCEpTION Recommender is only configured for a single layer."
+                #                     f" It appears your configuration file has an entry for Multilayer processing."
+                #                     f" Skipping the entry in question:\n{check_dict}")
+                #     continue  # Multilayer is not allowed for Recommender since a single Recommender is configured for an INCEpTION layer
+                    # _final_label = check_dict.target_layer
+                    # _final_features = {tf: sf[0](anno.src, sf[1]) for tf, sf in check_dict.items()}
+                    # self.count += 1
+
+                self.labels.append(_final_label)
+                self.offsets.append(
+                    (
+                        anno.begin,
+                        anno.end,
+                    )
+                )
+                self.scores.append(anno.score)
+                self.features.append(_final_features)
         return response_consumer_return_value(
-            self.offsets, self.labels, self.count, self.scores
+            self.offsets, self.labels, self.count, self.scores, self.features
         )
 
 
 class SimpleDeidConsumer(ResponseConsumer):
-    def __init__(self, processor: ProcessorType = ProcessorType.JSON):
+    def __init__(self, processor: ProcessorType = ProcessorType.JSON, **kwargs):
         super().__init__(name=self.__class__.__name__, processor=processor)
         self.namespace = "de.averbis.types.health."
         self.deid_types = [
@@ -187,7 +235,7 @@ class SimpleDeidConsumer(ResponseConsumer):
                 )
                 self.labels.append(_anno_label)
         return response_consumer_return_value(
-            self.offsets, self.labels, self.count, self.scores
+            self.offsets, self.labels, self.count, self.scores, None
         )
 
 

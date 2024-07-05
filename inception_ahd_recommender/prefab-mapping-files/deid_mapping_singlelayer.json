@@ -1,7 +1,7 @@
 {
   "VERSION": {
-    "mapping_file": "1.0.0",
-    "mapping_reader": "1.0.0"
+    "mapping_file": "1.1.0",
+    "mapping_reader": "1.1.0"
   },
   "IDENTIFIER_CONSTANTS": {
     "target_deid": "webanno.custom",
@@ -102,12 +102,6 @@
             }
           }
         }
-      },
-      "Sentence": {
-        "layer": {
-          "#target_segment.Sentence": "#source_segment.Sentence"
-        },
-        "features": {}
       }
     }
   }
