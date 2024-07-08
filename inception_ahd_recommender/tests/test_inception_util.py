@@ -27,7 +27,7 @@ def test_create_prediction():
     typesystem.create_feature(Span, "value_score_explanation", "uima.cas.String")
     typesystem.create_feature(Span, "value_auto_accept", "uima.cas.Boolean")
     cas = Cas(typesystem=typesystem)
-    prediction = create_prediction(
+    prediction = create_span_prediction(
         cas,
         "custom.Span",
         "value",
@@ -45,3 +45,7 @@ def test_create_prediction():
     assert prediction.get("value_score") == 0.1
     assert prediction.get("value_score_explanation") == "blah"
     assert prediction.get("value_auto_accept") == True
+
+
+if __name__ == "__main__":
+    test_create_prediction()
