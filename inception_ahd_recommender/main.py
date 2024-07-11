@@ -3,10 +3,21 @@ import os
 import pathlib
 import sys
 from pydoc import locate
+from typing import Tuple
+
+import pwinput
 
 from ariadne.contrib.external_server_consumer import ProcessorType
 from ariadne.contrib.external_uima_classifier import AHDClassifier
 from ariadne.server import Server
+
+
+def authentication(config):
+    if (not config.get("security_token", False)) or config.get("security_token") == "":
+        _ahd_user = input("AHD username: ")
+        _ahd_pass = pwinput.pwinput(prompt="AHD password: ", mask="*")
+        config["security_token"] = (_ahd_user, _ahd_pass,)
+
 
 _config = {
     "address": os.getenv("EXTERNAL_SERVER_ADDRESS", "http://localhost:8080"),
@@ -57,6 +68,7 @@ if __name__ == "__main__":
         "classifier": os.getenv("CLASSIFIER", False),
         "processor": os.getenv("PROCESSOR", ProcessorType.CAS),
     }
+    authentication(_config)
     _classifier = (
         AHDClassifier if not _config["classifier"] else locate(_config["classifier"])
     )
@@ -65,6 +77,7 @@ if __name__ == "__main__":
     )
     server.start()
 elif __name__ != "__main__":
+    authentication(_config)
     server.add_classifier(
         _server_handle, _classifier(config=_config, model_directory=_model_folder)
     )

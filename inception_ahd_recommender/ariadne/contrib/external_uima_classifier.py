@@ -120,7 +120,7 @@ class ExternalClassifier(ABC):
         return (
             self._config
             if self._config is not None
-            else config_object(None, None, None, None, None)
+            else config_object(None, None, None, None, None, None, None)
         )
 
     @abstractmethod
@@ -257,10 +257,17 @@ class AHDClassifier(AriadneClassifier, ExternalClassifier):
     def _initialize_server(self):
         self._server = None
         try:
-            self._server = AHDClient(
-                f"{self.get_configuration().address}/health-discovery",
-                api_token=self.get_configuration().security_token,
-            )
+            if isinstance(self.get_configuration().security_token, str):
+                self._server = AHDClient(
+                    f"{self.get_configuration().address}/health-discovery",
+                    api_token=self.get_configuration().security_token,
+                )
+            elif len(self.get_configuration().security_token) == 2:
+                self._server = AHDClient(
+                    f"{self.get_configuration().address}/health-discovery",
+                    username=self.get_configuration().security_token[0],
+                    password=self.get_configuration().security_token[1],
+                )
             project = self.get_server().get_project(
                 name=self.get_configuration().pipeline_project
             )
