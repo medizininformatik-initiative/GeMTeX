@@ -58,11 +58,20 @@ def _as_named_tuple(dct: dict):
     elif len(_response_consumer) == 1 and _response_consumer[0] != "":
         _response_consumer_name = _response_consumer[0]
 
+    _security = lower_dict.get("security_token", "").split(",")
+    if len(_security) == 1:
+        if _security[0] != "":
+            _security = _security[0].strip()
+        else:
+            _security = None
+    elif len(_security) == 2:
+        _security = (_security[0].strip(), _security[1].strip(),)
+
     return config_object(
         address=lower_dict.get("address", None),
         pipeline_name=lower_dict.get("pipeline_name", None),
         pipeline_project=lower_dict.get("pipeline_project", None),
-        security_token=lower_dict.get("security_token", None),
+        security_token=_security,
         response_consumer={
             "name": _response_consumer_name,
             "config": _response_consumer_config,
