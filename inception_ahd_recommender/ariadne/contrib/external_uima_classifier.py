@@ -62,10 +62,13 @@ def _as_named_tuple(dct: dict):
     if len(_security) == 1:
         if _security[0] != "":
             _security = _security[0].strip()
+            logging.info(f"Authentication with Token: {_security[:6]}...")
         else:
             _security = None
     elif len(_security) == 2:
         _security = (_security[0].strip(), _security[1].strip(),)
+        logging.info(f"Authentication with Username '{_security[0]}' &"
+                     f" Password: '{_security[1][:2]}{'*'*len(_security[1])}'")
 
     return config_object(
         address=lower_dict.get("address", None),
