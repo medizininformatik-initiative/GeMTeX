@@ -1,6 +1,7 @@
 import json
 import logging
 import pathlib
+import sys
 from abc import abstractmethod, ABC
 from collections import namedtuple
 from pathlib import Path
@@ -40,7 +41,7 @@ config_object = namedtuple(
 def _as_named_tuple(dct: dict):
     lower_dict = {k.lower(): v for k, v in dct.items()}
     if len(set(config_object._fields).intersection(lower_dict.keys())) != len(
-        config_object._fields
+            config_object._fields
     ):
         logging.warning(
             f"There are missing keys in the server config:"
@@ -107,9 +108,9 @@ class ExternalClassifier(ABC):
             )
 
         if (
-            self.get_configuration().address is None
-            or self.get_configuration().pipeline_name is None
-            or self.get_configuration().pipeline_name is None
+                self.get_configuration().address is None
+                or self.get_configuration().pipeline_name is None
+                or self.get_configuration().pipeline_name is None
         ):
             logging.error(
                 f"Either address or project/pipeline name couldn't be defined for the provided config file:"
@@ -212,13 +213,13 @@ class ExternalUIMAClassifier(AriadneClassifier, ExternalClassifier):
             return None
 
     def predict(
-        self,
-        cas: Cas,
-        layer: str,
-        feature: str,
-        project_id: str,
-        document_id: str,
-        user_id: str,
+            self,
+            cas: Cas,
+            layer: str,
+            feature: str,
+            project_id: str,
+            document_id: str,
+            user_id: str,
     ):
         _server_response = self.process_text(cas.sofa_string)
         add_prediction_to_cas(
@@ -233,12 +234,12 @@ class ExternalUIMAClassifier(AriadneClassifier, ExternalClassifier):
         )
 
     def fit(
-        self,
-        documents: List[TrainingDocument],
-        layer: str,
-        feature: str,
-        project_id,
-        user_id: str,
+            self,
+            documents: List[TrainingDocument],
+            layer: str,
+            feature: str,
+            project_id,
+            user_id: str,
     ):
         for doc in documents:
             logging.info(doc.document_id)
@@ -262,12 +263,17 @@ class AHDClassifier(AriadneClassifier, ExternalClassifier):
                     f"{self.get_configuration().address}/health-discovery",
                     api_token=self.get_configuration().security_token,
                 )
-            elif len(self.get_configuration().security_token) == 2:
+            elif ((isinstance(self.get_configuration().security_token, tuple)
+                   or isinstance(self.get_configuration().security_token, list)
+                  ) and len(self.get_configuration().security_token) == 2):
                 self._server = AHDClient(
                     f"{self.get_configuration().address}/health-discovery",
                     username=self.get_configuration().security_token[0],
                     password=self.get_configuration().security_token[1],
                 )
+            else:
+                raise Exception("No means of authentication provided (either token or username + password).")
+
             project = self.get_server().get_project(
                 name=self.get_configuration().pipeline_project
             )
@@ -279,6 +285,7 @@ class AHDClassifier(AriadneClassifier, ExternalClassifier):
             )
         except Exception as e:
             logging.error(e)
+            sys.exit(-1)
 
     def _load_model(self, user_id: str) -> Optional[Any]:
         return super()._load_model(user_id)
@@ -295,23 +302,23 @@ class AHDClassifier(AriadneClassifier, ExternalClassifier):
         )
 
     def fit(
-        self,
-        documents: List[TrainingDocument],
-        layer: str,
-        feature: str,
-        project_id,
-        user_id: str,
+            self,
+            documents: List[TrainingDocument],
+            layer: str,
+            feature: str,
+            project_id,
+            user_id: str,
     ):
         super().fit(documents, layer, feature, project_id, user_id)
 
     def predict(
-        self,
-        cas: Cas,
-        layer: str,
-        feature: str,
-        project_id: str,
-        document_id: str,
-        user_id: str,
+            self,
+            cas: Cas,
+            layer: str,
+            feature: str,
+            project_id: str,
+            document_id: str,
+            user_id: str,
     ):
         _server_response = self.process_text(cas.sofa_string, cas.document_language)
         add_prediction_to_cas(
@@ -327,17 +334,17 @@ class AHDClassifier(AriadneClassifier, ExternalClassifier):
 
 
 def add_prediction_to_cas(
-    cas: Cas,
-    layer: str,
-    feature: str,
-    project_id: str,
-    document_id: str,
-    user_id: str,
-    response: response_consumer_return_value,
-    class_name: Optional[str] = None,
+        cas: Cas,
+        layer: str,
+        feature: str,
+        project_id: str,
+        document_id: str,
+        user_id: str,
+        response: response_consumer_return_value,
+        class_name: Optional[str] = None,
 ):
     if isinstance(response, response_consumer_return_value) and isinstance(
-        response.count, int
+            response.count, int
     ):
         for i in range(response.count):
             _begin, _end = response.offsets[i]
