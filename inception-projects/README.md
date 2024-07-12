@@ -12,6 +12,9 @@ Enthält außerdem die durch die `deid`-Pipeline der
 [De-Identifikations-Guide (V3.3. 10.06.2024)](https://confluence.imi.med.fau.de/display/GEM/De-Identifikation) erstellt wurde.
 * Enthält unannotierte ("leere") Dateien des [`GRASSCO`-Korpus'](https://zenodo.org/records/6539131)¹ (für Recommender-Ansatz).
 
+### Layers
+* [PHI_layer.json](layers/PHI_layer.json) (Layer für PHI-Annotation, nicht in exportierten Projekten enthalten.)
+
 ## Verweise
 [1] Modersohn L, Schulz S, Lohr C, Hahn U.
 GRASCCO - _The First Publicly Shareable, Multiply-Alienated German Clinical Text Corpus_.
