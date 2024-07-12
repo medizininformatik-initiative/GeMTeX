@@ -18,7 +18,7 @@ Enthält außerdem die durch die `deid`-Pipeline der
 #### Hinweis
 * Layer bzw. die Definition der Annotation sind nicht in exportierten Projekten enthalten.
 * Layer müssen seprart aus vorhandenen Layer-Konfigurationen eingestellt oder importiert werden.
-* `Layers` --> `import` --> `layer.json`
+* Einstellungen in `Layers` &rarr; `import` &rarr; `layer.json`
 * [Siehe Dokumentation INCEpTION](https://inception-project.github.io/releases/33.2/docs/user-guide.html#layers_and_features_in_getting_started)
 
 #### Layer-Dateien
