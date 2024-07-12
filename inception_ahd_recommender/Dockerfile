@@ -9,7 +9,7 @@ ARG RECOMMENDER_ADDRESS
 WORKDIR $RECOMMENDER_WORKDIR
 
 
-COPY .. .
+COPY . .
 
 RUN python -m pip install --upgrade pip
 RUN python -m pip install gunicorn
