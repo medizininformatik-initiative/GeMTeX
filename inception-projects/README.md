@@ -22,8 +22,6 @@ Enthält außerdem die durch die `deid`-Pipeline der
 * [Siehe Dokumentation INCEpTION](https://inception-project.github.io/releases/33.2/docs/user-guide.html#layers_and_features_in_getting_started)
 
 #### Layer-Dateien
-* [PHI_layer.json](layers/PHI_layer.json) (Layer für PHI-Annotation)
-
 
 ### Layers
 * [PHI_layer.json](layers/PHI_layer.json) (Layer für PHI-Annotation, nicht in exportierten Projekten enthalten.)
