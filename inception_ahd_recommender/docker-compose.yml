@@ -1,7 +1,7 @@
 services:
   ahd-deid-recommender:
     build:
-      context: .
+      context: ./docker-recommender-start/
     image: ahd-deid-recommender:1.1.1
     restart: unless-stopped
     environment:
