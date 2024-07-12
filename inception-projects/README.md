@@ -8,10 +8,9 @@ Enthält außerdem die durch die `deid`-Pipeline der
 [Averbis Health Discovery](https://averbis.com/health-discovery/) vorannotierten Dokumente des [`GRASSCO`-Korpus'](https://zenodo.org/records/6539131).¹
 
 ### `inception-gemtex-deid-base_project-grascco_raw`
-Eine Layer-Definition, die auf Grundlage des aktuellen
-[De-Identifikations-Guide](https://confluence.imi.med.fau.de/display/GEM/De-Identifikation) erstellt wurde.
-Enthält außerdem unannotierte ("leere") Dateien des [`GRASSCO`-Korpus'](https://zenodo.org/records/6539131).¹
-(Sinnvoll, wenn ein Recommender Ansatz benutzt werden soll.)
+* Konfiguriertes Projekt mit auf Grundlage des aktuellen
+[De-Identifikations-Guide (V3.3. 10.06.2024)](https://confluence.imi.med.fau.de/display/GEM/De-Identifikation) erstellt wurde.
+* Enthält unannotierte ("leere") Dateien des [`GRASSCO`-Korpus'](https://zenodo.org/records/6539131)¹ (für Recommender-Ansatz).
 
 ## Verweise
 [1] Modersohn L, Schulz S, Lohr C, Hahn U.
