@@ -18,13 +18,12 @@ Enthält außerdem die durch die `deid`-Pipeline der
 #### Hinweis
 * Layer bzw. die Definition der Annotation sind nicht in exportierten Projekten enthalten.
 * Layer müssen seprart aus vorhandenen Layer-Konfigurationen eingestellt oder importiert werden.
-* Einstellungen in `Layers` &rarr; `Import` &rarr; `layer.json` &rarr; `Save`
+* `Layers` --> `import` --> `layer.json`
 * [Siehe Dokumentation INCEpTION](https://inception-project.github.io/releases/33.2/docs/user-guide.html#layers_and_features_in_getting_started)
 
 #### Layer-Dateien
+* [PHI_layer.json](layers/PHI_layer.json) (Layer für PHI-Annotation)
 
-### Layers
-* [PHI_layer.json](layers/PHI_layer.json) (Layer für PHI-Annotation, nicht in exportierten Projekten enthalten.)
 
 ## Verweise
 [1] Modersohn L, Schulz S, Lohr C, Hahn U.
