@@ -25,6 +25,9 @@ Enthält außerdem die durch die `deid`-Pipeline der
 * [PHI_layer.json](layers/PHI_layer.json) (Layer für PHI-Annotation)
 
 
+### Layers
+* [PHI_layer.json](layers/PHI_layer.json) (Layer für PHI-Annotation, nicht in exportierten Projekten enthalten.)
+
 ## Verweise
 [1] Modersohn L, Schulz S, Lohr C, Hahn U.
 GRASCCO - _The First Publicly Shareable, Multiply-Alienated German Clinical Text Corpus_.
