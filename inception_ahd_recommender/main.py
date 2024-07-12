@@ -55,7 +55,7 @@ if __name__ == "__main__":
         "pipeline_project": "RemoteRecommender",
         "pipeline_name": "deid",
         "response_consumer": "ariadne.contrib.external_server_consumer.MappingConsumer::"
-                             "./prefab-mapping-files/deid_mapping_singlelayer.json",
+        "./prefab-mapping-files/deid_mapping_singlelayer.json",
         "classifier": os.getenv("CLASSIFIER", False),
         "processor": os.getenv("PROCESSOR", ProcessorType.CAS),
     }

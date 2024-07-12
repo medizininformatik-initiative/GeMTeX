@@ -6,6 +6,7 @@ Date: February 27, 2024
 
 Description: Contains a class that interprets a mapping file and provides the mapping methods.
 """
+
 __version__ = "1.1.0"
 
 import enum
@@ -90,7 +91,12 @@ class MappingConfig:
 
     def _build_annotation_mapping(self):
         self.annotation_mapping = {}
-        for source_layer, target_layer, layer_dict, entry_name in self._layer_iterator():
+        for (
+            source_layer,
+            target_layer,
+            layer_dict,
+            entry_name,
+        ) in self._layer_iterator():
             if source_layer is not None:
                 self.annotation_mapping[source_layer] = AnnotationMapping(
                     target_layer,
