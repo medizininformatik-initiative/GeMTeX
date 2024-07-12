@@ -14,7 +14,16 @@ Enthält außerdem die durch die `deid`-Pipeline der
 * letztes Update: 12.07.2024
 
 ### Layers / Annotationsschemata
-* [PHI_layer.json](layers/PHI_layer.json) (Layer für PHI-Annotation, nicht in exportierten Projekten enthalten.)
+
+#### Hinweis
+* Layer bzw. die Definition der Annotation sind nicht in exportierten Projekten enthalten.
+* Layer müssen seprart aus vorhandenen Layer-Konfigurationen eingestellt oder importiert werden.
+* `Layers` --> `import` --> `layer.json`
+* [Siehe Dokumentation INCEpTION](https://inception-project.github.io/releases/33.2/docs/user-guide.html#layers_and_features_in_getting_started)
+
+#### Layer-Dateien
+* [PHI_layer.json](layers/PHI_layer.json) (Layer für PHI-Annotation)
+
 
 ## Verweise
 [1] Modersohn L, Schulz S, Lohr C, Hahn U.
