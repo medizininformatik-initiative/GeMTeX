@@ -194,7 +194,7 @@ def init_source_cas(
 
 def init_target_ts(mapping: MappingConfig) -> TypeSystem:
     typesystem = TypeSystem()
-    for _, target_layer, layer_dict in mapping._layer_iterator():
+    for _, target_layer, layer_dict, layer_suffix in mapping._layer_iterator():
         ts_type = typesystem.create_type(target_layer)
         ts_type_features = list(layer_dict.get("features", {}).keys())
         if len(ts_type_features) == 0:
