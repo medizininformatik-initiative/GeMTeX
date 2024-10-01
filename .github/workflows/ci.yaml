@@ -9,7 +9,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: inception-ahd-recommender
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build-and-push-image:
@@ -32,16 +32,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }} # automatically generated
 
+      - name: downcase IMAGE_NAME
+        run: |
+          echo "IMAGE_NAME=${IMAGE_NAME,,}" >>${GITHUB_ENV}
+
       - name: Get version from file
         id: version
-        run: echo "version=$(cat inception_ahd_recommender/VERSION)" >> $GITHUB_OUTPUT
-
-      # TODO: Releases. Ansonsten wird hier der Tag auf Basis von Commit und Branch generiert.
-      - name: Extract tags
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        run: echo "VERSION=$(cat inception_ahd_recommender/VERSION)" >> $GITHUB_ENV
 
       - name: Build and push Docker image
         id: push
@@ -49,4 +46,4 @@ jobs:
         with:
           context: ./inception_ahd_recommender
           push: true
-          tags: ${{ steps.verion.outputs.version }}
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
