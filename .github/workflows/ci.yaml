@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - inception_ahd_recommender/**
+      - inception_ahd_recommender/VERSION
 
 env:
   REGISTRY: ghcr.io
@@ -31,7 +31,11 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }} # automatically generated
-      
+
+      - name: Get version from file
+        id: version
+        run: echo "version=$(cat inception_ahd_recommender/VERSION)" >> $GITHUB_OUTPUT
+
       # TODO: Releases. Ansonsten wird hier der Tag auf Basis von Commit und Branch generiert.
       - name: Extract tags
         id: meta
@@ -45,4 +49,4 @@ jobs:
         with:
           context: ./inception_ahd_recommender
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ${{ steps.verion.outputs.version }}
