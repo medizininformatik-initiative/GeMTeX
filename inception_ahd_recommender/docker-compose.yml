@@ -1,8 +1,6 @@
 services:
   ahd-deid-recommender:
-    build:
-      context: .
-    image: ahd-deid-recommender:1.1.1
+    image: ghcr.io/medizininformatik-initiative/gemtex/inception-ahd-recommender:1.1.1
     restart: unless-stopped
     environment:
       - EXTERNAL_SERVER_ADDRESS=http://198.168.10.2:8080
@@ -15,7 +13,7 @@ services:
       - RECOMMENDER_WORKERS=4
       - RECOMMENDER_ADDRESS=:5000
     ports:
-      - 5000:5000
+      - "5000:5000"
     networks:
       - recommender-network
 networks:

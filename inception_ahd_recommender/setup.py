@@ -36,6 +36,7 @@ install_requires = [
     "dkpro-cassis==0.9.1",
     "joblib",
     "gunicorn",
+    "pyaml",
     "deprecation",
     "requests",
     "averbis-python-api==0.11.0",
