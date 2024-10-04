@@ -1,6 +1,8 @@
 import logging
 import yaml
 
+logging.info("Reading configuration for gunicorn from docker-compose.yml...")
+
 with open("docker-compose.yml") as stream:
     try:
         docker_yaml = yaml.safe_load(stream)
