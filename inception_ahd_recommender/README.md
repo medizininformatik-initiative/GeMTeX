@@ -55,6 +55,13 @@ networks:
 [...]
 ```
 
+### WSGI Server: Gunicorn
+Der Service ist mit dem WSGI-Server ``gunicorn`` konfiguriert. Beim Start des Containers wird dieser durch den "Entrypoint" `"gunicorn"` aufgerufen.
+Wenn keine anderen Argumente geliefert werden, wird dadurch die `gunicorn.conf.py` als Konfiguration benutzt und die Anzahl der ``worker`` und die ``address`` wie weiter unten beschrieben aus den Umgebungsvariablen bzw. der ``docker-compose.yml`` gelesen.
+Hier muss also nichts weiter beachtet werden, es sei denn man möchte den ``gunicorn`` Server selbst noch weiter konfigurieren:
+[Gunicorn Settings Documentation](https://docs.gunicorn.org/en/latest/settings.html).
+Dazu müsste man sich aber den Container entsprechend selbst bauen, oder per ``docker volumes`` eine geänderte `gunicorn.conf.py` hosten.
+
 ### ENVIRONMENT VARIABLES
 ###### EXTERNAL_SERVER_ADDRESS
 Gibt die Adresse der `Averbis Health Discovery` im `docker` Netzwerk an. Sollten keine Änderungen an den Einstellungen der `AHD` vorgenommen worden sein,
