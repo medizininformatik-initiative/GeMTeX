@@ -5,12 +5,12 @@ Konfigurationen für [INCEpTION](https://inception-project.github.io/) in Form e
 Eine Layer-Definition, die auf Grundlage des aktuellen
 [De-Identifikations-Guide](https://confluence.imi.med.fau.de/display/GEM/De-Identifikation) (v2) erstellt wurde.
 Enthält außerdem die durch die `deid`-Pipeline der
-[Averbis Health Discovery](https://averbis.com/health-discovery/) vorannotierten Dokumente des [`GRASSCO`-Korpus'](https://zenodo.org/records/6539131).¹
+[Averbis Health Discovery](https://averbis.com/health-discovery/) vorannotierten Dokumente des [`GRASCCO`-Korpus'](https://zenodo.org/records/6539131).¹
 
 ### `inception-gemtex-deid-base_project-grascco_raw`
 * Konfiguriertes Projekt mit auf Grundlage des aktuellen
 [De-Identifikations-Guide (V3.3. 10.06.2024)](https://confluence.imi.med.fau.de/display/GEM/De-Identifikation) erstellt wurde.
-* Enthält unannotierte ("leere") Dateien des [`GRASSCO`-Korpus'](https://zenodo.org/records/6539131)¹ (für Recommender-Ansatz).
+* Enthält unannotierte ("leere") Dateien des [`GRASCCO`-Korpus'](https://zenodo.org/records/6539131)¹ (für Recommender-Ansatz).
 * letztes Update: 12.07.2024
 
 ### Layers / Annotationsschemata
