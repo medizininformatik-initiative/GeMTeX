@@ -5,41 +5,27 @@
     "ahd": "7.5.0"
   },
   "IDENTIFIER_CONSTANTS": {
-    "target_core": "webanno.custom.core",
-    "target_modifier": "webanno.custom.modifier",
-    "target_qualifier": "webanno.custom.qualifier",
+    "target_all": "webanno.custom",
     "target_segment": "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type",
     "source_all": "de.averbis.types.health",
     "source_segment": "de.averbis.extraction.types"
   },
   "MAPPING": {
     "IDENTIFIER": {
-      "target_default": "#target_core",
+      "target_default": "#target_all",
       "source_default": "#source_all"
     },
     "ENTRIES": {
-      "Condition": {
-        "layer": {
-          "#target_core.Condition": "#source_all.Diagnosis"
-        },
+      "Core": {
         "features": {
-          "source": "source",
-          "conceptId": "conceptID"
+          "kind":{
+            "Condition": {
+              "layer": ".Diagnosis"
+            },
+            "Medication"
+          }
         }
       },
-      "MedicationAndSubstances": [
-        {
-          "layer": {
-            "#target_core.Condition": "#source_all.Medication"
-          },
-          "features": {
-            "atcCode": "atc"
-          }
-        },
-        {
-
-        }
-      ],
       "Sentence": {
         "layer": {
           "#target_segment.Sentence": "#source_segment.Sentence"
