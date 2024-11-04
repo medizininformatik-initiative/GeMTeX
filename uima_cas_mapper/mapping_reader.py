@@ -134,6 +134,7 @@ class MappingConfig:
                                 check_fs = MappingConfig.resolve_simple_bool(
                                     val.get("feature", lambda x: True)
                                 )
+                                #ToDo: add smthg like `add_feature` that adds additional features from the source to the target
                                 if source_layer not in self.annotation_mapping:
                                     self.annotation_mapping[source_layer] = (
                                         AnnotationMapping(
