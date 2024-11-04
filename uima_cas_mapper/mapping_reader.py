@@ -11,6 +11,7 @@ __version__ = "1.1.0"
 import enum
 import json
 import pathlib
+from collections import defaultdict
 from types import SimpleNamespace
 from typing import Union, Iterator, Dict
 
@@ -181,15 +182,18 @@ class MappingConfig:
             _identifier_dict[key] = mapping_config.get_expression_value(value)
         mapping_config.identifier = SimpleNamespace(**_identifier_dict)
 
-        _entries_dict = {}
+        _entries_dict = defaultdict(dict)
         for entry, entry_values in config.get("MAPPING", {}).get("ENTRIES", {}).items():
-            _entries_dict[entry] = {}
-            for layer_feature, _dict in entry_values.items():
-                _entries_dict[entry][layer_feature] = {}
-                for key, value in _dict.items():
-                    _entries_dict[entry][layer_feature][
-                        mapping_config.get_expression_value(key)
-                    ] = mapping_config.get_expression_value(value)
+            if not isinstance(entry_values, list):
+                entry_values = [entry_values]
+            for i, entry_value in enumerate(entry_values):
+                key_entry = f"{entry}_{i}" if len(entry_values) > 1 else entry
+                for layer_feature, _dict in entry_value.items():
+                    _entries_dict[key_entry][layer_feature] = {}
+                    for key, value in _dict.items():
+                        _entries_dict[key_entry][layer_feature][
+                            mapping_config.get_expression_value(key)
+                        ] = mapping_config.get_expression_value(value)
         mapping_config.entries = SimpleNamespace(**_entries_dict)
 
         mapping_config._build_annotation_mapping()
