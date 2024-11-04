@@ -92,6 +92,18 @@ Die erste Ebene enthält die Typen die in der neuen CAS erstellt werden sollen.
   "features": { [...] } (ii)
 }
 ```
+__ToDo__: _instead of object, list of objects is also allowed_
+```
+"Age": [
+    {
+      "layer": {},
+      "features": { [...] }
+    },
+    {
+      [...]
+    }
+]
+```
 
 ##### (i) layer
 Wenn der Wert des ``layer`` Eintrags leer gelassen wird (leeres `Object`), werden die unter *(b)* definierten Standard-Layer-Definitionen und der Name des `keys` verwendet.
