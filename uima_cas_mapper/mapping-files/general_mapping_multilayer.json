@@ -1,7 +1,8 @@
 {
   "VERSION": {
     "mapping_file": "1.0.0",
-    "mapping_reader": "1.1.0"
+    "mapping_reader": "1.1.0",
+    "ahd": "7.5.0"
   },
   "IDENTIFIER_CONSTANTS": {
     "target_core": "webanno.custom.core",
@@ -17,57 +18,28 @@
       "source_default": "#source_all"
     },
     "ENTRIES": {
-      "Age": {
-        "layer": {},
+      "Condition": {
+        "layer": {
+          "#target_core.Condition": "#source_all.Diagnosis"
+        },
         "features": {
-          "kind": "$DATE"
+          "source": "source",
+          "conceptId": "conceptID"
         }
       },
-      "Contact": {
-        "layer": {},
-        "features": {
-          "kind": "kind"
+      "MedicationAndSubstances": [
+        {
+          "layer": {
+            "#target_core.Condition": "#source_all.Medication"
+          },
+          "features": {
+            "atcCode": "atc"
+          }
+        },
+        {
+
         }
-      },
-      "Date": {
-        "layer": {},
-        "features": {
-          "kind": "kind",
-          "day": "day",
-          "month": "month",
-          "year": "year"
-        }
-      },
-      "ID": {
-        "layer": {},
-        "features": {
-          "kind": "kind"
-        }
-      },
-      "Location": {
-        "layer": {},
-        "features": {
-          "kind": "kind"
-        }
-      },
-      "Name": {
-        "layer": {},
-        "features": {
-          "kind": "kind"
-        }
-      },
-      "PHIOther": {
-        "layer": {},
-        "features": {
-          "kind": "$PHI_OTHER"
-        }
-      },
-      "Profession": {
-        "layer": {},
-        "features": {
-          "kind": "$PROFESSION"
-        }
-      },
+      ],
       "Sentence": {
         "layer": {
           "#target_segment.Sentence": "#source_segment.Sentence"
