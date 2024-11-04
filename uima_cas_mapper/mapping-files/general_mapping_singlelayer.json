@@ -21,8 +21,7 @@
           "kind":{
             "Condition": {
               "layer": ".Diagnosis"
-            },
-            "Medication"
+            }
           }
         }
       },
