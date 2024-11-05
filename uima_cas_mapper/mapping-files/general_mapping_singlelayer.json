@@ -1,7 +1,7 @@
 {
   "VERSION": {
     "mapping_file": "1.0.0",
-    "mapping_reader": "1.1.0",
+    "mapping_reader": "1.2.0",
     "ahd": "7.5.0"
   },
   "IDENTIFIER_CONSTANTS": {
@@ -18,9 +18,21 @@
     "ENTRIES": {
       "Core": {
         "features": {
-          "kind":{
+          "kind": {
             "Condition": {
-              "layer": ".Diagnosis"
+              "layer": ".Diagnosis",
+              "add_feature": {
+                "source": "source",
+                "conceptId": "conceptID"
+              }
+            },
+            "Test": {
+              "layer": ".Date",
+              "add_feature": {
+                "day": "day",
+                "month": "month",
+                "year": "year"
+              }
             }
           }
         }

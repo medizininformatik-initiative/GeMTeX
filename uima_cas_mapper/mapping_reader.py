@@ -92,7 +92,7 @@ class MappingConfig:
                 if sf.startswith("$")
                 else ((lambda x, y: x.get(y)), sf)
             )
-            for tf, sf in feat_dict.items()
+            for tf, sf in feat_dict.get("features", {}).items()
         }
 
     def _layer_iterator(self) -> Iterator[tuple]:
@@ -121,7 +121,7 @@ class MappingConfig:
                     entry_name,
                     MappingTypeEnum.MULTILAYER,
                     None,
-                    self._resolve_feature_dict(layer_dict.get("features", {})),
+                    self._resolve_feature_dict(layer_dict),
                 )
             else:
                 for feat, feat_val in layer_dict.get("features", {}).items():
