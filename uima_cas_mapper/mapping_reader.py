@@ -92,7 +92,7 @@ class MappingConfig:
                 if sf.startswith("$")
                 else ((lambda x, y: x.get(y)), sf)
             )
-            for tf, sf in feat_dict.get("features", {}).items()
+            for tf, sf in feat_dict.items()
         }
 
     def _layer_iterator(self) -> Iterator[tuple]:
@@ -121,7 +121,7 @@ class MappingConfig:
                     entry_name,
                     MappingTypeEnum.MULTILAYER,
                     None,
-                    self._resolve_feature_dict(layer_dict),
+                    self._resolve_feature_dict(layer_dict.get("features", {})),
                 )
             else:
                 for feat, feat_val in layer_dict.get("features", {}).items():
@@ -134,7 +134,6 @@ class MappingConfig:
                                 check_fs = MappingConfig.resolve_simple_bool(
                                     val.get("feature", lambda x: True)
                                 )
-                                #ToDo: add smthg like `add_feature` that adds additional features from the source to the target
                                 if source_layer not in self.annotation_mapping:
                                     self.annotation_mapping[source_layer] = (
                                         AnnotationMapping(
