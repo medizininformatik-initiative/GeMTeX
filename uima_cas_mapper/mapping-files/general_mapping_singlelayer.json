@@ -22,16 +22,13 @@
             "Condition": {
               "layer": ".Diagnosis",
               "add_feature": {
-                "source": "source",
-                "conceptId": "conceptID"
+                "icd10": "conceptID"
               }
             },
-            "Test": {
-              "layer": ".Date",
+            "Medication": {
+              "layer": ".Medication",
               "add_feature": {
-                "day": "day",
-                "month": "month",
-                "year": "year"
+                "atc": "atc"
               }
             }
           }
