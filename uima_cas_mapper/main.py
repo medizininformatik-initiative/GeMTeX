@@ -127,6 +127,10 @@ def mark_new(
                     for k, v in mapping_dict.items():
                         if v(layer_instance):
                             feat = {mapping_dict.target_feature: k}
+                            _dupl = mapping_dict.additional_feats.pop(mapping_dict.target_feature, None)
+                            if _dupl is not None:
+                                logging.warning(f"Removed {_dupl} from 'add_feature' for entry '{mapping_dict.entry_name}_{k}'.")
+                            feat.update({tf: sf[0](layer_instance, sf[1]) for tf, sf in mapping_dict.additional_feats.items()})
                             break
                 else:
                     feat = {tf: sf[0](layer_instance, sf[1]) for tf, sf in mapping_dict.items()}
@@ -196,7 +200,14 @@ def init_target_ts(mapping: MappingConfig) -> TypeSystem:
     typesystem = TypeSystem()
     for _, target_layer, layer_dict, layer_suffix in mapping._layer_iterator():
         ts_type = typesystem.create_type(target_layer)
-        ts_type_features = list(layer_dict.get("features", {}).keys())
+        ts_type_features = set()
+        for k, v in layer_dict.get("features", {}).items():
+            ts_type_features.add(k)
+            if isinstance(v, dict):
+                for nv in v.values():
+                    if isinstance(nv, dict):
+                        if "add_feature" in nv:
+                            ts_type_features.update(nv.get("add_feature").keys())
         if len(ts_type_features) == 0:
             continue
         for feature in ts_type_features:
