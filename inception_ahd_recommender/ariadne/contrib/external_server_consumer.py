@@ -183,6 +183,7 @@ class MappingConsumer(ResponseConsumer):
                 )
                 continue
 
+            anno: Annotation
             for anno in _processor.get_next(source_layer):
                 _final_label = None
                 _final_features = None
@@ -194,6 +195,14 @@ class MappingConsumer(ResponseConsumer):
                     if _check_call(anno):
                         _final_label = _label
                         _final_features = {check_dict.target_feature: _label}
+                        _dupl = check_dict.additional_feats.pop(check_dict.target_feature, None)
+                        if _dupl is not None:
+                            logging.warning(
+                                f"Removed {_dupl} from 'add_feature' for entry '{check_dict.entry_name}_{_label}'.")
+                        for k, v in check_dict.additional_feats.items():  # Provide the "add_feature" values
+                            _feat_val = anno.get(k)
+                            if _feat_val is not None:
+                                _final_features[k] = _feat_val
                         self.count += 1
                         break  # Stacking layers is not allowed
                 # else:
