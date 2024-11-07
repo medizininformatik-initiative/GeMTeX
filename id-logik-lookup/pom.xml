@@ -54,6 +54,11 @@
             <artifactId>uimaj-core</artifactId>
             <version>3.5.0</version>
         </dependency>
+        <dependency>
+            <groupId>org.apache.uima</groupId>
+            <artifactId>uimafit-core</artifactId>
+            <version>3.5.0</version>
+        </dependency>
         <!-- ID LOGIK API -->
         <dependency>
             <artifactId>shared-idlogik</artifactId>
