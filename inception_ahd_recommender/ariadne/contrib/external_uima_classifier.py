@@ -394,7 +394,7 @@ def add_prediction_to_cas(
                 feature,
                 _begin,
                 _end,
-                response.labels[i] if feature not in response.features[i] else response.features[i],
+                response.labels[i] if feature not in response.features[i] else response.features[i][feature],
                 response.score[i],
             )
             cas.add(prediction)
