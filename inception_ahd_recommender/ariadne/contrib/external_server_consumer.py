@@ -199,10 +199,10 @@ class MappingConsumer(ResponseConsumer):
                         if _dupl is not None:
                             logging.warning(
                                 f"Removed {_dupl} from 'add_feature' for entry '{check_dict.entry_name}_{_label}'.")
-                        for k, v in check_dict.additional_feats.items():  # Provide the "add_feature" values
-                            _feat_val = anno.get(k)
+                        for target_feature, mapping_tuple in check_dict.additional_feats.items():  # Provide the "add_feature" values
+                            _feat_val = mapping_tuple[0](anno,mapping_tuple[1])
                             if _feat_val is not None:
-                                _final_features[k] = _feat_val
+                                _final_features[target_feature] = _feat_val
                         self.count += 1
                         break  # Stacking layers is not allowed
                 # else:
