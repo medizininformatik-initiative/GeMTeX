@@ -59,11 +59,33 @@
             <artifactId>uimafit-core</artifactId>
             <version>3.5.0</version>
         </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-api</artifactId>
+            <version>3.0.0-beta2</version>
+        </dependency>
+
         <!-- ID LOGIK API -->
         <dependency>
             <artifactId>shared-idlogik</artifactId>
             <groupId>com.id.shared</groupId>
-            <version>7.8.16-SNAPSHOT</version>
+            <version>9.3.0</version>
+            <scope>system</scope>
+            <systemPath>${basedir}/lib/shared-idlogik-9.3.0.jar</systemPath>
+        </dependency>
+        <dependency>
+            <artifactId>shared-base</artifactId>
+            <groupId>com.id.shared</groupId>
+            <version>9.3.0</version>
+            <scope>system</scope>
+            <systemPath>${basedir}/lib/shared-base-9.3.0.jar</systemPath>
+        </dependency>
+        <dependency>
+            <artifactId>shared-util</artifactId>
+            <groupId>com.id.shared</groupId>
+            <version>9.3.0</version>
+            <scope>system</scope>
+            <systemPath>${basedir}/lib/shared-util-9.3.0.jar</systemPath>
         </dependency>
         <dependency>
             <groupId>org.apache.httpcomponents</groupId>

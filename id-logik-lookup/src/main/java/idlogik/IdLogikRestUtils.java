@@ -6,7 +6,8 @@ import com.id.idlogik.app.Task;
 import org.apache.commons.io.IOUtils;
 import org.apache.http.NameValuePair;
 import org.apache.http.message.BasicNameValuePair;
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.apache.xml.serialize.OutputFormat;
 import org.apache.xml.serialize.XMLSerializer;
 import org.w3c.dom.Document;
@@ -47,7 +48,7 @@ public final class IdLogikRestUtils {
   /**
    * Logging
    */
-  private static final Logger LOGGER = Logger.getLogger(IdLogikRestUtils.class);
+  private static final Logger LOGGER = LogManager.getLogger(IdLogikRestUtils.class);
 
   /**
    * No instance
