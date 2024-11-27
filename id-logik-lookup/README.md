@@ -7,7 +7,19 @@ Der Recommender bildet dann die Schnittstelle zwischen INCEpTION und dem ID Logi
 _ToDo_
 
 ### Konfiguration
-_ToDo_
+Standard Konfiguration:
+```
+idlogik:
+  protocol: http
+  host: localhost
+  port: 7777
+  licence:
+```
+``licence`` muss beim Start des Services als `property` übergeben werden (z.B. als ``command line option``):  
+```
+java -jar IDLOGIK_RECOMMENDER.jar --idlogik.licence=LICENCE_KEY
+```
+So kann bei bedarf auch der Host/Port konfiguriert werden. 
 
 ### Anderes
 _ToDo_
