@@ -6,11 +6,10 @@
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
         <version>3.1.5</version>
-<!--        <relativePath/> &lt;!&ndash; lookup parent from repository &ndash;&gt;-->
     </parent>
     <groupId>com.id</groupId>
     <artifactId>InceptionRecommender</artifactId>
-    <version>0.0.3</version>
+    <version>0.1.0</version>
     <name>InceptionRecommender</name>
     <description>InceptionRecommender</description>
     <properties>
@@ -19,6 +18,7 @@
 
     <dependencies>
 
+        <!-- Spring -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter</artifactId>
@@ -38,6 +38,7 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-cache</artifactId>
         </dependency>
+
         <!-- UIMA -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
@@ -92,6 +93,8 @@
             <scope>system</scope>
             <systemPath>${basedir}/lib/shared-util-9.3.0.jar</systemPath>
         </dependency>
+
+        <!-- Other -->
         <dependency>
             <groupId>org.apache.httpcomponents</groupId>
             <artifactId>httpclient</artifactId>
