@@ -10,7 +10,7 @@
     </parent>
     <groupId>com.id</groupId>
     <artifactId>InceptionRecommender</artifactId>
-    <version>0.0.2</version>
+    <version>0.0.3</version>
     <name>InceptionRecommender</name>
     <description>InceptionRecommender</description>
     <properties>
@@ -33,6 +33,10 @@
             <artifactId>spring-boot-starter-web</artifactId>
             <version>RELEASE</version>
             <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-cache</artifactId>
         </dependency>
         <!-- UIMA -->
         <dependency>
@@ -129,13 +133,6 @@
                     </image>
                     <includeSystemScope>true</includeSystemScope>
                 </configuration>
-<!--                <executions>-->
-<!--                    <execution>-->
-<!--                        <goals>-->
-<!--                            <goal>repackage</goal>-->
-<!--                        </goals>-->
-<!--                    </execution>-->
-<!--                </executions>-->
             </plugin>
         </plugins>
     </build>
