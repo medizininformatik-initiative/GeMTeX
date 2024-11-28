@@ -1,0 +1,49 @@
+name: Build and publish Inception-IDLogik-Recommender
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - id_logik_recommender/VERSION
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/inception-idlogik-recommender
+
+jobs:
+  build-and-push-image:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }} # automatically generated
+
+      - name: downcase IMAGE_NAME
+        run: |
+          echo "IMAGE_NAME=${IMAGE_NAME,,}" >>${GITHUB_ENV}
+
+      - name: Get version from file
+        id: version
+        run: echo "VERSION=$(cat id_logik_recommender/VERSION)" >> $GITHUB_ENV
+
+      - name: Build and push Docker image
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./id_logik_recommender
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
