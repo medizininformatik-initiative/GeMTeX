@@ -1,5 +1,0 @@
-idlogik:
-  protocol: http
-  host: localhost
-  port: 7777
-  licence:
