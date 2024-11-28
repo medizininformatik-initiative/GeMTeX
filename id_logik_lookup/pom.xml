@@ -115,7 +115,10 @@
         </dependency>
     </dependencies>
 
+    <packaging>jar</packaging>
+
     <build>
+        <finalName>id-logik-recommender</finalName>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
@@ -136,5 +139,4 @@
             </plugin>
         </plugins>
     </build>
-
 </project>
