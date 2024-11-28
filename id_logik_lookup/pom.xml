@@ -10,7 +10,7 @@
     </parent>
     <groupId>com.id</groupId>
     <artifactId>InceptionRecommender</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>0.0.2</version>
     <name>InceptionRecommender</name>
     <description>InceptionRecommender</description>
     <properties>
