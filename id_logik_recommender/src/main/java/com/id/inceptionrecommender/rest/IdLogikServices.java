@@ -45,7 +45,7 @@ public class IdLogikServices {
         }
     }
 
-    @Cacheable(value = "SCT_ANNO_CACHE", key = "#text", unless="#task.getResultItems().size()==0")
+    @Cacheable(value = "SCT_ANNO_CACHE", key = "#text", unless="#result.size()==0")
     public List<ResultItem> text2FullSCT(String text) {
         Task task = new Task();
         task.setServiceName("term.Index");
