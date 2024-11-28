@@ -9,6 +9,9 @@ Verschiedene Konfigurationen (`json` Format), mit denen `AHD` Pipelines angepass
 ### [`cda-transform`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/cda-transform)
 Eine Demo bzw. Machbarkeitsnachweis wie CDA Dokumente Level One über XSLT Stylesheets in HTML oder Plain-Text gewandelt werden können.
 
+### [`id-logik-lookup`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/id-logik-lookup)
+Ein in ``java`` implementierter Recommender für [INCEpTION](https://inception-project.github.io/) als Schnittstelle zum [IDLogik-Server](https://www.id-berlin.de/produkte/nlp-forschung/id-logik/).
+
 ### [`inception-projects`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/inception-projects)
 Beinhaltet exportierte Basis-Projekte (also im Grunde Konfigurationen der Layer etc.) für
 [INCEpTION](https://inception-project.github.io/), die von den einzelnen Standorten in ihre jeweilige
