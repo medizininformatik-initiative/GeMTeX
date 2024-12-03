@@ -1,3 +1,4 @@
+name: inception-dashboard-lead
 services:
   inception-reporting:
     image: inception-project/inception-dashboard:0.6.2
