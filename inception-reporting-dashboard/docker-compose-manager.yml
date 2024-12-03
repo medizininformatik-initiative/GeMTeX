@@ -1,0 +1,11 @@
+services:
+  inception-reporting:
+    image: inception-project/inception-dashboard:0.6.2
+    container_name: inception-dashboard-manager
+    command: '--manager'
+    restart: unless-stopped
+    ports:
+      - '9011:8501'
+
+volumes:
+  results:
