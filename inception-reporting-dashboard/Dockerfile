@@ -11,4 +11,4 @@ RUN cd inception-reporting-dashboard
 
 RUN pip install --no-cache-dir inception-reports
 
-CMD [ "inception_reports", "--manager" ]
+ENTRYPOINT [ "inception_reports" ]
