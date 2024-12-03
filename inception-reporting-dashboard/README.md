@@ -28,7 +28,7 @@ docker compose -f docker-compose-lead.yml up
 docker run -p 9012:8501 --name inception-dashboard-lead inception-project/inception-dashboard:0.6.2 --lead
 ```
 Erstellt ein Container mit dem Namen ``inception-dashboard-lead``,
-der das Manager Dashboard auf Port ``9012`` zur Verfügung stellt.
+der das Lead Dashboard auf Port ``9012`` zur Verfügung stellt.
 
 ### Anderes
 
