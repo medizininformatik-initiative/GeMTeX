@@ -2,28 +2,33 @@
 Konfigurationen für [INCEpTION](https://inception-project.github.io/) in Form exportierter Projekte.
 
 ### `inception-gemtex-deid-base_project`
-Eine Layer-Definition, die auf Grundlage des aktuellen
-[De-Identifikations-Guide](https://confluence.imi.med.fau.de/display/GEM/De-Identifikation) (v2) erstellt wurde.
+Eine Layer-Definition, die auf Grundlage der ersten Version der
+[De-Identifikations-Annotationsleitlinien (v2)](https://confluence.imi.med.fau.de/display/GEM/De-Identifikation) erstellt wurde.
 Enthält außerdem die durch die `deid`-Pipeline der
 [Averbis Health Discovery](https://averbis.com/health-discovery/) vorannotierten Dokumente des [`GRASCCO`-Korpus'](https://zenodo.org/records/6539131).¹
 
 ### `inception-gemtex-deid-base_project-grascco_raw`
-* Konfiguriertes Projekt mit auf Grundlage des aktuellen
+* Konfiguriertes Projekt mit auf Grundlage des 
 [De-Identifikations-Guide (V3.3. 10.06.2024)](https://confluence.imi.med.fau.de/display/GEM/De-Identifikation) erstellt wurde.
-* Enthält unannotierte ("leere") Dateien des [`GRASCCO`-Korpus'](https://zenodo.org/records/6539131)¹ (für Recommender-Ansatz).
+* Enthält nicht annotierte _("leere")_ Dateien des [`GRASCCO`-Korpus'](https://zenodo.org/records/6539131)¹ (für Recommender-Ansatz).
 * letztes Update: 12.07.2024
 
 ### Layers / Annotationsschemata
 
 #### Hinweis
-* Layer bzw. die Definition der Annotation sind nicht in exportierten Projekten enthalten.
-* Layer müssen seprart aus vorhandenen Layer-Konfigurationen eingestellt oder importiert werden.
+* Die Dateien der Layer bzw. die Definition der Annotation sind nicht in exportierten Projekten enthalten.
+* Layer müssen separart aus vorhandenen Layer-Konfigurationen eingestellt oder importiert werden.
 * Einstellungen in `Layers` &rarr; `Import` &rarr; `layer.json` &rarr; `Save`
 * [Siehe Dokumentation INCEpTION](https://inception-project.github.io/releases/33.2/docs/user-guide.html#layers_and_features_in_getting_started)
 
 #### Layer-Dateien
-* [PHI_layer.json](layers/PHI_layer.json) (Layer für PHI-Annotation)
 
+##### Layer für PHI-Annotation
+* Version 1: [v1_PHI_layer.json](layers/v1_PHI_layer.json)
+* **Version 1.1**: [v1.1_PHI_layer.json](layers/v1.1_PHI_layer.json) **(Aktualisierung 6.12.2024)**
+  * Erweiterung mit `DATE_BIRTH` und `DATE_DEATH` 
+  * Hinweis füt Integration in INCEpTION:
+    * Einstellungen öffnen: `Layers` &rarr; (bestehendes) `PHI`-Layer auswählen &rarr; `Import` &rarr; `v1.1_PHI_layer.json` &rarr; `Save`
 
 ## Verweise
 [1] Modersohn L, Schulz S, Lohr C, Hahn U.
