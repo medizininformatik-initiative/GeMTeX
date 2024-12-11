@@ -10,6 +10,7 @@ Verschiedene Konfigurationen (`json` Format), mit denen `AHD` Pipelines angepass
 Eine Demo bzw. Machbarkeitsnachweis wie CDA Dokumente Level One über XSLT Stylesheets in HTML oder Plain-Text gewandelt werden können.
 
 ### [`id_logik_recommender`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/id_logik_recommender)
+__(Als Docker Image verfügbar: `docker pull ghcr.io/medizininformatik-initiative/gemtex/inception-idlogik-recommender:0.1.1`)__  
 Ein in ``java`` implementierter Recommender für [INCEpTION](https://inception-project.github.io/) als Schnittstelle zum [IDLogik-Server](https://www.id-berlin.de/produkte/nlp-forschung/id-logik/).
 
 ### [`inception-projects`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/inception-projects)
@@ -22,6 +23,7 @@ Wenn nicht anders vermerkt, sind darin keine Dokumente vorhanden.
 Das Dashboard generiert verschiedene Diagramme für ein [INCEpTION](https://inception-project.github.io/)-Projekt. In seiner aktuellen Form kann es vom Projektmanager vor Ort verwendet werden, um verschiedene Metriken bezüglich des Fortschritts des Projekts und der Art der Annotationen zu visualisieren. Diese können dann exportiert und an die zentrale Projektleitung geschickt werden. Die Projektleitung kann dann anhand des Dashboards den Fortschritt der Projekte an den unterschiedlichen Standorten vergleichen und nachvollziehen.
 
 ### [`inception_ahd_recommender`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/inception_ahd_recommender)
+__(Als Docker Image verfügbar: `docker pull ghcr.io/medizininformatik-initiative/gemtex/inception-ahd-recommender:1.2.2`)__  
 Ein Recommender basierend auf dem [External INCEpTION Recommender](https://github.com/inception-project/inception-external-recommender), um in [INCEpTION](https://inception-project.github.io/) Annotationsvorschläge
 der [Averbis Health Discovery](https://averbis.com/health-discovery/) zu generieren. 
 
