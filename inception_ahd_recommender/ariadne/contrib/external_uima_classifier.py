@@ -35,6 +35,7 @@ config_object = namedtuple(
         "response_consumer",
         "classifier",
         "processor",
+        "docker_mode"
     ],
 )
 
@@ -110,6 +111,7 @@ class ExternalClassifier(ABC):
             response_consumer=None,
             classifier=None,
             processor=None,
+            docker_mode=None
         )
         if isinstance(config, Path):
             try:
@@ -332,7 +334,11 @@ class AHDClassifier(AriadneClassifier, ExternalClassifier):
                 self.get_pipeline().analyse_text_to_cas(source=text, language=language)
             )
         except RequestException as e:
-            sys.exit(f"AHD not accessible: '{e}'")
+            log_str = f"AHD not accessible: '{e}'"
+            if self.get_configuration().docker_mode:
+                sys.exit(log_str)
+            else:
+                logging.error(log_str)
 
     def fit(
         self,

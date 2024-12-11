@@ -3,12 +3,21 @@ import os
 import pathlib
 import sys
 from pydoc import locate
-
+from typing import Union
 
 from ariadne.contrib.external_server_consumer import ProcessorType
 from ariadne.contrib.external_uima_classifier import AHDClassifier
 from ariadne.server import Server
 
+
+def eval_bool(bool_str: Union[str, bool]) -> bool:
+    if isinstance(bool_str, bool):
+        return bool_str
+    elif isinstance(bool_str, str):
+        return {"true": True, "false": False, "yes": True, "no": False,
+                "y": True, "n": False, "j": True, "ja": True, "nein": False}.get(bool_str.lower())
+    else:
+        return True
 
 _config = {
     "address": os.getenv("EXTERNAL_SERVER_ADDRESS", "http://localhost:8080"),
@@ -20,6 +29,7 @@ _config = {
     ),
     "classifier": os.getenv("CLASSIFIER", False),
     "processor": os.getenv("PROCESSOR", ProcessorType.CAS),
+    "docker_mode": eval_bool(os.getenv("DOCKER_MODE", True)),
 }
 
 _server_handle = os.getenv("SERVER_HANDLE", "deid_recommender")
@@ -58,6 +68,7 @@ if __name__ == "__main__":
         "./prefab-mapping-files/deid_mapping_singlelayer.json",
         "classifier": os.getenv("CLASSIFIER", False),
         "processor": os.getenv("PROCESSOR", ProcessorType.CAS),
+        "docker_mode": False
     }
     _classifier = (
         AHDClassifier if not _config["classifier"] else locate(_config["classifier"])
