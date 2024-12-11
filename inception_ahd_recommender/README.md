@@ -168,11 +168,11 @@ Eine von denen kann dann auch mit ``<MAPPING_FILE>``=`/inception_ahd_recommender
 ## Entwicklung
 ### Versionsupdate
 Wenn eine neue Version des Recommenders veröffentlicht werden soll, muss die Datei `VERSION` geändert werden
-(dadurch wird der entsprechende workflow getriggert, sobald die Veränderung auf den `main` branch kommt → siehe `.github/workflows/ci.yaml`).
+(dadurch wird der entsprechende workflow getriggert, sobald die Veränderung auf den `main` branch kommt → siehe `.github/workflows/ci_ahd_recommender.yaml`).
 Bitte beachten, dass dann auch das version tag Suffix in der `docker-compose.yml` angepasst wird:
 ```
 services:
   ahd-deid-recommender:
-    image: ghcr.io/medizininformatik-initiative/gemtex/inception-ahd-recommender:1.1.2
+    image: ghcr.io/medizininformatik-initiative/gemtex/inception-ahd-recommender:1.2.2
   [...]
 ```
