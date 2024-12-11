@@ -12,6 +12,7 @@ services:
       - MODEL_DIR=/models
       - RECOMMENDER_WORKERS=4
       - RECOMMENDER_ADDRESS=:5000
+      - DOCKER_MODE=True
     ports:
       - "5000:5000"
     networks:

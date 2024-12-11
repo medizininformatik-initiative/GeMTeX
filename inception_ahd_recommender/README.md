@@ -123,6 +123,11 @@ Nutzt den Standard-Ordner, wenn nicht gesetzt.
 Diese beiden Werte werden an den WSGI Server (`gunicorn`) übergeben und bestimmen mit `WORKERS` wieviele Benutzer*innen gleichzeitig den Recommender verwenden können
 und mit `ADDRESS` unter welcher Adresse der Recommender von [INCEpTION](https://inception-project.github.io) erreicht werden kann.
 
+###### DOCKER_MODE
+_(default: True)_ Ob das Programm als Docker-Container läuft.  
+Wird z.B. (im `AHDClassifier`) dazu genutzt, um zu bestimmen, ob eine `RequestException` bzgl. der Erreichbarkeit der `AHD` abgefangen
+und das Programm geschlossen werden soll. Das ermöglicht dann das automatische Neustarten des Docker-Containers. 
+
 ### Andere Einstellungen in der docker-compose.yml
 ##### ports
 ```

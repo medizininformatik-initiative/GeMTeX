@@ -12,6 +12,7 @@ import cassis
 import requests
 from cassis import Cas
 from averbis import Client as AHDClient
+from requests import RequestException
 
 from ariadne.classifier import Classifier as AriadneClassifier
 from ariadne.contrib.external_server_consumer import (
@@ -34,6 +35,7 @@ config_object = namedtuple(
         "response_consumer",
         "classifier",
         "processor",
+        "docker_mode"
     ],
 )
 
@@ -109,6 +111,7 @@ class ExternalClassifier(ABC):
             response_consumer=None,
             classifier=None,
             processor=None,
+            docker_mode=None
         )
         if isinstance(config, Path):
             try:
@@ -326,9 +329,16 @@ class AHDClassifier(AriadneClassifier, ExternalClassifier):
         return super()._get_model_path(user_id)
 
     def process_text(self, text: str, language: str = None):
-        return self.get_response_consumer().process(
-            self.get_pipeline().analyse_text_to_cas(source=text, language=language)
-        )
+        try:
+            return self.get_response_consumer().process(
+                self.get_pipeline().analyse_text_to_cas(source=text, language=language)
+            )
+        except RequestException as e:
+            log_str = f"AHD not accessible: '{e}'"
+            if self.get_configuration().docker_mode:
+                sys.exit(log_str)
+            else:
+                logging.error(log_str)
 
     def fit(
         self,
