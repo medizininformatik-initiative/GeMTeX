@@ -88,6 +88,7 @@ def _as_named_tuple(dct: dict):
         },
         classifier=lower_dict.get("classifier"),
         processor=lower_dict.get("processor"),
+        docker_mode=lower_dict.get("docker_mode"),
     )
 
 
@@ -141,7 +142,7 @@ class ExternalClassifier(ABC):
         return (
             self._config
             if self._config is not None
-            else config_object(None, None, None, None, None, None, None)
+            else config_object(None, None, None, None, None, None, None, None)
         )
 
     @abstractmethod
