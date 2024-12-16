@@ -173,6 +173,6 @@ Bitte beachten, dass dann auch das version tag Suffix in der `docker-compose.yml
 ```
 services:
   ahd-deid-recommender:
-    image: ghcr.io/medizininformatik-initiative/gemtex/inception-ahd-recommender:1.2.2
+    image: ghcr.io/medizininformatik-initiative/gemtex/inception-ahd-recommender:1.2.3
   [...]
 ```

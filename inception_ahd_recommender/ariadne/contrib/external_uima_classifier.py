@@ -336,10 +336,7 @@ class AHDClassifier(AriadneClassifier, ExternalClassifier):
             )
         except RequestException as e:
             log_str = f"AHD not accessible: '{e}'"
-            if self.get_configuration().docker_mode:
-                sys.exit(log_str)
-            else:
-                logging.error(log_str)
+            logging.error(log_str)
 
     def fit(
         self,
