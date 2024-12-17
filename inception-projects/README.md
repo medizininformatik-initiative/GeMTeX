@@ -16,7 +16,7 @@ _(letztes Update: 12.07.2024)_
 
 #### Hinweis
 * Die Dateien der Layer bzw. die Definition der Annotation sind nicht in exportierten Projekten enthalten.
-* Layer müssen separart aus vorhandenen Layer-Konfigurationen eingestellt oder importiert werden.
+* Layer müssen separat aus vorhandenen Layer-Konfigurationen eingestellt oder importiert werden.
 * Einstellungen in `Layers` &rarr; `Import` &rarr; `layer.json` &rarr; `Save` ([siehe Dokumentation INCEpTION](https://inception-project.github.io/releases/33.2/docs/user-guide.html#layers_and_features_in_getting_started))
 
 #### Layer-Dateien
@@ -24,9 +24,14 @@ _(letztes Update: 12.07.2024)_
 ###### Layer für PHI-Annotation
 * Version 1: [v1_PHI_layer.json](layers/v1_PHI_layer.json)
 * **Version 1.1**: [v1.1_PHI_layer.json](layers/v1.1_PHI_layer.json) **(Aktualisierung 6.12.2024)**
-  * Erweiterung mit `DATE_BIRTH` und `DATE_DEATH` 
-  * Hinweis für Integration in INCEpTION:
-    * Einstellungen öffnen: `Layers` &rarr; (bestehendes) `PHI`-Layer auswählen &rarr; `Import` &rarr; `v1.1_PHI_layer.json` &rarr; `Save`
+  * Erweiterung mit `DATE_BIRTH` und `DATE_DEATH`
+* **Version 1.2**: [v1.2_PHI_layer.json](layers/v1.1_PHI_layer.json) **(Aktualisierung 17.12.2024)**
+  * Korrektur Beschreibung bzgl. `DATE`
+  * Entfernung `NAME_OTHER`
+* Hinweis für Integration neuer Layer-Einstellung in INCEpTION:
+  * Einstellungen öffnen: `Layers` &rarr; (bestehendes) `PHI`-Layer auswählen &rarr; `Import` &rarr; `v1.1_PHI_layer.json` &rarr; `Save`
+  * Alternative Einstellung in INCEpTION über `Tagsets` der jeweiligen Typen `DATE_BIRTH` und `DATE_DEATH`
+    * `phiKind` --> `Tags` --> `Create` --> Name und Description eingeben --> `Save`
 
 ## Verweise
 [1] Modersohn L, Schulz S, Lohr C, Hahn U.
