@@ -7,7 +7,7 @@
   "IDENTIFIER_CONSTANTS": {
     "target_all": "webanno.custom",
     "target_segment": "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type",
-    "source_all": "de.averbis.types.health",
+    "source_all": "gemtex",
     "source_segment": "de.averbis.extraction.types"
   },
   "MAPPING": {
@@ -16,22 +16,10 @@
       "source_default": "#source_all"
     },
     "ENTRIES": {
-      "Core": {
+      "Concept": {
+        "layer": {},
         "features": {
-          "kind": {
-            "Condition": {
-              "layer": ".Diagnosis",
-              "add_feature": {
-                "icd10": "conceptID"
-              }
-            },
-            "Medication": {
-              "layer": ".Medication",
-              "add_feature": {
-                "atc": "atc"
-              }
-            }
-          }
+          "id": "id"
         }
       },
       "Sentence": {
