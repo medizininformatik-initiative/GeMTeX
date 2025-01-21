@@ -1,6 +1,6 @@
 {
   "VERSION": {
-    "mapping_file": "1.1.0",
+    "mapping_file": "1.2.0",
     "mapping_reader": "1.1.0"
   },
   "IDENTIFIER_CONSTANTS": {
@@ -43,6 +43,12 @@
             },
             "DATE": {
               "layer": ".Date"
+            },
+            "DATE_BIRTH": {
+              "layer": ".PHIBirthDate"
+            },
+            "DATE_DEATH": {
+              "layer": ".PHIDeathDate"
             },
             "ID": {
               "layer": ".ID"

@@ -131,7 +131,7 @@
         {
           "key": "rules",
           "values": [
-            "PACKAGE de.averbis.types.health;\n// TYPESYSTEM de.averbis.types.health.SimplifiedHealthTypeSystem;\n// TYPESYSTEM de.averbis.textanalysis.typesystems.health.CompleteInternalHealthTypeSystem;\n\n// merge titles\n((t:PHITitleInd{-> UNMARK(t)})[2,100]){-> PHITitleInd};\n// med. alone is rather an adjective, TODO extract to list?\nt:PHITitleInd{REGEXP(\"med\\\\.?|inf\\\\.?|hc\\\\.?|dent\\\\.?\", true) -> UNMARK(t)};\n\nDECLARE PHINameTitle;\n\nPHITitleInd{-PARTOF(PHINameTitle)-> PHINameTitle} SW?{-PARTOF(PHITitleInd)} @PHIName;\n@PHIName COMMA? PHITitleInd{-PARTOF(PHINameTitle)-> PHINameTitle};\n"
+            "PACKAGE de.averbis.types.health;\n// TYPESYSTEM de.averbis.types.health.SimplifiedHealthTypeSystem;\n// TYPESYSTEM de.averbis.textanalysis.typesystems.health.CompleteInternalHealthTypeSystem;\n\n// merge titles\n((t:PHITitleInd{-> UNMARK(t)})[2,100]){-> PHITitleInd};\n// med. alone is rather an adjective, TODO extract to list?\nt:PHITitleInd{REGEXP(\"med\\\\.?|inf\\\\.?|hc\\\\.?|dent\\\\.?\", true) -> UNMARK(t)};\n\nDECLARE PHINameTitle;\n\nPHITitleInd{-PARTOF(PHINameTitle)-> PHINameTitle} SW?{-PARTOF(PHITitleInd)} @PHIName;\n@PHIName COMMA? PHITitleInd{-PARTOF(PHINameTitle)-> PHINameTitle};\n\nDECLARE PHIBirthDate, PHIDeathDate;\nbd:BirthDate.date{-> PHIBirthDate};\ndd:DeathDate.date{-> PHIDeathDate};"
           ]
         },
         {
