@@ -1,9 +1,9 @@
 services:
   ahd-deid-recommender:
-    image: ghcr.io/medizininformatik-initiative/gemtex/inception-ahd-recommender:1.2.3
+    image: ghcr.io/medizininformatik-initiative/gemtex/inception-ahd-recommender:1.3.0
     restart: unless-stopped
     environment:
-      - EXTERNAL_SERVER_ADDRESS=http://198.168.10.2:8080
+      - EXTERNAL_SERVER_ADDRESS=http://averbishealthdiscovery-health-discovery-hd-1:8080
       - EXTERNAL_SERVER_TOKEN=a72c80319b27199d81c939c210a646ca8d1aa76840a0cda62a6a91dc192ab7dd
       - PIPELINE_PROJECT=GeMTeX
       - PIPELINE_NAME=deid
