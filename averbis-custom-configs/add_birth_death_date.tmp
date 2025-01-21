@@ -1,4 +1,0 @@
-DECLARE PHIBirthDate, PHIDeathDate;
-
-bd:BirthDate.date{-> PHIBirthDate};
-dd:DeathDate.date{-> PHIDeathDate};
