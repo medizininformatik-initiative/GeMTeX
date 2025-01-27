@@ -42,6 +42,6 @@ jobs:
         id: push
         uses: docker/build-push-action@v6
         with:
-          context: ./id_logik_lookup
+          context: ./id_logik_recommender
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.version }}
