@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.*;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 import static org.apache.commons.lang3.StringUtils.isEmpty;
 import static org.springframework.http.HttpStatus.OK;
@@ -121,16 +122,20 @@ public class InceptionRecommender {
     Type annotationType = casDoc.getTypeSystem().getType(layerID);
     Feature feature = annotationType.getFeatureByBaseName(featureID);
     Feature inception_internal_predicted = annotationType.getFeatureByBaseName("inception_internal_predicted");
+    Feature id_score_explanation = annotationType.getFeatureByBaseName("id_score_explanation");
 
     for (AnnotationFS annotationFS : CasUtil.select(casDoc, annotationType)) {
       for (ResultItem ri : idLogikServices.text2FullSCT(annotationFS.getCoveredText())) {
         final String sctConcept = ri.getAttributes().getProperty("NAME");
+        final String sctLabel = ri.getAttributes().getProperty("TXT");
         //Don't use concepts starting with "X" - these are internal concepts that mark suggestions
         if (!sctConcept.startsWith("X")) {
           AnnotationFS annotation = casDoc.createAnnotation(
                   annotationType, annotationFS.getBegin(), annotationFS.getEnd()
           );
-          annotation.setFeatureValueFromString(feature, SCT_URL.concat(sctConcept));
+                                                                         //remove negation marker
+          annotation.setFeatureValueFromString(feature, SCT_URL.concat(sctConcept.replace("!", "")));
+          annotation.setFeatureValueFromString(id_score_explanation, sctLabel);
           annotation.setFeatureValueFromString(inception_internal_predicted, Boolean.toString(true));
           casDoc.addFsToIndexes(annotation);
         }
