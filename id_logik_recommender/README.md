@@ -27,7 +27,7 @@ java -jar IDLOGIK_RECOMMENDER.jar --idlogik.licence=LICENCE_KEY
 So kann bei bedarf auch der ``Host``/``Port`` konfiguriert werden.
 #### Docker Beispiel
 ````
-docker run --network NETWORK_NAME ghcr.io/medizininformatik-initiative/gemtex/inception-idlogik-recommender:0.1.1 --idlogik.licence=LICENCE --idlogik.host=IDLOGIK_DOCKER_NETWORK_IP
+docker run --network NETWORK_NAME ghcr.io/medizininformatik-initiative/gemtex/inception-idlogik-recommender:0.1.2 --idlogik.licence=LICENCE --idlogik.host=IDLOGIK_DOCKER_NETWORK_IP
 ````
 **Bitte beachten**, dass die Angaben für ``--idlogik.licence``, ``--idlogik.host`` etc. nach dem Namen des Images stehen (das wird dem Container übergeben) und die Angaben ``--network`` oder ``--name`` (wenn man zur einfacheren Referenzierung einen statischen Namen für den Container vergeben will) vor den Namen des Images kommen!
 
