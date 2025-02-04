@@ -11,6 +11,8 @@ docker build -t inception-project/inception-dashboard:VERSION .
 ```commandline
 docker compose -f docker-compose-manager.yml up
 ```
+* VERSION müsste noch in `docker-compose-manager.yml` angepasst werden.
+
 ``Docker``
 ```commandline
 docker run -p 9011:8501 --name inception-dashboard-manager inception-project/inception-dashboard:VERSION --manager
@@ -23,6 +25,8 @@ der das Manager Dashboard auf Port ``9011`` zur Verfügung stellt.
 ```commandline
 docker compose -f docker-compose-lead.yml up
 ```
+* VERSION müsste noch in `docker-compose-lead.yml` angepasst werden.  
+
 ``Docker``
 ```commandline
 docker run -p 9012:8501 --name inception-dashboard-lead inception-project/inception-dashboard:VERSION --lead
