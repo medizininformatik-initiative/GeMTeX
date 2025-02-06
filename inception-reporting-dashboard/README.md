@@ -4,14 +4,15 @@ https://github.com/inception-project/inception-reporting-dashboard
 ## Installation
 
 ```commandline
-docker build -t inception-project/inception-dashboard:VERSION .
+docker build --build-arg VERSION=VERSION_NR -t inception-project/inception-dashboard:VERSION_NR .
 ```
+* `VERSION_NR` entsprechend der aktuellen Release Version des Dashboards angeben
 
 ###### Manager
 ```commandline
 docker compose -f docker-compose-manager.yml up
 ```
-* VERSION müsste noch in `docker-compose-manager.yml` angepasst werden.
+* `VERSION` müsste noch in `docker-compose-manager.yml` angepasst werden.
 
 ``Docker``
 ```commandline
@@ -25,7 +26,7 @@ der das Manager Dashboard auf Port ``9011`` zur Verfügung stellt.
 ```commandline
 docker compose -f docker-compose-lead.yml up
 ```
-* VERSION müsste noch in `docker-compose-lead.yml` angepasst werden.  
+* `VERSION` müsste noch in `docker-compose-lead.yml` angepasst werden.  
 
 ``Docker``
 ```commandline

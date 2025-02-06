@@ -1,11 +1,13 @@
 FROM python:3.11-slim-buster
 
+ARG VERSION=${VERSION}
+
 WORKDIR /inception-reports
 
 RUN apt-get update --yes && \
     apt-get install --yes git
 
-RUN git clone https://github.com/inception-project/inception-reporting-dashboard.git --branch v0.6.2
+RUN git clone https://github.com/inception-project/inception-reporting-dashboard.git --branch v$VERSION
 
 RUN cd inception-reporting-dashboard
 
