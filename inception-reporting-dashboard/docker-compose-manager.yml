@@ -1,7 +1,7 @@
 name: inception-dashboard-manager
 services:
   inception-reporting:
-    image: inception-project/inception-dashboard:0.6.2
+    image: REPOSITORY_NAME/inception-dashboard:VERSION
     container_name: inception-dashboard-manager
     command: '--manager'
     restart: unless-stopped
