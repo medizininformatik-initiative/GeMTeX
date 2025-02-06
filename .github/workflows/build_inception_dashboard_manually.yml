@@ -1,4 +1,4 @@
-name: Build specific AHD Recommender Version
+name: Build specific INCEpTION Dashboard Version
 
 on:
   workflow_dispatch:
