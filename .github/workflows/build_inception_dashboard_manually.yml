@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version tag suffix of the resulting docker image'
-        default: 'latest'
+        description: 'Version number of the dashboard release'
+        default: ''
         required: true
         type: string
 
