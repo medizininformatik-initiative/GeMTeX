@@ -49,3 +49,9 @@ Unter Umständen muss dieser mit einfachen Anführungszeichen (`'`) umschlossen 
 
 ###### IDLOGIK_DOCKER_NETWORK_IP
 Die IP der IDLogik im Netzwerk (``NETWORK_NAME``).
+
+### Anderes
+Es wird ein Standard "FilterFile" mitgeliefert, dass sowohl in der ``application.yml``
+wie auch im ``docker`` build Prozess referenziert wird und Anwendung findet.
+Soll im ``docker`` Kontext eine anderes "FilterFile" verwendet werden,
+muss das über ein entsprechendes ``volume`` nebst eigener Konfiguration zur Verfügung gestellt werden.
