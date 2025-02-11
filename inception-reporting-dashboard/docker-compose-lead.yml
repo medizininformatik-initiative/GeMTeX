@@ -1,7 +1,7 @@
 name: inception-dashboard-lead
 services:
   inception-reporting:
-    image: inception-project/inception-dashboard:0.6.2
+    image: REPOSITORY_NAME/inception-dashboard:VERSION
     container_name: inception-dashboard-lead
     command: '--lead'
     restart: unless-stopped
