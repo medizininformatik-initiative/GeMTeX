@@ -4,4 +4,4 @@ idlogik:
   port: 7777
   licence:
 annotation:
-  filterFile:
+  filterFile: ./filters/default_filter_phrase.txt
