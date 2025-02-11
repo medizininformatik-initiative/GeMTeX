@@ -17,9 +17,16 @@ idlogik:
   host: localhost
   port: 7777
   licence:
+annotation:
+  filterFile:
 ```
 ``protocol`` und ``port`` müssen im Standardfall nicht geändert werden. Falls sich der Recommender und der IDLogik Server in einer ``Docker``-Umgebung befinden, müsste `host` aber auch angepasst werden.
 ``licence`` muss zwangsläufig beim Start des Services als `property` übergeben werden (z.B. als ``command line option``):  
+``filterFile`` Zeigt auf eine Textdatei, die reguläre Ausdrücke enthält, die nicht annotiert werden sollen:
+Beispiele:
+Der Ausdruck ``[0-9.:-/]*`` ignoriert alle Kombinationen aus Zahlen und den Zeichen ``.:-/``; damit werden einzelne Zahlen 
+aber auch Uhrzeiten und Datumsangaben erfasst. Der Ausdruck ``[A-Z][0-9.-]*`` matcht ICD-10 Codes. Hinweis: OPS Codes werden 
+durch den vorherigen regulären Ausdruck abgebildet.
 #### Java
 ```
 java -jar IDLOGIK_RECOMMENDER.jar --idlogik.licence=LICENCE_KEY

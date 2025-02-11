@@ -37,10 +37,13 @@ public class InceptionRecommender {
 
   public static final String SCT_URL = "http://snomed.info/id/";
   IdLogikServices idLogikServices;
+  AnnotationFilter annotationFilter;
 
   @Autowired
-  public InceptionRecommender(IdLogikClientProperties config, IdLogikServices idLogikServices) {
+  public InceptionRecommender(IdLogikClientProperties config, IdLogikServices idLogikServices,
+                              AnnotationFilter annotationFilter) {
     this.idLogikServices = idLogikServices;
+    this.annotationFilter = annotationFilter;
   }
 
   @RequestMapping(value = "/recommender/predict", method = RequestMethod.POST)
@@ -125,7 +128,7 @@ public class InceptionRecommender {
     Feature id_score_explanation = annotationType.getFeatureByBaseName("id_score_explanation");
 
     for (AnnotationFS annotationFS : CasUtil.select(casDoc, annotationType)) {
-      for (ResultItem ri : idLogikServices.text2FullSCT(annotationFS.getCoveredText())) {
+      for (ResultItem ri : idLogikServices.text2FullSCT(annotationFilter.filter(annotationFS.getCoveredText()))) {
         final String sctConcept = ri.getAttributes().getProperty("NAME");
         final String sctLabel = ri.getAttributes().getProperty("TXT");
         //Don't use concepts starting with "X" - these are internal concepts that mark suggestions
