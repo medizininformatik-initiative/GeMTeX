@@ -10,7 +10,7 @@ Verschiedene Konfigurationen (`json` Format), mit denen `AHD` Pipelines angepass
 Eine Demo bzw. Machbarkeitsnachweis wie CDA Dokumente Level One über XSLT Stylesheets in HTML oder Plain-Text gewandelt werden können.
 
 ### [`id_logik_recommender`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/id_logik_recommender)
-__(Als Docker Image verfügbar: `docker pull ghcr.io/medizininformatik-initiative/gemtex/inception-idlogik-recommender:0.2.0`)__  
+__(Als Docker Image verfügbar: `docker pull ghcr.io/medizininformatik-initiative/gemtex/inception-idlogik-recommender:0.2.2`)__  
 Ein in ``java`` implementierter Recommender für [INCEpTION](https://inception-project.github.io/) als Schnittstelle zum [IDLogik-Server](https://www.id-berlin.de/produkte/nlp-forschung/id-logik/).
 
 ### [`inception-projects`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/inception-projects)

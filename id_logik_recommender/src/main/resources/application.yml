@@ -3,3 +3,5 @@ idlogik:
   host: localhost
   port: 7777
   licence:
+annotation:
+  filterFile: ./filters/default_filter_phrases.txt

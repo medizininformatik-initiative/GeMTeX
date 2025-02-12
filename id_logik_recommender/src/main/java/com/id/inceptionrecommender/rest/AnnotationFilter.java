@@ -37,7 +37,7 @@ import java.util.List;
         @ConfigurationProperties(prefix = "annotation")
         public static class AnnotationProperties {
 
-            private String filterFile;
+            private String filterFile = "./filters/default_filter_phrases.txt";
 
             public void setFilterFile(String filterFile) {
                 this.filterFile = filterFile;
