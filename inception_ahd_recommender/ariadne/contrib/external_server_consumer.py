@@ -175,6 +175,7 @@ class MappingConsumer(ResponseConsumer):
 
         for source_layer, check_dict in self.mapper.annotation_mapping.items():
             # Multilayer is not allowed for Recommender since a single Recommender is configured for an INCEpTION layer
+            # except for when the given layer equals the layer in the mapping config
             if check_dict.mapping_type == MappingTypeEnum.MULTILAYER and check_dict.entry_name != layer:
                 logging.warning(
                     f"An INCEpTION Recommender is only configured for a single layer."
