@@ -88,6 +88,7 @@ def _as_named_tuple(dct: dict):
         },
         classifier=lower_dict.get("classifier"),
         processor=lower_dict.get("processor"),
+        docker_mode=lower_dict.get("docker_mode"),
     )
 
 
@@ -111,6 +112,7 @@ class ExternalClassifier(ABC):
             response_consumer=None,
             classifier=None,
             processor=None,
+            docker_mode=None
         )
         if isinstance(config, Path):
             try:
@@ -140,7 +142,7 @@ class ExternalClassifier(ABC):
         return (
             self._config
             if self._config is not None
-            else config_object(None, None, None, None, None, None, None)
+            else config_object(None, None, None, None, None, None, None, None)
         )
 
     @abstractmethod
@@ -328,9 +330,17 @@ class AHDClassifier(AriadneClassifier, ExternalClassifier):
         return super()._get_model_path(user_id)
 
     def process_text(self, text: str, layer: str, language: str = None):
-        return self.get_response_consumer().process(
-            self.get_pipeline().analyse_text_to_cas(source=text, language=language)
-        )
+        try:
+            return self.get_response_consumer().process(
+                self.get_pipeline().analyse_text_to_cas(source=text, language=language),
+                layer
+            )
+        except RequestException as e:
+            log_str = f"AHD not accessible: '{e}'"
+            if self.get_configuration().docker_mode:
+                sys.exit(log_str)
+            else:
+                logging.error(log_str)
 
     def fit(
         self,
