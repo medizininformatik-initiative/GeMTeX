@@ -16,6 +16,13 @@ scenario_dict = {
         "layer": "Core",
         "feature": "kind"
     },
+    "snomed": {
+        "xmi": "resources/Albers.snomed.xmi",
+        "ts": "resources/snomed_TypeSystem.xml",
+        "mapping": "../prefab-mapping-files/snomed_mapping_singlelayer.json",
+        "layer": "Concept",
+        "feature": "id"
+    },
     "deid": {
         "xmi": "resources/Albers.deid.xmi",
         "ts": "resources/deid_TypeSystem.xml",
@@ -24,7 +31,7 @@ scenario_dict = {
         "feature": "kind"
     }
 }
-scenario_switch = "general"
+scenario_switch = "snomed"
 
 @pytest.fixture
 def cas_mapping_consumer():
@@ -39,7 +46,7 @@ def cas_server_response(typesystem):
     return cassis.load_cas_from_xmi(pathlib.Path(scenario_dict.get(scenario_switch).get("xmi")), typesystem=typesystem)
 
 def test_mapping_consumer(cas_mapping_consumer, cas_server_response):
-    logging.info(cas_mapping_consumer.process(cas_server_response).features)
+    logging.info(cas_mapping_consumer.process(cas_server_response, scenario_dict.get(scenario_switch).get("layer")).features)
 
 def test_add_prediction_to_cas(cas_mapping_consumer, cas_server_response, typesystem):
     add_prediction_to_cas(
