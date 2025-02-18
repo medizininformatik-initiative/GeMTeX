@@ -127,7 +127,7 @@ class ResponseConsumer(ABC):
         self.features = []
 
     @abstractmethod
-    def process(self, response) -> "response_consumer_return_value":
+    def process(self, response, layer = None) -> "response_consumer_return_value":
         raise NotImplementedError
 
 
@@ -170,12 +170,12 @@ class MappingConsumer(ResponseConsumer):
             )
             sys.exit(-1)
 
-    def process(self, response) -> "response_consumer_return_value":
+    def process(self, response, layer = None) -> "response_consumer_return_value":
         _processor = self.processor.init(response, self)
 
         for source_layer, check_dict in self.mapper.annotation_mapping.items():
             # Multilayer is not allowed for Recommender since a single Recommender is configured for an INCEpTION layer
-            if check_dict.mapping_type == MappingTypeEnum.MULTILAYER:
+            if check_dict.mapping_type == MappingTypeEnum.MULTILAYER and check_dict.entry_name != layer:
                 logging.warning(
                     f"An INCEpTION Recommender is only configured for a single layer."
                     f" It appears your configuration file has an entry for Multilayer processing."
@@ -192,7 +192,7 @@ class MappingConsumer(ResponseConsumer):
                     continue
                 # if check_dict.mapping_type == MappingTypeEnum.SINGLELAYER:
                 for _label, _check_call in check_dict.items():
-                    if _check_call(anno):
+                    if callable(_check_call) and _check_call(anno):
                         _final_label = _label
                         _final_features = {check_dict.target_feature: _label}
                         _dupl = check_dict.additional_feats.pop(check_dict.target_feature, None)
@@ -203,16 +203,17 @@ class MappingConsumer(ResponseConsumer):
                             _feat_val = mapping_tuple[0](anno,mapping_tuple[1])
                             if _feat_val is not None:
                                 _final_features[target_feature] = _feat_val
-                        self.count += 1
                         break  # Stacking layers is not allowed
-                # else:
-                #     logging.warning(f"An INCEpTION Recommender is only configured for a single layer."
-                #                     f" It appears your configuration file has an entry for Multilayer processing."
-                #                     f" Skipping the entry in question:\n{check_dict}")
-                #     continue  # Multilayer is not allowed for Recommender since a single Recommender is configured for an INCEpTION layer
-                # _final_label = check_dict.target_layer
-                # _final_features = {tf: sf[0](anno.src, sf[1]) for tf, sf in check_dict.items()}
-                # self.count += 1
+                    elif isinstance(_check_call, tuple) and _check_call[0](anno, _check_call[1]) is not None:
+                        _final_label = _check_call[0](anno, _check_call[1])
+                        _final_features = {_label: _check_call[0](anno, _check_call[1])}
+                        logging.warning(
+                            f"An INCEpTION Recommender is only configured for a single layer."
+                            f" It appears your configuration file has an entry for Multilayer processing."
+                            f" However, for the layer in question an entry was found in the Mapping File."
+                            f" Trying to evaluate the settings."
+                        )
+                    self.count += 1
 
                 self.labels.append(_final_label)
                 self.offsets.append(
