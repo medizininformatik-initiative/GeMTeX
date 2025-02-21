@@ -178,7 +178,7 @@ class ExternalClassifier(ABC):
         return self._response_consumer
 
     @abstractmethod
-    def process_text(self, text: str, language: str = None):
+    def process_text(self, text: str, layer: str, language: str = None):
         raise NotImplementedError
 
 
@@ -212,7 +212,7 @@ class ExternalUIMAClassifier(AriadneClassifier, ExternalClassifier):
     def _get_model_path(self, user_id: str) -> Path:
         return super()._get_model_path(user_id)
 
-    def process_text(self, text: str, language: str = None):
+    def process_text(self, text: str, layer: str, language: str = None):
         if self.get_server() is not None and self.get_response_consumer() is not None:
             response = requests.post(
                 self.get_server(),
@@ -329,10 +329,11 @@ class AHDClassifier(AriadneClassifier, ExternalClassifier):
     def _get_model_path(self, user_id: str) -> Path:
         return super()._get_model_path(user_id)
 
-    def process_text(self, text: str, language: str = None):
+    def process_text(self, text: str, layer: str, language: str = None):
         try:
             return self.get_response_consumer().process(
-                self.get_pipeline().analyse_text_to_cas(source=text, language=language)
+                self.get_pipeline().analyse_text_to_cas(source=text, language=language),
+                layer
             )
         except RequestException as e:
             log_str = f"AHD not accessible: '{e}'"
@@ -360,7 +361,7 @@ class AHDClassifier(AriadneClassifier, ExternalClassifier):
         document_id: str,
         user_id: str,
     ):
-        _server_response = self.process_text(cas.sofa_string, cas.document_language)
+        _server_response = self.process_text(cas.sofa_string, layer, cas.document_language)
         add_prediction_to_cas(
             cas,
             layer,
@@ -394,7 +395,7 @@ def add_prediction_to_cas(
                 feature,
                 _begin,
                 _end,
-                response.labels[i],
+                response.labels[i] if feature not in response.features[i] else response.features[i][feature],
                 response.score[i],
             )
             cas.add(prediction)
