@@ -176,7 +176,7 @@ class MappingConsumer(ResponseConsumer):
         for source_layer, check_dict in self.mapper.annotation_mapping.items():
             # Multilayer is not allowed for Recommender since a single Recommender is configured for an INCEpTION layer
             # except for when the given layer equals the layer in the mapping config
-            if check_dict.mapping_type == MappingTypeEnum.MULTILAYER and check_dict.entry_name != layer:
+            if check_dict.mapping_type == MappingTypeEnum.MULTILAYER and check_dict.target_layer != layer:
                 logging.warning(
                     f"An INCEpTION Recommender is only configured for a single layer."
                     f" It appears your configuration file has an entry for Multilayer processing."
@@ -185,6 +185,7 @@ class MappingConsumer(ResponseConsumer):
                 continue
 
             anno: Annotation
+            _warned = False
             for anno in _processor.get_next(source_layer):
                 _final_label = None
                 _final_features = None
@@ -208,14 +209,15 @@ class MappingConsumer(ResponseConsumer):
                     elif isinstance(_check_call, tuple) and _check_call[0](anno, _check_call[1]) is not None:
                         _final_label = _check_call[0](anno, _check_call[1])
                         _final_features = {_label: _check_call[0](anno, _check_call[1])}
-                        logging.warning(
-                            f"An INCEpTION Recommender is only configured for a single layer."
-                            f" It appears your configuration file has an entry for Multilayer processing."
-                            f" However, for the layer in question an entry was found in the Mapping File."
-                            f" Trying to evaluate the settings."
-                        )
-                    self.count += 1
-
+                        if not _warned:
+                            logging.warning(
+                                f"An INCEpTION Recommender is only configured for a single layer."
+                                f" It appears your configuration file has an entry for Multilayer processing."
+                                f" However, for the layer in question an entry was found in the Mapping File."
+                                f" Trying to evaluate the settings."
+                            )
+                            _warned = True
+                self.count += 1
                 self.labels.append(_final_label)
                 self.offsets.append(
                     (
