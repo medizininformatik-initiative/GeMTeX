@@ -20,7 +20,7 @@ Beinhaltet exportierte Basis-Projekte (also im Grunde Konfigurationen der Layer 
 Wenn nicht anders vermerkt, sind darin keine Dokumente vorhanden.
 
 ### [`inception-reporting-dashboard`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/inception-reporting-dashboard)
-__(Als Docker Image verfügbar: `docker pull ghcr.io/medizininformatik-initiative/gemtex/inception-dashboard:0.6.4`)__  
+__(Als Docker Image verfügbar: `docker pull ghcr.io/medizininformatik-initiative/gemtex/inception-dashboard:0.6.5`)__  
 Das Dashboard generiert verschiedene Diagramme für ein [INCEpTION](https://inception-project.github.io/)-Projekt. In seiner aktuellen Form kann es vom Projektmanager vor Ort verwendet werden, um verschiedene Metriken bezüglich des Fortschritts des Projekts und der Art der Annotationen zu visualisieren. Diese können dann exportiert und an die zentrale Projektleitung geschickt werden. Die Projektleitung kann dann anhand des Dashboards den Fortschritt der Projekte an den unterschiedlichen Standorten vergleichen und nachvollziehen.
 
 ### [`inception_ahd_recommender`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/inception_ahd_recommender)
