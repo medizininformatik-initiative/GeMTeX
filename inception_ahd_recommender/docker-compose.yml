@@ -1,6 +1,6 @@
 services:
   ahd-deid-recommender:
-    image: ghcr.io/medizininformatik-initiative/gemtex/inception-ahd-recommender:1.4.1
+    image: ghcr.io/medizininformatik-initiative/gemtex/inception-ahd-recommender:1.4.2
     restart: unless-stopped
     environment:
       - EXTERNAL_SERVER_ADDRESS=http://averbishealthdiscovery-health-discovery-hd-1:8080

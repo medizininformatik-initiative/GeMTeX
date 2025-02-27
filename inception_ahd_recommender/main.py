@@ -63,11 +63,11 @@ if __name__ == "__main__":
         "address": "http://0.0.0.0:9010",
         "security_token": "8ffafddb8986d5dde5e62f9bab804631485cae42bcde5498c52b06a9f769586c",
         "pipeline_project": "RemoteRecommender",
-        "pipeline_name": "gemtex_preannotation-0.12.0",
-        # "pipeline_name": "deid-custom",
+        # "pipeline_name": "gemtex_preannotation-0.12.0",
+        "pipeline_name": "deid-custom",
         "response_consumer": "ariadne.contrib.external_server_consumer.MappingConsumer::"
-        "./prefab-mapping-files/snomed_mapping_singlelayer.json",
-        # "./prefab-mapping-files/deid_mapping_singlelayer.json",
+        # "./prefab-mapping-files/snomed_mapping_singlelayer.json",
+        "./prefab-mapping-files/deid_mapping_singlelayer.json",
         "classifier": os.getenv("CLASSIFIER", False),
         "processor": os.getenv("PROCESSOR", ProcessorType.CAS),
         "docker_mode": False
@@ -79,7 +79,7 @@ if __name__ == "__main__":
         # _server_handle, _classifier(config=_config, model_directory=_model_folder)
         "ahd_recommender", _classifier(config=_config, model_directory=_model_folder)
     )
-    server.start(port=5001)
+    server.start(port=5002)
 elif __name__ != "__main__":
     server.add_classifier(
         _server_handle, _classifier(config=_config, model_directory=_model_folder)

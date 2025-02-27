@@ -52,6 +52,7 @@ class Processor(ABC):
         consumer.labels = []
         consumer.offsets = []
         consumer.scores = []
+        consumer.features = []
 
     @abstractmethod
     def get_next(self, layer) -> Annotation:
