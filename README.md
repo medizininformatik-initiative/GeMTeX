@@ -26,10 +26,10 @@ Ein Recommender basierend auf dem [External INCEpTION Recommender](https://githu
 der [Averbis Health Discovery](https://averbis.com/health-discovery/) zu generieren. 
 
 ### [`scripts`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/scripts)
-Ordner für verschiedene Skripts/Demos.
-#### [`cda-transform`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/scripts/cda-transform)
+Ordner für verschiedene Skripte/Demos.
+* [`cda-transform`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/scripts/cda-transform)  
 Eine Demo bzw. Machbarkeitsnachweis wie CDA Dokumente Level One über XSLT Stylesheets in HTML oder Plain-Text gewandelt werden können.
-#### [`health-discovery-scripts`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/scripts/health-discovery-scripts)
+* [`health-discovery-scripts`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/scripts/health-discovery-scripts)  
 Python-Skripte um die [Averbis Health Discovery](https://averbis.com/health-discovery/) per API anzusprechen.
 
 ### [`uima_cas_mapper`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/uima_cas_mapper)
