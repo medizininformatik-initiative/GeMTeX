@@ -6,9 +6,6 @@ die nicht gut im Projekt-[Confluence](https://confluence.imi.med.fau.de) abgeleg
 ### [`averbis-custom-configs`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/averbis-custom-configs)
 Verschiedene Konfigurationen (`json` Format), mit denen `AHD` Pipelines angepasst werden können.
 
-### [`cda-transform`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/cda-transform)
-Eine Demo bzw. Machbarkeitsnachweis wie CDA Dokumente Level One über XSLT Stylesheets in HTML oder Plain-Text gewandelt werden können.
-
 ### [`id_logik_recommender`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/id_logik_recommender)
 __(Als Docker Image verfügbar: `docker pull ghcr.io/medizininformatik-initiative/gemtex/inception-idlogik-recommender:0.2.2`)__  
 Ein in ``java`` implementierter Recommender für [INCEpTION](https://inception-project.github.io/) als Schnittstelle zum [IDLogik-Server](https://www.id-berlin.de/produkte/nlp-forschung/id-logik/).
@@ -27,6 +24,13 @@ Das Dashboard generiert verschiedene Diagramme für ein [INCEpTION](https://ince
 __(Als Docker Image verfügbar: `docker pull ghcr.io/medizininformatik-initiative/gemtex/inception-ahd-recommender:1.4.2`)__  
 Ein Recommender basierend auf dem [External INCEpTION Recommender](https://github.com/inception-project/inception-external-recommender), um in [INCEpTION](https://inception-project.github.io/) Annotationsvorschläge
 der [Averbis Health Discovery](https://averbis.com/health-discovery/) zu generieren. 
+
+### [`scripts`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/scripts)
+Ordner für verschiedene Skripts/Demos.
+#### [`cda-transform`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/scripts/cda-transform)
+Eine Demo bzw. Machbarkeitsnachweis wie CDA Dokumente Level One über XSLT Stylesheets in HTML oder Plain-Text gewandelt werden können.
+#### [`health-discovery-scripts`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/scripts/health-discovery-scripts)
+Python-Skripte um die [Averbis Health Discovery](https://averbis.com/health-discovery/) per API anzusprechen.
 
 ### [`uima_cas_mapper`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/uima_cas_mapper)
 Ein `Python`-Programm um `xmi` im
