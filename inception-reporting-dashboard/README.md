@@ -1,5 +1,6 @@
 # Inception Reporting Dashboard
-https://github.com/inception-project/inception-reporting-dashboard
+https://github.com/inception-project/inception-reporting-dashboard  
+VERSION [aktuell]: `0.8`
 
 ## Installation
 

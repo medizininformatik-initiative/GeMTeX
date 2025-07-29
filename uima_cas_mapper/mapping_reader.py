@@ -6,11 +6,13 @@ Date: February 27, 2024
 
 Description: Contains a class that interprets a mapping file and provides the mapping methods.
 """
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 import enum
 import json
+import logging
 import pathlib
+from collections import defaultdict
 from types import SimpleNamespace
 from typing import Union, Iterator, Dict
 
@@ -32,6 +34,7 @@ class AnnotationMapping(dict):
         target_feature: str,
         entry_name: str,
         mapping_type: MappingTypeEnum = MappingTypeEnum.SINGLELAYER,
+        add_feat: dict = None,
         *args,
         **kwargs,
     ):
@@ -40,6 +43,7 @@ class AnnotationMapping(dict):
         self.target_layer = target_layer
         self.target_feature = target_feature
         self.entry_name = entry_name
+        self.additional_feats = add_feat
 
     @property
     def mapping_type(self):
@@ -65,12 +69,31 @@ class AnnotationMapping(dict):
     def target_feature(self, val: str):
         self._target_feature = val
 
+    @property
+    def additional_feats(self):
+        return self._additional_feats
+
+    @additional_feats.setter
+    def additional_feats(self, val: dict):
+        self._additional_feats = val if isinstance(val, dict) else {}
+
 
 class MappingConfig:
     constants: dict
     identifier: SimpleNamespace
     entries: SimpleNamespace
     annotation_mapping: Dict[str, AnnotationMapping]
+
+    @staticmethod
+    def _resolve_feature_dict(feat_dict):
+        return {
+            tf: (
+                ((lambda x, y: sf[1:]), sf[1:])
+                if sf.startswith("$")
+                else ((lambda x, y: x.get(y)), sf)
+            )
+            for tf, sf in feat_dict.items()
+        }
 
     def _layer_iterator(self) -> Iterator[tuple]:
         for layer_suffix, layer_dict in self.entries.__dict__.items():
@@ -97,14 +120,8 @@ class MappingConfig:
                     None,
                     entry_name,
                     MappingTypeEnum.MULTILAYER,
-                    {
-                        tf: (
-                            ((lambda x, y: sf[1:]), sf[1:])
-                            if sf.startswith("$")
-                            else ((lambda x, y: x.get(y)), sf)
-                        )
-                        for tf, sf in layer_dict.get("features", {}).items()
-                    },
+                    None,
+                    self._resolve_feature_dict(layer_dict.get("features", {})),
                 )
             else:
                 for feat, feat_val in layer_dict.get("features", {}).items():
@@ -112,7 +129,7 @@ class MappingConfig:
                         for key, val in feat_val.items():
                             if isinstance(val, dict):
                                 source_layer = self.get_expression_value(
-                                    val.get("layer", None), ArchitectureEnum.SOURCE
+                                    val.get("layer", f".{key}"), ArchitectureEnum.SOURCE
                                 )
                                 check_fs = MappingConfig.resolve_simple_bool(
                                     val.get("feature", lambda x: True)
@@ -124,9 +141,15 @@ class MappingConfig:
                                             target_feature=feat,
                                             entry_name=entry_name,
                                             mapping_type=MappingTypeEnum.SINGLELAYER,
+                                            add_feat=self._resolve_feature_dict(val.get("add_feature", {}))
                                         )
                                     )
                                 self.annotation_mapping[source_layer][key] = check_fs
+                            else:
+                                logging.warning(
+                                    f"No proper description for entry '{entry_name}_features_{feat}_{key}' (needs to be object/dict).")
+                    else:
+                        logging.warning(f"No proper description for entries feature '{entry_name}_features_{feat}' (needs to be object/dict).")
 
     def get_expression_value(
         self,
@@ -181,15 +204,18 @@ class MappingConfig:
             _identifier_dict[key] = mapping_config.get_expression_value(value)
         mapping_config.identifier = SimpleNamespace(**_identifier_dict)
 
-        _entries_dict = {}
+        _entries_dict = defaultdict(dict)
         for entry, entry_values in config.get("MAPPING", {}).get("ENTRIES", {}).items():
-            _entries_dict[entry] = {}
-            for layer_feature, _dict in entry_values.items():
-                _entries_dict[entry][layer_feature] = {}
-                for key, value in _dict.items():
-                    _entries_dict[entry][layer_feature][
-                        mapping_config.get_expression_value(key)
-                    ] = mapping_config.get_expression_value(value)
+            if not isinstance(entry_values, list):
+                entry_values = [entry_values]
+            for i, entry_value in enumerate(entry_values):
+                key_entry = f"{entry}_{i}" if len(entry_values) > 1 else entry
+                for layer_feature, _dict in entry_value.items():
+                    _entries_dict[key_entry][layer_feature] = {}
+                    for key, value in _dict.items():
+                        _entries_dict[key_entry][layer_feature][
+                            mapping_config.get_expression_value(key)
+                        ] = mapping_config.get_expression_value(value)
         mapping_config.entries = SimpleNamespace(**_entries_dict)
 
         mapping_config._build_annotation_mapping()

@@ -1,0 +1,33 @@
+{
+  "VERSION": {
+    "mapping_file": "1.0.0",
+    "mapping_reader": "1.2.0",
+    "ahd": "7.5.0"
+  },
+  "IDENTIFIER_CONSTANTS": {
+    "target_all": "webanno.custom",
+    "target_segment": "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type",
+    "source_all": "gemtex",
+    "source_segment": "de.averbis.extraction.types"
+  },
+  "MAPPING": {
+    "IDENTIFIER": {
+      "target_default": "#target_all",
+      "source_default": "#source_all"
+    },
+    "ENTRIES": {
+      "Concept": {
+        "layer": {},
+        "features": {
+          "id": "id"
+        }
+      },
+      "Sentence": {
+        "layer": {
+          "#target_segment.Sentence": "#source_segment.Sentence"
+        },
+        "features": {}
+      }
+    }
+  }
+}
