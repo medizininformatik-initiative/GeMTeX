@@ -23,9 +23,8 @@ annotation:
 * ``protocol`` und ``port`` müssen im Standardfall nicht geändert werden. Falls sich der Recommender und der IDLogik Server in einer ``Docker``-Umgebung befinden, müsste `host` aber auch angepasst werden.
 * ``licence`` muss zwangsläufig beim Start des Services als `property` übergeben werden (z.B. als ``command line option`` siehe Beispiele - Java weiter unten).  
 * ``filterFile`` Zeigt auf eine Textdatei, die reguläre Ausdrücke enthält, die nicht annotiert werden sollen:  
-  * ``[0-9.:-/]*`` ignoriert alle Kombinationen aus Zahlen und den Zeichen ``.:-/``; damit werden einzelne Zahlen 
-  aber auch Uhrzeiten und Datumsangaben erfasst.
-  * ``[A-Z][0-9.-]*`` matcht ICD-10 Codes. Hinweis: OPS Codes werden 
+  * ``\b[0-9]{1,2}[.][0-9]{1,2}[.][0-9]{2,4}``, ``\b[0-9]{1,2}[:][0-9]{1,2}[:]{0,1}[0-9]{1,2}`` ignoriert alle Kombinationen für Uhrzeiten und Datumsangaben.
+  * ``\b[A-Z][0-9]{2}[.]{0,1}[0-9,-]{0,2}`` matcht ICD-10 Codes. Hinweis: OPS Codes werden 
   durch den vorherigen regulären Ausdruck abgebildet.
 
 #### Beispiele
@@ -36,7 +35,7 @@ java -jar IDLOGIK_RECOMMENDER.jar --idlogik.licence=LICENCE_KEY
 So kann bei bedarf auch der ``Host``/``Port`` konfiguriert werden.
 ##### Docker
 ````
-docker run --network NETWORK_NAME ghcr.io/medizininformatik-initiative/gemtex/inception-idlogik-recommender:0.2.2 --idlogik.licence=LICENCE --idlogik.host=IDLOGIK_DOCKER_NETWORK_IP
+docker run --network NETWORK_NAME ghcr.io/medizininformatik-initiative/gemtex/inception-idlogik-recommender:0.2.3 --idlogik.licence=LICENCE --idlogik.host=IDLOGIK_DOCKER_NETWORK_IP
 ````
 **Bitte beachten**, dass die Angaben für ``--idlogik.licence``, ``--idlogik.host`` etc. nach dem Namen des Images stehen (das wird dem Container übergeben) und die Angaben ``--network`` oder ``--name`` (wenn man zur einfacheren Referenzierung einen statischen Namen für den Container vergeben will) vor den Namen des Images kommen!
 
