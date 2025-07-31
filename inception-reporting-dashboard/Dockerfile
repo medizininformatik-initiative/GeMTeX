@@ -4,6 +4,8 @@ ARG VERSION=${VERSION}
 
 WORKDIR /inception-reports
 
+RUN pip install --no-cache-dir apt-mirror-updater && apt-mirror-updater -a
+
 RUN apt-get update --yes && \
     apt-get install --yes git
 
