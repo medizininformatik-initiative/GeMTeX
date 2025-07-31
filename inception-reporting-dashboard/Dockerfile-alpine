@@ -1,11 +1,11 @@
-FROM python:3.11-slim
+FROM python:3.11-alpine
 
 ARG VERSION=${VERSION}
 
 WORKDIR /inception-reports
 
-RUN apt-get update --yes && \
-    apt-get install --yes git
+RUN apk update --yes && \
+    apk add --yes git
 
 RUN git clone https://github.com/inception-project/inception-reporting-dashboard.git --branch v$VERSION
 
