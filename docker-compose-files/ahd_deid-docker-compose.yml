@@ -1,0 +1,31 @@
+name: ahd-deid-recommender
+services:
+  ahd-deid-recommender:
+    container_name: ahd-deid-recommender
+    image: ghcr.io/medizininformatik-initiative/gemtex/inception-ahd-recommender:1.4.2
+    restart: unless-stopped
+    environment:
+      - EXTERNAL_SERVER_ADDRESS=
+      - EXTERNAL_SERVER_TOKEN=
+      - PIPELINE_PROJECT=
+      - PIPELINE_NAME=
+      - CONSUMER=ariadne.contrib.external_server_consumer.MappingConsumer::/mapping_files/deid_mapping_singlelayer.json
+      - SERVER_HANDLE=deid_recommender
+      - MODEL_DIR=/models
+      - RECOMMENDER_WORKERS=4
+      - RECOMMENDER_ADDRESS=:5000
+    ports:
+      - 5000:5000
+    networks:
+      - recommender-network
+    volumes:
+      - type: bind
+        source: ./mapping_files
+        target: /mapping_files
+      - type: bind
+        source: ./models
+        target: /models
+networks:
+  recommender-network:
+    external: true
+    name: recommender-network
