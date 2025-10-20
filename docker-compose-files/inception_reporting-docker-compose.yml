@@ -1,7 +1,7 @@
 name: inception-reporting
 services:
   inception-reporting-lead:
-    image: ghcr.io/medizininformatik-initiative/gemtex/inception-dashboard:0.9
+    image: ${REPOSITORY_NAME:-ghcr.io/medizininformatik-initiative/gemtex}/inception-dashboard:${VERSION:-0.9.2}
     container_name: inception-dashboard-lead
     command: '--lead'
     restart: unless-stopped
@@ -12,7 +12,7 @@ services:
     networks:
       - recommender-network
   inception-reporting-manager:
-    image: ghcr.io/medizininformatik-initiative/gemtex/inception-dashboard:0.9
+    image: ${REPOSITORY_NAME:-ghcr.io/medizininformatik-initiative/gemtex}/inception-dashboard:${VERSION:-0.9.2}
     container_name: inception-dashboard-manager
     command: '--manager'
     restart: unless-stopped
