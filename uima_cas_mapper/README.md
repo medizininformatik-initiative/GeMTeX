@@ -46,7 +46,7 @@ Dabei gibt es folgende festgelegte Struktur:
 <ol type="a">
   <li>
     Hier können Platzhalter definiert werden die im weiteren Verlauf der Mapping Datei mit '#' referenziert werden können.
-    Ein '.' darf dabei nicht verwendet werden, da dieser im Weiteren als Trennstelle interpretiert wird. 
+    Ein '.' darf dabei im key-Namen nicht verwendet werden, da dieser im Weiteren als Trennstelle interpretiert wird. 
   </li>
   <li>
     Hier sind z.Z. nur zwei Einträge vorgesehen:
@@ -186,5 +186,8 @@ In obigen Beispiel wird ein Layer in der Ziel-CAS mit einem `kind` Feature angel
     ein Layer in der Quell-CAS mit dem Wert 'org.example.Contact' gefunden wird (startet nicht mit einem Punkt, weshalb der String ohne zusätzliche Auflösung genommen wird).
     Wieder wird eine Bool'sche Abfrage gestartet: der 'kind' Wert ist entweder 'other' oder 'none'.
     Der Wert des `kind` Features wäre in diesem Fall 'CONTACT_OTHER'.
+  </li>
+  <li>
+    Ein 'layer' Eintrag kann auch eine Liste sein (e.g. `"layer": [".Contact", ".ContactOther"]`). Dann würde für beide Quell-Layer die entsprechende Layer-Definition im Ziel-CAS angelegt.
   </li>
 </ol>
