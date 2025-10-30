@@ -1,0 +1,255 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<typeSystemDescription
+	xmlns="http://uima.apache.org/resourceSpecifier">
+	<name>de.averbis.textanalysis.types.health.PHITypeSystem</name>
+	<description>Typesystem used to represent Protected Health Information.
+	</description>
+	<version>${project.version}</version>
+	<vendor>Averbis GmbH</vendor>
+	<imports>
+		<import name="de.averbis.extraction.types.AverbisTypeSystem" />
+	</imports>
+	<types>
+
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.Deidentifiable</name>
+			<description>Internal type for representing replacements during deidentification.</description>
+			<supertypeName>de.averbis.extraction.types.CoreAnnotation</supertypeName>
+			<features>
+				<featureDescription>
+					<name>replacement</name>
+					<description>The textual replacement for the identified text span.</description>
+					<rangeTypeName>uima.cas.String</rangeTypeName>
+				</featureDescription>
+				<featureDescription>
+					<name>replacementKind</name>
+					<description>The approach of the replacement.</description>
+					<rangeTypeName>uima.cas.String</rangeTypeName>
+				</featureDescription>
+			</features>
+		</typeDescription>
+		
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.PHI</name>
+			<description>Protected health information.</description>
+			<supertypeName>de.averbis.textanalysis.types.health.Deidentifiable</supertypeName>
+			<features>
+				<featureDescription>
+					<name>kind</name>
+					<description>Fine-grained kind of the type of protected health information.</description>
+					<rangeTypeName>uima.cas.String</rangeTypeName>
+				</featureDescription>
+				<featureDescription>
+					<name>coarseKind</name>
+					<description>Coarse kind of the type of protected health information.</description>
+					<rangeTypeName>uima.cas.String</rangeTypeName>
+				</featureDescription>
+			</features>
+		</typeDescription>
+
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.PHIDate</name>
+			<description>Mention of a date.</description>
+			<supertypeName>de.averbis.textanalysis.types.health.PHI</supertypeName>
+		</typeDescription>
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.PHIBirthDate</name>
+			<description>Mention of a birth date.</description>
+			<supertypeName>de.averbis.textanalysis.types.health.PHIDate</supertypeName>
+		</typeDescription>
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.PHIDeathDate</name>
+			<description>Mention of a death date.</description>
+			<supertypeName>de.averbis.textanalysis.types.health.PHIDate</supertypeName>
+		</typeDescription>
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.PHICommonDate</name>
+			<description>Mention of a common date.</description>
+			<supertypeName>de.averbis.textanalysis.types.health.PHIDate</supertypeName>
+		</typeDescription>
+
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.PHIAge</name>
+			<description>Age of the patient.</description>
+			<supertypeName>de.averbis.textanalysis.types.health.PHI</supertypeName>
+		</typeDescription>
+
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.PHIName</name>
+			<description>Name of a person.</description>
+			<supertypeName>de.averbis.textanalysis.types.health.PHI</supertypeName>
+		</typeDescription>
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.PHIPatient</name>
+			<description>Mention of the patient's name or another person's name like a relative or representative of the patient.</description>
+			<supertypeName>de.averbis.textanalysis.types.health.PHIName</supertypeName>
+		</typeDescription>
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.PHIDoctor</name>
+			<description>Mention of doctor's name or another staff member.</description>
+			<supertypeName>de.averbis.textanalysis.types.health.PHIName</supertypeName>
+		</typeDescription>
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.PHINameTitle</name>
+			<description>Mention of title of a person.</description>
+			<supertypeName>de.averbis.textanalysis.types.health.PHIName</supertypeName>
+		</typeDescription>
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.PHINameOther</name>
+			<description>Mention of another person not linked to the patient or doctors.</description>
+			<supertypeName>de.averbis.textanalysis.types.health.PHIName</supertypeName>
+		</typeDescription>
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.PHIUsername</name>
+			<description>Mention of username.</description>
+			<supertypeName>de.averbis.textanalysis.types.health.PHIName</supertypeName>
+		</typeDescription>
+
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.PHILocation</name>
+			<description>Location information like hospital, street, city or country.</description>
+			<supertypeName>de.averbis.textanalysis.types.health.PHI</supertypeName>
+		</typeDescription>
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.PHIStreet</name>
+			<description>Mention of a street.</description>
+			<supertypeName>de.averbis.textanalysis.types.health.PHILocation</supertypeName>
+		</typeDescription>
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.PHIHospital</name>
+			<description>Mention of a hospital.</description>
+			<supertypeName>de.averbis.textanalysis.types.health.PHILocation</supertypeName>
+		</typeDescription>
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.PHICountry</name>
+			<description>Mention of a country.</description>
+			<supertypeName>de.averbis.textanalysis.types.health.PHILocation</supertypeName>
+		</typeDescription>
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.PHICity</name>
+			<description>Mention of a city.</description>
+			<supertypeName>de.averbis.textanalysis.types.health.PHILocation</supertypeName>
+		</typeDescription>
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.PHIState</name>
+			<description>Mention of a state.</description>
+			<supertypeName>de.averbis.textanalysis.types.health.PHILocation</supertypeName>
+		</typeDescription>
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.PHIZip</name>
+			<description>Mention of a zip code.</description>
+			<supertypeName>de.averbis.textanalysis.types.health.PHILocation</supertypeName>
+		</typeDescription>
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.PHIOrganization</name>
+			<description>Mention of an organization.</description>
+			<supertypeName>de.averbis.textanalysis.types.health.PHILocation</supertypeName>
+		</typeDescription>
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.PHILocationOther</name>
+			<description>Mention of an unspecific location.</description>
+			<supertypeName>de.averbis.textanalysis.types.health.PHILocation</supertypeName>
+		</typeDescription>
+
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.PHIID</name>
+			<description>Different kinds of IDs like social security numbers, medical record number or health plan number.</description>
+			<supertypeName>de.averbis.textanalysis.types.health.PHI</supertypeName>
+		</typeDescription>
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.PHIIDNum</name>
+			<description>Mentions of specific IDs.</description>
+			<supertypeName>de.averbis.textanalysis.types.health.PHIID</supertypeName>
+		</typeDescription>
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.PHIMedicalRecord</name>
+			<description>Mentions of specific medical record numbers/ids.</description>
+			<supertypeName>de.averbis.textanalysis.types.health.PHIID</supertypeName>
+		</typeDescription>
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.PHIDevice</name>
+			<description>Mentions of specific device.</description>
+			<supertypeName>de.averbis.textanalysis.types.health.PHIID</supertypeName>
+		</typeDescription>
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.PHIBioId</name>
+			<description>Mentions of a specific id.</description>
+			<supertypeName>de.averbis.textanalysis.types.health.PHIID</supertypeName>
+		</typeDescription>
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.PHIHealthPlan</name>
+			<description>Mentions of a health plan id.</description>
+			<supertypeName>de.averbis.textanalysis.types.health.PHIID</supertypeName>
+		</typeDescription>
+		
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.PHIContact</name>
+			<description>Contact information like phone, fax, email, url or IP.</description>
+			<supertypeName>de.averbis.textanalysis.types.health.PHI</supertypeName>
+		</typeDescription>
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.PHIPhone</name>
+			<description>Mention of a phone number.</description>
+			<supertypeName>de.averbis.textanalysis.types.health.PHIContact</supertypeName>
+		</typeDescription>
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.PHIFax</name>
+			<description>Mention of a fax number.</description>
+			<supertypeName>de.averbis.textanalysis.types.health.PHIContact</supertypeName>
+		</typeDescription>
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.PHIEmail</name>
+			<description>Mention of an email address.</description>
+			<supertypeName>de.averbis.textanalysis.types.health.PHIContact</supertypeName>
+		</typeDescription>
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.PHIUrl</name>
+			<description>Mention of a URL.</description>
+			<supertypeName>de.averbis.textanalysis.types.health.PHIContact</supertypeName>
+		</typeDescription>
+		
+
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.PHIProfession</name>
+			<description>Mention of a profession.</description>
+			<supertypeName>de.averbis.textanalysis.types.health.PHI</supertypeName>
+		</typeDescription>
+		
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.PHIOther</name>
+			<description>Mention of other PHI.</description>
+			<supertypeName>de.averbis.textanalysis.types.health.PHI</supertypeName>
+		</typeDescription>
+		
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.PHISentence</name>
+			<description>An additional representation that indicates if a sentence contains PHI.</description>
+			<supertypeName>de.averbis.textanalysis.types.health.Deidentifiable</supertypeName>
+			<features>
+				<featureDescription>
+					<name>label</name>
+					<description>Information if the sentence contains PHI: PHI or OTHER</description>
+					<rangeTypeName>uima.cas.String</rangeTypeName>
+				</featureDescription>
+			</features>
+		</typeDescription>
+		
+		<typeDescription>
+			<name>de.averbis.textanalysis.types.health.DeidentifiedDocument</name>
+			<description>A deidentified version of the document.</description>
+			<supertypeName>de.averbis.extraction.types.CoreAnnotation</supertypeName>
+			<features>
+				<featureDescription>
+					<name>kind</name>
+					<description>The kind of method applied in order to deidentify the document.</description>
+					<rangeTypeName>uima.cas.String</rangeTypeName>
+				</featureDescription>
+				<featureDescription>
+					<name>deidentifiedText</name>
+					<description>The deidentified version of the document.</description>
+					<rangeTypeName>uima.cas.String</rangeTypeName>
+				</featureDescription>
+			</features>
+		</typeDescription>
+	</types>
+</typeSystemDescription>
