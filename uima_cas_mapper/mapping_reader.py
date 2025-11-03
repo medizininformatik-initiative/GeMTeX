@@ -35,6 +35,7 @@ class AnnotationMapping(dict):
         entry_name: str,
         mapping_type: MappingTypeEnum = MappingTypeEnum.SINGLELAYER,
         add_feat: dict = None,
+        priority: int = 0,
         *args,
         **kwargs,
     ):
@@ -44,6 +45,15 @@ class AnnotationMapping(dict):
         self.target_feature = target_feature
         self.entry_name = entry_name
         self.additional_feats = add_feat
+        self.priority = priority
+
+    @property
+    def priority(self):
+        return self._priority
+
+    @priority.setter
+    def priority(self, val: int):
+        self._priority = val
 
     @property
     def mapping_type(self):
@@ -142,7 +152,8 @@ class MappingConfig:
                                                 target_feature=feat,
                                                 entry_name=entry_name,
                                                 mapping_type=MappingTypeEnum.SINGLELAYER,
-                                                add_feat=self._resolve_feature_dict(val.get("add_feature", {}))
+                                                add_feat=self._resolve_feature_dict(val.get("add_feature", {})),
+                                                priority=val.get("prio", 0)
                                             )
                                         )
                                     self.annotation_mapping[_source_layer][key] = check_fs
