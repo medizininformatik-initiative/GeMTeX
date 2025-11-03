@@ -179,7 +179,7 @@ def init_source_cas(
         if cas_path.is_file():
             with cas_path.open('rb') as cas_file:
                 if suffix in ['xmi']:
-                    cas = load_cas_from_xmi(cas_file, typesystem)
+                    cas = load_cas_from_xmi(cas_file, typesystem, lenient=True)
                 elif suffix in ['json']:
                     cas = load_cas_from_json(cas_file)
             yield cas, typesystem, cas_path.stem
