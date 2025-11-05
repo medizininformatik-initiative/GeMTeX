@@ -160,8 +160,8 @@ Wenn für `<CONSUMER_CLASS>` der ``MappingConsumer`` verwendet wird, braucht es 
 Dabei müssen dann die entsprechenden Dateien dem ``docker`` Container zur Verfügung gestellt werden (`source`) und `<MAPPING_FILE>` dann relativ zu `target` spezifiziert werden.
 Anhand des Beispiels und einer Mapping Datei `../uima_cas_mapper/mapping-files/deid_mapping_singlelayer.json` wäre ``<MAPPING_FILE>`` dann als `/mapping-files/deid_mapping_singlelayer.json` anzugeben.  
 Der Recommender `docker` Container (wenn das `RECOMMENDER_WORKDIR` in der `docker` Datei nicht geändert wird) beinhaltet aber auch zwei vorgefertigte Mapping Dateien unter `/inception_ahd_recommender/prefab-mapping-files`:
-* `deid_mapping_singlelayer.json`
-* `deid_mapping_multilayer.json`
+* `deid_mapping_singlelayer.json` (für AHD v7.x)
+* `deid_mapping_singlelayer_v2.json` (für AHD v8.x)
 
 Eine von denen kann dann auch mit ``<MAPPING_FILE>``=`/inception_ahd_recommender/prefab-mapping-files/<FILE>` referenziert werden.
 
