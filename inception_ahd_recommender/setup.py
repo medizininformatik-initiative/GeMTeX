@@ -33,12 +33,12 @@ REQUIRES_PYTHON = ">=3.6.0"
 install_requires = [
     "flask",
     "filelock",
-    "dkpro-cassis==0.9.1",
+    "dkpro-cassis==0.10.1",
     "joblib",
     "gunicorn",
     "deprecation",
     "requests",
-    "averbis-python-api==0.11.0",
+    "averbis-python-api==0.16.0",
 ]
 
 contrib_dependencies = ["scikit-learn>=1.0.1", "requests"]
