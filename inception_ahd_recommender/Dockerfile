@@ -1,5 +1,7 @@
-ARG ROOT_CONTAINER=python:3.7-slim
+ARG ROOT_CONTAINER=python:3.9-slim
 FROM $ROOT_CONTAINER
+
+RUN pip install uv
 
 ARG RECOMMENDER_WORKDIR=/inception_ahd_recommender
 
@@ -7,8 +9,6 @@ WORKDIR $RECOMMENDER_WORKDIR
 
 COPY . .
 
-RUN python -m pip install --upgrade pip
-RUN python -m pip install -e . &&\
-    python -m pip install -e ".[contrib]"
+RUN uv sync
 
-ENTRYPOINT ["gunicorn"]
+ENTRYPOINT ["uv", "run", "gunicorn"]
