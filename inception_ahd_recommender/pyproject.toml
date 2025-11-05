@@ -1,0 +1,70 @@
+[project]
+name = "inception-ahd-recommender"
+version = "1.5.0"
+description = "Specific implementation to extract UIMA cas annotations from the AVERBIS Health Discovery; but ultimately extensible to any external server. Based on INCEpTION external recommender library in Python."
+readme = "README.md"
+license = "Apache License 2.0"
+requires-python = ">=3.9.0"
+authors = [
+    { name = "Franz Matthies", email = "franz.matthies@imise.uni-leipzig.de" },
+    { name = "The INCEpTION team", email = "inception-users@googlegroups.com" },
+]
+keywords = [
+    "averbis",
+    "dkpro",
+    "inception",
+    "nlp",
+    "uima",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python",
+]
+dependencies = [
+    "averbis-python-api==0.16.0",
+    "deprecation",
+    "dkpro-cassis==0.10.1",
+    "filelock",
+    "flask",
+    "gunicorn",
+    "joblib",
+    "requests",
+]
+
+[project.urls]
+Repository = "https://github.com/medizininformatik-initiative/GeMTeX/tree/main/inception_ahd_recommender"
+"Bug Tracker" = "https://github.com/medizininformatik-initiative/GeMTeX/issues"
+
+[dependency-groups]
+contrib = [
+    "requests",
+    "scikit-learn>=1.0.1",
+]
+dev = [
+    "black",
+    "wget",
+]
+doc = [
+    "sphinx",
+    "sphinx-autodoc-typehints",
+    "sphinx-rtd-theme",
+]
+test = [
+    "codecov",
+    "pytest",
+    "pytest-cov",
+    "tox",
+]
+
+[tool.uv]
+package = false
+default-groups = [
+    "contrib"
+]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "ariadne",
+    "prefab-mapping-files",
+    "./*.py"
+]
