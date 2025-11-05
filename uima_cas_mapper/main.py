@@ -118,6 +118,9 @@ def mark_new(
     if missing_type_warn is None:
         missing_type_warn = []
 
+    #ToDo? deal with same offset for probable more specific types (e.g. 2 annos PHIDate -> PHIBirthDate with same offset)
+    #  mapping_dict has 'priority' property (0 default & highest prio)
+
     for source_layer, mapping_dict in mapping.annotation_mapping.items():
         duplicate_check = defaultdict(dict)
         try:
@@ -179,7 +182,7 @@ def init_source_cas(
         if cas_path.is_file():
             with cas_path.open('rb') as cas_file:
                 if suffix in ['xmi']:
-                    cas = load_cas_from_xmi(cas_file, typesystem)
+                    cas = load_cas_from_xmi(cas_file, typesystem, lenient=True)
                 elif suffix in ['json']:
                     cas = load_cas_from_json(cas_file)
             yield cas, typesystem, cas_path.stem

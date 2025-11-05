@@ -6,7 +6,7 @@ Date: February 27, 2024
 
 Description: Contains a class that interprets a mapping file and provides the mapping methods.
 """
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 
 import enum
 import json
@@ -35,6 +35,7 @@ class AnnotationMapping(dict):
         entry_name: str,
         mapping_type: MappingTypeEnum = MappingTypeEnum.SINGLELAYER,
         add_feat: dict = None,
+        priority: int = 0,
         *args,
         **kwargs,
     ):
@@ -44,6 +45,15 @@ class AnnotationMapping(dict):
         self.target_feature = target_feature
         self.entry_name = entry_name
         self.additional_feats = add_feat
+        self.priority = priority
+
+    @property
+    def priority(self):
+        return self._priority
+
+    @priority.setter
+    def priority(self, val: int):
+        self._priority = val
 
     @property
     def mapping_type(self):
@@ -128,23 +138,25 @@ class MappingConfig:
                     if isinstance(feat_val, dict):
                         for key, val in feat_val.items():
                             if isinstance(val, dict):
-                                source_layer = self.get_expression_value(
-                                    val.get("layer", f".{key}"), ArchitectureEnum.SOURCE
-                                )
                                 check_fs = MappingConfig.resolve_simple_bool(
                                     val.get("feature", lambda x: True)
                                 )
-                                if source_layer not in self.annotation_mapping:
-                                    self.annotation_mapping[source_layer] = (
-                                        AnnotationMapping(
-                                            target_layer=target_layer,
-                                            target_feature=feat,
-                                            entry_name=entry_name,
-                                            mapping_type=MappingTypeEnum.SINGLELAYER,
-                                            add_feat=self._resolve_feature_dict(val.get("add_feature", {}))
+                                source_layer = val.get("layer", f".{key}")
+                                source_layer = source_layer if isinstance(source_layer, list) else [source_layer]
+                                for _source_layer in source_layer:
+                                    _source_layer = self.get_expression_value(_source_layer, ArchitectureEnum.SOURCE)
+                                    if _source_layer not in self.annotation_mapping:
+                                        self.annotation_mapping[_source_layer] = (
+                                            AnnotationMapping(
+                                                target_layer=target_layer,
+                                                target_feature=feat,
+                                                entry_name=entry_name,
+                                                mapping_type=MappingTypeEnum.SINGLELAYER,
+                                                add_feat=self._resolve_feature_dict(val.get("add_feature", {})),
+                                                priority=val.get("prio", 0)
+                                            )
                                         )
-                                    )
-                                self.annotation_mapping[source_layer][key] = check_fs
+                                    self.annotation_mapping[_source_layer][key] = check_fs
                             else:
                                 logging.warning(
                                     f"No proper description for entry '{entry_name}_features_{feat}_{key}' (needs to be object/dict).")

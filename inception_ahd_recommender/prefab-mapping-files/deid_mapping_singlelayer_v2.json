@@ -1,0 +1,95 @@
+{
+  "VERSION": {
+    "mapping_file": "2.0.0",
+    "mapping_reader": "1.3.0"
+  },
+  "IDENTIFIER_CONSTANTS": {
+    "target_deid": "webanno.custom",
+    "target_segment": "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type",
+    "source_deid": "de.averbis.textanalysis.types.health",
+    "source_segment": "de.averbis.extraction.types"
+  },
+  "MAPPING": {
+    "IDENTIFIER": {
+      "target_default": "#target_deid",
+      "source_default": "#source_deid"
+    },
+    "ENTRIES": {
+      "PHI": {
+        "features": {
+          "kind": {
+            "AGE": {
+              "layer": ".PHIAge"
+            },
+            "CONTACT_EMAIL": {
+              "layer": ".PHIEmail"
+            },
+            "CONTACT_FAX": {
+              "layer": ".PHIFax"
+            },
+            "CONTACT_PHONE": {
+              "layer": ".PHIPhone"
+            },
+            "CONTACT_URL": {
+              "layer": ".PHIUrl"
+            },
+            "DATE": {
+              "layer": ".PHICommonDate"
+            },
+            "DATE_BIRTH": {
+              "layer": ".PHIBirthDate"
+            },
+            "DATE_DEATH": {
+              "layer": ".PHIDeathDate"
+            },
+            "ID": {
+              "layer": ".PHIID"
+            },
+            "LOCATION_CITY": {
+              "layer": ".PHICity"
+            },
+            "LOCATION_COUNTRY": {
+              "layer": ".PHICountry"
+            },
+            "LOCATION_HOSPITAL": {
+              "layer": ".PHIHospital"
+            },
+            "LOCATION_ORGANIZATION": {
+              "layer": ".PHIOrganization"
+            },
+            "LOCATION_STATE": {
+              "layer": ".PHIState"
+            },
+            "LOCATION_STREET": {
+              "layer": ".PHIStreet"
+            },
+            "LOCATION_ZIP": {
+              "layer": ".PHIZip"
+            },
+            "LOCATION_OTHER": {
+              "layer": ".PHILocationOther"
+            },
+            "NAME_DOCTOR": {
+              "layer": ".PHIDoctor"
+            },
+            "NAME_PATIENT": {
+              "layer": ".PHIPatient"
+            },
+            "NAME_TITLE": {
+              "layer": ".PHINameTitle"
+            },
+            "NAME_OTHER": {
+              "layer": [".PHINameOther", ".PHIUsername"]
+            },
+            "PROFESSION": {
+              "layer": ".PHIProfession"
+            },
+            "OTHER": {
+              "layer": ".PHIOther"
+            }
+          }
+        }
+      }
+    }
+  }
+}
