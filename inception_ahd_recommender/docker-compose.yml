@@ -1,13 +1,13 @@
 services:
   ahd-deid-recommender:
-    image: ghcr.io/medizininformatik-initiative/gemtex/inception-ahd-recommender:1.4.2
+    image: ghcr.io/medizininformatik-initiative/gemtex/inception-ahd-recommender:1.5.0
     restart: unless-stopped
     environment:
       - EXTERNAL_SERVER_ADDRESS=http://averbishealthdiscovery-health-discovery-hd-1:8080
       - EXTERNAL_SERVER_TOKEN=
       - PIPELINE_PROJECT=GeMTeX
       - PIPELINE_NAME=deid
-      - CONSUMER=ariadne.contrib.external_server_consumer.MappingConsumer::/inception_ahd_recommender/prefab-mapping-files/deid_mapping_singlelayer.json
+      - CONSUMER=ariadne.contrib.external_server_consumer.MappingConsumer::/inception_ahd_recommender/prefab-mapping-files/deid_mapping_singlelayer_v2.json
       - SERVER_HANDLE=deid_recommender
       - MODEL_DIR=/models
       - RECOMMENDER_WORKERS=4
