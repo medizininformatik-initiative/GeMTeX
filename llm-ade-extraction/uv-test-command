@@ -1,0 +1,1 @@
+uv run --with ade_extraction_pipeline --no-project -- start-pipeline

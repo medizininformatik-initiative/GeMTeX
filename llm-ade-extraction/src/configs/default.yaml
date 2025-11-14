@@ -1,0 +1,17 @@
+title: Default Configuration
+
+pydantic-ai:
+  model: openai.OpenAIChatModel
+  provider: openai.OpenAIProvider
+  api_key:
+
+pydantic:
+  TextAnnotationen:
+    Diagnosen:
+      prompt: Die konkrete Referenz der Diagnose im Text.
+    Medikationen:
+      prompt: Die konkrete Referenz einer Medikation oder eines Wirkstoffs im Text.
+
+prompt: |-
+  Du bist ein medizinischer Dokumentar.
+  Aus den Texten, die dir gegeben werden extrahierst du die `TextAnnotationen`.
