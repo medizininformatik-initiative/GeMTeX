@@ -7,6 +7,7 @@ name = "ade-extraction-pipeline"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "aiohttp" },
     { name = "click" },
     { name = "oaklib" },
     { name = "pydantic-ai" },
@@ -14,6 +15,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiohttp", specifier = ">=3.12.15" },
     { name = "click", specifier = ">=8.3.0" },
     { name = "oaklib", specifier = ">=0.6.23" },
     { name = "pydantic-ai", specifier = "==1.17.0" },

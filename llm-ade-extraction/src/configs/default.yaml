@@ -1,11 +1,15 @@
 title: Default Configuration
 
-id-logik-recommender:
-  host: localhost
-  port: 8080
-  endpoints:
-    icd10: /inception/lookup_icd10?q={diagnose}
-    sct: /inception/lookup_sct?q={drug}
+coding:
+  servers:
+    id-server:
+      host: localhost
+      port: 8080
+  config:
+    diagnosen:
+      - id-server: /inception/lookup_icd10?q={text}
+    medikationen:
+      - id-server: /inception/lookup_sct?q={text}
 
 pydantic-ai:
   model: openai.OpenAIChatModel
