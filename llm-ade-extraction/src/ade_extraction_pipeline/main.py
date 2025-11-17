@@ -20,7 +20,8 @@ class Mode(enum.Enum):
 @click.option("--config", default="default", help="config file")
 @click.option("--mode", default="text", type=click.Choice(Mode, case_sensitive=False))
 @click.option("--output", default=None)
-def start_pipeline(src: str, config: str, mode: Mode, output: Optional[str]) -> None:
+@click.option("--api-key", default=None)
+def start_pipeline(src: str, config: str, mode: Mode, output: Optional[str], api_key: Optional[str]) -> None:
     _default_configs = list_configs()
     if pl.Path(config).is_file():
         _config_path = pl.Path(config)
@@ -32,12 +33,12 @@ def start_pipeline(src: str, config: str, mode: Mode, output: Optional[str]) -> 
 
     result = None
     if mode == Mode.TEXT:
-        result = run_agent_on_query(src, _config)
+        pass
     elif mode == Mode.FILE:
         src = pl.Path(src).read_text()
-        result = run_agent_on_query(src, _config)
     elif mode == Mode.FOLDER:
         raise NotImplementedError()
+    result = run_agent_on_query(src, _config, api_key)
 
     if result is not None:
         if output is None:

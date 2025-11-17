@@ -68,7 +68,7 @@ def json_schema_to_base_model(schema: dict[str, Any]) -> Type[BaseModel]:
     return create_model(schema.get("title", "DynamicModel"), **model_fields)
 
 
-def run_agent_on_query(query: str, config: dict) -> AgentRunResult[Any]:
+def run_agent_on_query(query: str, config: dict, api_key: Optional[str]) -> AgentRunResult[Any]:
     _models = json_schema_to_base_model(config.get("pydantic").get("TextAnnotationen"))
     agent = Agent(
         model=OpenAIChatModel(
@@ -76,7 +76,7 @@ def run_agent_on_query(query: str, config: dict) -> AgentRunResult[Any]:
             # provider=OllamaProvider(base_url='http://localhost:11434/v1'),
             provider=OpenAIProvider(
                 base_url="https://api.helmholtz-blablador.fz-juelich.de/v1/",
-                api_key=config.get("pydantic-ai").get("api_key", ""),
+                api_key=config.get("pydantic-ai").get("api_key", api_key) if config.get("pydantic-ai").get("api_key", api_key) is not None else api_key,
             ),
         ),
         system_prompt=config.get("prompt"),
