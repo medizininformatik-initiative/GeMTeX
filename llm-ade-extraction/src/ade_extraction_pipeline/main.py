@@ -39,12 +39,12 @@ def start_pipeline(src: str, config: str, mode: Mode, output: Optional[str]) -> 
     elif mode == Mode.FOLDER:
         raise NotImplementedError()
 
-    if output is None and result is not None:
-        # json.dumps(result.output, indent=2)
-        print(result.output)
-    elif output := pl.Path(output):
-        output.touch()
-        json.dump(result.output, output.open('wb'), indent=2)
+    if result is not None:
+        if output is None:
+            json.dumps(result.output.model_dump(), indent=2)
+        elif output := pl.Path(output):
+            output.touch()
+            json.dump(result.output.model_dump(), output.open('w', encoding='utf-8'), indent=2, ensure_ascii=False)
 
 def list_configs() -> dict[str, pl.Path]:
     _config_folder = pl.Path(__file__).parent.parent / "configs"
@@ -53,3 +53,7 @@ def list_configs() -> dict[str, pl.Path]:
         if config.is_file() and config.suffix in [".yaml", ".yml"]:
             _dict[config.stem] = config
     return _dict
+
+
+if __name__ == "__main__":
+    start_pipeline()
