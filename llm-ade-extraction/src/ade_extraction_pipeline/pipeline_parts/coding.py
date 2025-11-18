@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from typing import Union, Optional
 
 from aiohttp import ClientSession
-from pysolr import Results
 
 
 @dataclass
@@ -19,7 +18,11 @@ class Result:
     results: list[dict]
 
     def to_json(self):
-        return self.original_dict | {"codes": { "results": self.results, "src": self.src }}
+        _new_dict = self.original_dict | {"codes": []}
+        for _d in self.results:
+            _d["src"] = self.src
+            _new_dict["codes"].append(_d)
+        return _new_dict
 
 
 class CodingServer:
@@ -30,12 +33,14 @@ class CodingServer:
         port: Union[str, int] = 8080,
         endpoints: dict[str, str] = None,
         protocol: str = "http",
+        ignore_fields: list[str] = None,
     ):
         self._name = name
         self._endpoints = {}
         self._host = host
         self._port = port
         self._protocol = protocol
+        self._ignore_fields = ignore_fields if ignore_fields is not None else []
         self.build_endpoint_dict(endpoints)
 
     def __str__(self):
@@ -60,6 +65,8 @@ class CodingServer:
         self._endpoints = _temp_dict
 
     def endpoint(self, anno_type: str, **kwargs) -> Optional[str]:
+        if not self.endpoints.get(anno_type, False):
+            return None
         _config_args = self.endpoints.get(anno_type, {}).get("args", [])
         if len(_config_args) == 0:
             return self._endpoints[anno_type]["endpoint"]
@@ -67,7 +74,7 @@ class CodingServer:
         for k in set(kwargs.keys()).difference(_config_args):
             _difference_set.add(k)
             kwargs.pop(k)
-        if len(_difference_set) > 0:
+        if len(_difference_set) > 0 and len(_difference_set.difference(self._ignore_fields)) != 0:
             logging.warning(f"Some arguments were superfluous: {_difference_set}")
         if len(kwargs) != len(_config_args):
             logging.error(f"There are some arguments missing: {set(_config_args).difference(kwargs.keys())}")
@@ -99,10 +106,11 @@ class CodingServer:
         return result_dict
 
 
-def add_codes(results: dict, config: dict) -> list[dict]:
-    new_results = []
+def add_codes(results: dict, config: dict) -> dict:
+    final_results = {}
     _server_config = config.get("coding").get("servers")
     _coding_config = config.get("coding").get("config")
+    _ignore_fields = config.get("coding").get("ignore_fields")
     for server_name, server_config in _server_config.items():
         ep_dict = {}
         for anno_type, endpoint_list in _coding_config.items():
@@ -117,9 +125,21 @@ def add_codes(results: dict, config: dict) -> list[dict]:
             host=server_config.get("host", "localhost"),
             port=server_config.get("port", 8080),
             endpoints=ep_dict,
+            ignore_fields=_ignore_fields,
         )
-        new_results.append(coding_server.incorporate_codes(results))
-    return new_results
+        _results = coding_server.incorporate_codes(results)
+        if len(final_results) == 0:
+            final_results.update(_results)
+        else:
+            for k, v in _results.items():
+                for d in v:
+                    _source_id = d.get("id")
+                    for idx, _ in enumerate(final_results.get(k, [])):
+                        _target_id = final_results[k][idx].get("id")
+                        if _source_id != _target_id or len(d.get("codes", [])) == 0:
+                            continue
+                        final_results[k][idx]["codes"] += d.get("codes", [])
+    return final_results
 
 if __name__ == "__main__":
     _path = pathlib.Path(__file__).parent.parent.parent.parent / "test/test_file_out.txt"

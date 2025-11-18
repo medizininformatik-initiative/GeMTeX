@@ -10,6 +10,8 @@ coding:
       - id-server: /inception/lookup_icd10?q={text}
     medikationen:
       - id-server: /inception/lookup_sct?q={text}
+  ignore_fields:
+    - id
 
 pydantic-ai:
   model: openai.OpenAIChatModel
