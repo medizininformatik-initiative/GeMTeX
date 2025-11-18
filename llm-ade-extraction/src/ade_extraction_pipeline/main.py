@@ -29,21 +29,39 @@ class Step(enum.Enum):
 
 @click.command()
 @click.argument("src")
-@click.option("--config", default="default", help="config file")
 @click.option(
-    "--mode", default=Mode.TEXT, type=click.Choice(Mode, case_sensitive=False)
+    "--config",
+    default="default",
+    help="Path to a config file; or a name for a preconfigured one: {default}.",
+)
+@click.option(
+    "--mode",
+    default=Mode.TEXT,
+    type=click.Choice(Mode, case_sensitive=False),
+    help="The type of the input.",
 )
 @click.option(
     "--output",
     default=".",
     type=click.Path(exists=False, dir_okay=False, allow_dash=False, path_type=pl.Path),
+    help="The output file if '--mode file|text' or a path if '--mode folder'.",
 )
-@click.option("--api-key", default=None, type=click.STRING)
-@click.option("--force-text", is_flag=True)
+@click.option(
+    "--api-key",
+    default=None,
+    type=click.STRING,
+    help="The API key to use for authentication for the chosen ai module. An API key given in the config file takes precedence.",
+)
 @click.option(
     "--start-with",
     default=Step.EXTRACTION,
     type=click.Choice(Step, case_sensitive=False),
+    help="The step to start the pipeline with. If not starting with the first step, the provided SRC needs to be a dump of the previous step.",
+)
+@click.option(
+    "--force-text",
+    is_flag=True,
+    help="If set, skips text length validation (meaning you can provide a very short sentence as input SRC)",
 )
 def start_pipeline(
     src: str,
@@ -51,8 +69,8 @@ def start_pipeline(
     mode: Mode,
     output: pl.Path,
     api_key: Optional[str],
-    force_text: bool,
     start_with: Step,
+    force_text: bool,
 ) -> None:
     _default_configs = list_configs()
     if pl.Path(config).is_file():
