@@ -14,9 +14,13 @@ coding:
     - id
 
 pydantic-ai:
-  model: openai.OpenAIChatModel
-  provider: openai.OpenAIProvider
-  api_key:
+  model:
+    implementation: openai.OpenAIChatModel
+    name: alias-large
+  provider:
+    implementation: openai.OpenAIProvider
+    url: https://api.helmholtz-blablador.fz-juelich.de/v1/
+    api_key:
 
 pydantic:
   TextAnnotationen:

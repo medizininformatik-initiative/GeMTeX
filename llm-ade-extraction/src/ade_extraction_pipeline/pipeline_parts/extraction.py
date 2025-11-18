@@ -1,4 +1,5 @@
 from enum import Enum
+from importlib import import_module
 from typing import Any, Type, Optional
 
 from pydantic import BaseModel, Field, create_model
@@ -70,19 +71,23 @@ def json_schema_to_base_model(schema: dict[str, Any]) -> Type[BaseModel]:
 def run_agent_on_query(
     query: str, config: dict, api_key: Optional[str]
 ) -> AgentRunResult[Any]:
-    _models = json_schema_to_base_model(config.get("pydantic").get("TextAnnotationen"))
+    _ai_model_dict = config.get("pydantic-ai").get("model")
+    _ai_provider_dict = config.get("pydantic-ai").get("provider")
+    _pydantic_ai_model = _ai_model_dict.get("implementation", "openai.OpenAIChatModel")
+    _pydantic_ai_provider = _ai_provider_dict.get("implementation", "openai.OpenAIProvider")
+    pydantic_model = json_schema_to_base_model(config.get("pydantic").get("TextAnnotationen"))
     agent = Agent(
-        model=OpenAIChatModel(
-            model_name="alias-large",
+        model=import_module(_pydantic_ai_model, "pydantic_ai.models")(
+            model_name=_pydantic_ai_model.get("name", "alias-large"),
             # provider=OllamaProvider(base_url='http://localhost:11434/v1'),
-            provider=OpenAIProvider(
-                base_url="https://api.helmholtz-blablador.fz-juelich.de/v1/",
-                api_key=config.get("pydantic-ai").get("api_key", api_key)
-                if config.get("pydantic-ai").get("api_key", api_key) is not None
+            provider=import_module(_pydantic_ai_provider, "pydantic_ai.providers")(
+                base_url=_ai_provider_dict.get("url", "https://api.helmholtz-blablador.fz-juelich.de/v1/"),
+                api_key=_ai_provider_dict.get("api_key", api_key)
+                if _ai_provider_dict.get("api_key", api_key) is not None
                 else api_key,
             ),
         ),
         system_prompt=config.get("prompt"),
-        output_type=_models,
+        output_type=pydantic_model,
     )
     return agent.run_sync(query)
