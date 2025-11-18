@@ -32,31 +32,31 @@ class Step(enum.Enum):
 @click.option(
     "--config",
     default="default",
-    help="Path to a config file; or a name for a preconfigured one: {default}.",
+    help="Path to a config file; or a name for a preconfigured one from these options: {default}. [Default: 'default']",
 )
 @click.option(
     "--mode",
     default=Mode.TEXT,
     type=click.Choice(Mode, case_sensitive=False),
-    help="The type of the input.",
+    help="The type of the input. [Default: 'text']",
 )
 @click.option(
     "--output",
-    default=".",
-    type=click.Path(exists=False, dir_okay=False, allow_dash=False, path_type=pl.Path),
-    help="The output file if '--mode file|text' or a path if '--mode folder'.",
+    default="./pipeline_out.json",
+    type=click.Path(exists=False, dir_okay=True, allow_dash=False, path_type=pl.Path),
+    help="The output file if '--mode file|text' or a path if '--mode folder'. [Default: './pipeline_out.json']",
 )
 @click.option(
     "--api-key",
     default=None,
     type=click.STRING,
-    help="The API key to use for authentication for the chosen ai module. An API key given in the config file takes precedence.",
+    help="The API key to use for authentication for the chosen ai module. An API key given in the config file takes precedence. [Default: None]",
 )
 @click.option(
     "--start-with",
     default=Step.EXTRACTION,
     type=click.Choice(Step, case_sensitive=False),
-    help="The step to start the pipeline with. If not starting with the first step, the provided SRC needs to be a dump of the previous step.",
+    help="The step to start the pipeline with. If not starting with the first step, the provided SRC needs to be a dump of the previous step. [Default: 'extraction']",
 )
 @click.option(
     "--force-text",
@@ -81,7 +81,9 @@ def start_pipeline(
         _config_path = _default_configs.get("default")
     _config = yaml.safe_load(_config_path.open("rb"))
 
+    _is_text = False
     if mode == Mode.TEXT:
+        _is_text = True
         if not force_text and len(src) < 75:
             if not pl.Path(src).is_file():
                 raise click.BadParameter(
@@ -94,6 +96,7 @@ def start_pipeline(
                     f"Treated 'SRC' as 'file' ({src.resolve()}).\n"
                     f"Please set '--mode file' if using a file as input to avoid this warning."
                 )
+                _is_text = False
     elif mode == Mode.FILE:
         src = pl.Path(src)
     elif mode == Mode.FOLDER:
@@ -101,7 +104,7 @@ def start_pipeline(
 
     if start_with == Step.EXTRACTION:
         extraction = run_agent_on_query(
-            src.read_text(encoding="utf-8"), _config, api_key
+            src.read_text(encoding="utf-8") if not _is_text else src, _config, api_key
         )
         if extraction is not None:
             extraction = add_ids_to_results(extraction.output.model_dump())

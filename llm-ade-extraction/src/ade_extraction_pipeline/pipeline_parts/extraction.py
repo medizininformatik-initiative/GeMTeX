@@ -68,19 +68,29 @@ def json_schema_to_base_model(schema: dict[str, Any]) -> Type[BaseModel]:
     return create_model(schema.get("title", "DynamicModel"), **model_fields)
 
 
+def get_full_module_name_and_class(module_type: str, config_impl_name: str):
+    _provider_model_dict = {
+        "model": "models", "models": "models",
+        "provider": "providers", "providers": "providers"
+    }
+    return  f"pydantic_ai.{_provider_model_dict.get(module_type)}.{".".join(config_impl_name.split(".")[:-1])}", config_impl_name.split(".")[-1]
+
+
 def run_agent_on_query(
     query: str, config: dict, api_key: Optional[str]
 ) -> AgentRunResult[Any]:
     _ai_model_dict = config.get("pydantic-ai").get("model")
     _ai_provider_dict = config.get("pydantic-ai").get("provider")
-    _pydantic_ai_model = _ai_model_dict.get("implementation", "openai.OpenAIChatModel")
-    _pydantic_ai_provider = _ai_provider_dict.get("implementation", "openai.OpenAIProvider")
-    pydantic_model = json_schema_to_base_model(config.get("pydantic").get("TextAnnotationen"))
+
+    _ai_model_module, _ai_model_name = get_full_module_name_and_class("models", _ai_model_dict.get("implementation", "openai.OpenAIChatModel"))
+    _ai_provider_module, _ai_provider_name = get_full_module_name_and_class("providers", _ai_provider_dict.get("implementation", "openai.OpenAIProvider"))
+    _pydantic_model = json_schema_to_base_model(config.get("pydantic").get("TextAnnotationen"))
+    
     agent = Agent(
-        model=import_module(_pydantic_ai_model, "pydantic_ai.models")(
-            model_name=_pydantic_ai_model.get("name", "alias-large"),
+        model=getattr(import_module(_ai_model_module), _ai_model_name)(
+            model_name=_ai_model_dict.get("name", "alias-large"),
             # provider=OllamaProvider(base_url='http://localhost:11434/v1'),
-            provider=import_module(_pydantic_ai_provider, "pydantic_ai.providers")(
+            provider=getattr(import_module(_ai_provider_module), _ai_provider_name)(
                 base_url=_ai_provider_dict.get("url", "https://api.helmholtz-blablador.fz-juelich.de/v1/"),
                 api_key=_ai_provider_dict.get("api_key", api_key)
                 if _ai_provider_dict.get("api_key", api_key) is not None
@@ -88,6 +98,6 @@ def run_agent_on_query(
             ),
         ),
         system_prompt=config.get("prompt"),
-        output_type=pydantic_model,
+        output_type=_pydantic_model,
     )
     return agent.run_sync(query)
