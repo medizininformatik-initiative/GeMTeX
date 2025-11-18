@@ -6,7 +6,6 @@ from pydantic import BaseModel, Field, create_model
 from pydantic_ai import Agent, AgentRunResult
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
-from pydantic_ai.providers.ollama import OllamaProvider
 
 
 def json_schema_to_base_model(schema: dict[str, Any]) -> Type[BaseModel]:

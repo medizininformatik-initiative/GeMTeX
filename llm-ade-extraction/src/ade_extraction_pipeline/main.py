@@ -8,7 +8,6 @@ import click
 import pathlib as pl
 
 import yaml
-from pydantic import BaseModel
 
 from ade_extraction_pipeline.pipeline_parts.coding import add_codes
 from ade_extraction_pipeline.pipeline_parts.extraction import run_agent_on_query
@@ -31,11 +30,21 @@ class Step(enum.Enum):
 @click.command()
 @click.argument("src")
 @click.option("--config", default="default", help="config file")
-@click.option("--mode", default=Mode.TEXT, type=click.Choice(Mode, case_sensitive=False))
-@click.option("--output", default=".", type=click.Path(exists=False, dir_okay=False, allow_dash=False, path_type=pl.Path))
+@click.option(
+    "--mode", default=Mode.TEXT, type=click.Choice(Mode, case_sensitive=False)
+)
+@click.option(
+    "--output",
+    default=".",
+    type=click.Path(exists=False, dir_okay=False, allow_dash=False, path_type=pl.Path),
+)
 @click.option("--api-key", default=None, type=click.STRING)
 @click.option("--force-text", is_flag=True)
-@click.option("--start-with", default=Step.EXTRACTION, type=click.Choice(Step, case_sensitive=False))
+@click.option(
+    "--start-with",
+    default=Step.EXTRACTION,
+    type=click.Choice(Step, case_sensitive=False),
+)
 def start_pipeline(
     src: str,
     config: str,
@@ -73,7 +82,9 @@ def start_pipeline(
         raise NotImplementedError()
 
     if start_with == Step.EXTRACTION:
-        extraction = run_agent_on_query(src.read_text(encoding='utf-8'), _config, api_key)
+        extraction = run_agent_on_query(
+            src.read_text(encoding="utf-8"), _config, api_key
+        )
         if extraction is not None:
             extraction = add_ids_to_results(extraction.output.model_dump())
         else:
@@ -82,7 +93,9 @@ def start_pipeline(
         dump_steps(extraction, output, int(Step.EXTRACTION))
     elif start_with == Step.CODING:
         if not src.is_file():
-            raise click.BadParameter(f"When starting with {Step.CODING}, you need to provide a file with the extraction results.")
+            raise click.BadParameter(
+                f"When starting with {Step.CODING}, you need to provide a file with the extraction results."
+            )
         extraction = json.load(src.open("r", encoding="utf-8"))
     coding = add_codes(extraction, _config)
     dump_steps(coding, output, int(Step.CODING))
@@ -94,7 +107,9 @@ def dump_steps(result: dict, output_path: pl.Path, step: int):
             print(json.dumps(result, indent=2))
         else:
             output_path = pl.Path(output_path)
-            final = pl.Path(output_path.parent, f"{output_path.stem}_[{step}]{output_path.suffix}")
+            final = pl.Path(
+                output_path.parent, f"{output_path.stem}_[{step}]{output_path.suffix}"
+            )
             final.touch()
             json.dump(
                 result,
@@ -103,11 +118,13 @@ def dump_steps(result: dict, output_path: pl.Path, step: int):
                 ensure_ascii=False,
             )
 
+
 def add_ids_to_results(results: dict) -> dict:
     for k in results.keys():
         for d in results[k]:
             d["id"] = str(uuid.uuid4())
     return results
+
 
 def list_configs() -> dict[str, pl.Path]:
     _config_folder = pl.Path(__file__).parent.parent / "configs"

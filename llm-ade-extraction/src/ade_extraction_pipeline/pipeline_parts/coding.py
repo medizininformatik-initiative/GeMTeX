@@ -74,29 +74,40 @@ class CodingServer:
         for k in set(kwargs.keys()).difference(_config_args):
             _difference_set.add(k)
             kwargs.pop(k)
-        if len(_difference_set) > 0 and len(_difference_set.difference(self._ignore_fields)) != 0:
+        if (
+            len(_difference_set) > 0
+            and len(_difference_set.difference(self._ignore_fields)) != 0
+        ):
             logging.warning(f"Some arguments were superfluous: {_difference_set}")
         if len(kwargs) != len(_config_args):
-            logging.error(f"There are some arguments missing: {set(_config_args).difference(kwargs.keys())}")
+            logging.error(
+                f"There are some arguments missing: {set(_config_args).difference(kwargs.keys())}"
+            )
             return None
         return self.endpoints[anno_type]["endpoint"].format(**kwargs)
 
     async def get_code(self, anno_type, **kwargs):
         _get_all = kwargs.pop("get_all", False)
         async with ClientSession() as session:
-            rs = Result(src=self._name, annotation_type=anno_type, original_dict=kwargs, results=[])
+            rs = Result(
+                src=self._name,
+                annotation_type=anno_type,
+                original_dict=kwargs,
+                results=[],
+            )
             if _endpoint := self.endpoint(anno_type=anno_type, **kwargs):
                 async with session.get(f"{self.url}/{_endpoint}") as response:
                     code = await response.json(content_type=None)
                     rs.results = code if _get_all else code[:1]
             return rs
 
-
     async def get_all_codes(self, extractions: dict, get_all: bool = False):
         tasks = []
         for anno_type, extr_list in extractions.items():
             for extr in extr_list:
-                tasks.append(self.get_code(anno_type=anno_type, get_all=get_all, **extr))
+                tasks.append(
+                    self.get_code(anno_type=anno_type, get_all=get_all, **extr)
+                )
         return await asyncio.gather(*tasks)
 
     def incorporate_codes(self, extractions: dict) -> dict:
@@ -115,7 +126,7 @@ def add_codes(results: dict, config: dict) -> dict:
         ep_dict = {}
         for anno_type, endpoint_list in _coding_config.items():
             for ep in endpoint_list:
-                if not server_name in ep:
+                if server_name not in ep:
                     continue
                 ep_dict[anno_type] = ep.get(server_name)
         if len(ep_dict) == 0:
@@ -141,8 +152,11 @@ def add_codes(results: dict, config: dict) -> dict:
                         final_results[k][idx]["codes"] += d.get("codes", [])
     return final_results
 
+
 if __name__ == "__main__":
-    _path = pathlib.Path(__file__).parent.parent.parent.parent / "test/test_file_out.txt"
+    _path = (
+        pathlib.Path(__file__).parent.parent.parent.parent / "test/test_file_out.txt"
+    )
     cs = CodingServer(
         name="id-logik",
         host="localhost",
@@ -152,5 +166,7 @@ if __name__ == "__main__":
             "medikationen": "/inception/lookup_sct?q={text}",
         },
     )
-    result = cs.incorporate_codes(json.load(_path.open('r', encoding='utf-8')))
-    pathlib.Path(_path.parent, "test_file_out.json").write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding='utf-8')
+    result = cs.incorporate_codes(json.load(_path.open("r", encoding="utf-8")))
+    pathlib.Path(_path.parent, "test_file_out.json").write_text(
+        json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
