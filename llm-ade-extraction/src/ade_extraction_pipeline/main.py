@@ -3,6 +3,7 @@ import json
 import logging
 import uuid
 from typing import Optional
+from pydantic_ai import ModelHTTPError
 
 import click
 import pathlib as pl
@@ -103,13 +104,18 @@ def start_pipeline(
         raise NotImplementedError()
 
     if start_with == Step.EXTRACTION:
-        extraction = run_agent_on_query(
-            src.read_text(encoding="utf-8") if not _is_text else src, _config, api_key
-        )
+        try:
+            extraction = run_agent_on_query(
+                src.read_text(encoding="utf-8") if not _is_text else src, _config, api_key
+            )
+        except ModelHTTPError as e:
+            extraction = None
+            _error = e.message
+
         if extraction is not None:
             extraction = add_ids_to_results(extraction.output.model_dump())
         else:
-            logging.error("Extraction failed.")
+            logging.error(f"Extraction failed: {_error}")
             return
         dump_steps(extraction, output, int(Step.EXTRACTION))
     elif start_with == Step.CODING:
