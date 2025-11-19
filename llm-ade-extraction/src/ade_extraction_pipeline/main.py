@@ -28,12 +28,17 @@ class Step(enum.Enum):
         return self.value - 1
 
 
+class DefaultConfigs(enum.Enum):
+    OLLAMA = "OLLAMA"
+    BLABLADOR = "BLABLADOR"
+
+
 @click.command()
 @click.argument("src")
 @click.option(
     "--config",
     default="ollama",
-    help="Path to a config file; or a name for a preconfigured one from these options: {blablador, ollama}. [Default: 'blablador']",
+    help=f"Path to a config file; or a name for a preconfigured one from these options: {[s.lower() for s in DefaultConfigs._member_names_]}. [Default: '{str(DefaultConfigs.OLLAMA.value).lower()}']",
 )
 @click.option(
     "--mode",
@@ -106,7 +111,9 @@ def start_pipeline(
     if start_with == Step.EXTRACTION:
         try:
             extraction = run_agent_on_query(
-                src.read_text(encoding="utf-8") if not _is_text else src, _config, api_key
+                src.read_text(encoding="utf-8") if not _is_text else src,
+                _config,
+                api_key,
             )
         except ModelHTTPError | AttributeError as e:
             extraction = None
