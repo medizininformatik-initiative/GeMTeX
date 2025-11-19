@@ -1,7 +1,8 @@
 from enum import Enum
 from importlib import import_module
 from typing import Any, Type, Optional
-
+import zlib
+from base64 import urlsafe_b64encode as b64e, urlsafe_b64decode as b64d
 from pydantic import BaseModel, Field, create_model
 
 from pydantic_ai import Agent, AgentRunResult
@@ -79,8 +80,18 @@ def get_full_module_name_and_class(module_type: str, config_impl_name: str):
     )
 
 
+def obscure_key(key: str) -> str:
+    return b64e(zlib.compress(key.encode(), 9)).decode()
+
+
+def get_api_key(key: str, is_obscured: bool = False) -> str:
+    if not is_obscured:
+        return key
+    return zlib.decompress(b64d(key.encode())).decode()
+
+
 def run_agent_on_query(
-    query: str, config: dict, api_key: Optional[str]
+    query: str, config: dict, api_key: Optional[str], api_key_obscured: bool = False
 ) -> AgentRunResult[Any]:
     _ai_model_dict = config.get("pydantic-ai").get("model")
     _ai_provider_dict = config.get("pydantic-ai").get("provider")
@@ -95,6 +106,11 @@ def run_agent_on_query(
         config.get("pydantic").get("TextAnnotationen")
     )
 
+    _api_key = (
+        _ai_provider_dict.get("api_key", api_key)
+        if _ai_provider_dict.get("api_key", api_key) is not None
+        else api_key
+    )
     agent = Agent(
         model=getattr(import_module(_ai_model_module), _ai_model_name)(
             model_name=_ai_model_dict.get("name", "alias-large"),
@@ -102,9 +118,7 @@ def run_agent_on_query(
                 base_url=_ai_provider_dict.get(
                     "url", "https://api.helmholtz-blablador.fz-juelich.de/v1/"
                 ),
-                api_key=_ai_provider_dict.get("api_key", api_key)
-                if _ai_provider_dict.get("api_key", api_key) is not None
-                else api_key,
+                api_key=get_api_key(_api_key, api_key_obscured),
             ),
         ),
         system_prompt=config.get("prompt"),

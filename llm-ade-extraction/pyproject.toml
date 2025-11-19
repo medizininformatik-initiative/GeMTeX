@@ -13,6 +13,7 @@ dependencies = [
 
 [project.scripts]
 start-pipeline = "ade_extraction_pipeline.main:start_pipeline"
+obscure-api-key = "ade_extraction_pipeline.main:obscure_api_key"
 
 [build-system]
 requires = ["uv_build>=0.9.9,<0.10.0"]

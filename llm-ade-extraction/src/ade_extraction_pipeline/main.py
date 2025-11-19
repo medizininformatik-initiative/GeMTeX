@@ -11,7 +11,10 @@ import pathlib as pl
 import yaml
 
 from ade_extraction_pipeline.pipeline_parts.coding import add_codes
-from ade_extraction_pipeline.pipeline_parts.extraction import run_agent_on_query
+from ade_extraction_pipeline.pipeline_parts.extraction import (
+    run_agent_on_query,
+    obscure_key,
+)
 
 
 class Mode(enum.Enum):
@@ -31,6 +34,12 @@ class Step(enum.Enum):
 class DefaultConfigs(enum.Enum):
     OLLAMA = "OLLAMA"
     BLABLADOR = "BLABLADOR"
+
+
+@click.command()
+@click.argument("key")
+def obscure_api_key(key: str):
+    print(obscure_key(key))
 
 
 @click.command()
