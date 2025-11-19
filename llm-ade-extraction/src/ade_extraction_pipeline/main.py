@@ -32,8 +32,8 @@ class Step(enum.Enum):
 @click.argument("src")
 @click.option(
     "--config",
-    default="default",
-    help="Path to a config file; or a name for a preconfigured one from these options: {default}. [Default: 'default']",
+    default="ollama",
+    help="Path to a config file; or a name for a preconfigured one from these options: {blablador, ollama}. [Default: 'blablador']",
 )
 @click.option(
     "--mode",
@@ -79,7 +79,7 @@ def start_pipeline(
     elif _saved_config := _default_configs.get(config, None):
         _config_path = _saved_config
     else:
-        _config_path = _default_configs.get("default")
+        _config_path = _default_configs.get("ollama")
     _config = yaml.safe_load(_config_path.open("rb"))
 
     _is_text = False
@@ -108,7 +108,7 @@ def start_pipeline(
             extraction = run_agent_on_query(
                 src.read_text(encoding="utf-8") if not _is_text else src, _config, api_key
             )
-        except ModelHTTPError as e:
+        except ModelHTTPError | AttributeError as e:
             extraction = None
             _error = e.message
 

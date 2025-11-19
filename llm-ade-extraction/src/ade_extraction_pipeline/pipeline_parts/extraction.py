@@ -5,8 +5,6 @@ from typing import Any, Type, Optional
 from pydantic import BaseModel, Field, create_model
 
 from pydantic_ai import Agent, AgentRunResult
-from pydantic_ai.models.openai import OpenAIChatModel
-from pydantic_ai.providers.openai import OpenAIProvider
 
 
 def json_schema_to_base_model(schema: dict[str, Any]) -> Type[BaseModel]:
@@ -89,7 +87,6 @@ def run_agent_on_query(
     agent = Agent(
         model=getattr(import_module(_ai_model_module), _ai_model_name)(
             model_name=_ai_model_dict.get("name", "alias-large"),
-            # provider=OllamaProvider(base_url='http://localhost:11434/v1'),
             provider=getattr(import_module(_ai_provider_module), _ai_provider_name)(
                 base_url=_ai_provider_dict.get("url", "https://api.helmholtz-blablador.fz-juelich.de/v1/"),
                 api_key=_ai_provider_dict.get("api_key", api_key)
