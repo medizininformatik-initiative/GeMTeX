@@ -2,6 +2,8 @@ import enum
 import json
 import logging
 import uuid
+import os
+from dotenv import load_dotenv
 from typing import Optional
 
 import click
@@ -15,6 +17,8 @@ from ade_extraction_pipeline.pipeline_parts.extraction import (
     obscure_key,
 )
 
+# Reads .env file and makes values available through os.getenv
+load_dotenv()
 
 class Mode(enum.Enum):
     FILE = enum.auto()
@@ -45,7 +49,7 @@ def obscure_api_key():
 @click.argument("src")
 @click.option(
     "--config",
-    default="ollama",
+    default=os.getenv("LLM_PIPELINE_CONFIG") if os.getenv("LLM_PIPELINE_CONFIG") is not None else "ollama",
     help=f"Path to a config file; or a name for a preconfigured one from these options: {[s.lower() for s in DefaultConfigs._member_names_]}. [Default: '{str(DefaultConfigs.OLLAMA.value).lower()}']",
 )
 @click.option(
@@ -62,7 +66,7 @@ def obscure_api_key():
 )
 @click.option(
     "--api-key",
-    default=None,
+    default=os.getenv("LLM_PIPELINE_API_KEY"),
     type=click.STRING,
     help="The API key to use for authentication for the chosen ai module. An API key given in the config file takes precedence. [Default: None]",
 )
