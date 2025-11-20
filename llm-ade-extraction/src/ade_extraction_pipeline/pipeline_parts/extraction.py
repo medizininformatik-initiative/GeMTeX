@@ -1,11 +1,11 @@
 from enum import Enum
 from importlib import import_module
-from typing import Any, Type, Optional
+from typing import Any, Type, Optional, Union, Tuple
 import zlib
 from base64 import urlsafe_b64encode as b64e, urlsafe_b64decode as b64d
 from pydantic import BaseModel, Field, create_model
 
-from pydantic_ai import Agent, AgentRunResult
+from pydantic_ai import Agent, AgentRunResult, ModelHTTPError
 
 
 def json_schema_to_base_model(schema: dict[str, Any]) -> Type[BaseModel]:
@@ -84,15 +84,19 @@ def obscure_key(key: str) -> str:
     return b64e(zlib.compress(key.encode(), 9)).decode()
 
 
+def unobscure_key(key: str) -> str:
+    return zlib.decompress(b64d(key.encode())).decode()
+
+
 def get_api_key(key: str, is_obscured: bool = False) -> str:
     if not is_obscured:
         return key
-    return zlib.decompress(b64d(key.encode())).decode()
+    return unobscure_key(key)
 
 
 def run_agent_on_query(
     query: str, config: dict, api_key: Optional[str], api_key_obscured: bool = False
-) -> AgentRunResult[Any]:
+) -> Tuple[bool, Union[AgentRunResult[Any]]]:
     _ai_model_dict = config.get("pydantic-ai").get("model")
     _ai_provider_dict = config.get("pydantic-ai").get("provider")
 
@@ -124,4 +128,8 @@ def run_agent_on_query(
         system_prompt=config.get("prompt"),
         output_type=_pydantic_model,
     )
-    return agent.run_sync(query)
+    try:
+        result = True, agent.run_sync(query)
+    except ModelHTTPError as e:
+        result = False, e
+    return result

@@ -3,7 +3,6 @@ import json
 import logging
 import uuid
 from typing import Optional
-from pydantic_ai import ModelHTTPError
 
 import click
 import pathlib as pl
@@ -37,9 +36,9 @@ class DefaultConfigs(enum.Enum):
 
 
 @click.command()
-@click.argument("key")
-def obscure_api_key(key: str):
-    print(obscure_key(key))
+def obscure_api_key():
+    key = click.prompt("     API key", type=str, hide_input=True)
+    print(f"Obscured key: {obscure_key(key)}")
 
 
 @click.command()
@@ -78,6 +77,11 @@ def obscure_api_key(key: str):
     is_flag=True,
     help="If set, skips text length validation (meaning you can provide a very short sentence as input SRC)",
 )
+@click.option(
+    "--obscured-api-key",
+    is_flag=True,
+    help="If set, this assumes a previously obscured API key as '--api-key input' and will unobscure it. The obscuring has taken place with the 'obscure-api-key' command.",
+)
 def start_pipeline(
     src: str,
     config: str,
@@ -86,7 +90,13 @@ def start_pipeline(
     api_key: Optional[str],
     start_with: Step,
     force_text: bool,
+    obscured_api_key: bool,
 ) -> None:
+    if force_text:
+        logging.info("Forcing text as input even if too short normally.")
+    if obscured_api_key:
+        logging.info("API key is assumed as obscured and will be unobscured.")
+
     _default_configs = list_configs()
     if pl.Path(config).is_file():
         _config_path = pl.Path(config)
@@ -118,26 +128,22 @@ def start_pipeline(
         raise NotImplementedError()
 
     if start_with == Step.EXTRACTION:
-        try:
-            extraction = run_agent_on_query(
-                src.read_text(encoding="utf-8") if not _is_text else src,
-                _config,
-                api_key,
-            )
-        except ModelHTTPError | AttributeError as e:
-            extraction = None
-            _error = e.message
-
-        if extraction is not None:
+        successful, extraction = run_agent_on_query(
+            src.read_text(encoding="utf-8") if not _is_text else src,
+            _config,
+            api_key,
+            obscured_api_key,
+        )
+        if successful:
             extraction = add_ids_to_results(extraction.output.model_dump())
         else:
-            logging.error(f"Extraction failed: {_error}")
+            logging.error(f"Extraction failed: {extraction}")
             return
         dump_steps(extraction, output, int(Step.EXTRACTION))
     elif start_with == Step.CODING:
         if not src.is_file():
             raise click.BadParameter(
-                f"When starting with {Step.CODING}, you need to provide a file with the extraction results."
+                f"When starting with {Step.CODING.name}, you need to provide a file with the extraction results."
             )
         extraction = json.load(src.open("r", encoding="utf-8"))
     coding = add_codes(extraction, _config)
@@ -150,8 +156,9 @@ def dump_steps(result: dict, output_path: pl.Path, step: int):
             print(json.dumps(result, indent=2))
         else:
             output_path = pl.Path(output_path)
+            suffix = ".json"
             final = pl.Path(
-                output_path.parent, f"{output_path.stem}_[{step}]{output_path.suffix}"
+                output_path.parent, f"{output_path.stem}_[{step}]{suffix}"
             )
             final.touch()
             json.dump(
