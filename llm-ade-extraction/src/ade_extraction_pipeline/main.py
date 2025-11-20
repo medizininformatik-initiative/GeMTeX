@@ -77,6 +77,12 @@ def obscure_api_key():
     help="The step to start the pipeline with. If not starting with the first step, the provided SRC needs to be a dump of the previous step. [Default: 'extraction']",
 )
 @click.option(
+    "--workdir",
+    default=".",
+    type=click.Path(exists=True, dir_okay=True, allow_dash=False, path_type=pl.Path),
+    help="The working directory to use for all file path resolution. [Default: current working directory]",
+)
+@click.option(
     "--force-text",
     is_flag=True,
     help="If set, skips text length validation (meaning you can provide a very short sentence as input SRC)",
@@ -93,6 +99,7 @@ def start_pipeline(
     output: pl.Path,
     api_key: Optional[str],
     start_with: Step,
+    workdir: pl.Path,
     force_text: bool,
     obscured_api_key: bool,
 ) -> None:
@@ -114,12 +121,12 @@ def start_pipeline(
     if mode == Mode.TEXT:
         _is_text = True
         if not force_text and len(src) < 75:
-            if not pl.Path(src).is_file():
+            if not (workdir /pl.Path(src)).is_file():
                 raise click.BadParameter(
                     "When using 'SRC' as text input, it must be at least 75 characters long. If you want to skip this check use the flag '--force-text'."
                 )
             else:
-                src = pl.Path(src)
+                src = workdir / pl.Path(src)
                 logging.warning(
                     f"'SRC' was too short for being recognized as text input.\n"
                     f"Treated 'SRC' as 'file' ({src.resolve()}).\n"
@@ -127,7 +134,7 @@ def start_pipeline(
                 )
                 _is_text = False
     elif mode == Mode.FILE:
-        src = pl.Path(src)
+        src = workdir / pl.Path(src)
     elif mode == Mode.FOLDER:
         raise NotImplementedError()
 
@@ -143,15 +150,16 @@ def start_pipeline(
         else:
             logging.error(f"Extraction failed: {extraction}")
             return
-        dump_steps(extraction, output, int(Step.EXTRACTION))
+        dump_steps(extraction, (workdir / output), int(Step.EXTRACTION))
     elif start_with == Step.CODING:
+        src = workdir / src
         if not src.is_file():
             raise click.BadParameter(
                 f"When starting with {Step.CODING.name}, you need to provide a file with the extraction results."
             )
         extraction = json.load(src.open("r", encoding="utf-8"))
     coding = add_codes(extraction, _config)
-    dump_steps(coding, output, int(Step.CODING))
+    dump_steps(coding, (workdir / output), int(Step.CODING))
 
 
 def dump_steps(result: dict, output_path: pl.Path, step: int):
