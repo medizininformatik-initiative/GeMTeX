@@ -10,6 +10,7 @@ dependencies = [
     "dotenv>=0.9.9",
     "oaklib>=0.6.23",
     "pydantic-ai==1.17.0",
+    "yaspin>=3.3.0",
 ]
 
 [project.scripts]

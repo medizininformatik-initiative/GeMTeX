@@ -155,7 +155,7 @@ def add_codes(results: dict, config: dict) -> dict:
 
 if __name__ == "__main__":
     _path = (
-        pathlib.Path(__file__).parent.parent.parent.parent / "test/test_file_out.txt"
+        pathlib.Path(__file__).parent.parent.parent.parent / "test/test_out_[0].json"
     )
     cs = CodingServer(
         name="id-logik",
@@ -167,6 +167,7 @@ if __name__ == "__main__":
         },
     )
     result = cs.incorporate_codes(json.load(_path.open("r", encoding="utf-8")))
-    pathlib.Path(_path.parent, "test_file_out.json").write_text(
-        json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
+    print(result)
+    # pathlib.Path(_path.parent, "test_file_out.json").write_text(
+    #     json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8"
+    # )

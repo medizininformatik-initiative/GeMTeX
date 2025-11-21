@@ -4,12 +4,14 @@ import logging
 import uuid
 import os
 from dotenv import load_dotenv
-from typing import Optional
+from typing import Optional, Tuple
 
 import click
 import pathlib as pl
 
 import yaml
+from yaspin import yaspin
+from yaspin.core import Yaspin
 
 from ade_extraction_pipeline.pipeline_parts.coding import add_codes
 from ade_extraction_pipeline.pipeline_parts.extraction import (
@@ -18,7 +20,8 @@ from ade_extraction_pipeline.pipeline_parts.extraction import (
 )
 
 # Reads .env file and makes values available through os.getenv
-load_dotenv()
+load_dotenv(os.getenv("WORK_DIR_ENV"))
+
 
 class Mode(enum.Enum):
     FILE = enum.auto()
@@ -49,7 +52,9 @@ def obscure_api_key():
 @click.argument("src")
 @click.option(
     "--config",
-    default=os.getenv("LLM_PIPELINE_CONFIG") if os.getenv("LLM_PIPELINE_CONFIG") is not None else "ollama",
+    default=os.getenv("LLM_PIPELINE_CONFIG")
+    if os.getenv("LLM_PIPELINE_CONFIG") is not None
+    else "ollama",
     help=f"Path to a config file; or a name for a preconfigured one from these options: {[s.lower() for s in DefaultConfigs._member_names_]}. [Default: '{str(DefaultConfigs.OLLAMA.value).lower()}']",
 )
 @click.option(
@@ -60,9 +65,9 @@ def obscure_api_key():
 )
 @click.option(
     "--output",
-    default="./pipeline_out.json",
+    default="pipeline_out",
     type=click.Path(exists=False, dir_okay=True, allow_dash=False, path_type=pl.Path),
-    help="The output file if '--mode file|text' or a path if '--mode folder'. [Default: './pipeline_out.json']",
+    help="The output file if '--mode file|text' or a path if '--mode folder' If you want to dump the result to stdout, you can provide a dash (-). [Default: './pipeline_out.json' | './pipeline_out/']",
 )
 @click.option(
     "--api-key",
@@ -121,7 +126,7 @@ def start_pipeline(
     if mode == Mode.TEXT:
         _is_text = True
         if not force_text and len(src) < 75:
-            if not (workdir /pl.Path(src)).is_file():
+            if not (workdir / pl.Path(src)).is_file():
                 raise click.BadParameter(
                     "When using 'SRC' as text input, it must be at least 75 characters long. If you want to skip this check use the flag '--force-text'."
                 )
@@ -138,19 +143,17 @@ def start_pipeline(
     elif mode == Mode.FOLDER:
         raise NotImplementedError()
 
+    _output_path = None
+    if output.name != "-":
+        _output_path = workdir / output
     if start_with == Step.EXTRACTION:
-        successful, extraction = run_agent_on_query(
-            src.read_text(encoding="utf-8") if not _is_text else src,
-            _config,
-            api_key,
-            obscured_api_key,
+        extraction, dump_str = start_extraction(
+            src=src.read_text(encoding="utf-8") if not _is_text else src,
+            config=_config,
+            api_key=api_key,
+            obscured_api_key=obscured_api_key,
+            output_path=_output_path,
         )
-        if successful:
-            extraction = add_ids_to_results(extraction.output.model_dump())
-        else:
-            logging.error(f"Extraction failed: {extraction}")
-            return
-        dump_steps(extraction, (workdir / output), int(Step.EXTRACTION))
     elif start_with == Step.CODING:
         src = workdir / src
         if not src.is_file():
@@ -158,20 +161,51 @@ def start_pipeline(
                 f"When starting with {Step.CODING.name}, you need to provide a file with the extraction results."
             )
         extraction = json.load(src.open("r", encoding="utf-8"))
-    coding = add_codes(extraction, _config)
-    dump_steps(coding, (workdir / output), int(Step.CODING))
+    else:
+        extraction = None
+    coding, dump_str = start_coding(extraction=extraction, config=_config, output_path=_output_path)
+
+    if _output_path is None:
+        print(dump_str)
 
 
-def dump_steps(result: dict, output_path: pl.Path, step: int):
+def start_extraction(
+    src: str, config: dict, api_key: str, obscured_api_key: bool, output_path: pl.Path
+) -> Optional[Tuple[dict, Optional[str]]]:
+    with yaspin(text="Extracting...") as spinner:
+        successful, extraction = run_agent_on_query(
+            src,
+            config,
+            api_key,
+            obscured_api_key,
+        )
+        if successful:
+            extraction = add_ids_to_results(extraction.output.model_dump())
+        else:
+            logging.error(f"Extraction failed: {extraction}")
+            return None
+    dump_str = dump_steps(extraction, output_path, Step.EXTRACTION, spinner)
+    return extraction, dump_str
+
+
+def start_coding(extraction: Optional[dict], config: dict, output_path: pl.Path) -> Optional[Tuple[dict, str]]:
+    with yaspin(text="Integrating codes...") as spinner:
+        if extraction is None:
+            logging.error(f"Coding failed: no extraction results: {extraction}.")
+            return None
+        coding = add_codes(extraction, config)
+        dump_str = dump_steps(coding, output_path, Step.CODING, spinner)
+        return coding, dump_str
+
+
+def dump_steps(result: dict, output_path: pl.Path, step: Step, spinner: Optional[Yaspin] = None) -> Optional[str]:
     if result is not None:
         if output_path is None:
-            print(json.dumps(result, indent=2))
+            return json.dumps(result, indent=2, ensure_ascii=False,)
         else:
             output_path = pl.Path(output_path)
             suffix = ".json"
-            final = pl.Path(
-                output_path.parent, f"{output_path.stem}_[{step}]{suffix}"
-            )
+            final = pl.Path(output_path.parent, f"{output_path.stem}_[{int(step)}]{suffix}")
             final.touch()
             json.dump(
                 result,
@@ -179,6 +213,9 @@ def dump_steps(result: dict, output_path: pl.Path, step: int):
                 indent=2,
                 ensure_ascii=False,
             )
+            spinner.write(f"Written results for '{step.name}' to '{final.resolve()}'.")
+            return None
+    return None
 
 
 def add_ids_to_results(results: dict) -> dict:
