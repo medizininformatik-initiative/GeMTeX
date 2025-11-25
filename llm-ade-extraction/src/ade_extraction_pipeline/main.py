@@ -3,11 +3,12 @@ import json
 import logging
 import uuid
 import os
+import asyncio
+import pathlib as pl
 from dotenv import load_dotenv
 from typing import Optional, Tuple
 
 import click
-import pathlib as pl
 
 import yaml
 from yaspin import yaspin
@@ -143,13 +144,36 @@ def start_pipeline(
     elif mode == Mode.FOLDER:
         raise NotImplementedError()
 
+    if mode in [Mode.TEXT, Mode.FILE]:
+        start_parts_sync(
+            output,
+            workdir,
+            start_with,
+            src.read_text(encoding="utf-8") if not _is_text else src,
+            _config,
+            api_key,
+            obscured_api_key,
+        )
+    elif mode == mode.FOLDER:
+        pass
+
+
+def start_parts_sync(
+    output: pl.Path,
+    workdir: pl.Path,
+    start_with: Step,
+    src: str,
+    config: dict,
+    api_key: Optional[str],
+    obscured_api_key: bool,
+):
     _output_path = None
     if output.name != "-":
         _output_path = workdir / output
     if start_with == Step.EXTRACTION:
         extraction, dump_str = start_extraction(
-            src=src.read_text(encoding="utf-8") if not _is_text else src,
-            config=_config,
+            src=src,
+            config=config,
             api_key=api_key,
             obscured_api_key=obscured_api_key,
             output_path=_output_path,
@@ -163,7 +187,9 @@ def start_pipeline(
         extraction = json.load(src.open("r", encoding="utf-8"))
     else:
         extraction = None
-    coding, dump_str = start_coding(extraction=extraction, config=_config, output_path=_output_path)
+    coding, dump_str = start_coding(
+        extraction=extraction, config=config, output_path=_output_path
+    )
 
     if _output_path is None:
         print(dump_str)
@@ -188,7 +214,9 @@ def start_extraction(
     return extraction, dump_str
 
 
-def start_coding(extraction: Optional[dict], config: dict, output_path: pl.Path) -> Optional[Tuple[dict, str]]:
+def start_coding(
+    extraction: Optional[dict], config: dict, output_path: pl.Path
+) -> Optional[Tuple[dict, str]]:
     with yaspin(text="Integrating codes...") as spinner:
         if extraction is None:
             logging.error(f"Coding failed: no extraction results: {extraction}.")
@@ -198,14 +226,22 @@ def start_coding(extraction: Optional[dict], config: dict, output_path: pl.Path)
         return coding, dump_str
 
 
-def dump_steps(result: dict, output_path: pl.Path, step: Step, spinner: Optional[Yaspin] = None) -> Optional[str]:
+def dump_steps(
+    result: dict, output_path: pl.Path, step: Step, spinner: Optional[Yaspin] = None
+) -> Optional[str]:
     if result is not None:
         if output_path is None:
-            return json.dumps(result, indent=2, ensure_ascii=False,)
+            return json.dumps(
+                result,
+                indent=2,
+                ensure_ascii=False,
+            )
         else:
             output_path = pl.Path(output_path)
             suffix = ".json"
-            final = pl.Path(output_path.parent, f"{output_path.stem}_[{int(step)}]{suffix}")
+            final = pl.Path(
+                output_path.parent, f"{output_path.stem}_[{int(step)}]{suffix}"
+            )
             final.touch()
             json.dump(
                 result,
