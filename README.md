@@ -20,11 +20,14 @@ Beinhaltet exportierte Basis-Projekte (also im Grunde Konfigurationen der Layer 
 Wenn nicht anders vermerkt, sind darin keine Dokumente vorhanden.
 
 ### [`inception-reporting-dashboard`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/inception-reporting-dashboard)
-__(Als Docker Image verfügbar: `docker pull ghcr.io/medizininformatik-initiative/gemtex/inception-dashboard:0.9`)__  
-Das Dashboard generiert verschiedene Diagramme für ein [INCEpTION](https://inception-project.github.io/)-Projekt. In seiner aktuellen Form kann es vom Projektmanager vor Ort verwendet werden, um verschiedene Metriken bezüglich des Fortschritts des Projekts und der Art der Annotationen zu visualisieren. Diese können dann exportiert und an die zentrale Projektleitung geschickt werden. Die Projektleitung kann dann anhand des Dashboards den Fortschritt der Projekte an den unterschiedlichen Standorten vergleichen und nachvollziehen.
+__(Als Docker Image verfügbar: `docker pull ghcr.io/medizininformatik-initiative/gemtex/inception-dashboard:0.9.4`)__  
+Das Dashboard generiert verschiedene Diagramme für ein [INCEpTION](https://inception-project.github.io/)-Projekt. In seiner aktuellen Form kann es vom
+Projektmanager vor Ort verwendet werden, um verschiedene Metriken bezüglich des Fortschritts des Projekts und der Art
+der Annotationen zu visualisieren. Diese können dann exportiert und an die zentrale Projektleitung geschickt werden.
+Die Projektleitung kann dann anhand des Dashboards den Fortschritt der Projekte an den unterschiedlichen Standorten vergleichen und nachvollziehen.
 
 ### [`inception_ahd_recommender`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/inception_ahd_recommender)
-__(Als Docker Image verfügbar: `docker pull ghcr.io/medizininformatik-initiative/gemtex/inception-ahd-recommender:1.4.2`)__  
+__(Als Docker Image verfügbar: `docker pull ghcr.io/medizininformatik-initiative/gemtex/inception-ahd-recommender:1.5.0`)__  
 Ein Recommender basierend auf dem [External INCEpTION Recommender](https://github.com/inception-project/inception-external-recommender), um in [INCEpTION](https://inception-project.github.io/) Annotationsvorschläge
 der [Averbis Health Discovery](https://averbis.com/health-discovery/) zu generieren. 
 
