@@ -123,8 +123,10 @@ def start_pipeline(
     _config = yaml.safe_load(_config_path.open("rb"))
 
     _is_text = False
+    srcs = []
     if mode == Mode.TEXT:
         _is_text = True
+        srcs = [src]
         if not force_text and len(src) < 75:
             if not (workdir / pl.Path(src)).is_file():
                 raise click.BadParameter(
@@ -132,6 +134,7 @@ def start_pipeline(
                 )
             else:
                 src = workdir / pl.Path(src)
+                srcs = [src]
                 logging.warning(
                     f"'SRC' was too short for being recognized as text input.\n"
                     f"Treated 'SRC' as 'file' ({src.resolve()}).\n"
@@ -139,40 +142,61 @@ def start_pipeline(
                 )
                 _is_text = False
     elif mode == Mode.FILE:
-        src = workdir / pl.Path(src)
+        srcs = [workdir / pl.Path(src)]
     elif mode == Mode.FOLDER:
-        raise NotImplementedError()
+        srcs = list((workdir / pl.Path(src)).iterdir())
 
     _output_path = None
     if output.name != "-":
         _output_path = workdir / output
+    else:
+        if mode == Mode.FOLDER:
+            pass
     if start_with == Step.EXTRACTION:
-        extraction, dump_str = start_extraction(
-            src=src.read_text(encoding="utf-8") if not _is_text else src,
-            config=_config,
-            api_key=api_key,
-            obscured_api_key=obscured_api_key,
-            output_path=_output_path,
-        )
+        extraction_list = [
+            start_extraction(
+                src=src.read_text(encoding="utf-8") if not _is_text else src,
+                config=_config,
+                api_key=api_key,
+                obscured_api_key=obscured_api_key,
+                output_path=_output_path
+                if _output_path is None
+                else _output_path / (f"{src.stem}" if not _is_text else "txt_input"),
+                number=i
+            )
+            for i, src in enumerate(srcs)
+        ]
     elif start_with == Step.CODING:
         src = workdir / src
         if not src.is_file():
             raise click.BadParameter(
                 f"When starting with {Step.CODING.name}, you need to provide a file with the extraction results."
             )
-        extraction = json.load(src.open("r", encoding="utf-8"))
+        extraction_list = [(json.load(src.open("r", encoding="utf-8")), None)]
     else:
-        extraction = None
-    coding, dump_str = start_coding(extraction=extraction, config=_config, output_path=_output_path)
+        extraction_list = [(None, None)]
+    coding_list = [
+        start_coding(
+            extraction=extraction_tuple[0],
+            config=_config,
+            output_path=_output_path
+            if _output_path is None
+            else _output_path / (f"{src.stem}" if not _is_text else "txt_input"),
+            number=i,
+        )
+        for i, (src, extraction_tuple) in enumerate(zip(srcs, extraction_list))
+        if extraction_tuple is not None
+    ]
 
-    if _output_path is None:
-        print(dump_str)
+    if _output_path is None and mode != Mode.FOLDER:
+        if len(coding_list) > 0:
+            print(coding_list[0][1])
 
 
 def start_extraction(
-    src: str, config: dict, api_key: str, obscured_api_key: bool, output_path: pl.Path
+    src: str, config: dict, api_key: str, obscured_api_key: bool, output_path: pl.Path, number: int
 ) -> Optional[Tuple[dict, Optional[str]]]:
-    with yaspin(text="Extracting...") as spinner:
+    with yaspin(text=f"Extracting [{number}]...") as spinner:
         successful, extraction = run_agent_on_query(
             src,
             config,
@@ -188,8 +212,10 @@ def start_extraction(
     return extraction, dump_str
 
 
-def start_coding(extraction: Optional[dict], config: dict, output_path: pl.Path) -> Optional[Tuple[dict, str]]:
-    with yaspin(text="Integrating codes...") as spinner:
+def start_coding(
+    extraction: Optional[dict], config: dict, output_path: pl.Path, number: int
+) -> Optional[Tuple[dict, str]]:
+    with yaspin(text=f"Integrating codes [{number}]...") as spinner:
         if extraction is None:
             logging.error(f"Coding failed: no extraction results: {extraction}.")
             return None
@@ -198,14 +224,23 @@ def start_coding(extraction: Optional[dict], config: dict, output_path: pl.Path)
         return coding, dump_str
 
 
-def dump_steps(result: dict, output_path: pl.Path, step: Step, spinner: Optional[Yaspin] = None) -> Optional[str]:
+def dump_steps(
+    result: dict, output_path: pl.Path, step: Step, spinner: Optional[Yaspin] = None
+) -> Optional[str]:
     if result is not None:
         if output_path is None:
-            return json.dumps(result, indent=2, ensure_ascii=False,)
+            return json.dumps(
+                result,
+                indent=2,
+                ensure_ascii=False,
+            )
         else:
             output_path = pl.Path(output_path)
             suffix = ".json"
-            final = pl.Path(output_path.parent, f"{output_path.stem}_[{int(step)}]{suffix}")
+            final = pl.Path(
+                output_path.parent, f"{output_path.stem}_[{int(step)}]{suffix}"
+            )
+            final.parent.mkdir(parents=True, exist_ok=True)
             final.touch()
             json.dump(
                 result,
