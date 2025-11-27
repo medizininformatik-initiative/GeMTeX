@@ -94,9 +94,9 @@ def get_api_key(key: str, is_obscured: bool = False) -> str:
     return unobscure_key(key)
 
 
-def setup_agent(
-    config: dict, api_key: Optional[str], api_key_obscured: bool = False
-) -> Agent:
+def run_agent_on_query(
+    query: str, config: dict, api_key: Optional[str], api_key_obscured: bool = False
+) -> Tuple[bool, Union[AgentRunResult[Any]]]:
     _ai_model_dict = config.get("pydantic-ai").get("model")
     _ai_provider_dict = config.get("pydantic-ai").get("provider")
 
@@ -115,7 +115,7 @@ def setup_agent(
         if _ai_provider_dict.get("api_key", api_key) is not None
         else api_key
     )
-    return Agent(
+    agent = Agent(
         model=getattr(import_module(_ai_model_module), _ai_model_name)(
             model_name=_ai_model_dict.get("name", "alias-large"),
             provider=getattr(import_module(_ai_provider_module), _ai_provider_name)(
@@ -128,23 +128,6 @@ def setup_agent(
         system_prompt=config.get("prompt"),
         output_type=_pydantic_model,
     )
-
-
-async def run_agent_on_query_async(
-    query: str, config: dict, api_key: Optional[str], api_key_obscured: bool = False
-):
-    agent = setup_agent(config, api_key, api_key_obscured)
-    try:
-        result = True, await agent.run(query)
-    except ModelHTTPError as e:
-        result = False, e
-    return result
-
-
-def run_agent_on_query(
-    query: str, config: dict, api_key: Optional[str], api_key_obscured: bool = False
-) -> Tuple[bool, Union[AgentRunResult[Any]]]:
-    agent = setup_agent(config, api_key, api_key_obscured)
     try:
         result = True, agent.run_sync(query)
     except ModelHTTPError as e:
