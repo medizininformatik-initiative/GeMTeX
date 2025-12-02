@@ -35,7 +35,11 @@ pydantic:
           properties:
             text:
               type: string
-              title: Die konkrete Referenz der Diagnose im Text.
+              title: |-
+                Die konkrete Referenz der Diagnose im Text. Folgende Diagnosearten sollen nicht annotiert werden:
+                - Zustände nach einem Eingriff (z.B.: 'Zustand nach Konisation')
+                - Alte oder vergangene Diagnosen (z.B.: 'Röteln im Kindesalter')
+                - Familienanamnesen (z.B.: 'Brustkrebs bei der Mutter')
       medikationen:
         type: array
         items:
