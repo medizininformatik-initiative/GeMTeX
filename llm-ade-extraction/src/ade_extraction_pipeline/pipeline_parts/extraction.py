@@ -5,7 +5,7 @@ import zlib
 from base64 import urlsafe_b64encode as b64e, urlsafe_b64decode as b64d
 from pydantic import BaseModel, Field, create_model
 
-from pydantic_ai import Agent, AgentRunResult, ModelHTTPError
+from pydantic_ai import Agent, AgentRunResult, ModelHTTPError, capture_run_messages, ToolOutput, NativeOutput
 
 
 def json_schema_to_base_model(schema: dict[str, Any]) -> Type[BaseModel]:
@@ -126,10 +126,11 @@ def run_agent_on_query(
             ),
         ),
         system_prompt=config.get("prompt"),
-        output_type=_pydantic_model,
+        output_type=NativeOutput([_pydantic_model]),
     )
-    try:
-        result = True, agent.run_sync(query)
-    except ModelHTTPError as e:
-        result = False, e
-    return result
+    with capture_run_messages() as messages:
+        try:
+          result = True, agent.run_sync(query)
+        except ModelHTTPError as e:
+            result = False, e
+        return result

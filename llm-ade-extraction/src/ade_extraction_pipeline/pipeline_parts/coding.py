@@ -39,7 +39,7 @@ class CodingServer:
         self._endpoints = {}
         self._host = host
         self._port = port
-        self._protocol = protocol
+        self._protocol = protocol if not host.startswith("http") else ""
         self._ignore_fields = ignore_fields if ignore_fields is not None else []
         self.build_endpoint_dict(endpoints)
 
@@ -48,7 +48,10 @@ class CodingServer:
 
     @property
     def url(self):
-        return f"{self._protocol}://{self._host}:{self._port}"
+        if self._port is not None and self._port.is_integer():
+            return f"{self._protocol}{"://" if len(self._protocol) > 0 else ""}{self._host}:{self._port}"
+        else:
+            return f"{self._protocol}{"://" if len(self._protocol) > 0 else ""}{self._host}"
 
     @property
     def endpoints(self):
@@ -98,6 +101,8 @@ class CodingServer:
             if _endpoint := self.endpoint(anno_type=anno_type, **kwargs):
                 async with session.get(f"{self.url}/{_endpoint}") as response:
                     code = await response.json(content_type=None)
+                    if isinstance(code, dict) and code.get("error", "").lower() == "not found":
+                        return rs
                     rs.results = code if _get_all else code[:1]
             return rs
 

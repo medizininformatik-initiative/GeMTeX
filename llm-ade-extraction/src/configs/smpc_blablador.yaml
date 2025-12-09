@@ -1,0 +1,54 @@
+title: Default Configuration - Blablador
+
+coding:
+  servers:
+    zbmed:
+      host: https://semanticlookup.zbmed.de
+      port:
+  config:
+    diagnosen:
+      - zbmed: /ols/api/search?q={text}&ontology=icd10
+    medikationen:
+      - zbmed: /ols/api/search?q={text}&ontology=atc
+  ignore_fields:
+    - id
+
+pydantic-ai:
+  model:
+    implementation: openai.OpenAIChatModel
+    name: alias-large
+  provider:
+    implementation: openai.OpenAIProvider
+    url: https://api.helmholtz-blablador.fz-juelich.de/v1/
+    api_key:
+
+pydantic:
+  TextAnnotationen:
+    title: TextAnnotationen
+    type: object
+    properties:
+      diagnosen:
+        type: array
+        items:
+          type: object
+          title: Diagnose
+          properties:
+            text:
+              type: string
+              title: |-
+                Die konkrete Referenz einer Diagnose, einer Kondition oder eines Krankheitsbildes im Text.
+      medikationen:
+        type: array
+        items:
+          type: object
+          title: Medikation
+          properties:
+            text:
+              type: string
+              title: |-
+                Die konkrete Referenz einer Medikation oder eines Wirkstoffs im Text.
+                Benutze die kürzeste noch aussagekräftige Wortkette. Das sind in der Regle nur 1 - 3 Wörter!
+
+prompt: |-
+  Du bist ein medizinischer Dokumentar.
+  Aus den Texten, die dir gegeben werden extrahierst du die `TextAnnotationen`.
