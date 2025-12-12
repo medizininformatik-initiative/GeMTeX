@@ -5,6 +5,7 @@ import pathlib
 import re
 from collections import defaultdict
 from dataclasses import dataclass
+from functools import reduce
 from typing import Union, Optional
 
 from aiohttp import ClientSession
@@ -17,10 +18,15 @@ class Result:
     original_dict: dict
     results: list[dict]
 
-    def to_json(self):
+    def to_json(self, restrict_to: list[str] = None):
         _new_dict = self.original_dict | {"codes": []}
+        restrict_to = [] if restrict_to is None else restrict_to
         for _d in self.results:
-            _d["src"] = self.src
+            _d["coding_src"] = self.src
+            if restrict_to is not None and len(restrict_to) > 0:
+                for k in list(_d.keys()):
+                    if k not in restrict_to:
+                        _d.pop(k, None)
             _new_dict["codes"].append(_d)
         return _new_dict
 
@@ -34,13 +40,19 @@ class CodingServer:
         endpoints: dict[str, str] = None,
         protocol: str = "http",
         ignore_fields: list[str] = None,
+        response_parsing: dict = None
     ):
+        _rp = response_parsing if response_parsing is not None else {}
         self._name = name
         self._endpoints = {}
         self._host = host
         self._port = port
         self._protocol = protocol if not host.startswith("http") else ""
         self._ignore_fields = ignore_fields if ignore_fields is not None else []
+        self._response_parse_func = lambda x: x
+        self._restrict_output = _rp.get("restrict", [])
+        if _rp.get("parse", False):
+            self.parse_response_def(_rp.get("parse"))
         self.build_endpoint_dict(endpoints)
 
     def __str__(self):
@@ -56,6 +68,12 @@ class CodingServer:
     @property
     def endpoints(self):
         return self._endpoints
+
+    def parse_response_def(self, response_parsing: str):
+        if response_parsing is None:
+            return
+        _lambda_list = [eval(r.strip()) for r in response_parsing.split("->")]
+        self._response_parse_func = lambda x: reduce(lambda r,f: f(r), _lambda_list, x)
 
     def build_endpoint_dict(self, value):
         _temp_dict = {}
@@ -103,7 +121,8 @@ class CodingServer:
                     code = await response.json(content_type=None)
                     if isinstance(code, dict) and code.get("error", "").lower() == "not found":
                         return rs
-                    rs.results = code if _get_all else code[:1]
+                    _rs_res = self._response_parse_func(code) if _get_all else self._response_parse_func(code)[:1]
+                    rs.results = _rs_res if isinstance(_rs_res, list) else [_rs_res]
             return rs
 
     async def get_all_codes(self, extractions: dict, get_all: bool = False):
@@ -115,21 +134,23 @@ class CodingServer:
                 )
         return await asyncio.gather(*tasks)
 
-    def incorporate_codes(self, extractions: dict) -> dict:
+    def incorporate_codes(self, extractions: dict, **kwargs) -> dict:
         result_dict = defaultdict(list)
-        for result in asyncio.run(self.get_all_codes(extractions)):
-            result_dict[result.annotation_type].append(result.to_json())
+        for result in asyncio.run(self.get_all_codes(extractions, kwargs.pop("get_all", True))):
+            result_dict[result.annotation_type].append(result.to_json(restrict_to=self._restrict_output))
         return result_dict
 
 
 def add_codes(results: dict, config: dict) -> dict:
     final_results = {}
     _server_config = config.get("coding").get("servers")
-    _coding_config = config.get("coding").get("config")
+    _annotations_config = config.get("coding").get("config").get("annotations")
+    _response_parsing = config.get("coding").get("config").get("response")
+    _get_all = config.get("coding").get("config").get("get_all", True)
     _ignore_fields = config.get("coding").get("ignore_fields")
     for server_name, server_config in _server_config.items():
         ep_dict = {}
-        for anno_type, endpoint_list in _coding_config.items():
+        for anno_type, endpoint_list in _annotations_config.items():
             for ep in endpoint_list:
                 if server_name not in ep:
                     continue
@@ -142,8 +163,9 @@ def add_codes(results: dict, config: dict) -> dict:
             port=server_config.get("port", 8080),
             endpoints=ep_dict,
             ignore_fields=_ignore_fields,
+            response_parsing=_response_parsing.get(server_name)
         )
-        _results = coding_server.incorporate_codes(results)
+        _results = coding_server.incorporate_codes(results, get_all=_get_all)
         if len(final_results) == 0:
             final_results.update(_results)
         else:

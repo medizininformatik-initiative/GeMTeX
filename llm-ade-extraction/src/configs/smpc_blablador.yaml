@@ -6,10 +6,16 @@ coding:
       host: https://semanticlookup.zbmed.de
       port:
   config:
-    diagnosen:
-      - zbmed: /ols/api/search?q={text}&ontology=icd10
-    medikationen:
-      - zbmed: /ols/api/search?q={text}&ontology=atc
+    annotations:
+      diagnosen:
+        - zbmed: /ols/api/search?q={text}&ontology=icd10
+      medikationen:
+        - zbmed: /ols/api/search?q={text}&ontology=atc
+    response:
+      zbmed:
+        parse: "lambda d: d.get('response', {}) -> lambda d: d.get('docs', [])"
+        restrict: ["ontology_name", "short_form"]
+    get_all: true
   ignore_fields:
     - id
 

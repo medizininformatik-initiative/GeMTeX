@@ -6,10 +6,16 @@ coding:
       host: localhost
       port: 8080
   config:
-    diagnosen:
-      - id-server: /inception/lookup_icd10?q={text}
-    medikationen:
-      - id-server: /inception/lookup_sct?q={text}
+    annotations:
+      diagnosen:
+        - id-server: /inception/lookup_icd10?q={text}
+      medikationen:
+        - id-server: /inception/lookup_sct?q={text}
+    response:
+      id-server:
+        parse:
+        restrict: [ ]
+    get_all: false
   ignore_fields:
     - id
 

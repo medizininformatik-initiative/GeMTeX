@@ -67,7 +67,7 @@ def obscure_api_key():
     "--output",
     default="pipeline_out",
     type=click.Path(exists=False, dir_okay=True, allow_dash=False, path_type=pl.Path),
-    help="The output file if '--mode file|text' or a path if '--mode folder' If you want to dump the result to stdout, you can provide a dash (-). [Default: './pipeline_out.json' | './pipeline_out/']",
+    help="The output path; filenames will be deduced from input file ('txt_input' if --mode='text'). If you want to dump the result to stdout, you can provide a dash (-). [Default: './pipeline_out/*']",
 )
 @click.option(
     "--api-key",
@@ -152,6 +152,7 @@ def start_pipeline(
     else:
         if mode == Mode.FOLDER:
             pass
+
     if start_with == Step.EXTRACTION:
         extraction_list = [
             start_extraction(
@@ -167,6 +168,7 @@ def start_pipeline(
             for i, src in enumerate(srcs)
         ]
     elif start_with == Step.CODING:
+        #ToDo: "MODE == folder" not yet implemented for "start_with == CODING"?!
         src = workdir / src
         if not src.is_file():
             raise click.BadParameter(
@@ -175,6 +177,7 @@ def start_pipeline(
         extraction_list = [(json.load(src.open("r", encoding="utf-8")), None)]
     else:
         extraction_list = [(None, None)]
+
     coding_list = [
         start_coding(
             extraction=extraction_tuple[0],
@@ -255,7 +258,9 @@ def dump_steps(
 
 def add_ids_to_results(results: dict) -> dict:
     for k in results.keys():
-        for d in results[k]:
+        if results.get(k) is None:
+            continue
+        for d in results.get(k, []):
             d["id"] = str(uuid.uuid4())
     return results
 
