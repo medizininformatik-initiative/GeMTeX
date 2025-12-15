@@ -259,6 +259,7 @@ def dump_steps(
 def add_ids_to_results(results: dict) -> dict:
     for k in results.keys():
         if results.get(k) is None:
+            results[k] = []
             continue
         for d in results.get(k, []):
             d["id"] = str(uuid.uuid4())

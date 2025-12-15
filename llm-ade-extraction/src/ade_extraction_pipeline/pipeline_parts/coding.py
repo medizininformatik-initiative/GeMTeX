@@ -128,6 +128,8 @@ class CodingServer:
     async def get_all_codes(self, extractions: dict, get_all: bool = False):
         tasks = []
         for anno_type, extr_list in extractions.items():
+            if extr_list is None:
+                continue
             for extr in extr_list:
                 tasks.append(
                     self.get_code(anno_type=anno_type, get_all=get_all, **extr)
