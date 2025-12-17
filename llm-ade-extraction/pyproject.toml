@@ -1,0 +1,22 @@
+[project]
+name = "ade_extraction_pipeline"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "aiohttp>=3.12.15",
+    "click>=8.3.0",
+    "dotenv>=0.9.9",
+    "oaklib>=0.6.23",
+    "pydantic-ai==1.26.0",
+    "yaspin>=3.3.0",
+]
+
+[project.scripts]
+start-pipeline = "ade_extraction_pipeline.main:start_pipeline"
+obscure-api-key = "ade_extraction_pipeline.main:obscure_api_key"
+
+[build-system]
+requires = ["uv_build>=0.9.9,<0.10.0"]
+build-backend = "uv_build"

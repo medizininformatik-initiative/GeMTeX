@@ -1,0 +1,57 @@
+title: Default Configuration - Ollama
+
+coding:
+  servers:
+    id-server:
+      host: localhost
+      port: 8080
+  config:
+    annotations:
+      diagnosen:
+        - id-server: /inception/lookup_icd10?q={text}
+      medikationen:
+        - id-server: /inception/lookup_sct?q={text}
+    response:
+      id-server:
+        parse:
+        restrict: [ ]
+    get_all: false
+  ignore_fields:
+    - id
+
+pydantic-ai:
+  model:
+    implementation: openai.OpenAIChatModel
+    name: llama3.1
+  provider:
+    implementation: ollama.OllamaProvider
+    url: http://localhost:11434/v1
+    api_key:
+
+pydantic:
+  TextAnnotationen:
+    title: TextAnnotationen
+    type: object
+    properties:
+      diagnosen:
+        type: array
+        items:
+          type: object
+          title: Diagnose
+          properties:
+            text:
+              type: string
+              title: Die konkrete Referenz der Diagnose im Text.
+      medikationen:
+        type: array
+        items:
+          type: object
+          title: Medikation
+          properties:
+            text:
+              type: string
+              title: Die konkrete Referenz einer Medikation oder eines Wirkstoffs im Text.
+
+prompt: |-
+  Du bist ein medizinischer Dokumentar.
+  Aus den Texten, die dir gegeben werden extrahierst du die `TextAnnotationen`.
