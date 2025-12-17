@@ -1,7 +1,7 @@
 name: inception-dashboard-manager
 services:
   inception-reporting:
-    image: ${REPOSITORY_NAME:-ghcr.io/medizininformatik-initiative/gemtex}/inception-dashboard:${VERSION:-0.9.4}
+    image: ${REPOSITORY_NAME:-ghcr.io/medizininformatik-initiative/gemtex}/inception-dashboard:${VERSION:-0.9.5}
     container_name: inception-dashboard-manager
     command: '--manager'
     restart: unless-stopped

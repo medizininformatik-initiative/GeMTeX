@@ -1,11 +1,11 @@
 # Inception Reporting Dashboard
 https://github.com/inception-project/inception-reporting-dashboard  
-VERSION [aktuell]: `0.9.4`
+VERSION [aktuell]: `0.9.5`
 
 ## Installation
 
 ```commandline
-docker build --build-arg VERSION=0.9.4 -t inception-project/inception-dashboard:0.9.4 .
+docker build --build-arg VERSION=0.9.5 -t inception-project/inception-dashboard:0.9.5 .
 ```
 
 ###### Manager
@@ -14,11 +14,11 @@ docker build --build-arg VERSION=0.9.4 -t inception-project/inception-dashboard:
 [REPOSITORY_NAME=REPO_NAME VERSION=VERSION] docker compose -f docker-compose-manager.yml up
 ```
 * `[Optional]`: REPO_NAME (s. "Anderes"); default: ``ghcr.io/medizininformatik-initiative/gemtex``
-* `[Optional]`: VERSION (s. "Anderes"); default: ``0.9.4``
+* `[Optional]`: VERSION (s. "Anderes"); default: ``0.9.5``
 
 ``Docker``
 ```commandline
-docker run -p 9011:8501 --name inception-dashboard-manager REPO_NAME/inception-dashboard:0.9.4 --manager
+docker run -p 9011:8501 --name inception-dashboard-manager REPO_NAME/inception-dashboard:0.9.5 --manager
 ```
 * `Zwingend`: REPO_NAME (s. "Anderes")
 
@@ -31,11 +31,11 @@ der das Manager Dashboard auf Port ``9011`` zur Verfügung stellt.
 [REPOSITORY_NAME=REPO_NAME VERSION=VERSION] docker compose -f docker-compose-lead.yml up
 ```
 * `[Optional]`: REPO_NAME (s. "Anderes"); default: ``ghcr.io/medizininformatik-initiative/gemtex``
-* `[Optional]`: VERSION (s. "Anderes"); default: ``0.9.4``
+* `[Optional]`: VERSION (s. "Anderes"); default: ``0.9.5``
 
 ``Docker``
 ```commandline
-docker run -p 9012:8501 --name inception-dashboard-lead REPO_NAME/inception-dashboard:0.9.4 --lead
+docker run -p 9012:8501 --name inception-dashboard-lead REPO_NAME/inception-dashboard:0.9.5 --lead
 ```
 * `Zwingend`: REPO_NAME (s. "Anderes")  
 
