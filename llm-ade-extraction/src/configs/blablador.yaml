@@ -42,10 +42,22 @@ pydantic:
             text:
               type: string
               title: |-
-                Die konkrete Referenz der Diagnose im Text. Folgende Diagnosearten sollen nicht annotiert werden:
-                - Zustände nach einem Eingriff (z.B.: 'Zustand nach Konisation')
-                - Alte oder vergangene Diagnosen (z.B.: 'Röteln im Kindesalter')
-                - Familienanamnesen (z.B.: 'Brustkrebs bei der Mutter')
+                Die konkrete Referenz der Diagnose im Text.
+            condition_after:
+              type: bool
+              title: |-
+                Gibt an, ob es ein Zustand nach einem Eingriff ist (z.B.: 'Zustand nach Konisation').
+                Antworte hier lediglich mit 'true' für 'ja' oder 'false' für 'nein'.
+            is_old:
+              type: bool
+              title: |-
+                Gibt an, ob es eine alte, sehr lange zurückliegende Diagnose ist (z.B.: 'Röteln im Kindesalter').
+                Antworte hier lediglich mit 'true' für 'ja' oder 'false' für 'nein'.
+            is_family:
+              type: bool
+              title: |-
+                Gibt an, ob es eine Anamnese in der Familie ist (z.B.: 'Brustkrebs bei der Mutter').
+                Antworte hier lediglich mit 'true' für 'ja' oder 'false' für 'nein'.
       medikationen:
         type: array
         items:
