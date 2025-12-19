@@ -17,10 +17,15 @@ coding:
         restrict: [ ]
     get_all: false
   ignore_fields:
-    - id
-    - is_condition_after
-    - is_old
-    - is_family
+    diagnosen:
+      - id
+      - is_condition_after
+      - is_old
+      - is_family
+    medikationen:
+      - frequency
+      - strength
+      - active_substance
 
 pydantic-ai:
   model:

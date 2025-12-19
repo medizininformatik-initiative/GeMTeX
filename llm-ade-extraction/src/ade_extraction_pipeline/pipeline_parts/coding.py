@@ -39,7 +39,7 @@ class CodingServer:
         port: Union[str, int] = 8080,
         endpoints: dict[str, str] = None,
         protocol: str = "http",
-        ignore_fields: list[str] = None,
+        ignore_fields: dict[str, list[str]] = None,
         response_parsing: dict = None
     ):
         _rp = response_parsing if response_parsing is not None else {}
@@ -48,12 +48,13 @@ class CodingServer:
         self._host = host
         self._port = port
         self._protocol = protocol if not host.startswith("http") else ""
-        self._ignore_fields = ignore_fields if ignore_fields is not None else []
+        self._ignore_fields = {}
         self._response_parse_func = lambda x: x
         self._restrict_output = _rp.get("restrict", [])
         if _rp.get("parse", False):
             self.parse_response_def(_rp.get("parse"))
         self.build_endpoint_dict(endpoints)
+        self.build_ignore_dict(ignore_fields)
 
     def __str__(self):
         return json.dumps(self, default=lambda o: o.__dict__, indent=2)
@@ -68,6 +69,10 @@ class CodingServer:
     @property
     def endpoints(self):
         return self._endpoints
+
+    @property
+    def ignore_fields(self) -> dict[str, list[str]]:
+        return self._ignore_fields
 
     def parse_response_def(self, response_parsing: str):
         if response_parsing is None:
@@ -85,6 +90,11 @@ class CodingServer:
                 }
         self._endpoints = _temp_dict
 
+    def build_ignore_dict(self, value: Optional[dict[str, list[str]]]):
+        self._ignore_fields = value if value is not None else {
+            k: [] for k in self.endpoints.keys()
+        }
+
     def endpoint(self, anno_type: str, **kwargs) -> Optional[str]:
         if not self.endpoints.get(anno_type, False):
             return None
@@ -97,7 +107,7 @@ class CodingServer:
             kwargs.pop(k)
         if (
             len(_difference_set) > 0
-            and len(_difference_set.difference(self._ignore_fields)) != 0
+            and len(_difference_set.difference(self.ignore_fields.get(anno_type, []))) != 0
         ):
             logging.warning(f"Some arguments were superfluous: {_difference_set}")
         if len(kwargs) != len(_config_args):
