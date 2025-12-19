@@ -18,11 +18,15 @@ coding:
     get_all: false
   ignore_fields:
     - id
+    - is_condition_after
+    - is_old
+    - is_family
 
 pydantic-ai:
   model:
     implementation: openai.OpenAIChatModel
     name: alias-large
+    temperature: 0.2
   provider:
     implementation: openai.OpenAIProvider
     url: https://api.helmholtz-blablador.fz-juelich.de/v1/
@@ -43,7 +47,7 @@ pydantic:
               type: string
               title: |-
                 Die konkrete Referenz der Diagnose im Text.
-            condition_after:
+            is_condition_after:
               type: bool
               title: |-
                 Gibt an, ob es ein Zustand nach einem Eingriff ist (z.B.: 'Zustand nach Konisation').
@@ -66,8 +70,27 @@ pydantic:
           properties:
             text:
               type: string
-              title: Die konkrete Referenz einer Medikation oder eines Wirkstoffs im Text.
+              title: |-
+                Die konkrete Referenz einer Medikation im Text.
+                Das umfasst unter anderem Wirkstoff und Stärke.
+            active_substance:
+              type: string
+              title: |-
+                Die Angabe zum Wirkstoff der Medikation.
+                Befindet sich im unmittelbaren Umfeld oder ist Teil der Medikation.
+            strength:
+              type: string
+              title: |-
+                Eine Angabe zur Stärke des Wirkstoffes.
+                Befindet sich im unmittelbaren Umfeld oder ist Teil der Medikation.
+                Wird meist mit einer Einheit angegeben (z.B.: ml, mg, 3 Tabletten, 1 IE)
+            frequency:
+              type: string
+              title: |-
+                Eine Angabe zur Frequenz der Einnahme (z.B.: '1 0 1', '1x täglich', 'eine Tablette morgens'.
+                Befindet sich im unmittelbaren Umfeld.
 
 prompt: |-
   Du bist ein medizinischer Dokumentar.
   Aus den Texten, die dir gegeben werden extrahierst du die `TextAnnotationen`.
+  Erfinde niemals Angaben, sondern beziehe dich auf die konkreten Textstellen!

@@ -5,7 +5,9 @@ import zlib
 from base64 import urlsafe_b64encode as b64e, urlsafe_b64decode as b64d
 from pydantic import BaseModel, Field, create_model
 
-from pydantic_ai import Agent, AgentRunResult, ModelHTTPError, capture_run_messages, ToolOutput, NativeOutput
+from pydantic_ai import Agent, AgentRunResult, ModelHTTPError, capture_run_messages, NativeOutput, ModelSettings
+from pydantic_ai.models import Model
+from pydantic_ai.providers import Provider
 
 
 def json_schema_to_base_model(schema: dict[str, Any]) -> Type[BaseModel]:
@@ -115,18 +117,27 @@ def run_agent_on_query(
         if _ai_provider_dict.get("api_key", api_key) is not None
         else api_key
     )
+
+    model_impl = getattr(import_module(_ai_model_module), _ai_model_name)
+    provider_impl = getattr(import_module(_ai_provider_module), _ai_provider_name)
+    model_settings = ModelSettings(
+        temperature=_ai_model_dict.get("temperature", 0.5),
+    )
+
     agent = Agent(
-        model=getattr(import_module(_ai_model_module), _ai_model_name)(
+        model=model_impl(
             model_name=_ai_model_dict.get("name", "alias-large"),
-            provider=getattr(import_module(_ai_provider_module), _ai_provider_name)(
+            provider=provider_impl(
                 base_url=_ai_provider_dict.get(
                     "url", "https://api.helmholtz-blablador.fz-juelich.de/v1/"
                 ),
                 api_key=get_api_key(_api_key, api_key_obscured),
             ),
+            settings=model_settings,
         ),
         system_prompt=config.get("prompt"),
-        output_type=NativeOutput([_pydantic_model]),
+        # output_type=NativeOutput([_pydantic_model]),
+        output_type=_pydantic_model,
     )
     with capture_run_messages() as messages:
         try:

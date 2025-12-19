@@ -23,6 +23,7 @@ pydantic-ai:
   model:
     implementation: openai.OpenAIChatModel
     name: alias-large
+    temperature: 0.5
   provider:
     implementation: openai.OpenAIProvider
     url: https://api.helmholtz-blablador.fz-juelich.de/v1/
