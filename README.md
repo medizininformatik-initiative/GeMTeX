@@ -37,6 +37,8 @@ Ordner für verschiedene Skripte/Demos.
 Eine Demo bzw. Machbarkeitsnachweis wie CDA Dokumente Level One über XSLT Stylesheets in HTML oder Plain-Text gewandelt werden können.
 * [`health-discovery-scripts`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/scripts/health-discovery-scripts)  
 Python-Skripte um die [Averbis Health Discovery](https://averbis.com/health-discovery/) per API anzusprechen.
+* `snomed-postprocessing`  
+Skript um SNOMED Codes zu identifzieren, die nicht mit der Version 04/2024 kompatibel sind.
 
 ### [`uima_cas_mapper`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/uima_cas_mapper)
 Ein `Python`-Programm um `xmi` im
