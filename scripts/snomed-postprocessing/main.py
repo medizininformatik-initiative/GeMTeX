@@ -1,5 +1,4 @@
 import json
-import re
 
 from scttsrapy.api import EndpointBuilder
 import scttsrapy.concepts as concepts
@@ -8,29 +7,41 @@ import scttsrapy.concepts as concepts
 def pprint_json(json_data):
     print(json.dumps(json_data, indent=2))
 
+def filter_by_semantic_tag(
+    json_data: dict, tag: str = None, positive: bool = True
+) -> dict:
+    """
+    Filters the results of e.g. "scttsrapy"´s `get_concept_children` by the respective "semantic tag".
 
-def filter_by_semantic_tag(json_data: dict, tag: str = None) -> dict:
+    :param json_data: the result dict, containing at least a "content" field that features a list of concepts.
+    :param tag: the semantic tag to filter by (e.g. "disorder", "finding", etc.).
+    :param positive: whether to include concepts with said semantic tag (`True`) or to exclude them (`False`).
+    """
     if tag is None:
         return json_data
     if not json_data.get("success", False):
-        return {
-            "success": False,
-            "content": []
-        }
+        return {"success": False, "content": []}
 
-    regex = re.compile(r'\({}\)'.format(tag), flags=re.IGNORECASE)
+    if positive:
+        bool_check = lambda x: x.get("fsn", {}).get("term", "").lower().find(f"({tag.lower()})") != -1
+    else:
+        bool_check = lambda x: x.get("fsn", {}).get("term", "").lower().find(f"({tag.lower()})") == -1
     return {
         "success": True,
-        "content": [
-            d for d in json_data.get("content", []) if regex.match(d.get("fsn", {}).get("term", ""))
-        ]
+        "content": [d for d in json_data.get("content", []) if bool_check(d)],
     }
+
 
 if __name__ == "__main__":
     # Set up the endpoint for local snowstorm
+    host = "http://nlp-prod:9021"
     endpoint_builder = EndpointBuilder()
-    endpoint_builder.set_api_endpoint("http://nlp-prod:9021")
+    endpoint_builder.set_api_endpoint(host)
 
     # Query all children for concept '47295007' --> "Psychomotor agitation (finding)"
-    concept_children = concepts.get_concept_children("47295007", endpoint_builder=endpoint_builder)
-    pprint_json(filter_by_semantic_tag(concept_children, tag="disorder"))
+    concept_children = concepts.get_concept_children(
+        "47295007", endpoint_builder=endpoint_builder
+    )
+    pprint_json(
+        filter_by_semantic_tag(concept_children, tag="disorder", positive=False)
+    )
