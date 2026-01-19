@@ -1,0 +1,13 @@
+[project]
+name = "snomed-postprocessing"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "requests==2.27.1",
+    "scttsrapy",
+]
+
+[tool.uv.sources]
+scttsrapy = { git = "https://github.com/AberystwythSystemsBiology/SCTTSRApy" }
