@@ -1,0 +1,3 @@
+Wir berichten über [** NAME_PATIENT PB3RF5 **], geboren am [** DATE_BIRTH 01.01.2025 **], der am [** DATE 18.02.2025 **] in unserer Einrichtung in Behandlung war.
+Er erhielt eine Nierentransplantation (Spender-ID: [** ID NU0JA3 **], geboren am [** DATE_BIRTH 01.01.2023 **]).
+Während der Transplantation kam es zu keinen Komplikationen.

@@ -1,0 +1,15 @@
+Bitte überweisen Sie die Rechnung an IBAN: [** ID IB4EK3 **], BIC: [** ID EK1HM4 **].
+
+Besuchsanschrift:
+
+[** LOCATION_ORGANIZATION QI1OT6 **]
+[** LOCATION_ORGANIZATION HS7YO3 **]
+[** LOCATION_STREET CP3BV7 **]
+[** LOCATION_ZIP QK2DH2 **] [** LOCATION_CITY OV4QY3 **]
+
+Rechnungsanschrift:
+
+[** LOCATION_ORGANIZATION RJ9RP9 **]​​
+[** LOCATION_STREET UA2YX3 **]
+​[** LOCATION_ZIP PY8UV7 **] [** LOCATION_CITY OV4QY3 **]​
+

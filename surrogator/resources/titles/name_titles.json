@@ -1,0 +1,9 @@
+{
+	"0": 	["BMed", "MMed"],
+	"1": 	["Dipl. Med.", "Dipl.-Med.", "Dipl.-Med", "Dr.", "Dr. med.", "Dr. med. Dr. med.", "MBA", "Dr. med. univ."],
+	"2": 	["Dr. med. habil", "Dr. med. habil.", "Dr. med. univ.", "Dr.med.", "MU Dr.", "PD Dr.", "PD Dr. med.", "PD Dr. med. habil.", "PD Dr.med.", "PD Dr.med.habil", "PD Dr.med.habil ", "Prof.", "MUDr."],
+	"3": 	["Prof. Dr.", "Prof. Dr. med.", "Prof. Dr. med.", "Prof.Dr.med.", "Professor", "Professor Dr. med.", "Univ-Prof. Dr. Dr.", "Univ.-Prof. Dr. Dr.", "Univ.-Prof. Dr. med.", "Univ.-Prof.Dr.med."],
+	"4": 	["Diplom-Stomatologe ", "Dipl.-Stom.", "Dr. cand. med. dent.", "Dr. med. dent.", "B Dent Med", "M Dent Med", "Dr. med. dent.", "MDDr."],
+	"5": 	["Dr. rer. medic.", "Dr. rer. med.", "Dr. nat. med.", "Dr. med. sci.", "Dr. rer. hum.", "Dr. sc. hum.", "Dr. h.c.", "Dr. E.h.", "rer medic", "Master of Arts", "Magister Artium", "Dr. sc. med.", "DrSc, DSc", "DrSc, DSc"],
+	"6": 	["BSN, BScN", "MSN, MScN"]
+}

@@ -1,0 +1,194 @@
+{
+  "beruf_einrichtung.txt": {
+    "filename_orig": "beruf_einrichtung.txt",
+    "annotations": {
+      "NAME_PATIENT": {
+        "HP7SL6": "Andreas Fleischmann"
+      },
+      "LOCATION_ORGANIZATION": {
+        "PE8QX5": "Schlachhof Schlacht-Gut"
+      }
+    }
+  },
+  "contact.txt": {
+    "filename_orig": "contact.txt",
+    "annotations": {
+      "LOCATION_CITY": {
+        "GT9GP1": "Leipzig"
+      },
+      "CONTACT_URL": {
+        "BQ1OD0": "https://www.uniklinikum-leipzig.de/PublishingImages/Seiten/UKL/Lageplan/lageplan-neu-uniklinikum-leipzig.jpg?RenditionID=5",
+        "GM1KE8": "https://www.uniklinikum-leipzig.de/"
+      },
+      "CONTACT_EMAIL": {
+        "XE9CH8": "s.peter@klinikum-leipzig.de",
+        "IW2PC3": "MB-IN-123@uni-klinik-leipzig.de",
+        "HZ8MW7": "onkologie@med.uni-leipzig.de",
+        "ON9CI1": "nchi@med.uni-leipzig.de",
+        "AV3OV9": "max.mueller@medizin.uni-leipzig.de"
+      }
+    }
+  },
+  "kein_geburtsdatum.txt": {
+    "filename_orig": "kein_geburtsdatum.txt",
+    "annotations": {
+      "NAME_PATIENT": {
+        "QW8BE9": "Tina Schmidt"
+      },
+      "DATE_BIRTH": {
+        "01.01.2025": "18.02.2025"
+      }
+    }
+  },
+  "klinik-mit-name.txt": {
+    "filename_orig": "klinik-mit-name.txt",
+    "annotations": {
+      "LOCATION_HOSPITAL": {
+        "PQ3YF7": "Dresdner Universitätsklinikum",
+        "ZD6EN1": "Universitätsklinikum Carl Gustav Carus",
+        "VR6GK2": "Universitätsklinikum Carl Gustav Carus Dresden"
+      },
+      "LOCATION_CITY": {
+        "RM6PN2": "Dresden",
+        "DC7CU1": "Dresdner"
+      },
+      "LOCATION_COUNTRY": {
+        "ZN2ZT3": "Ostsachsen"
+      }
+    }
+  },
+  "lokation.txt": {
+    "filename_orig": "lokation.txt",
+    "annotations": {
+      "NAME_PATIENT": {
+        "AD1YV9": "Moritz Hausmann"
+      },
+      "DATE_BIRTH": {
+        "01.01.2025": "16.02.2025"
+      },
+      "LOCATION_HOSPITAL": {
+        "CC0VU7": "Universitätsklinikum Musterstadt"
+      },
+      "LOCATION_ORGANIZATION": {
+        "TZ3UM3": "Grünes Haus"
+      },
+      "LOCATION_STREET": {
+        "HE4DR0": "Universitätsstraße 3"
+      },
+      "LOCATION_ZIP": {
+        "IC5FS7": "01234"
+      },
+      "LOCATION_CITY": {
+        "KQ3DJ7": "Musterhausen"
+      },
+      "CONTACT_EMAIL": {
+        "BG2FB2": "kontakt-per-mail@uniklinik-musterhausen.de"
+      },
+      "CONTACT_URL": {
+        "XA5HK7": "www.universitätsklinikum-musterhausen.de"
+      }
+    }
+  },
+  "rechnung.txt": {
+    "filename_orig": "rechnung.txt",
+    "annotations": {
+      "ID": {
+        "EK1HM4": "DEUTDEDB476",
+        "IB4EK3": "DE32390400139542648643"
+      },
+      "LOCATION_ORGANIZATION": {
+        "QI1OT6": "Universität Leipzig",
+        "HS7YO3": "Institut für Medizinische Informatik, Statistik und Epidemiologie",
+        "RJ9RP9": "LIFE Management Cluster"
+      },
+      "LOCATION_STREET": {
+        "UA2YX3": "Philipp-Rosenthal-Straße 27",
+        "CP3BV7": "Härtelstraße 16-18"
+      },
+      "LOCATION_ZIP": {
+        "QK2DH2": "04107",
+        "PY8UV7": "04103"
+      },
+      "LOCATION_CITY": {
+        "OV4QY3": "Leipzig"
+      }
+    }
+  },
+  "rosensaele.txt": {
+    "filename_orig": "rosensaele.txt",
+    "annotations": {
+      "LOCATION_STREET": {
+        "DL5CV0": "Fürstengraben 27"
+      },
+      "LOCATION_ZIP": {
+        "KA4VM9": "07743"
+      },
+      "LOCATION_CITY": {
+        "CJ0IF3": "Jena"
+      },
+      "LOCATION_OTHER": {
+        "CD0OK2": "Haus der Rosensäle",
+        "LN4XI3": "Botanische Garten"
+      },
+      "LOCATION_ORGANIZATION": {
+        "EN3CF5": "Friedrich-Schiller-Universität Jena"
+      }
+    }
+  },
+  "rotes_haus.txt": {
+    "filename_orig": "rotes_haus.txt",
+    "annotations": {
+      "LOCATION_ORGANIZATION": {
+        "SB6MY5": "LIFE Management Cluster"
+      },
+      "LOCATION_OTHER": {
+        "GW7FX4": "Rotes Haus"
+      },
+      "LOCATION_STREET": {
+        "QF0TR2": "Philipp-Rosenthal-Str. 27"
+      },
+      "ID": {
+        "FW5DW5": "M"
+      },
+      "LOCATION_ZIP": {
+        "VS2JQ5": "04103"
+      },
+      "LOCATION_CITY": {
+        "FJ9BK3": "Leipzig"
+      },
+      "CONTACT_EMAIL": {
+        "BE5NP4": "info-life@lists.uni-leipzig.de"
+      }
+    }
+  },
+  "verstorben.txt": {
+    "filename_orig": "verstorben.txt",
+    "annotations": {
+      "NAME_PATIENT": {
+        "ZV5NH4": "Mustermann",
+        "RF3PZ6": "Max Mustermann"
+      },
+      "DATE_BIRTH": {
+        "01.01.2023": "01.06.2023"
+      },
+      "DATE_DEATH": {
+        "01.07.2026": "30.08.2026"
+      }
+    }
+  },
+  "zwei_idenditäten.txt": {
+    "filename_orig": "zwei_idenditäten.txt",
+    "annotations": {
+      "NAME_PATIENT": {
+        "PB3RF5": "Max Mustermann"
+      },
+      "DATE_BIRTH": {
+        "01.01.2025": "16.02.2025",
+        "01.01.2023": "01.06.2023"
+      },
+      "ID": {
+        "NU0JA3": "45782389"
+      }
+    }
+  }
+}

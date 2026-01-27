@@ -1,0 +1,2 @@
+Wir berichten über NAME_PATIENT.
+Sie kam zu uns am DATE_BIRTH in die Notaufnahme im Hause nach einem Autounfall und klagter über Nackenschmerzen.

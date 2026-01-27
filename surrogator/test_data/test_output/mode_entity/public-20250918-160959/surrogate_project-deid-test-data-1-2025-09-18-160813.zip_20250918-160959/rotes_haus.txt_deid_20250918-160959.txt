@@ -1,0 +1,10 @@
+Bitte kommen Sie zu Ihrem Termin in die Studienambulanz zum LOCATION_ORGANIZATION (LOCATION_OTHER):
+
+LOCATION_STREET, Haus ID
+LOCATION_ZIP LOCATION_CITY
+
+Bitte kommen Sie pünktlich!
+
+Sie können uns auch gern vorab kontaktien: CONTACT_EMAIL 
+
+Mit freundlichen Grüßen.
