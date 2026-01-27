@@ -1,0 +1,16 @@
+,NAME_PATIENT,DATE_BIRTH,OTHER,PROFESSION,LOCATION_ORGANIZATION,LOCATION_CITY,CONTACT_URL,CONTACT_EMAIL,LOCATION_HOSPITAL,LOCATION_COUNTRY,DATE,LOCATION_STREET,LOCATION_ZIP,ID,LOCATION_OTHER,DATE_DEATH
+alpenwirt.txt,['Johann Hofer'],['18.02.2025'],['der letzte Alpwirt im Stubaital'],,,,,,,,,,,,,
+beruf_einrichtung.txt,['Andreas Fleischmann'],,,['Metzger'],['Schlachhof Schlacht-Gut'],,,,,,,,,,,
+busfahrerin.txt,,['18.02.2025'],,['Busfahrerin'],['Bahnbetrieben Musterstadt'],,,,,,,,,,,
+contact.txt,,,,,,['Leipzig'],"['https://www.uniklinikum-leipzig.de/PublishingImages/Seiten/UKL/Lageplan/lageplan-neu-uniklinikum-leipzig.jpg?RenditionID=5', 'https://www.uniklinikum-leipzig.de/']","['nchi@med.uni-leipzig.de', 's.peter@klinikum-leipzig.de', 'onkologie@med.uni-leipzig.de', 'max.mueller@medizin.uni-leipzig.de', 'MB-IN-123@uni-klinik-leipzig.de']",,,,,,,,
+gesetzesnennung.txt,,,,,,,,,,,,,,,,
+kein_geburtsdatum.txt,['Tina Schmidt'],['18.02.2025'],,,,,,,,,,,,,,
+klinik-mit-name.txt,,,,,,"['Dresdner', 'Dresden']",,,"['Universitätsklinikum Carl Gustav Carus', 'Universitätsklinikum Carl Gustav Carus Dresden', 'Dresdner Universitätsklinikum']",['Ostsachsen'],,,,,,
+lokation.txt,['Moritz Hausmann'],['16.02.2025'],,,['Grünes Haus'],['Musterhausen'],['www.universitätsklinikum-musterhausen.de'],['kontakt-per-mail@uniklinik-musterhausen.de'],['Universitätsklinikum Musterstadt'],,['18.02.2025'],['Universitätsstraße 3'],['01234'],,,
+minister_angehörige.txt,['Maxima Musterhausen'],['16.02.2025'],['Tochter der Gesundheitsministerin'],,,,,,,,,,,,,
+rechnung.txt,,,,,"['Universität Leipzig', 'Institut für Medizinische Informatik, Statistik und Epidemiologie', 'LIFE Management Cluster']",['Leipzig'],,,,,,"['Philipp-Rosenthal-Straße 27', 'Härtelstraße 16-18']","['04103', '04107']","['DEUTDEDB476', 'DE32390400139542648643']",,
+rosensaele.txt,,,,,['Friedrich-Schiller-Universität Jena'],['Jena'],,,,,,['Fürstengraben 27'],['07743'],,"['Haus der Rosensäle', 'Botanische Garten']",
+rotes_haus.txt,,,,,['LIFE Management Cluster'],['Leipzig'],,['info-life@lists.uni-leipzig.de'],,,,['Philipp-Rosenthal-Str. 27'],['04103'],['M'],['Rotes Haus'],
+verstorben.txt,"['Max Mustermann', 'Mustermann']",['01.06.2023'],,,,,,,,,"['18.02.2025', '16.02.2025']",,,,,['30.08.2026']
+weitsprung.txt,['Johanna Weitsicht'],['01.06.2023'],['kann aufgrund ihrer Verletzung ihren dritten Weltrekord im Weitsprung auf der anstehenden Olympiade nicht antreten'],['Leistungsportlerin'],,,,,,,['16.02.2025'],,,,,
+zwei_idenditäten.txt,['Max Mustermann'],"['01.06.2023', '16.02.2025']",,,,,,,,,['18.02.2025'],,,['45782389'],,

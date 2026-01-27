@@ -1,0 +1,3 @@
+Wir berichten über NAME_PATIENT.
+Der Patient arbeitet in einem Schlachthof als PROFESSION und hat durch die permanente Kälteeinflüsse gesundheitliche Probleme bekommen.
+Im LOCATION_ORGANIZATION gab es in letzter Zeit ähnliche Fälle zu berichten.

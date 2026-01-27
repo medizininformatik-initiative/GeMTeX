@@ -1,0 +1,5 @@
+LOCATION_HOSPITAL steht als Kliniklum der Supra-Maximalversorgung steht das LOCATION_HOSPITAL den Menschen der Region, aber auch darüber hinaus in allen Bereichen der stationären wie ambulanten Krankenversorgung offen.
+Die LOCATION_CITY Hochschulmedizin ist führend in der Therapie komplexer, besonders schwerer oder seltener Erkrankungen.
+Das LOCATION_HOSPITAL ist mit seinem Know-how ein wichtiger Partner für niedergelassene Ärzte wie auch Krankenhäuser in LOCATION_CITY und LOCATION_COUNTRY.
+
+

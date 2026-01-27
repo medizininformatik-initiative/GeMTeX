@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "surrogator"
+description = "Creates surrogates of to anonymized annotations."
+version = "1.0.2"
+authors = [
+    { name = "Christina", email = "christina.lohr@imise.uni-leipzig.de" }
+]
+readme = "README.md"
+requires-python = ">=3.11"
+
+dependencies = [
+    "pandas~=2.2.2",
+    "dkpro-cassis",
+    "pycaprio~=0.3.0",
+    "streamlit",
+    "toml~=0.10.2",
+    "mdutils~=1.6.0",
+    "tabulate~=0.9.0",
+    "streamlit_ext",
+    "python-dateutil~=2.9.0",
+    "requests~=2.32.3",
+    "schwifty",
+    "gender-guesser",
+    "spacy",
+    "joblib",
+    "sentence-transformers",
+    "Levenshtein",
+    "scikit-learn",
+    "openpyxl",
+    "overpy",
+    "anytree",
+]
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+exclude = ['tests']
+
+[tool.setuptools.package-data]
+"inception_reports" = ["data/*.json","config/logging_config.yaml"]
+
+[project.scripts]
+inception_reports = "inception_reports.__main__:main"
+download_models = "Surrogator.Configuration.model_loader:download_models"
+
+[project.urls]
+Homepage = "https://www.smith.care/en/gemtex_mii/"

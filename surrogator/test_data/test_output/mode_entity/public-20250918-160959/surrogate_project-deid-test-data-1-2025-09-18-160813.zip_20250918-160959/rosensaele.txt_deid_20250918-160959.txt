@@ -1,0 +1,4 @@
+Das Labor befindet sich am LOCATION_STREET in LOCATION_ZIP LOCATION_CITY, im LOCATION_OTHER.
+Kommen Sie bitte pünktlich.
+Bedenken Sie, dass es keine öffentlichen Parkmöglichkeiten vor Ort gibt.
+Gegenüber ist der LOCATION_OTHER der LOCATION_ORGANIZATION.

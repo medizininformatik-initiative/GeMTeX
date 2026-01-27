@@ -1,0 +1,9 @@
+The copyright of the code in this repository belongs to the respective contributors who
+license their contribution under the terms of the Apache License 2.0.
+
+Besides individual contributions, the copyright in this codebase largely belongs to:
+
+Copyright 2025 Copyright (c) 2025 Uni Leipzig, Institut für Medizinische Informatik, Statistik und Epidemiologie (IMISE)
+
+For individual contributions, please check the CONTRIBITORS.txt file as well as the history
+contained in this repository.

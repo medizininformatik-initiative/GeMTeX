@@ -1,0 +1,4 @@
+Das Labor befindet sich am [** LOCATION_STREET DL5CV0 **] in [** LOCATION_ZIP KA4VM9 **] [** LOCATION_CITY CJ0IF3 **], im [** LOCATION_OTHER CD0OK2 **].
+Kommen Sie bitte pünktlich.
+Bedenken Sie, dass es keine öffentlichen Parkmöglichkeiten vor Ort gibt.
+Gegenüber ist der [** LOCATION_OTHER LN4XI3 **] der [** LOCATION_ORGANIZATION EN3CF5 **].

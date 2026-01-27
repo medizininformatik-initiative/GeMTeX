@@ -1,0 +1,122 @@
+[ {
+  "name" : "webanno.custom.PHI",
+  "features" : [ {
+    "name" : "kind",
+    "tag_set" : {
+      "name" : "phiKind",
+      "description" : null,
+      "language" : null,
+      "tags" : [ {
+        "tag_name" : "AGE",
+        "tag_description" : "Konkrete Altersangaben (nicht in Datumsform)"
+      }, {
+        "tag_name" : "CONTACT_EMAIL",
+        "tag_description" : "E-Mail-Adresse"
+      }, {
+        "tag_name" : "NAME_EXT",
+        "tag_description" : "Nennung von Personen im Zshg. mit Ämtern, Versicherungen, etc."
+      }, {
+        "tag_name" : "NAME_OTHER",
+        "tag_description" : "Nennung weiterer Namen"
+      }, {
+        "tag_name" : "NAME_RELATIVE",
+        "tag_description" : "Angehörige der/des Patient*in"
+      }, {
+        "tag_name" : "NAME_TITLE",
+        "tag_description" : "Titel-Bezeichnungen"
+      }, {
+        "tag_name" : "PROFESSION",
+        "tag_description" : "Bezeichnungen von Berufen im Zusammenhang mit dem Patienten, ohne Nennung eines Status (z.B. arbeitslos, berentet, Teilzeit)"
+      }, {
+        "tag_name" : "OTHER",
+        "tag_description" : "weitere zu de-identifizierende Merkmale, die mit den anderen Kategorien nicht abgedeckt werden können"
+      }, {
+        "tag_name" : "CONTACT_FAX",
+        "tag_description" : "Faxnummer"
+      }, {
+        "tag_name" : "CONTACT_PHONE",
+        "tag_description" : "Telefonnummer"
+      }, {
+        "tag_name" : "CONTACT_URL",
+        "tag_description" : "URL einer Homepage"
+      }, {
+        "tag_name" : "DATE",
+        "tag_description" : "alle Datumsangaben (u.a. Geburtsdatum, Sterbedatum)"
+      }, {
+        "tag_name" : "ID",
+        "tag_description" : "Nummer zur Identifikation eines Patienten, Nummer zur Identifikation eines medizinischen Falles, Sonstige Identifikationsnummern"
+      }, {
+        "tag_name" : "LOCATION_CITY",
+        "tag_description" : "Name einer Stadt"
+      }, {
+        "tag_name" : "LOCATION_COUNTRY",
+        "tag_description" : "Name eines Landes"
+      }, {
+        "tag_name" : "LOCATION_HOSPITAL",
+        "tag_description" : "Nennung einer klinischen Einrichtung"
+      }, {
+        "tag_name" : "LOCATION_ORGANIZATION",
+        "tag_description" : "Name einer (medizinischen) Organisation"
+      }, {
+        "tag_name" : "LOCATION_OTHER",
+        "tag_description" : "Sonstige Adressen"
+      }, {
+        "tag_name" : "LOCATION_STATE",
+        "tag_description" : "Name eines Bundeslandes"
+      }, {
+        "tag_name" : "LOCATION_STREET",
+        "tag_description" : "Straßenname + Hausnummer"
+      }, {
+        "tag_name" : "LOCATION_ZIP",
+        "tag_description" : "Postleitzahl"
+      }, {
+        "tag_name" : "NAME_DOCTOR",
+        "tag_description" : "Vor- und Zusame eines Arztes oder medizinischen Personals"
+      }, {
+        "tag_name" : "NAME_USERNAME",
+        "tag_description" : "Username, Sekretariatskürzel"
+      }, {
+        "tag_name" : "NAME_PATIENT",
+        "tag_description" : "Vor- und Zuname eines Patienten oder Angehörigen"
+      } ],
+      "create_tag" : false
+    },
+    "uiName" : "kind",
+    "type" : "uima.cas.String",
+    "enabled" : true,
+    "visible" : true,
+    "include_in_hover" : false,
+    "required" : false,
+    "remember" : false,
+    "hideUnconstraintFeature" : false,
+    "description" : null,
+    "project_name" : "GeMTeX: De-Identification (GraSCCo raw)",
+    "multi_value_mode" : "NONE",
+    "link_mode" : "NONE",
+    "link_type_name" : null,
+    "link_type_role_feature_name" : null,
+    "link_type_target_feature_name" : null,
+    "traits" : "{\"multipleRows\":false,\"dynamicSize\":false,\"collapsedRows\":1,\"expandedRows\":1,\"editorType\":\"COMBOBOX\",\"keyBindings\":[{\"keyCombo\":\"N\",\"value\":\"NAME_PATIENT\"},{\"keyCombo\":\"Shift N\",\"value\":\"NAME_DOCTOR\"},{\"keyCombo\":\"i\",\"value\":\"ID\"},{\"keyCombo\":\"d\",\"value\":\"DATE\"},{\"keyCombo\":\"C\",\"value\":\"CONTACT_EMAIL\"},{\"keyCombo\":\"Shift C\",\"value\":\"CONTACT_PHONE\"},{\"keyCombo\":\"Ctrl Shift C\",\"value\":\"CONTACT_FAX\"},{\"keyCombo\":\"Ctrl Alt Shift C\",\"value\":\"CONTACT_URL\"},{\"keyCombo\":\"Ctrl Shift N\",\"value\":\"NAME_USERNAME\"}]}",
+    "curatable" : true
+  } ],
+  "uiName" : "PHI",
+  "type" : "span",
+  "description" : null,
+  "enabled" : true,
+  "built_in" : false,
+  "readonly" : false,
+  "attach_type" : null,
+  "attach_feature" : null,
+  "allow_stacking" : false,
+  "cross_sentence" : true,
+  "show_hover" : true,
+  "anchoring_mode" : "TOKENS",
+  "overlap_mode" : "NO_OVERLAP",
+  "validation_mode" : "ALWAYS",
+  "lock_to_token_offset" : false,
+  "multiple_tokens" : true,
+  "project_name" : "GeMTeX: De-Identification",
+  "linked_list_behavior" : false,
+  "on_click_javascript_action" : null,
+  "traits" : null
+} ]

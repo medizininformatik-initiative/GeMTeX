@@ -1,0 +1,5 @@
+[** LOCATION_HOSPITAL VR6GK2 **] steht als Kliniklum der Supra-Maximalversorgung steht das [** LOCATION_HOSPITAL PQ3YF7 **] den Menschen der Region, aber auch darüber hinaus in allen Bereichen der stationären wie ambulanten Krankenversorgung offen.
+Die [** LOCATION_CITY DC7CU1 **] Hochschulmedizin ist führend in der Therapie komplexer, besonders schwerer oder seltener Erkrankungen.
+Das [** LOCATION_HOSPITAL ZD6EN1 **] ist mit seinem Know-how ein wichtiger Partner für niedergelassene Ärzte wie auch Krankenhäuser in [** LOCATION_CITY RM6PN2 **] und [** LOCATION_COUNTRY ZN2ZT3 **].
+
+

@@ -38,6 +38,9 @@ Eine Demo bzw. Machbarkeitsnachweis wie CDA Dokumente Level One über XSLT Style
 * [`health-discovery-scripts`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/scripts/health-discovery-scripts)  
 Python-Skripte um die [Averbis Health Discovery](https://averbis.com/health-discovery/) per API anzusprechen.
 
+### [`surrogator`](/surrogator/Readme.md)
+Werkzeug für Pseudonymisierung von Textdocumenten nach Detektion von PII-Entitäten.
+
 ### [`uima_cas_mapper`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/uima_cas_mapper)
 Ein `Python`-Programm um `xmi` im
 [UIMA-CAS](https://uima.apache.org/)-Format von einem Typensystem in ein anderes umzuschreiben (z.B. die Exporte der

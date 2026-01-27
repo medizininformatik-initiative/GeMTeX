@@ -1,1 +1,12 @@
 /inception_ahd_recommender/.venv/
+
+*.idea
+/.idea/*
+/data/
+__pycache__/
+.project
+.pydevproject
+/venv/
+/.venv/*
+.vscode/*
+debug.sh

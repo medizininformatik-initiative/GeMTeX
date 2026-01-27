@@ -1,0 +1,366 @@
+{
+  "birthday_cnt": {
+    "beruf_einrichtung.txt": 0,
+    "contact.txt": 0,
+    "gesetzesnennung.txt": 0,
+    "klinik-mit-name.txt": 0,
+    "rechnung.txt": 0,
+    "rosensaele.txt": 0,
+    "rotes_haus.txt": 0,
+    "zwei_idenditäten.txt": 2
+  },
+  "corpus_files": {
+    "alpenwirt.txt": 0,
+    "beruf_einrichtung.txt": 1,
+    "busfahrerin.txt": 0,
+    "contact.txt": 1,
+    "gesetzesnennung.txt": 0,
+    "kein_geburtsdatum.txt": 1,
+    "klinik-mit-name.txt": 1,
+    "lokation.txt": 1,
+    "minister_angehörige.txt": 0,
+    "rechnung.txt": 1,
+    "rosensaele.txt": 1,
+    "rotes_haus.txt": 1,
+    "verstorben.txt": 1,
+    "weitsprung.txt": 0,
+    "zwei_idenditäten.txt": 1
+  },
+  "stats_detailed": {
+    "alpenwirt.txt": {
+      "DATE_BIRTH": [
+        "18.02.2025"
+      ],
+      "NAME_PATIENT": [
+        "Johann Hofer"
+      ],
+      "OTHER": [
+        "der letzte Alpwirt im Stubaital"
+      ]
+    },
+    "beruf_einrichtung.txt": {
+      "LOCATION_ORGANIZATION": [
+        "Schlachhof Schlacht-Gut"
+      ],
+      "NAME_PATIENT": [
+        "Andreas Fleischmann"
+      ],
+      "PROFESSION": [
+        "Metzger"
+      ]
+    },
+    "busfahrerin.txt": {
+      "DATE_BIRTH": [
+        "18.02.2025"
+      ],
+      "LOCATION_ORGANIZATION": [
+        "Bahnbetrieben Musterstadt"
+      ],
+      "PROFESSION": [
+        "Busfahrerin"
+      ]
+    },
+    "contact.txt": {
+      "CONTACT_EMAIL": [
+        "max.mueller@medizin.uni-leipzig.de",
+        "s.peter@klinikum-leipzig.de",
+        "MB-IN-123@uni-klinik-leipzig.de",
+        "onkologie@med.uni-leipzig.de",
+        "nchi@med.uni-leipzig.de"
+      ],
+      "CONTACT_URL": [
+        "https://www.uniklinikum-leipzig.de/PublishingImages/Seiten/UKL/Lageplan/lageplan-neu-uniklinikum-leipzig.jpg?RenditionID=5",
+        "https://www.uniklinikum-leipzig.de/"
+      ],
+      "LOCATION_CITY": [
+        "Leipzig"
+      ]
+    },
+    "gesetzesnennung.txt": {},
+    "kein_geburtsdatum.txt": {
+      "DATE_BIRTH": [
+        "18.02.2025"
+      ],
+      "NAME_PATIENT": [
+        "Tina Schmidt"
+      ]
+    },
+    "klinik-mit-name.txt": {
+      "LOCATION_CITY": [
+        "Dresden",
+        "Dresdner"
+      ],
+      "LOCATION_COUNTRY": [
+        "Ostsachsen"
+      ],
+      "LOCATION_HOSPITAL": [
+        "Universitätsklinikum Carl Gustav Carus",
+        "Universitätsklinikum Carl Gustav Carus Dresden",
+        "Dresdner Universitätsklinikum"
+      ]
+    },
+    "lokation.txt": {
+      "CONTACT_EMAIL": [
+        "kontakt-per-mail@uniklinik-musterhausen.de"
+      ],
+      "CONTACT_URL": [
+        "www.universitätsklinikum-musterhausen.de"
+      ],
+      "DATE": [
+        "18.02.2025"
+      ],
+      "DATE_BIRTH": [
+        "16.02.2025"
+      ],
+      "LOCATION_CITY": [
+        "Musterhausen"
+      ],
+      "LOCATION_HOSPITAL": [
+        "Universitätsklinikum Musterstadt"
+      ],
+      "LOCATION_ORGANIZATION": [
+        "Grünes Haus"
+      ],
+      "LOCATION_STREET": [
+        "Universitätsstraße 3"
+      ],
+      "LOCATION_ZIP": [
+        "01234"
+      ],
+      "NAME_PATIENT": [
+        "Moritz Hausmann"
+      ]
+    },
+    "minister_angehörige.txt": {
+      "DATE_BIRTH": [
+        "16.02.2025"
+      ],
+      "NAME_PATIENT": [
+        "Maxima Musterhausen"
+      ],
+      "OTHER": [
+        "Tochter der Gesundheitsministerin"
+      ]
+    },
+    "rechnung.txt": {
+      "ID": [
+        "DEUTDEDB476",
+        "DE32390400139542648643"
+      ],
+      "LOCATION_CITY": [
+        "Leipzig"
+      ],
+      "LOCATION_ORGANIZATION": [
+        "Institut für Medizinische Informatik, Statistik und Epidemiologie",
+        "Universität Leipzig",
+        "LIFE Management Cluster"
+      ],
+      "LOCATION_STREET": [
+        "Härtelstraße 16-18",
+        "Philipp-Rosenthal-Straße 27"
+      ],
+      "LOCATION_ZIP": [
+        "04103",
+        "04107"
+      ]
+    },
+    "rosensaele.txt": {
+      "LOCATION_CITY": [
+        "Jena"
+      ],
+      "LOCATION_ORGANIZATION": [
+        "Friedrich-Schiller-Universität Jena"
+      ],
+      "LOCATION_OTHER": [
+        "Haus der Rosensäle",
+        "Botanische Garten"
+      ],
+      "LOCATION_STREET": [
+        "Fürstengraben 27"
+      ],
+      "LOCATION_ZIP": [
+        "07743"
+      ]
+    },
+    "rotes_haus.txt": {
+      "CONTACT_EMAIL": [
+        "info-life@lists.uni-leipzig.de"
+      ],
+      "ID": [
+        "M"
+      ],
+      "LOCATION_CITY": [
+        "Leipzig"
+      ],
+      "LOCATION_ORGANIZATION": [
+        "LIFE Management Cluster"
+      ],
+      "LOCATION_OTHER": [
+        "Rotes Haus"
+      ],
+      "LOCATION_STREET": [
+        "Philipp-Rosenthal-Str. 27"
+      ],
+      "LOCATION_ZIP": [
+        "04103"
+      ]
+    },
+    "verstorben.txt": {
+      "DATE": [
+        "16.02.2025",
+        "18.02.2025"
+      ],
+      "DATE_BIRTH": [
+        "01.06.2023"
+      ],
+      "DATE_DEATH": [
+        "30.08.2026"
+      ],
+      "NAME_PATIENT": [
+        "Mustermann",
+        "Max Mustermann"
+      ]
+    },
+    "weitsprung.txt": {
+      "DATE": [
+        "16.02.2025"
+      ],
+      "DATE_BIRTH": [
+        "01.06.2023"
+      ],
+      "NAME_PATIENT": [
+        "Johanna Weitsicht"
+      ],
+      "OTHER": [
+        "kann aufgrund ihrer Verletzung ihren dritten Weltrekord im Weitsprung auf der anstehenden Olympiade nicht antreten"
+      ],
+      "PROFESSION": [
+        "Leistungsportlerin"
+      ]
+    },
+    "zwei_idenditäten.txt": {
+      "DATE": [
+        "18.02.2025"
+      ],
+      "DATE_BIRTH": [
+        "16.02.2025",
+        "01.06.2023"
+      ],
+      "ID": [
+        "45782389"
+      ],
+      "NAME_PATIENT": [
+        "Max Mustermann"
+      ]
+    }
+  },
+  "stats_detailed_cnt": {
+    "alpenwirt.txt": {
+      "DATE_BIRTH": 1,
+      "NAME_PATIENT": 1,
+      "OTHER": 1
+    },
+    "beruf_einrichtung.txt": {
+      "LOCATION_ORGANIZATION": 1,
+      "NAME_PATIENT": 1,
+      "PROFESSION": 1
+    },
+    "busfahrerin.txt": {
+      "DATE_BIRTH": 1,
+      "LOCATION_ORGANIZATION": 1,
+      "PROFESSION": 1
+    },
+    "contact.txt": {
+      "CONTACT_EMAIL": 5,
+      "CONTACT_URL": 2,
+      "LOCATION_CITY": 2
+    },
+    "gesetzesnennung.txt": {},
+    "kein_geburtsdatum.txt": {
+      "DATE_BIRTH": 1,
+      "NAME_PATIENT": 1
+    },
+    "klinik-mit-name.txt": {
+      "LOCATION_CITY": 2,
+      "LOCATION_COUNTRY": 1,
+      "LOCATION_HOSPITAL": 3
+    },
+    "lokation.txt": {
+      "CONTACT_EMAIL": 1,
+      "CONTACT_URL": 1,
+      "DATE": 1,
+      "DATE_BIRTH": 1,
+      "LOCATION_CITY": 1,
+      "LOCATION_HOSPITAL": 1,
+      "LOCATION_ORGANIZATION": 1,
+      "LOCATION_STREET": 1,
+      "LOCATION_ZIP": 1,
+      "NAME_PATIENT": 1
+    },
+    "minister_angehörige.txt": {
+      "DATE_BIRTH": 1,
+      "NAME_PATIENT": 1,
+      "OTHER": 1
+    },
+    "rechnung.txt": {
+      "ID": 2,
+      "LOCATION_CITY": 2,
+      "LOCATION_ORGANIZATION": 3,
+      "LOCATION_STREET": 2,
+      "LOCATION_ZIP": 2
+    },
+    "rosensaele.txt": {
+      "LOCATION_CITY": 1,
+      "LOCATION_ORGANIZATION": 1,
+      "LOCATION_OTHER": 2,
+      "LOCATION_STREET": 1,
+      "LOCATION_ZIP": 1
+    },
+    "rotes_haus.txt": {
+      "CONTACT_EMAIL": 1,
+      "ID": 1,
+      "LOCATION_CITY": 1,
+      "LOCATION_ORGANIZATION": 1,
+      "LOCATION_OTHER": 1,
+      "LOCATION_STREET": 1,
+      "LOCATION_ZIP": 1
+    },
+    "verstorben.txt": {
+      "DATE": 2,
+      "DATE_BIRTH": 1,
+      "DATE_DEATH": 1,
+      "NAME_PATIENT": 2
+    },
+    "weitsprung.txt": {
+      "DATE": 1,
+      "DATE_BIRTH": 1,
+      "NAME_PATIENT": 1,
+      "OTHER": 1,
+      "PROFESSION": 1
+    },
+    "zwei_idenditäten.txt": {
+      "DATE": 1,
+      "DATE_BIRTH": 2,
+      "ID": 1,
+      "NAME_PATIENT": 1
+    }
+  },
+  "wrong_annotations": {
+    "busfahrerin.txt": [
+      {
+        "text": "Tina Schmidt",
+        "token_id": 1,
+        "token_kind": null
+      }
+    ],
+    "gesetzesnennung.txt": [
+      {
+        "text": "(Zweckbindung gemäß § 33 Abs. 1.4 Sächsisches Krankenhausgesetz (SächsKHG))",
+        "token_id": 1,
+        "token_kind": null
+      }
+    ]
+  },
+  "wrong_birthdates": {},
+  "wrong_deathdates": {}
+}

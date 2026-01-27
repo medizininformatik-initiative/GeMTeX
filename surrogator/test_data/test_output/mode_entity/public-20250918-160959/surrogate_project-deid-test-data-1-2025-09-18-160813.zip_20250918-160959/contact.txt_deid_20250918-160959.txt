@@ -1,0 +1,23 @@
+Universitätsklikum LOCATION_CITY
+
+Ihr Weg zu uns
+
+Einen Lageplan mit allen Häusern und Einrichtungen der Universitätsmedizin können Sie herunterladen:
+CONTACT_URL
+
+Ein Übersicht aller Kliniken, Abteilungen und Institute der Univeristätsmedizin LOCATION_CITY finden Sie  unter CONTACT_URL
+
+Kontaktieren Sie uns über folgende Wege:
+
+CONTACT_EMAIL
+
+CONTACT_EMAIL
+
+CONTACT_EMAIL
+
+CONTACT_EMAIL
+
+CONTACT_EMAIL
+
+Wir hoffen, wir konntne Ihnen damit genügend Kontaktmöglichkeiten geben.
+

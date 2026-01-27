@@ -1,0 +1,800 @@
+310Klinik
+AMEOS Klinikum Bremen
+AMEOS Klinikum Heiligenhafen
+AMEOS Klinikum Ueckermünde
+AWO Psychiatriezentrum
+Acura-Rheumazentrum Baden-Baden
+Agaplesion Bethanien Krankenhaus Heidelberg
+Agaplesion Bethesda Krankenhaus Wuppertal
+Agaplesion Diakonieklinikum Rotenburg
+Agaplesion Elisabethenstift
+Agaplesion Ev. Bathildiskrankenhaus
+Agaplesion Evangelisches Krankenhaus Holzminden
+Agaplesion Krankenhaus Neu Bethlehem
+Alb Fils Kliniken
+Albertinen Krankenhaus
+Alexianer Krankenhaus Hedwigshöhe
+Alexianer St. Hedwig-Krankenhaus
+Alexianer St. Joseph-Krankenhaus Berlin-Weißensee
+Alexianer-Krankenhaus Aachen
+Alfried Krupp Krankenhaus Rüttenscheid
+Alfried Krupp Krankenhaus Steele
+Alice-Hospital Darmstadt
+Aller-Weser-Klinik
+Allgemeines Fakultätskrankenhaus Prag
+Allgemeines Krankenhaus der Stadt Wien
+Allgemeinkrankenhaus (St. Helena)
+Altonaer Kinderkrankenhaus
+Ameos Klinikum Hildesheim
+Ameos Klinikum Osnabrück
+AndreasKlinik
+Annastift (Hannover)
+Arabella Klinik
+Arona Klinik für Altersmedizin
+Asklepios Fachklinikum Brandenburg
+Asklepios Fachklinikum Lübben
+Asklepios Fachklinikum Stadtroda
+Asklepios Klinik Schaufling
+Asklepios Klinik St. Georg
+Asklepios Klinikum Uckermark
+Asklepios Westklinikum Hamburg
+Augenklinik Herzog Carl Theodor
+Augenklinik Marzahn
+Augusta-Kranken-Anstalt Bochum
+Augustinum Klinik München
+BDH-Klinik Greifswald
+BG Klinikum Bergmannstrost Halle
+BG Klinikum Hamburg
+Balıklı Rum Hastanesi
+Berufsgenossenschaftliche Unfallklinik Duisburg
+Berufsgenossenschaftliche Unfallklinik Frankfurt am Main
+Berufsgenossenschaftliche Unfallklinik Ludwigshafen
+Berufsgenossenschaftliche Unfallklinik Murnau
+Berufsgenossenschaftliches Universitätsklinikum Bergmannsheil
+Bethanien-Krankenhaus (Frankfurt am Main)
+Bethlehem Gesundheitszentrum Stolberg
+Betty Ford Center
+Bezirkskliniken Schwaben
+Bezirksklinikum Mainkofen
+Bezirksklinikum Regensburg
+Bezirkskrankenhaus Augsburg
+Bezirkskrankenhaus Bayreuth
+Bezirkskrankenhaus Günzburg
+Bezirkskrankenhaus Kempten
+Bezirkskrankenhaus Lienz
+Bezirkskrankenhaus Lohr
+Borromäus Hospital Leer
+Bundeswehrkrankenhaus Berlin
+Bundeswehrkrankenhaus Detmold
+Bundeswehrkrankenhaus Hamburg
+Bundeswehrkrankenhaus Hamm
+Bundeswehrkrankenhaus Ulm
+Bundeswehrkrankenhaus Westerstede
+Bundeswehrzentralkrankenhaus Koblenz
+Bürgerhospital (Frankfurt am Main)
+Camogli-Gesundheitszentrum
+Caritas-Krankenhaus Bad Mergentheim
+Caritas-Krankenhaus St. Josef Regensburg
+CaritasKlinikum Saarbrücken
+Carl-Thiem-Klinikum Cottbus
+Carolinum (Frankfurt am Main)
+Cedars-Sinai Medical Center
+Centre hospitalier de l’Université de Montréal
+Centre hospitalier universitaire Grenoble Alpes
+Centre hospitalier universitaire de Québec
+Centre hospitalier universitaire vaudois
+Charité
+Charité Campus Benjamin Franklin
+Charlottenklinik Stuttgart
+Children’s Hospital Los Angeles
+Children’s Hospital of Philadelphia
+Christliches Kinderhospital Osnabrück
+Clementine Kinderhospital
+Clinique Bois-Cerf
+Clinique Cecil
+Connaught-Krankenhaus
+Crossroads Centre
+DIAKO Bremen
+DRK Fachklinik Bad Neuenahr-Ahrweiler
+DRK Kliniken Berlin
+DRK Kliniken Berlin Köpenick
+DRK Kliniken Berlin Westend
+DRK Schmerz-Zentrum Mainz
+DRK-Kinderklinik Siegen
+Deutsche Klinik für Diagnostik
+Deutsches Herzzentrum Berlin
+Deutsches Herzzentrum München
+Deutsches Kinderschmerzzentrum
+Deutsches Zentrum für Kinder- und Jugendrheumatologie
+Diabetes Zentrum Mergentheim
+Diakoneo Diak Klinikum (Schwäbisch Hall)
+Diakonie-Klinikum Stuttgart
+Diakonie-Krankenhaus Wehrda
+Diakonissenanstalt Dresden
+Diakonissenkrankenhaus Augsburg
+Diakonissenkrankenhaus Flensburg
+Diakonissenkrankenhaus Leipzig
+Diakonissenkrankenhaus Linz
+Diakonissenkrankenhaus Mannheim
+Donauklinik Neu-Ulm
+Dr. Lubos Kliniken Bogenhausen
+Dr. Lubos Kliniken Pasing
+Dr. von Ehrenwall’sche Klinik
+Dr. von Haunersches Kinderspital
+Drei-Burgen-Klinik
+Dreifaltigkeits-Krankenhaus Wesseling
+Edelsteinklinik Bruchweiler
+Eifelklinik St. Brigida
+Elbe Kliniken Stade-Buxtehude
+Elblandklinikum Meißen
+Elblandklinikum Radebeul
+Elblandklinikum Riesa
+Elisabeth Klinikum Schmalkalden
+Elisabeth-Krankenhaus Essen
+Engeriedspital
+Entbindungsklinik Pjöngjang
+Epsom Hospital
+Erzgebirgsklinikum Annaberg
+Euregio-Klinik Grafschaft Bentheim
+Evangelische Stiftung Tannenhof
+Evangelisches Diakonissenkrankenhaus (Jerusalem)
+Evangelisches Krankenhaus Bethesda zu Duisburg
+Evangelisches Krankenhaus Bochum-Linden
+Evangelisches Krankenhaus Düsseldorf
+Evangelisches Krankenhaus Essen-Werden
+Evangelisches Krankenhaus Göttingen-Weende
+Evangelisches Krankenhaus Hattingen
+Evangelisches Krankenhaus Königin Elisabeth Herzberge
+Evangelisches Krankenhaus Luckau
+Evangelisches Krankenhaus Ludwigsfelde-Teltow
+Evangelisches Krankenhaus Lutherstift Frankfurt (Oder)
+Evangelisches Krankenhaus Mülheim
+Evangelisches Krankenhaus Oldenburg
+Evangelisches Krankenhaus Wesel
+Evangelisches Krankenhaus Wien
+Evangelisches Krankenhaus Witten
+Evangelisches Stift St. Martin Koblenz
+Evangelisches Waldkrankenhaus Spandau
+Facharztklinik Hamburg
+Fachklinik Aukrug
+Fachklinik Eußerthal
+Fachklinik Haus Immanuel
+Fachklinik Kamillushaus Heidhausen
+Fachklinik für Neurologie Dietenbronn
+Fachklinik und Moorbad Bad Freienwalde
+Fachkrankenhaus Kloster Grafschaft
+Filderklinik
+Forschungszentrum Borstel
+Franziskus Hospital Bielefeld
+Franziskus Spital
+Franziskus-Krankenhaus Berlin
+Franziskushöhe
+Friedrich-Ebert-Krankenhaus Neumünster
+GPR Klinikum
+GRN-Klinik Eberbach
+GRN-Klinik Schwetzingen
+GRN-Klinik Sinsheim
+Geburtshaus Maternité Alpine
+Gemeinschaftsklinikum Mittelrhein
+Gemeinschaftskrankenhaus Havelhöhe
+Gemeinschaftskrankenhaus Herdecke
+Georgenhospital (Berlin)
+Georgenkrankenhaus
+Geriatrie-Zentrum Haus Berge
+Gertraudenhospital (Berlin)
+Gesundheit Nordhessen Holding
+Grand Med Hospital
+Gräfliche Kliniken Bad Driburg
+HNO-Klinik Bogenhausen Dr. Gaertner
+Hallwang Clinic
+Havelland-Kliniken
+Hegau-Bodensee-Klinikum
+Heidekreis-Klinikum
+Heinrich Sengelmann Kliniken
+Heinrich-Braun-Klinikum
+Helios Dr. Horst Schmidt Kliniken Wiesbaden
+Helios Endo-Klinik Hamburg
+Helios Fachkliniken Hildburghausen
+Helios Klinik Attendorn
+Helios Klinik Blankenhain
+Helios Klinik Volkach
+Helios Kliniken Schwerin
+Helios Klinikum Aue
+Helios Klinikum Bad Saarow
+Helios Klinikum Berlin-Buch
+Helios Klinikum Erfurt
+Helios Klinikum Gotha
+Helios Klinikum Hildesheim
+Helios Klinikum Krefeld
+Helios Klinikum Meiningen
+Helios Klinikum Niederberg
+Helios Mariahilf Klinik Hamburg
+Helios Universitätsklinikum Wuppertal
+Hellmig-Krankenhaus Kamen
+Henneberg-Kliniken Hildburghausen
+Hermann-Josef-Krankenhaus
+Herz- und Diabeteszentrum Nordrhein-Westfalen
+Herz- und Kreislaufzentrum Rotenburg a. d. Fulda
+Herz-Jesu-Krankenhaus Fulda
+Herz-Jesu-Krankenhaus Wien
+Herzliya Medical Center
+Herzogin Elisabeth Hospital
+Herzzentrum Coswig
+Herzzentrum Leipzig
+Hessing-Klinik
+Hetzelstift
+Hirslanden Klinik Aarau
+Hirslanden Klinik Permanence
+Hochgebirgsklinik Davos
+Hospital Alemán Nicaragüense
+Hospital zum Heiligen Geist Boppard
+Howard University Hospital
+Hufeland Klinikum
+Huyssens-Stiftung
+Hôpital Necker–Enfants malades
+Hôpital Riviera-Chablais
+Hôpitaux universitaires de Genève
+Hôtel-Dieu (Carpentras)
+Höhenklinik Wald
+Hüttenhospital
+Ilm-Kreis Kliniken
+Inselspital
+Isar Klinikum
+Isar-Amper-Klinikum München-Ost
+Israelitisches Krankenhaus Hamburg
+Istituto nazionale per le malattie infettive
+Johanna-Etienne-Krankenhaus
+Johanniter-Krankenhaus Geesthacht
+Josefinum (Augsburg)
+Joseph-Serlin-Klinik
+Justizvollzugskrankenhaus Berlin
+Justizvollzugskrankenhaus Hohenasperg
+Justizvollzugskrankenhaus Nordrhein-Westfalen
+KMG Klinikum Sondershausen
+KMG Klinikum Sömmerda
+KMG Manniske Klinik Bad Frankenhausen
+KRH Klinikum Agnes Karll Laatzen
+KRH Klinikum Nordstadt
+KRH Klinikum Oststadt-Heidehaus
+KRH Klinikum Siloah
+KRH Psychiatrie Wunstorf
+Kantonsspital Aarau
+Kantonsspital Baden
+Kantonsspital Graubünden
+Kantonsspital Münsterlingen
+Kantonsspital St. Gallen
+Kantonsspital Winterthur
+Karl-Jaspers-Klinik Wehnen
+Karolinska-Universitätskrankenhaus
+Katharinen-Hospital Unna
+Katholisches Kinderkrankenhaus Wilhelmstift
+Katholisches Klinikum Bochum
+Katholisches Klinikum Koblenz-Montabaur
+Katholisches Krankenhaus Dortmund-West
+Katholisches Krankenhaus Erfurt
+Katholisches Krankenhaus im Siebengebirge
+Katutura-Staatskrankenhaus
+Kbo-Heckscher-Klinikum
+Kemperhof
+Kenema-Staatskrankenhaus
+Kepler Universitätsklinikum
+Kinderhospital Osnabrück
+Kinderhospiz Bethel
+Kinderhospiz St. Petersburg
+Kinderklinik Augsburg
+Kinderklinik Louis Țurcanu
+Kinderklinik Sankt Augustin
+Kinderkrankenhaus Park Schönfeld
+Kinderkrankenhaus auf der Bult
+Kindernachsorgeklinik Berlin-Brandenburg
+Kinderpalliativzentrum Datteln
+Kinderspital Zürich
+Klinik Am Rosenberg
+Klinik Arlesheim
+Klinik Baden-Baden Balg
+Klinik Beau-Site
+Klinik Belair
+Klinik Beverin
+Klinik Birshof
+Klinik Blankenstein
+Klinik Bühl
+Klinik Floridsdorf
+Klinik Forbach
+Klinik Hirslanden
+Klinik Hohe Mark
+Klinik Hohe Warte
+Klinik Im Park
+Klinik Königshof
+Klinik Königstein der KVB
+Klinik Löwenstein
+Klinik Nette-Gut für Forensische Psychiatrie
+Klinik Ottakring
+Klinik Rastatt
+Klinik St. Anna (Luzern)
+Klinik Stephanshorn
+Klinik Waldhaus
+Klinik Waldhof Elgershausen
+Klinik Wysshölzli
+Klinik am Park Lünen
+Klinik für Augenheilkunde
+Klinik für Dermatologie, Allergologie und Venerologie der Medizinischen Hochschule Hannover
+Klinik für Herzchirurgie Karlsruhe
+Klinik für Kinder- und Jugendmedizin der Ruhr-Universität Bochum im St. Josef-Hospital
+Klinik für Kinder- und Jugendpsychiatrie, Psychosomatik und Psychotherapie
+Klinik für Urologie und Uroonkologie Braunschweig
+Kliniken Landkreis Biberach
+Kliniken St. Elisabeth (Neuburg an der Donau)
+Kliniken Südostbayern
+Kliniken der Stadt Köln
+Kliniken des Main-Taunus-Kreises
+Klinikum Altenburger Land
+Klinikum Altmühlfranken
+Klinikum Ansbach
+Klinikum Augsburg Süd
+Klinikum Bad Hersfeld
+Klinikum Bad Salzungen
+Klinikum Bayreuth
+Klinikum Bielefeld
+Klinikum Bremen-Mitte
+Klinikum Bremen-Nord
+Klinikum Bremen-Ost
+Klinikum Bremerhaven
+Klinikum Chemnitz
+Klinikum Christophsbad
+Klinikum Coburg
+Klinikum Crailsheim
+Klinikum Darmstadt
+Klinikum Dortmund
+Klinikum Dritter Orden
+Klinikum Emden
+Klinikum Erding
+Klinikum Ernst von Bergmann
+Klinikum Esslingen
+Klinikum Frankfurt Höchst
+Klinikum Freising
+Klinikum Freital
+Klinikum Friedrichshafen
+Klinikum Fulda
+Klinikum Fürth
+Klinikum Görlitz
+Klinikum Gütersloh
+Klinikum Herford
+Klinikum Hochrhein
+Klinikum Ingolstadt
+Klinikum Itzehoe
+Klinikum Karlsburg
+Klinikum Kassel
+Klinikum Kaufbeuren
+Klinikum Kempten
+Klinikum Klagenfurt am Wörthersee
+Klinikum Landkreis Tuttlingen
+Klinikum Landshut
+Klinikum Links der Weser
+Klinikum Lippe
+Klinikum Magdeburg
+Klinikum Memmingen
+Klinikum Merzig
+Klinikum Mittelbaden Baden-Baden Ebersteinburg
+Klinikum Mittelbaden Hub
+Klinikum Neumarkt in der Oberpfalz
+Klinikum Nordfriesland
+Klinikum Nürnberg
+Klinikum Oldenburg
+Klinikum Passau
+Klinikum Prenzlauer Berg
+Klinikum Schaumburg
+Klinikum Schloß Winnenden – Zentrum für Psychiatrie Winnenden
+Klinikum St. Georg Leipzig
+Klinikum St. Marien Amberg
+Klinikum Traunstein
+Klinikum Weiden
+Klinikum Wels-Grieskirchen
+Klinikum Wilhelmshaven
+Klinikum Wolfsburg
+Klinikum Worms
+Klinikum am Bruderwald
+Klinikum am Plattenwald
+Klinikum der Stadt Ludwigshafen
+Klinikum rechts der Isar
+Klinikverbund Südwest
+Knappschafts-Krankenhaus (Essen)
+Knappschaftskrankenhaus Bochum-Langendreer
+Knappschaftskrankenhaus Bottrop
+Knappschaftskrankenhaus Dortmund
+Knappschaftskrankenhaus Lütgendortmund
+Krankenhaus Bad Arolsen
+Krankenhaus Barmherzige Brüder (München)
+Krankenhaus Barmherzige Brüder (Regensburg)
+Krankenhaus Bethanien Moers
+Krankenhaus Buchen
+Krankenhaus Buchholz
+Krankenhaus Diakovere Henriettenstift
+Krankenhaus Dornbirn
+Krankenhaus Düren
+Krankenhaus Freudenstadt
+Krankenhaus Hardheim
+Krankenhaus Jerusalem
+Krankenhaus Maria Ebene
+Krankenhaus Maria Hilf (Brilon)
+Krankenhaus Martha Maria (München)
+Krankenhaus Moabit
+Krankenhaus Mosbach
+Krankenhaus Neu-Mariahilf
+Krankenhaus Neuwittelsbach
+Krankenhaus Plettenberg
+Krankenhaus Porz am Rhein
+Krankenhaus Rockenhausen
+Krankenhaus Salzhausen
+Krankenhaus St. Carolus (Görlitz)
+Krankenhaus St. Elisabeth Bad Hersfeld
+Krankenhaus St. Josef (Schweinfurt)
+Krankenhaus St. Marienstift Magdeburg
+Krankenhaus St. Vinzenz Zams
+Krankenhaus Tauberbischofsheim
+Krankenhaus Tirschenreuth
+Krankenhaus Vilkpėdė
+Krankenhaus Waldfriede
+Krankenhaus West (Stralsund)
+Krankenhaus Winsen
+Krankenhaus Wittmund
+Krankenhaus der Barmherzigen Brüder Wien
+Krankenhaus der Barmherzigen Schwestern Wien
+Krankenhaus der Barmherzigen Schwestern vom heiligen Karl Borromäus (Prag)
+Krankenhaus der Elisabethinen Graz
+Krankenhaus der Elisabethinen Linz
+Krankenhaus des Maßregelvollzugs Berlin
+Krankenhaus für Infektionskrankheiten und Pneumologie Dr. Victor Babeș
+Kreisklinik Hofgeismar
+Kreisklinik Wolfhagen
+Kreisklinik Wörth an der Donau
+Kreiskliniken Reutlingen
+Kreisklinikum für Notfallmedizin Timișoara
+Kreiskrankenhaus Greiz
+Kreiskrankenhaus Gummersbach
+Kreiskrankenhaus Kempten
+Kreiskrankenhaus Waldbröl
+Kuressaare haigla
+LKH Graz II Standort West
+LKH Südsteiermark - Standort Wagna
+LKH-Universitätsklinikum Graz
+LMU Klinikum
+LVR-Klinik Bedburg-Hau
+LVR-Klinik Bonn
+LVR-Klinik Düren
+LVR-Klinik Köln
+LVR-Klinik Langenfeld
+LVR-Klinik Mönchengladbach
+LVR-Klinik Viersen
+LVR-Klinikum Düsseldorf
+LVR-Klinikum Essen
+LWL-Klinik Dortmund -Elisabeth-Klinik-
+LWL-Klinik Hemer
+LWL-Klinik Lengerich
+LWL-Klinik Marl-Sinsen
+LWL-Klinikum Gütersloh
+LWL-Universitätsklinik Bochum
+Landesklinikum Mauer
+Landeskrankenhaus Bludenz
+Landeskrankenhaus Bregenz
+Landeskrankenhaus Feldkirch
+Landeskrankenhaus Hochzirl
+Landeskrankenhaus Hohenems
+Landeskrankenhaus Innsbruck
+Landeskrankenhaus Merzig
+Landeskrankenhaus Villach
+Landstuhl Regional Medical Center
+Lenox Hill Hospital
+Leopoldina-Krankenhaus Schweinfurt
+Leppermühle
+Liechtensteinisches Landesspital
+Lindenbrunn
+Lindenhofspital
+Ludwig-Noll-Krankenhaus
+Luisenhospital Aachen
+Lukas-Krankenhaus Bünde
+Lukaskrankenhaus Neuss
+Lungenfachklinik Immenhausen
+Lungenheilanstalt Edmundsthal-Siemerswalde
+Lungenklinik Heckeshorn
+Lungenklinik Hemer
+Luzerner Kantonsspital
+M&i-Fachklinik Bad Liebenstein
+Malteser Waldkrankenhaus St. Marien
+Marien Hospital Dortmund-Hombruch
+Marien-Hospital Wattenscheid
+Marien-Hospital Wesel
+Marienhaus Klinikum Mainz
+Marienhospital Aachen
+Marienhospital Altenessen
+Marienhospital Darmstadt
+Marienhospital Gelsenkirchen
+Marienhospital Osnabrück
+Marienhospital Papenburg-Aschendorf
+Marienhospital Witten
+Marienkrankenhaus Hamburg
+Marienkrankenhaus Kassel
+Marienkrankenhaus Schwerte
+Marienstift Arnstadt
+Markus-Krankenhaus
+Martin Gropius Krankenhaus
+Martin-Luther-Krankenhaus (Wattenscheid)
+Martinsbrunn (Meran)
+Mathilden-Hospital (Herford)
+McGill University Health Centre
+Med Campus III
+Med Campus IV
+Mediclin Herzzentrum Lahr
+Militärkrankenhaus für Unfallchirurgie Dr. Victor Popescu
+Militärmedizinische Akademie Sofia
+Mittelrhein-Klinik
+Munizipalklinikum für Notfallmedizin Timișoara
+Mühlenkreiskliniken
+München Klinik Bogenhausen
+München Klinik Harlaching
+München Klinik Neuperlach
+München Klinik Schwabing
+München Klinik Thalkirchner Straße
+Neckar-Odenwald-Kliniken
+Netzwerk Alternsforschung
+Neuromed Campus
+New Cross Hospital
+Niederösterreichische Landesnervenklinik Gugging
+Nordwest-Krankenhaus Sanderbusch
+Oberhavel Kliniken
+Oberlausitz-Kliniken
+Oberschwabenklinik
+Olgahospital
+Ordensklinikum Linz
+Ortho-Klinik Dortmund
+Orthopädisches Spital Speising
+OsteMed Klinik Bremervörde
+Ostel (Bremervörde)
+PP.rt
+Paracelsus-Klinik Bremen
+Paracelsus-Krankenhaus Unterlengenhardt
+Park-Klinik Weißensee
+Park-Klinikum Bad Krozingen
+Park-Klinikum Leipzig
+Parkinson-Klinik Ortenau
+Paul-Gerhardt-Haus (Regensburg)
+Paulinenkrankenhaus (Berlin)
+Paulinenstift Nastätten
+Pennsylvania Hospital
+Pfalzklinikum für Psychiatrie und Neurologie
+Pfeiffersche Stiftungen
+Philippshospital Riedstadt
+Philippusstift Essen
+Pius-Hospital Oldenburg
+Prosper-Hospital Recklinghausen
+Psychiatrische Dienste Aargau
+Psychiatrische Universitätsklinik Zürich
+Psychiatrisches Krankenhaus Rokiškis
+Psychiatrisches Zentrum Nordbaden
+Pyhrn-Eisenwurzen Klinikum Steyr
+RKU – Universitäts- und Rehabilitationskliniken Ulm
+Radboud Universitair Medisch Centrum
+Rambam Health Care Campus
+Rehabilitationszentrum Ederhof
+Rems-Murr-Kliniken
+Republikkrankenhaus Klaipėda
+Rhein-Kreis Neuss Kliniken
+Rhein-Maas Klinikum
+Rhein-Mosel-Fachklinik Andernach
+Rheinland Klinikum Dormagen
+Rheinland Klinikum Grevenbroich Elisabethkrankenhaus
+Rigshospitalet
+Rittberg-Krankenhaus
+Robert-Bosch-Krankenhaus
+Robert-Koch-Krankenhaus Apolda
+Roland-Klinik
+Rotes Kreuz Krankenhaus Bremen
+Rotkreuzklinik Lindenberg
+Rotkreuzklinik Wertheim
+Royal Free Hospital
+Royal Halifax Infirmary
+Rudolf-Virchow-Klinikum Glauchau
+Rudolf-Virchow-Krankenhaus
+Ruppiner Kliniken
+SHG-Kliniken Völklingen
+SLK-Kliniken
+SRH Fachkrankenhaus Neresheim
+SRH Klinikum Karlsbad-Langensteinbach
+SRH Krankenhaus Oberndorf a.N.
+SRH Krankenhaus Sigmaringen
+SRH Krankenhaus Waltershausen-Friedrichroda
+SRH Kurpfalzkrankenhaus Heidelberg
+SRH Wald-Klinikum Gera
+SRH Zentralklinikum Suhl
+Saarländische Klinik für Forensische Psychiatrie
+Salem-Spital
+Salzkammergut Klinikum
+Sana Dreifaltigkeits-Krankenhaus Köln
+Sana Klinik Laupheim
+Sana Klinik Riedlingen
+Sana Kliniken Sommerfeld
+Sana Klinikum Biberach
+Sana Klinikum Hameln-Pyrmont
+Sana Klinikum Hof
+Sana Klinikum Lichtenberg
+Sana Klinikum Offenbach
+Sankt Katharinen-Krankenhaus (Frankfurt am Main)
+Sankt-Elisabeth-Hospital Gütersloh
+Sankt-Gertrauden-Krankenhaus
+Sankt-Rochus-Kliniken Bad Schönborn
+Sankt-Willehad-Hospital
+Schlosspark-Klinik
+Schwarzwald-Baar Klinikum Villingen-Schwenningen
+Schweizer Paraplegiker-Zentrum
+Schön Klinik Hamburg Eilbek
+Seoul National University Hospital
+Shanghai East Hospital
+Sierra Leone Psychiatric Teaching Hospital
+Sigma-Zentrum
+Sonnenhofspital
+Sophien- und Hufeland-Klinikum Weimar
+Spital Bülach
+Spital Männedorf
+Spital Tiefenau
+Spital Zweisimmen
+Spitalzentrum Biel
+St. Anna Kinderspital
+St. Annastift
+St. Antonius Krankenhaus Köln
+St. Augustinus-Krankenhaus (Lendersdorf)
+St. Barbara-Hospital Duisburg
+St. Christophorus-Krankenhaus Werne
+St. Elisabeth-Hospital Bochum
+St. Elisabeth-Krankenhaus Leipzig
+St. Elisabeth-Krankenhaus Niederwenigern
+St. Elisabethen-Klinikum Ravensburg
+St. Georg Klinikum Eisenach
+St. Josef Krankenhaus Wien
+St. Josef-Hospital Bochum
+St. Josef-Krankenhaus Kupferdreh
+St. Josef-Krankenhaus Linnich
+St. Josefs-Hospital Bochum-Linden
+St. Josefs-Hospital Wiesbaden
+St. Joseph Krankenhaus Berlin-Tempelhof
+St. Joseph-Stift (Bremen)
+St. Joseph-Stift (Dresden)
+St. Maria-Hilf-Krankenhaus
+St. Marien-Hospital (Birkesdorf)
+St. Marien-Hospital (Gelsenkirchen-Buer)
+St. Marien-Hospital Bonn
+St. Marien-Hospital Hamm
+St. Marien-Hospital Mülheim an der Ruhr
+St. Rochus-Hospital Castrop-Rauxel
+St. Theresien-Krankenhaus Nürnberg
+St. Vincentius-Kliniken
+St. Vincenz-Krankenhaus Essen
+St. Vincenz-Krankenhaus Limburg
+St. Vincenz-Krankenhaus Paderborn
+St.-Antonius-Hospital Eschweiler
+St.-Antonius-Hospital Gronau
+St.-Antonius-Klinik (Wegberg)
+St.-Elisabeth-Krankenhaus Dortmund-Kurl
+St.-Johannes-Hospital Dortmund
+St.-Josefs-Hospital Dortmund
+St.-Katharinen-Hospital Frechen
+St.-Marien-Hospital Lünen
+St.-Marien-Krankenhaus Siegen
+Stadtkrankenhaus Schwabach
+Stadtspital Triemli
+Stadtspital Waid
+Sternbach-Klinik Schleiz
+Städtische Kliniken Mönchengladbach
+Städtisches Klinikum Braunschweig
+Städtisches Klinikum Dessau
+Städtisches Klinikum Dresden
+Städtisches Klinikum Karlsruhe
+Städtisches Klinikum Lüneburg
+Städtisches Klinikum Solingen
+Städtisches Krankenhaus Heinsberg
+Städtisches Krankenhaus Kiel
+Surp-Agop-Krankenhaus
+Sächsisches Krankenhaus Altscherbitz
+Sächsisches Krankenhaus Großschweidnitz
+Sächsisches Krankenhaus Rodewisch, Zentrum für Psychiatrie, Psychotherapie, Psychosomatik und Neurologie
+Südharz Klinikum Nordhausen
+Taksim Alman Hastanesi
+Theodor-Wenzel-Werk
+Theresienkrankenhaus und St. Hedwig-Klinik Mannheim
+Thoraxklinik Heidelberg
+Thüringen-Kliniken „Georgius Agricola“
+UZ Brussel
+Unfallkrankenhaus Berlin
+Unfallkrankenhaus Casa Austria
+Unfallkrankenhaus Graz
+Unfallkrankenhaus Kalwang
+Unfallkrankenhaus Klagenfurt
+Unfallkrankenhaus Linz
+Unfallkrankenhaus Meidling
+Unfallkrankenhaus Salzburg
+Uniklinik RWTH Aachen – Franziskus
+University College Hospital
+Universitäre Altersmedizin Felix Platter
+Universitäre Psychiatrische Dienste Bern
+Universitäre Psychiatrische Kliniken Basel
+Universitäts-Augenklinik Düsseldorf
+Universitäts-Herzzentrum Freiburg-Bad Krozingen
+Universitäts-Kinderspital beider Basel
+Universitätsklinik Balgrist
+Universitätsklinik für Gynäkologie und Geburtshilfe Bega
+Universitätsklinik für Gynäkologie und Geburtshilfe Dr. Dumitru Popescu
+Universitätsklinik für Onkologie und Dermato-Venerologie
+Universitätsklinikum Aachen
+Universitätsklinikum Augsburg
+Universitätsklinikum Bonn
+Universitätsklinikum Brandenburg an der Havel
+Universitätsklinikum Carl Gustav Carus Dresden
+Universitätsklinikum Düsseldorf
+Universitätsklinikum Erlangen
+Universitätsklinikum Essen
+Universitätsklinikum Frankfurt
+Universitätsklinikum Freiburg
+Universitätsklinikum Gießen und Marburg
+Universitätsklinikum Halle (Saale)
+Universitätsklinikum Hamburg-Eppendorf
+Universitätsklinikum Heidelberg
+Universitätsklinikum Jena
+Universitätsklinikum Krems
+Universitätsklinikum Leipzig
+Universitätsklinikum Magdeburg
+Universitätsklinikum Mannheim
+Universitätsklinikum Münster
+Universitätsklinikum OWL
+Universitätsklinikum Odense
+Universitätsklinikum Regensburg
+Universitätsklinikum Schleswig-Holstein
+Universitätsklinikum Tübingen
+Universitätsklinikum Ulm
+Universitätsklinikum Würzburg
+Universitätsklinikum der Ruhr-Universität Bochum
+Universitätsklinikum des Saarlandes
+Universitätskrankenhaus Klaipėda
+Universitätskrankenhaus Motol
+Universitätsmedizin Greifswald
+Universitätsmedizin Göttingen
+Universitätsmedizin Rostock
+Universitätsmedizin der Johannes Gutenberg-Universität Mainz
+Universitätsspital Basel
+Universitätsspital Zürich
+Urologische Universitätsklinik Heidelberg
+Vamed Rehaklinik Ahrenshoop
+Vattikuti Urology Institute
+Vereins-Lazarett Schloß Wolfegg
+Vestische Kinder- und Jugendklinik Datteln
+ViDia Christliche Kliniken Karlsruhe
+Viktoriaspital (Bern)
+Vincentinum (Augsburg)
+Vinzentius-Krankenhaus Landau
+Vinzenzkrankenhaus (Hannover)
+VinziDorf-Hospiz
+Vitos Klinik für Psychiatrie und Psychotherapie Bad Emstal
+Vitos Weilmünster
+Vivantes Auguste-Viktoria-Klinikum
+Vivantes Humboldt-Klinikum
+Vivantes Klinikum Am Urban
+Vivantes Klinikum Kaulsdorf
+Vivantes Klinikum Neukölln
+Vivantes Klinikum im Friedrichshain
+Vulpius Klinik
+Waldkliniken Eisenberg
+Waldkrankenhaus Köppern
+Wehrawaldklinik
+Westküstenklinikum
+Westpfalz-Klinikum
+Wilfried-Rasch-Klinik
+Wilhelmsburger Krankenhaus Groß-Sand
+Wohnquartier Lindenhof
+Yedikule Surp Pırgiç Ermeni Hastanesi
+Zentralinstitut für Seelische Gesundheit
+Zentralklinik Bad Berka
+Zentralkrankenhaus Windhoek
+Zentrum für Erlebnispädagogik und Umweltbildung
+Zentrum für Psychiatrie Calw – Klinikum Nordschwarzwald
+Zentrum für psychische Gesundheit der Stadt Vilnius
+Zentrum für Älterenmedizin Laupheim
+ZfP Südwürttemberg
+Zieglerspital
+Ökumenisches Hainich-Klinikum Mühlhausen

@@ -1,0 +1,203 @@
+{
+  "beruf_einrichtung.txt": {
+    "filename_orig": "beruf_einrichtung.txt",
+    "annotations": {
+      "NAME_PATIENT": {
+        "Sébastien Beykirch": "Andreas Fleischmann"
+      },
+      "LOCATION_ORGANIZATION": {
+        "Kutschen - Ruß": "Schlachhof Schlacht-Gut"
+      }
+    }
+  },
+  "contact.txt": {
+    "filename_orig": "contact.txt",
+    "annotations": {
+      "LOCATION_CITY": {
+        "Königshain-Wiederau": "Leipzig"
+      },
+      "CONTACT_URL": {
+        "https://www.yrqxrzepaez-königshain-wieesrau.es/NqsrrzsizzVyzdsq/Jjseih/PFR/Upwijgcc/cgejwhpa-nqs-yrqxrzepaez-königshain-wieesrau.lom?MyagjupbyIB=5": "https://www.uniklinikum-leipzig.de/PublishingImages/Seiten/UKL/Lageplan/lageplan-neu-uniklinikum-leipzig.jpg?RenditionID=5",
+        "https://www.yrqxrzepaez-königshain-wieesrau.es/": "https://www.uniklinikum-leipzig.de/"
+      },
+      "CONTACT_EMAIL": {
+        "dtwyuqhix@mgk.yjc-königlhain-wiederau.de": "onkologie@med.uni-leipzig.de",
+        "l.osqbh@klinikum-königlhain-wiederau.de": "s.peter@klinikum-leipzig.de",
+        "KB-BC-906@yjc-klinik-königlhain-wiederau.de": "MB-IN-123@uni-klinik-leipzig.de",
+        "upw.rkyexke@mgkizin.yjc-königlhain-wiederau.de": "max.mueller@medizin.uni-leipzig.de",
+        "tixl@mgk.yjc-königlhain-wiederau.de": "nchi@med.uni-leipzig.de"
+      }
+    }
+  },
+  "kein_geburtsdatum.txt": {
+    "filename_orig": "kein_geburtsdatum.txt",
+    "annotations": {
+      "NAME_PATIENT": {
+        "Waltraude Boschele": "Tina Schmidt"
+      },
+      "DATE_BIRTH": {
+        "25.02.2025": "18.02.2025"
+      }
+    }
+  },
+  "klinik-mit-name.txt": {
+    "filename_orig": "klinik-mit-name.txt",
+    "annotations": {
+      "LOCATION_HOSPITAL": {
+        "Berufsgenossenschaftliches Universitätsklinikum Bergmannsheil": "Dresdner Universitätsklinikum",
+        "Karolinska-Universitätskrankenhaus": "Universitätsklinikum Carl Gustav Carus"
+      },
+      "LOCATION_CITY": {
+        "Delitzsch": "Dresdner",
+        "Reichenbach/Oberlausitz": "Dresden"
+      },
+      "LOCATION_COUNTRY": {
+        "Ostsachsen": "Ostsachsen"
+      }
+    }
+  },
+  "lokation.txt": {
+    "filename_orig": "lokation.txt",
+    "annotations": {
+      "NAME_PATIENT": {
+        "Vincent Göttsch": "Moritz Hausmann"
+      },
+      "DATE_BIRTH": {
+        "23.02.2025": "16.02.2025"
+      },
+      "DATE": {
+        "25.02.2025": "18.02.2025"
+      },
+      "LOCATION_HOSPITAL": {
+        "Universitätsklinikum Mannheim": "Universitätsklinikum Musterstadt"
+      },
+      "LOCATION_ORGANIZATION": {
+        "Grünes Quartier": "Grünes Haus"
+      },
+      "LOCATION_STREET": {
+        "Auf dem Sande 50": "Universitätsstraße 3"
+      },
+      "LOCATION_ZIP": {
+        "20535": "01234"
+      },
+      "LOCATION_CITY": {
+        "Hamburg-Mitte": "Musterhausen"
+      },
+      "CONTACT_EMAIL": {
+        "yrqxrze-ooj-cgej@cytwielce-hamburg-mitte.de": "kontakt-per-mail@uniklinik-musterhausen.de"
+      },
+      "CONTACT_URL": {
+        "www.tgoqwpwqlxoxabflxeix-hamburg-mitte.de": "www.universitätsklinikum-musterhausen.de"
+      }
+    }
+  },
+  "rechnung.txt": {
+    "filename_orig": "rechnung.txt",
+    "annotations": {
+      "ID": {
+        "KE60181590830166131860": "DE32390400139542648643",
+        "SDHUUSBS960": "DEUTDEDB476"
+      },
+      "LOCATION_ORGANIZATION": {
+        "Akademie Überlingen": "Universität Leipzig",
+        "Competenzzentrum Epidemiologie und Versorgungsforschung bei Pflegeberufen": "Institut für Medizinische Informatik, Statistik und Epidemiologie",
+        "life FinanceConsult": "LIFE Management Cluster"
+      },
+      "LOCATION_STREET": {
+        "Pilligerheck 94": "Härtelstraße 16-18",
+        "Kuser Plateau 85": "Philipp-Rosenthal-Straße 27"
+      },
+      "LOCATION_ZIP": {
+        "67471": "04107",
+        "LOCATION": "04103"
+      },
+      "LOCATION_CITY": {
+        "Königshain-Wiederau": "Leipzig"
+      }
+    }
+  },
+  "rosensaele.txt": {
+    "filename_orig": "rosensaele.txt",
+    "annotations": {
+      "LOCATION_STREET": {
+        "Markt 45": "Fürstengraben 27"
+      },
+      "LOCATION_ZIP": {
+        "07922": "07743"
+      },
+      "LOCATION_CITY": {
+        "Tanna": "Jena"
+      },
+      "LOCATION_OTHER": {
+        "Da Rosetta": "Haus der Rosensäle",
+        "Botanischer Garten": "Botanische Garten"
+      },
+      "LOCATION_ORGANIZATION": {
+        "Hochschul-Sozialwerk-Wuppertal": "Friedrich-Schiller-Universität Jena"
+      }
+    }
+  },
+  "rotes_haus.txt": {
+    "filename_orig": "rotes_haus.txt",
+    "annotations": {
+      "LOCATION_ORGANIZATION": {
+        "life FinanceConsult": "LIFE Management Cluster"
+      },
+      "LOCATION_OTHER": {
+        "Pfunds Molkerei": "Rotes Haus"
+      },
+      "LOCATION_STREET": {
+        "Nord 92": "Philipp-Rosenthal-Str. 27"
+      },
+      "ID": {
+        "L": "M"
+      },
+      "LOCATION_ZIP": {
+        "54558": "04103"
+      },
+      "LOCATION_CITY": {
+        "Königshain-Wiederau": "Leipzig"
+      },
+      "CONTACT_EMAIL": {
+        "ehat-blst@bcclf.rfd-königshain-wiederau.de": "info-life@lists.uni-leipzig.de"
+      }
+    }
+  },
+  "verstorben.txt": {
+    "filename_orig": "verstorben.txt",
+    "annotations": {
+      "NAME_PATIENT": {
+        "Julien Brecklinghaus": "Max Mustermann",
+        "Brecklinghaus": "Mustermann"
+      },
+      "DATE_BIRTH": {
+        "08.06.2023": "01.06.2023"
+      },
+      "DATE": {
+        "23.02.2025": "16.02.2025",
+        "25.02.2025": "18.02.2025"
+      },
+      "DATE_DEATH": {
+        "06.09.2026": "30.08.2026"
+      }
+    }
+  },
+  "zwei_idenditäten.txt": {
+    "filename_orig": "zwei_idenditäten.txt",
+    "annotations": {
+      "NAME_PATIENT": {
+        "Adrian Unterbuchner": "Max Mustermann"
+      },
+      "DATE_BIRTH": {
+        "23.02.2025": "16.02.2025",
+        "08.06.2023": "01.06.2023"
+      },
+      "DATE": {
+        "25.02.2025": "18.02.2025"
+      },
+      "ID": {
+        "29141777": "45782389"
+      }
+    }
+  }
+}

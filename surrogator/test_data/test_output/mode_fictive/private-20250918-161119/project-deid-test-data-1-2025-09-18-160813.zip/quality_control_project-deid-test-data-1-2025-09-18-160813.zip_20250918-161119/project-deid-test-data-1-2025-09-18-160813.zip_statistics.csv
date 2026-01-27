@@ -1,0 +1,16 @@
+,NAME_PATIENT,DATE_BIRTH,OTHER,PROFESSION,LOCATION_ORGANIZATION,LOCATION_CITY,CONTACT_URL,CONTACT_EMAIL,LOCATION_HOSPITAL,LOCATION_COUNTRY,DATE,LOCATION_STREET,LOCATION_ZIP,ID,LOCATION_OTHER,DATE_DEATH
+alpenwirt.txt,1.0,1.0,1.0,,,,,,,,,,,,,
+beruf_einrichtung.txt,1.0,,,1.0,1.0,,,,,,,,,,,
+busfahrerin.txt,,1.0,,1.0,1.0,,,,,,,,,,,
+contact.txt,,,,,,2.0,2.0,5.0,,,,,,,,
+gesetzesnennung.txt,,,,,,,,,,,,,,,,
+kein_geburtsdatum.txt,1.0,1.0,,,,,,,,,,,,,,
+klinik-mit-name.txt,,,,,,2.0,,,3.0,1.0,,,,,,
+lokation.txt,1.0,1.0,,,1.0,1.0,1.0,1.0,1.0,,1.0,1.0,1.0,,,
+minister_angehörige.txt,1.0,1.0,1.0,,,,,,,,,,,,,
+rechnung.txt,,,,,3.0,2.0,,,,,,2.0,2.0,2.0,,
+rosensaele.txt,,,,,1.0,1.0,,,,,,1.0,1.0,,2.0,
+rotes_haus.txt,,,,,1.0,1.0,,1.0,,,,1.0,1.0,1.0,1.0,
+verstorben.txt,2.0,1.0,,,,,,,,,2.0,,,,,1.0
+weitsprung.txt,1.0,1.0,1.0,1.0,,,,,,,1.0,,,,,
+zwei_idenditäten.txt,1.0,2.0,,,,,,,,,1.0,,,1.0,,

@@ -1,0 +1,27 @@
+name: gemtexsurrogator
+services:
+  gemtexsurrogator:
+    image: gemtex/surrogator:1.0.2
+    container_name: gemtex_surrogator
+    command: "--webservice"
+    restart: unless-stopped
+    ports:
+      - '9015:8501'
+    environment:
+      - OVERPASS_URL=http://overpass_api/api/interpreter
+    volumes:
+      - ./my_projects:/my_projects
+      - ./private:/webservice/private
+      - ./public:/webservice/public
+  overpass_api:
+    image: wiktorn/overpass-api:latest
+    container_name: overpass_api
+    restart: unless-stopped
+    ports:
+      - '9016:80'
+    environment:
+        - OVERPASS_MODE=init
+        - OVERPASS_PLANET_URL=https://zenodo.org/records/17279648/files/germany-latest.osm.bz2
+        - OVERPASS_ALLOW_DUPLICATE_QUERIES=yes
+    volumes:
+      - ./maps:/db

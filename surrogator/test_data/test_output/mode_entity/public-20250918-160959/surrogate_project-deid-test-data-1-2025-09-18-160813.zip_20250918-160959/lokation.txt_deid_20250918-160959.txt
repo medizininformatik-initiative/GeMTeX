@@ -1,0 +1,6 @@
+Wir berichten über NAME_PATIENT, geboren am DATE_BIRTH, der am DATE in unserer Einrichtung in Behandlung war.
+Wir laden Ihn zur Wiederbehandlung in unsere Sprechstunde in vier Wochen ein.
+Unsere Sprechstunde finden Sie im LOCATION_HOSPITAL, LOCATION_ORGANIZATION, LOCATION_STREET, LOCATION_ZIP LOCATION_CITY.
+Bitte vereinbaren Sie vorab telefonisch einen Termin unter 0123/987654.
+Alternativ können Sie uns auch gern unter CONTACT_EMAIL kontaktieren.
+Weiere Informationen zu Anfahrt und Kontakt finden Sie im Internet unter CONTACT_URL.

@@ -1,0 +1,2 @@
+Wir berichten über NAME_PATIENT, geboren am DATE_BIRTH, der bei uns im Haus von DATE bis DATE stationär in Behandlung war.
+Wir teilen Ihnen mit, dass Herr NAME_PATIENT in der Nacht zum DATE_DEATH verstorben ist.
