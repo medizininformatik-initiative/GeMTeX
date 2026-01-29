@@ -10,7 +10,7 @@ Verschiedene Konfigurationen (`json` Format), mit denen `AHD` Pipelines angepass
 TODO
 
 ### [`id_logik_recommender`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/id_logik_recommender)
-__(Als Docker Image verfügbar: `docker pull ghcr.io/medizininformatik-initiative/gemtex/inception-idlogik-recommender:0.2.3`)__  
+__(Als Docker Image verfügbar: `docker pull ghcr.io/medizininformatik-initiative/gemtex/inception-idlogik-recommender:0.3.0`)__  
 Ein in ``java`` implementierter Recommender für [INCEpTION](https://inception-project.github.io/) als Schnittstelle zum [IDLogik-Server](https://www.id-berlin.de/produkte/nlp-forschung/id-logik/).
 
 ### [`inception-projects`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/inception-projects)
