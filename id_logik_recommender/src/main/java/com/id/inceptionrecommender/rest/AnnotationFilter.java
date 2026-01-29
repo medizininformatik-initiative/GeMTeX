@@ -38,13 +38,19 @@ import java.util.List;
         public static class AnnotationProperties {
 
             private String filterFile;
+            private String domainFilterConcepts;
 
             public void setFilterFile(String filterFile) {
                 this.filterFile = filterFile;
             }
 
             public String getFilterFile() {
+
                 return filterFile;
+            }
+
+            public String getDomainFilterConcepts() {
+                return domainFilterConcepts;
             }
 
         }
