@@ -45,14 +45,16 @@ import java.util.List;
             }
 
             public String getFilterFile() {
-
                 return filterFile;
+            }
+
+            public void setDomainFilterConcepts(String domainFilterConcepts) {
+                this.domainFilterConcepts = domainFilterConcepts;
             }
 
             public String getDomainFilterConcepts() {
                 return domainFilterConcepts;
             }
-
         }
     }
 
