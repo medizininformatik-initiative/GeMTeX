@@ -18,7 +18,7 @@ idlogik:
   port: 7777
   licence:
 annotation:
-  filterFile:
+  filterFile: ./filters/default_filter_phrase.txt
   domainFilterConcepts: 308916002;276339004;419891008;246061005;900000000000442005;900000000000454005;416698001;106237007;370136006;762947003;48176007;372148003;14679004;415229000;108334009;370115009;363743006;254291000;273249006;78621006;276825009;362981000;243796009
 ```
 ``protocol`` und ``port`` müssen im Standardfall nicht geändert werden. Falls sich der Recommender und der IDLogik Server in einer ``Docker``-Umgebung befinden, müsste `host` aber auch angepasst werden.
@@ -26,8 +26,9 @@ annotation:
 * ``filterFile`` Zeigt auf eine Textdatei, die reguläre Ausdrücke enthält, die nicht annotiert werden sollen:  
   * ``\b[0-9]{1,2}[.][0-9]{1,2}[.][0-9]{2,4}``, ``\b[0-9]{1,2}[:][0-9]{1,2}[:]{0,1}[0-9]{1,2}`` ignoriert alle Kombinationen für Uhrzeiten und Datumsangaben.
   * ``\b[A-Z][0-9]{2}[.]{0,1}[0-9,-]{0,2}`` matcht ICD-10 Codes. Hinweis: OPS Codes werden 
-durch den vorherigen regulären Ausdruck abgebildet.
-``domainFilterConcepts`` Enthält eine Semikolon-getrennte Liste von SNOMED CT-Konzepten, die inkl. deren Subkonzepte als Filter verwendet werden sollen. D.h. diese Konzepte sind Concepte deren komplette Hierarchie als Filter verwendet werden soll.
+durch den vorherigen regulären Ausdruck abgebildet.  
+  
+* ``domainFilterConcepts`` Enthält eine Semikolon-getrennte Liste von SNOMED CT-Konzepten, die inkl. deren Subkonzepte als Filter verwendet werden sollen. D.h. das sind Konzepte deren komplette Hierarchie als Filter verwendet werden soll.
 
 | Name | Index | Bemerkung |
 |------|-------|-------|
@@ -67,7 +68,7 @@ java -jar IDLOGIK_RECOMMENDER.jar --idlogik.licence=LICENCE
 So kann bei bedarf auch der ``Host``/``Port`` konfiguriert werden.
 ##### Docker
 ````
-docker run --network NETWORK_NAME ghcr.io/medizininformatik-initiative/gemtex/inception-idlogik-recommender:0.2.4 --idlogik.licence=LICENCE --idlogik.host=IDLOGIK_DOCKER_NETWORK_IP
+docker run --network NETWORK_NAME ghcr.io/medizininformatik-initiative/gemtex/inception-idlogik-recommender:0.3.0 --idlogik.licence=LICENCE --idlogik.host=IDLOGIK_DOCKER_NETWORK_IP
 ````
 **Bitte beachten**, dass die Angaben für ``--idlogik.licence``, ``--idlogik.host`` etc. nach dem Namen des Images stehen (das wird dem Container übergeben) und die Angaben ``--network`` oder ``--name`` (wenn man zur einfacheren Referenzierung einen statischen Namen für den Container vergeben will) vor den Namen des Images kommen!
 

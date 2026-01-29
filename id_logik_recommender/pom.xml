@@ -9,7 +9,7 @@
     </parent>
     <groupId>com.id</groupId>
     <artifactId>id_logik_recommender</artifactId>
-    <version>0.2.4</version>
+    <version>0.3.0</version>
     <name>IDLogik Inception Recommender</name>
     <properties>
         <java.version>17</java.version>

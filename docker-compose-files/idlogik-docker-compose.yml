@@ -7,7 +7,7 @@ services:
     restart: unless-stopped
     entrypoint: /opt/diacos/daemon.sh
   recommender:
-    image: ghcr.io/medizininformatik-initiative/gemtex/inception-idlogik-recommender:0.2.3
+    image: ghcr.io/medizininformatik-initiative/gemtex/inception-idlogik-recommender:0.3.0
     container_name: id-logik-recommender
     networks:
       recommender-network:
@@ -17,7 +17,7 @@ services:
         condition: service_healthy
     environment:
       - spring.main.allow-bean-definition-overriding=true
-    command: --idlogik.port=7777 --idlogik.host=id-logik-server --idlogik.licence='0hfGIN0sojcEpec6z6xRDGQkSntWHSaqhPSUOqLbl5YR2xHO1Dna4W4uyqONxS7ioANBcIvxff683Z3ddXoH9Y3h07PcGAFTUzVfsWv2P3uP41Irf4dxPZK6AIHWE594JeMx0jDssklyqDZk0r15gEQ6cd6luws917YDfDGxU0IHYe0O|18DA6vHkfxOIVVhE9cs1BuubIEe1k5LxijmXwkRLBEuf1iSd633jS3my48Rui66KEpuRPY8RxO19Q9MDgt7twdap'
+    command: --idlogik.port=7777 --idlogik.host=id-logik-server --idlogik.licence=''
 
 networks:
   recommender-network:
