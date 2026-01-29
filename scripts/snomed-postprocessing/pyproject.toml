@@ -1,13 +1,22 @@
 [project]
-name = "snomed-postprocessing"
+name = "snomed_post_processing"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "click>=8.3.1",
+    "pandas>=3.0.0",
     "requests==2.27.1",
     "scttsrapy",
 ]
 
 [tool.uv.sources]
 scttsrapy = { git = "https://github.com/AberystwythSystemsBiology/SCTTSRApy" }
+
+[project.scripts]
+log-critical-documents = "snomed_post_processing.main:log_documents"
+
+[build-system]
+requires = ["uv_build>=0.9.9,<0.10.0"]
+build-backend = "uv_build"

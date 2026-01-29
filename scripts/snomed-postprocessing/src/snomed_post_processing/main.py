@@ -1,5 +1,6 @@
 import json
 
+import click
 from scttsrapy.api import EndpointBuilder
 import scttsrapy.concepts as concepts
 
@@ -30,6 +31,11 @@ def filter_by_semantic_tag(
         "success": True,
         "content": [d for d in json_data.get("content", []) if bool_check(d)],
     }
+
+
+@click.command()
+def log_documents():
+    pass
 
 
 if __name__ == "__main__":
