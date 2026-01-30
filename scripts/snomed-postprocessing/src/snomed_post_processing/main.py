@@ -1,53 +1,107 @@
-import json
+import logging
+import sys
+from typing import Union
 
 import click
-from scttsrapy.api import EndpointBuilder
-import scttsrapy.concepts as concepts
+
+from .snowstorm_funcs import build_endpoint, get_branches, dump_concept_ids
 
 
-def pprint_json(json_data):
-    print(json.dumps(json_data, indent=2))
+class ClickUnion(click.ParamType):
+    def __init__(self, *types):
+        self.types = types
 
-def filter_by_semantic_tag(
-    json_data: dict, tag: str = None, positive: bool = True
-) -> dict:
-    """
-    Filters the results of e.g. "scttsrapy"´s `get_concept_children` by the respective "semantic tag".
+    def convert(self, value, param, ctx):
+        for _type in self.types:
+            try:
+                return _type.convert(value, param, ctx)
+            except click.BadParameter:
+                continue
 
-    :param json_data: the result dict, containing at least a "content" field that features a list of concepts.
-    :param tag: the semantic tag to filter by (e.g. "disorder", "finding", etc.).
-    :param positive: whether to include concepts with said semantic tag (`True`) or to exclude them (`False`).
-    """
-    if tag is None:
-        return json_data
-    if not json_data.get("success", False):
-        return {"success": False, "content": []}
+        self.fail("Didn't match any of the accepted types.")
 
-    if positive:
-        bool_check = lambda x: x.get("fsn", {}).get("term", "").lower().find(f"({tag.lower()})") != -1
-    else:
-        bool_check = lambda x: x.get("fsn", {}).get("term", "").lower().find(f"({tag.lower()})") == -1
-    return {
-        "success": True,
-        "content": [d for d in json_data.get("content", []) if bool_check(d)],
-    }
+
+def common_click_options(fnc):
+    fnc = click.option(
+        "--use-secure_protocol", is_flag=True, help="Whether to use 'https'."
+    )(fnc)
+    fnc = click.option(
+        "--port", default=8080, help="Port on which the Snowstorm server runs."
+    )(fnc)
+    fnc = click.option(
+        "--ip", default="localhost", help="The IP address of the Snowstorm server."
+    )(fnc)
+    return fnc
+
+
+def common_click_args(fnc):
+    fnc = click.argument("root_code", default="138875005")(fnc)
+    return fnc
 
 
 @click.command()
+@common_click_args
+@common_click_options
 def log_documents():
     pass
 
 
-if __name__ == "__main__":
-    # Set up the endpoint for local snowstorm
-    host = "http://nlp-prod:9021"
-    endpoint_builder = EndpointBuilder()
-    endpoint_builder.set_api_endpoint(host)
+@click.command()
+@common_click_args
+@common_click_options
+@click.option(
+    "--branch",
+    default=0,
+    type=ClickUnion(click.INT, click.STRING),
+    help="The branch (i.e. Release Version) of SNOMED on the server. Defaults to the first one found.",
+)
+def create_concept_id_dump(
+    root_code: str,
+    ip: str,
+    port: Union[int, str],
+    use_secure_protocol: bool,
+    branch: Union[int, str],
+):
+    endpoint_builder, host = build_endpoint(ip, port, use_secure_protocol)
+    path_ids, path_names = get_branches(endpoint_builder, host)
 
-    # Query all children for concept '47295007' --> "Psychomotor agitation (finding)"
-    concept_children = concepts.get_concept_children(
-        "47295007", endpoint_builder=endpoint_builder
-    )
-    pprint_json(
-        filter_by_semantic_tag(concept_children, tag="disorder", positive=False)
-    )
+    if isinstance(branch, int):
+        path = path_ids.get("path", {}).get(branch, None)
+    elif isinstance(branch, str):
+        if branch not in path_names:
+            path = None
+        else:
+            path = branch
+    else:
+        path = None
+
+    if path is None:
+        _p = path_ids.get("path", {}).get(0, None)
+        if _p is None:
+            logging.error(f"Could not find branch '{branch}'. Exiting.")
+            sys.exit(-1)
+        logging.warning(
+            f"Branch not found: '{branch}'. Trying to use first one found '{_p}'."
+        )
+        path = _p
+    else:
+        logging.info(f"Using branch: '{path}'.")
+
+    endpoint_builder.set_branch(path)
+
+    ## From here replace with logic to recursively get all children, write their id into db(-like)
+    dump_concept_ids(root_code, endpoint_builder)
+
+
+@click.command()
+@common_click_options
+def list_branches(ip: str, port: Union[int, str], use_secure_protocol: bool):
+    endpoint_builder, host = build_endpoint(ip, port, use_secure_protocol)
+    path_ids, _ = get_branches(endpoint_builder, host)
+    pad = len(max([str(x) for x in path_ids.get("path").keys()], key=len))
+    for _id, path in path_ids.get("path").items():
+        print(f"{str(_id).ljust(pad, ' ')} : {path}")
+
+
+if __name__ == "__main__":
+    pass
