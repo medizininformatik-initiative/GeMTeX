@@ -10,6 +10,8 @@ from typing import Union, Optional
 
 from aiohttp import ClientSession
 
+from ade_extraction_pipeline.utils.server import BasicServer
+
 
 @dataclass
 class Result:
@@ -31,7 +33,7 @@ class Result:
         return _new_dict
 
 
-class CodingServer:
+class CodingServer(BasicServer):
     def __init__(
         self,
         name: str,
@@ -40,14 +42,11 @@ class CodingServer:
         endpoints: dict[str, str] = None,
         protocol: str = "http",
         ignore_fields: dict[str, list[str]] = None,
-        response_parsing: dict = None
+        response_parsing: dict = None,
     ):
+        super().__init__(name, host, port, protocol)
         _rp = response_parsing if response_parsing is not None else {}
-        self._name = name
         self._endpoints = {}
-        self._host = host
-        self._port = port
-        self._protocol = protocol if not host.startswith("http") else ""
         self._ignore_fields = {}
         self._response_parse_func = lambda x: x
         self._restrict_output = _rp.get("restrict", [])
@@ -58,13 +57,6 @@ class CodingServer:
 
     def __str__(self):
         return json.dumps(self, default=lambda o: o.__dict__, indent=2)
-
-    @property
-    def url(self):
-        if self._port is not None and self._port.is_integer():
-            return f"{self._protocol}{"://" if len(self._protocol) > 0 else ""}{self._host}:{self._port}"
-        else:
-            return f"{self._protocol}{"://" if len(self._protocol) > 0 else ""}{self._host}"
 
     @property
     def endpoints(self):
@@ -78,7 +70,7 @@ class CodingServer:
         if response_parsing is None:
             return
         _lambda_list = [eval(r.strip()) for r in response_parsing.split("->")]
-        self._response_parse_func = lambda x: reduce(lambda r,f: f(r), _lambda_list, x)
+        self._response_parse_func = lambda x: reduce(lambda r, f: f(r), _lambda_list, x)
 
     def build_endpoint_dict(self, value):
         _temp_dict = {}
@@ -91,9 +83,9 @@ class CodingServer:
         self._endpoints = _temp_dict
 
     def build_ignore_dict(self, value: Optional[dict[str, list[str]]]):
-        self._ignore_fields = value if value is not None else {
-            k: [] for k in self.endpoints.keys()
-        }
+        self._ignore_fields = (
+            value if value is not None else {k: [] for k in self.endpoints.keys()}
+        )
 
     def endpoint(self, anno_type: str, **kwargs) -> Optional[str]:
         if not self.endpoints.get(anno_type, False):
@@ -107,7 +99,8 @@ class CodingServer:
             kwargs.pop(k)
         if (
             len(_difference_set) > 0
-            and len(_difference_set.difference(self.ignore_fields.get(anno_type, []))) != 0
+            and len(_difference_set.difference(self.ignore_fields.get(anno_type, [])))
+            != 0
         ):
             logging.warning(f"Some arguments were superfluous: {_difference_set}")
         if len(kwargs) != len(_config_args):
@@ -121,7 +114,7 @@ class CodingServer:
         _get_all = kwargs.pop("get_all", False)
         async with ClientSession() as session:
             rs = Result(
-                src=self._name,
+                src=self.name,
                 annotation_type=anno_type,
                 original_dict=kwargs,
                 results=[],
@@ -129,9 +122,16 @@ class CodingServer:
             if _endpoint := self.endpoint(anno_type=anno_type, **kwargs):
                 async with session.get(f"{self.url}/{_endpoint}") as response:
                     code = await response.json(content_type=None)
-                    if isinstance(code, dict) and code.get("error", "").lower() == "not found":
+                    if (
+                        isinstance(code, dict)
+                        and code.get("error", "").lower() == "not found"
+                    ):
                         return rs
-                    _rs_res = self._response_parse_func(code) if _get_all else self._response_parse_func(code)[:1]
+                    _rs_res = (
+                        self._response_parse_func(code)
+                        if _get_all
+                        else self._response_parse_func(code)[:1]
+                    )
                     rs.results = _rs_res if isinstance(_rs_res, list) else [_rs_res]
             return rs
 
@@ -148,8 +148,12 @@ class CodingServer:
 
     def incorporate_codes(self, extractions: dict, **kwargs) -> dict:
         result_dict = defaultdict(list)
-        for result in asyncio.run(self.get_all_codes(extractions, kwargs.pop("get_all", True))):
-            result_dict[result.annotation_type].append(result.to_json(restrict_to=self._restrict_output))
+        for result in asyncio.run(
+            self.get_all_codes(extractions, kwargs.pop("get_all", True))
+        ):
+            result_dict[result.annotation_type].append(
+                result.to_json(restrict_to=self._restrict_output)
+            )
         return result_dict
 
 
@@ -175,7 +179,7 @@ def add_codes(results: dict, config: dict) -> dict:
             port=server_config.get("port", 8080),
             endpoints=ep_dict,
             ignore_fields=_ignore_fields,
-            response_parsing=_response_parsing.get(server_name)
+            response_parsing=_response_parsing.get(server_name),
         )
         _results = coding_server.incorporate_codes(results, get_all=_get_all)
         if len(final_results) == 0:

@@ -5,7 +5,14 @@ import zlib
 from base64 import urlsafe_b64encode as b64e, urlsafe_b64decode as b64d
 from pydantic import BaseModel, Field, create_model
 
-from pydantic_ai import Agent, AgentRunResult, ModelHTTPError, capture_run_messages, NativeOutput, ModelSettings
+from pydantic_ai import (
+    Agent,
+    AgentRunResult,
+    ModelHTTPError,
+    capture_run_messages,
+    NativeOutput,
+    ModelSettings,
+)
 from pydantic_ai.models import Model
 from pydantic_ai.providers import Provider
 
@@ -141,7 +148,7 @@ def run_agent_on_query(
     )
     with capture_run_messages() as messages:
         try:
-          result = True, agent.run_sync(query)
+            result = True, agent.run_sync(query)
         except ModelHTTPError as e:
             result = False, e
         return result

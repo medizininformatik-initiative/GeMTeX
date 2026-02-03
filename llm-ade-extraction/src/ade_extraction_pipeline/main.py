@@ -1,3 +1,4 @@
+# ToDO: integrate libs/amts.jar into pipeline
 import enum
 import json
 import logging
@@ -163,12 +164,12 @@ def start_pipeline(
                 output_path=_output_path
                 if _output_path is None
                 else _output_path / (f"{src.stem}" if not _is_text else "txt_input"),
-                number=i
+                number=i,
             )
             for i, src in enumerate(srcs)
         ]
     elif start_with == Step.CODING:
-        #ToDo: "MODE == folder" not yet implemented for "start_with == CODING"?!
+        # ToDo: "MODE == folder" not yet implemented for "start_with == CODING"?!
         src = workdir / src
         if not src.is_file():
             raise click.BadParameter(
@@ -197,7 +198,12 @@ def start_pipeline(
 
 
 def start_extraction(
-    src: str, config: dict, api_key: str, obscured_api_key: bool, output_path: pl.Path, number: int
+    src: str,
+    config: dict,
+    api_key: str,
+    obscured_api_key: bool,
+    output_path: pl.Path,
+    number: int,
 ) -> Optional[Tuple[dict, Optional[str]]]:
     with yaspin(text=f"Extracting [{number}]...") as spinner:
         successful, extraction = run_agent_on_query(
