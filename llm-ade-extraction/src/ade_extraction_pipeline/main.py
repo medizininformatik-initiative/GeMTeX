@@ -33,6 +33,7 @@ class Mode(enum.Enum):
 class Step(enum.Enum):
     EXTRACTION = enum.auto()
     CODING = enum.auto()
+    AMTS = enum.auto()
 
     def __int__(self):
         return self.value - 1

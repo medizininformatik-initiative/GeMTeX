@@ -24,11 +24,17 @@ class BasicServer:
 
     @property
     def port(self):
-        return self._port
+        return self._port if isinstance(self._port, str) else str(self._port)
+
+    @property
+    def protocol(self):
+        return self._protocol
 
     @property
     def url(self):
         if self.port is not None and self.port.is_integer():
-            return f"{self._protocol}{'://' if len(self._protocol) > 0 else ''}{self._host}:{self._port}"
+            return f"{self.protocol}{'://' if len(self.protocol) > 0 else ''}{self._host}:{self._port}"
         else:
-            return f"{self._protocol}{'://' if len(self._protocol) > 0 else ''}{self._host}"
+            return (
+                f"{self.protocol}{'://' if len(self.protocol) > 0 else ''}{self._host}"
+            )
