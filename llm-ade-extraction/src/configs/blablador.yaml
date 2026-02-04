@@ -27,6 +27,13 @@ coding:
       - strength
       - active_substance
 
+amts:
+  servers:
+    id-amts:
+      protocol: https
+      host: dev-ci.id-berlin.de
+      port: 443
+
 pydantic-ai:
   model:
     implementation: openai.OpenAIChatModel

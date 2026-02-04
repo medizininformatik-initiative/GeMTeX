@@ -5,6 +5,7 @@ import re
 import subprocess
 from typing import Optional
 
+from ade_extraction_pipeline.utils.enums import Step
 from ade_extraction_pipeline.utils.server import BasicServer
 
 logging.basicConfig(level=logging.INFO)
@@ -45,7 +46,7 @@ class AMTSJavaCaller:
         self,
         file: str,
         server: AMTSServer,
-        step: int = 2
+        step: int = int(Step.AMTS)
     ):
         _file_path = pathlib.Path(file).resolve()
         _id_output_path = pathlib.Path(
@@ -88,6 +89,25 @@ class AMTSJavaCaller:
             logging.warning(
                 f"Couldn't deduce return code. Check output location if process was successful: '{_id_output_path}'"
             )
+
+
+def extract_amts_info(file_name: str, config: dict):
+    _server_config = config.get("amts").get("servers")
+
+    step_coding = int(Step.CODING)
+    step_amts = int(Step.AMTS)
+    in_file = f"{file_name[:-2]}{step_coding}].json"
+
+    amts_count = 0
+    for server_name, server_config in _server_config.items():
+        amts_count += 1
+        amts_server = AMTSServer(
+            name=server_name,
+            host=server_config.get("host", "localhost"),
+            port=server_config.get("port", 9999),
+            protocol=server_config.get("protocol", "http"),
+        )
+        amts_server
 
 
 if __name__ == "__main__":

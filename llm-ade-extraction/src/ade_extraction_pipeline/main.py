@@ -1,5 +1,4 @@
 # ToDO: integrate libs/amts.jar into pipeline
-import enum
 import json
 import logging
 import uuid
@@ -19,29 +18,10 @@ from ade_extraction_pipeline.pipeline_parts.extraction import (
     run_agent_on_query,
     obscure_key,
 )
+from ade_extraction_pipeline.utils.enums import Mode, Step, DefaultConfigs
 
 # Reads .env file and makes values available through os.getenv
 load_dotenv(os.getenv("WORK_DIR_ENV"))
-
-
-class Mode(enum.Enum):
-    FILE = enum.auto()
-    TEXT = enum.auto()
-    FOLDER = enum.auto()
-
-
-class Step(enum.Enum):
-    EXTRACTION = enum.auto()
-    CODING = enum.auto()
-    AMTS = enum.auto()
-
-    def __int__(self):
-        return self.value - 1
-
-
-class DefaultConfigs(enum.Enum):
-    OLLAMA = "OLLAMA"
-    BLABLADOR = "BLABLADOR"
 
 
 @click.command()
