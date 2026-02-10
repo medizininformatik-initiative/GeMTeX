@@ -1,15 +1,19 @@
+import enum
 import logging
+import pathlib
 import sys
 from typing import Union
 
 import click
 
 from .snowstorm_funcs import build_endpoint, get_branches, dump_concept_ids
+from .utils import DumpMode
 
 
 class ClickUnion(click.ParamType):
     def __init__(self, *types):
-        self.types = types
+        self.types = [t[0] for t in types]
+        self.name = f"[{','.join([t[1] for t in types])}]"
 
     def convert(self, value, param, ctx):
         for _type in self.types:
@@ -43,6 +47,8 @@ def common_click_args(fnc):
 @common_click_args
 @common_click_options
 def log_documents():
+    # input uima json/xmi
+    # dkpro-cassis
     pass
 
 
@@ -52,8 +58,21 @@ def log_documents():
 @click.option(
     "--branch",
     default=0,
-    type=ClickUnion(click.INT, click.STRING),
+    type=ClickUnion((click.INT, "int"), (click.STRING, "str")),
     help="The branch (i.e. Release Version) of SNOMED on the server. Defaults to the first one found.",
+)
+@click.option(
+    "--dump-mode",
+    default=DumpMode.VERSION,
+    type=click.Choice(DumpMode, case_sensitive=False),
+    help="Whether to whitelist ('version') or blacklist ('semantic') a code dump.",
+)
+@click.option(
+    "--filter-list", '-fl',
+    default="",
+    type=ClickUnion((click.STRING, "str"), (click.File, "file")),
+    multiple=True,
+    help="When \"dump-mode == 'semantic'\", either multiple arguments of codes (or semantic tags) or a file that contains a code (semantic tag) per line.",
 )
 def create_concept_id_dump(
     root_code: str,
@@ -61,6 +80,8 @@ def create_concept_id_dump(
     port: Union[int, str],
     use_secure_protocol: bool,
     branch: Union[int, str],
+    dump_mode: DumpMode,
+    filter_list: Union[str, click.File],
 ):
     endpoint_builder, host = build_endpoint(ip, port, use_secure_protocol)
     path_ids, path_names = get_branches(endpoint_builder, host)
@@ -89,8 +110,24 @@ def create_concept_id_dump(
 
     endpoint_builder.set_branch(path)
 
-    ## From here replace with logic to recursively get all children, write their id into db(-like)
-    dump_concept_ids(root_code, endpoint_builder)
+    code_filter = None
+    if dump_mode == dump_mode.SEMANTIC:
+        if not isinstance(filter_list, tuple) and pathlib.Path(filter_list).is_file():
+            code_filter = (
+                pathlib.Path(filter_list).read_text(encoding="utf-8").splitlines()
+            )
+        else:
+            code_filter = filter_list
+            if len(filter_list) == 0:
+                code_filter = None
+
+
+    dump_concept_ids(
+        root_code=root_code,
+        endpoint_builder=endpoint_builder,
+        filter_list=code_filter,
+        dump_mode=dump_mode,
+    )
 
 
 @click.command()
