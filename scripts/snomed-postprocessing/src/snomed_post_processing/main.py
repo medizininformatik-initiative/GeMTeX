@@ -1,13 +1,19 @@
-import enum
+import sys
 import logging
 import pathlib
 import sys
 from typing import Union
 
 import click
+import yaspin
 
-from .snowstorm_funcs import build_endpoint, get_branches, dump_concept_ids
-from .utils import DumpMode
+if __name__ == "__main__":
+    sys.path.append(".")
+    from snowstorm_funcs import build_endpoint, get_branches, dump_concept_ids
+    from utils import DumpMode, FilterMode, dump_codes_to_hdf5, ListDumpType
+else:
+    from .snowstorm_funcs import build_endpoint, get_branches, dump_concept_ids
+    from .utils import DumpMode, FilterMode, dump_codes_to_hdf5, ListDumpType
 
 
 class ClickUnion(click.ParamType):
@@ -69,10 +75,21 @@ def log_documents():
 )
 @click.option(
     "--filter-list", '-fl',
-    default="",
+    default=None,
     type=ClickUnion((click.STRING, "str"), (click.File, "file")),
     multiple=True,
     help="When \"dump-mode == 'semantic'\", either multiple arguments of codes (or semantic tags) or a file that contains a code (semantic tag) per line.",
+)
+@click.option(
+    "--filter-mode",
+    default=FilterMode.POSITIVE,
+    type=click.Choice(FilterMode, case_sensitive=False),
+    help="'positive': only concepts with specified codes/tags will be returned; 'negative': vice versa concepts with specified codes/tags will not be returned"
+)
+@click.option(
+    "--not-recursive",
+    is_flag=True,
+    help="If this flag is set, the codes will not be resolved recursively and only the first level children will be returned."
 )
 def create_concept_id_dump(
     root_code: str,
@@ -82,6 +99,8 @@ def create_concept_id_dump(
     branch: Union[int, str],
     dump_mode: DumpMode,
     filter_list: Union[str, click.File],
+    filter_mode: FilterMode,
+    not_recursive: bool,
 ):
     endpoint_builder, host = build_endpoint(ip, port, use_secure_protocol)
     path_ids, path_names = get_branches(endpoint_builder, host)
@@ -112,22 +131,29 @@ def create_concept_id_dump(
 
     code_filter = None
     if dump_mode == dump_mode.SEMANTIC:
-        if not isinstance(filter_list, tuple) and pathlib.Path(filter_list).is_file():
+        if len(filter_list) < 1:
+            code_filter = None
+        elif pathlib.Path(filter_list[0]).is_file():
             code_filter = (
-                pathlib.Path(filter_list).read_text(encoding="utf-8").splitlines()
+                pathlib.Path(filter_list[0]).read_text(encoding="utf-8").splitlines()
             )
         else:
             code_filter = filter_list
             if len(filter_list) == 0:
                 code_filter = None
 
-
-    dump_concept_ids(
-        root_code=root_code,
-        endpoint_builder=endpoint_builder,
-        filter_list=code_filter,
-        dump_mode=dump_mode,
-    )
+    with yaspin.yaspin(text="Processing...") as spinner:
+        codes = dump_concept_ids(
+            root_code=root_code,
+            endpoint_builder=endpoint_builder,
+            filter_list=code_filter,
+            filter_mode=filter_mode,
+            dump_mode=dump_mode,
+            is_not_recursive=not_recursive,
+        )
+    hdf5_path = pathlib.Path(__file__, "../../../data/test.hdf5").resolve()
+    hdf5_path.parent.mkdir(exist_ok=True, parents=True)
+    dump_codes_to_hdf5(hdf5_path, codes, ListDumpType.BLACKLIST)
 
 
 @click.command()
@@ -141,4 +167,8 @@ def list_branches(ip: str, port: Union[int, str], use_secure_protocol: bool):
 
 
 if __name__ == "__main__":
-    pass
+    # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--filter-list", "social concept", "--filter-list", "procedure", "--filter-list", "physical force", "--filter-list", "body structure", "--dump-mode", "semantic", "--filter-mode", "positive", "--not-recursive"])
+    # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--filter-list", "./config/blacklist_filter_codes.txt", "--dump-mode", "semantic", "--filter-mode", "negative"])
+    # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--dump-mode", "version"])
+    create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--dump-mode", "semantic", "--not-recursive"])
+    # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--dump-mode", "version", "298011007"])
