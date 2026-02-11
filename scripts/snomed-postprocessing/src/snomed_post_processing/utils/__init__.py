@@ -127,11 +127,19 @@ def snowstorm_response_to_pydantic(
     return SnowstormResponse.model_validate_json(json.dumps(json_data, ensure_ascii=False))
 
 
-def dump_codes_to_hdf5(fi_path: pathlib.Path, codes: set, list_type: ListDumpType, append: bool = True, force_overwrite: bool = False):
-    def _create_dataset(fi, name, content):
-        return fi.create_dataset(name, np.array(list(content)), maxshape=(None,))
+def dump_codes_to_hdf5(fi_path: pathlib.Path, codes: set, list_type: ListDumpType, revision: bool = True, force_overwrite: bool = False):
+    def _create_dataset(fi: h5py.File, name: str, content: Union[set, list, np.ndarray]):
+        if name in fi:
+            group = fi[f"/{name}"]
+        else:
+            group = fi.create_group(name)
 
-    dataset_name = str(list_type)
+        _last = sorted(int(group.keys())[-1]) if len(group.keys()) > 0 else -1
+        data = np.array(list(content)) if not isinstance(content, np.ndarray) else content
+        ds = group.create_dataset(str(_last + 1), shape=(data.shape[0],), dtype=np.int32)
+        ds[:] = data.astype(int)
+
+    dataset_name = list_type.name.lower()
     file_exists = False
     if fi_path.exists():
         file_exists = True
@@ -139,7 +147,7 @@ def dump_codes_to_hdf5(fi_path: pathlib.Path, codes: set, list_type: ListDumpTyp
     with h5py.File(str(fi_path.resolve()), "r+" if file_exists else "a") as f:
         dataset_exists = dataset_name in f.keys()
 
-        if file_exists and dataset_exists and not (force_overwrite or append):
+        if file_exists and dataset_exists and not (force_overwrite or revision):
             logging.error(f"Dataset '{dataset_name}' already exists.")
             return
 
@@ -150,9 +158,10 @@ def dump_codes_to_hdf5(fi_path: pathlib.Path, codes: set, list_type: ListDumpTyp
                 if force_overwrite:
                     del f[dataset_name]
                     _create_dataset(f, dataset_name, np.array(list(codes)))
-                elif append:
-                    df: np.ndarray = f[dataset_name]
-                    df.resize(df.shape[0] + len(codes))
-                    df[-len(codes):] = np.array(list(codes))
+                elif revision:
+                    pass
+                    # df: np.ndarray = f[dataset_name]
+                    # df.resize(df.shape[0] + len(codes))
+                    # df[-len(codes):] = np.array(list(codes))
             else:
                 _create_dataset(f, dataset_name, np.array(list(codes)))

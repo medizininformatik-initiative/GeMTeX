@@ -170,5 +170,6 @@ if __name__ == "__main__":
     # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--filter-list", "social concept", "--filter-list", "procedure", "--filter-list", "physical force", "--filter-list", "body structure", "--dump-mode", "semantic", "--filter-mode", "positive", "--not-recursive"])
     # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--filter-list", "./config/blacklist_filter_codes.txt", "--dump-mode", "semantic", "--filter-mode", "negative"])
     # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--dump-mode", "version"])
-    create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--dump-mode", "semantic", "--not-recursive"])
+    # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--dump-mode", "semantic", "--not-recursive"])
     # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--dump-mode", "version", "298011007"])
+    create_concept_id_dump(["--dump-mode", "semantic", "--not-recursive"])
