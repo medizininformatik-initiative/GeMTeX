@@ -11,9 +11,11 @@ if __name__ == "__main__":
     sys.path.append(".")
     from snowstorm_funcs import build_endpoint, get_branches, dump_concept_ids
     from utils import DumpMode, FilterMode, dump_codes_to_hdf5, ListDumpType
+    from uima_processing import process_inception_zip
 else:
     from .snowstorm_funcs import build_endpoint, get_branches, dump_concept_ids
     from .utils import DumpMode, FilterMode, dump_codes_to_hdf5, ListDumpType
+    from .uima_processing import process_inception_zip
 
 
 class ClickUnion(click.ParamType):
@@ -50,12 +52,16 @@ def common_click_args(fnc):
 
 
 @click.command()
-@common_click_args
-@common_click_options
+# @common_click_args
+# @common_click_options
 def log_documents():
     # input uima json/xmi
     # dkpro-cassis
-    pass
+    test_base = pathlib.Path(__file__, "../../../test/").resolve()
+    test_zip = pathlib.Path(test_base, "project-gemtex-sem-ann-grascco-2026-02-10-135207.zip").resolve()
+    if result := process_inception_zip(test_zip):
+        print(result)
+    print("Done.")
 
 
 @click.command()
@@ -151,9 +157,9 @@ def create_concept_id_dump(
             dump_mode=dump_mode,
             is_not_recursive=not_recursive,
         )
-    hdf5_path = pathlib.Path(__file__, "../../../data/test.hdf5").resolve()
+    hdf5_path = pathlib.Path(__file__, "../../../data/gemtex_snomedct_codes.hdf5").resolve()
     hdf5_path.parent.mkdir(exist_ok=True, parents=True)
-    dump_codes_to_hdf5(hdf5_path, codes, ListDumpType.BLACKLIST)
+    dump_codes_to_hdf5(hdf5_path, codes, ListDumpType.BLACKLIST if dump_mode == DumpMode.SEMANTIC else ListDumpType.WHITELIST)
 
 
 @click.command()
@@ -169,7 +175,7 @@ def list_branches(ip: str, port: Union[int, str], use_secure_protocol: bool):
 if __name__ == "__main__":
     # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--filter-list", "social concept", "--filter-list", "procedure", "--filter-list", "physical force", "--filter-list", "body structure", "--dump-mode", "semantic", "--filter-mode", "positive", "--not-recursive"])
     # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--filter-list", "./config/blacklist_filter_codes.txt", "--dump-mode", "semantic", "--filter-mode", "negative"])
-    # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--dump-mode", "version"])
+    create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--dump-mode", "version"])
     # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--dump-mode", "semantic", "--not-recursive"])
     # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--dump-mode", "version", "298011007"])
-    create_concept_id_dump(["--dump-mode", "semantic", "--not-recursive"])
+    # create_concept_id_dump(["--dump-mode", "semantic", "--not-recursive"])
