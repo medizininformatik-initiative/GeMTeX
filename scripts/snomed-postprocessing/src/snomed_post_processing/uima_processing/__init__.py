@@ -7,13 +7,15 @@ import gc
 from typing import Union
 
 import cassis
+import numpy as np
 
 
 @dataclasses.dataclass
 class DocumentAnnotations:
-    snomed_codes: list[int]
-    offsets: list[tuple[int, int]]
-    text: list[str]
+    snomed_codes: np.ndarray
+    offsets: np.ndarray
+    text: np.ndarray
+    length: int
 
 
 def _load_document(path: Union[str, pathlib.Path]) -> cassis.Cas:
@@ -28,20 +30,25 @@ def get_annotations_from_document(document: Union[cassis.Cas, str, pathlib.Path]
     if not annotation_types:
         annotation_types = ["gemtex.Concept"]
     id_prefix = id_prefix + "/" if not id_prefix.endswith("/") else id_prefix
-    annotations = DocumentAnnotations([], [], [])
+    # annotations = DocumentAnnotations([], [], [], 0)
 
     if not isinstance(document, cassis.Cas):
         document = _load_document(document)
-
+    codes, offsets, text = [], [], []
     for type_ in annotation_types:
         for annotation in document.select(type_):
             try:
-                annotations.snomed_codes.append(int(annotation.get("id").removeprefix(id_prefix)))
-                annotations.offsets.append((annotation.begin, annotation.end,))
-                annotations.text.append(annotation.get_covered_text())
+                codes.append(annotation.get("id").removeprefix(id_prefix))
+                offsets.append((annotation.begin, annotation.end,))
+                text.append(annotation.get_covered_text())
             except Exception as e:
                 pass
-    return annotations
+    return DocumentAnnotations(
+        snomed_codes=np.asarray(codes, dtype=np.dtypes.StringDType),
+        offsets=np.asarray(offsets, dtype="i,i"),
+        text=np.asarray(text, dtype=np.dtypes.StringDType),
+        length=len(codes)
+    )
 
 def process_inception_zip(file_path: Union[str, pathlib.Path], annotation_types: list[ str] = None, id_prefix: str = "http://snomed.info/id/"):
     if not annotation_types:
@@ -122,3 +129,13 @@ def process_inception_zip(file_path: Union[str, pathlib.Path], annotation_types:
         return None
 
     return annotations
+
+def analyze_documents(project: dict[str, dict[str, DocumentAnnotations ]], filter_array: np.ndarray = None):
+    # project = {doc_name: {annotator_name: DocumentAnnotations}}
+    for doc_name, annotators in project.items():
+        for annotator_name, annotations in annotators.items():
+            print(f"{doc_name} - {annotator_name}")
+
+    # np.stack((doc1_arr, np.pad(doc2_arr, (0, 1), mode='constant', constant_values=138875005)))
+    # .tolist() --> gets the python values like tuple, str etc.
+    # np.isin(document_array, filter_array) returns --> returns document_array shaped bool array

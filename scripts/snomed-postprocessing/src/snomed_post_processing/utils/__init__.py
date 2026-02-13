@@ -136,8 +136,8 @@ def dump_codes_to_hdf5(fi_path: pathlib.Path, codes: set, list_type: ListDumpTyp
 
         _last = sorted(int(group.keys())[-1]) if len(group.keys()) > 0 else -1
         data = np.array(list(content)) if not isinstance(content, np.ndarray) else content
-        ds = group.create_dataset(str(_last + 1), shape=(data.shape[0],), dtype=np.int32)
-        ds[:] = data.astype(int)
+        ds = group.create_dataset(str(_last + 1), shape=(data.shape[0],), dtype='T')
+        ds[:] = data
 
     dataset_name = list_type.name.lower()
     file_exists = False
