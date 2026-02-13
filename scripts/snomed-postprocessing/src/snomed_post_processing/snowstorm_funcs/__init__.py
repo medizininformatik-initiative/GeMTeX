@@ -86,4 +86,4 @@ def dump_concept_ids(
         for code in return_codes(concept_children):
             id_hash_set.update(dump_concept_ids(code, endpoint_builder, filter_list, filter_mode, dump_mode, is_not_recursive, iteration, id_hash_set))
 
-    return id_hash_set
+    return set(id_hash_set)

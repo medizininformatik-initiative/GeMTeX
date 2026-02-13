@@ -149,14 +149,14 @@ def create_concept_id_dump(
                 code_filter = None
 
     with yaspin.yaspin(text="Processing...") as spinner:
-        codes = dump_concept_ids(
+        codes = set(dump_concept_ids(
             root_code=root_code,
             endpoint_builder=endpoint_builder,
             filter_list=code_filter,
             filter_mode=filter_mode,
             dump_mode=dump_mode,
             is_not_recursive=not_recursive,
-        )
+        ))
     hdf5_path = pathlib.Path(__file__, "../../../data/gemtex_snomedct_codes.hdf5").resolve()
     hdf5_path.parent.mkdir(exist_ok=True, parents=True)
     dump_codes_to_hdf5(hdf5_path, codes, ListDumpType.BLACKLIST if dump_mode == DumpMode.SEMANTIC else ListDumpType.WHITELIST)
