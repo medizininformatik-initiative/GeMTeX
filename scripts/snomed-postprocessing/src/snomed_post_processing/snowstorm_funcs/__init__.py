@@ -47,6 +47,7 @@ def dump_concept_ids(
     filter_mode: FilterMode = FilterMode.POSITIVE,
     dump_mode: DumpMode = DumpMode.VERSION,
     is_not_recursive: bool = False,
+    up_to_including: int = -1,
     iteration: int = 0,
     id_hash_set: set = None,
 ) -> set[str]:
@@ -54,7 +55,7 @@ def dump_concept_ids(
         id_hash_set = set()
     if root_code in id_hash_set:
         return id_hash_set
-    if is_not_recursive and iteration >= 2:
+    if (is_not_recursive and iteration >= 2) or (not is_not_recursive and up_to_including != -1 and iteration >= (up_to_including + 1)):
         return id_hash_set
 
     concept_children = concepts.get_concept_children(
@@ -78,12 +79,12 @@ def dump_concept_ids(
             for code in return_codes(
                     filter_by_semantic_tag(concept_children, tags=filter_list, positive=filter_mode==FilterMode.POSITIVE)
             ):
-                id_hash_set.update(dump_concept_ids(code, endpoint_builder, filter_list, filter_mode, dump_mode, is_not_recursive, iteration, id_hash_set))
+                id_hash_set.update(dump_concept_ids(code, endpoint_builder, filter_list, filter_mode, dump_mode, is_not_recursive, up_to_including, iteration, id_hash_set))
         else:
             # Filter not by tags but by codes
             raise NotImplementedError("Filtering by codes is not yet implemented; only filtering by semantic tags.")
     else:
         for code in return_codes(concept_children):
-            id_hash_set.update(dump_concept_ids(code, endpoint_builder, filter_list, filter_mode, dump_mode, is_not_recursive, iteration, id_hash_set))
+            id_hash_set.update(dump_concept_ids(code, endpoint_builder, filter_list, filter_mode, dump_mode, is_not_recursive, up_to_including, iteration, id_hash_set))
 
     return set(id_hash_set)

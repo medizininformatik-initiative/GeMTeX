@@ -156,6 +156,7 @@ def create_concept_id_dump(
             filter_mode=filter_mode,
             dump_mode=dump_mode,
             is_not_recursive=not_recursive,
+            up_to_including=-1,
         ))
     hdf5_path = pathlib.Path(__file__, "../../../data/gemtex_snomedct_codes.hdf5").resolve()
     hdf5_path.parent.mkdir(exist_ok=True, parents=True)
@@ -175,7 +176,8 @@ def list_branches(ip: str, port: Union[int, str], use_secure_protocol: bool):
 if __name__ == "__main__":
     # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--filter-list", "social concept", "--filter-list", "procedure", "--filter-list", "physical force", "--filter-list", "body structure", "--dump-mode", "semantic", "--filter-mode", "positive", "--not-recursive"])
     # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--filter-list", "./config/blacklist_filter_codes.txt", "--dump-mode", "semantic", "--filter-mode", "negative"])
-    create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--dump-mode", "version"])
+    # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--dump-mode", "version"])
     # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--dump-mode", "semantic", "--not-recursive"])
     # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--dump-mode", "version", "298011007"])
-    # create_concept_id_dump(["--dump-mode", "semantic", "--not-recursive"])
+    create_concept_id_dump(["--dump-mode", "version"])
+    # create_concept_id_dump(["--dump-mode", "version", "--not-recursive"])
