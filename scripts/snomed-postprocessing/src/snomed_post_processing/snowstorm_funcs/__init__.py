@@ -12,6 +12,7 @@ if __name__.find(".snowstorm_funcs") != -1:
 else:
     from utils import filter_by_semantic_tag, DumpMode, return_codes, FilterMode
 
+
 def build_endpoint(ip: str, port: Union[int, str], use_secure_protocol: bool):
     host = f"http{'s' if use_secure_protocol else ''}://{ip}:{port}"
     endpoint_builder = EndpointBuilder()
@@ -76,14 +77,42 @@ def dump_concept_ids(
     if dump_mode == dump_mode.SEMANTIC and filter_list is not None:
         if is_semantic_tags:
             for code in return_codes(
-                    filter_by_semantic_tag(concept_children, tags=filter_list, positive=filter_mode==FilterMode.POSITIVE)
+                filter_by_semantic_tag(
+                    concept_children,
+                    tags=filter_list,
+                    positive=filter_mode == FilterMode.POSITIVE,
+                )
             ):
-                id_hash_set.update(dump_concept_ids(code, endpoint_builder, filter_list, filter_mode, dump_mode, is_not_recursive, iteration, id_hash_set))
+                id_hash_set.update(
+                    dump_concept_ids(
+                        code,
+                        endpoint_builder,
+                        filter_list,
+                        filter_mode,
+                        dump_mode,
+                        is_not_recursive,
+                        iteration,
+                        id_hash_set,
+                    )
+                )
         else:
             # Filter not by tags but by codes
-            raise NotImplementedError("Filtering by codes is not yet implemented; only filtering by semantic tags.")
+            raise NotImplementedError(
+                "Filtering by codes is not yet implemented; only filtering by semantic tags."
+            )
     else:
         for code in return_codes(concept_children):
-            id_hash_set.update(dump_concept_ids(code, endpoint_builder, filter_list, filter_mode, dump_mode, is_not_recursive, iteration, id_hash_set))
+            id_hash_set.update(
+                dump_concept_ids(
+                    code,
+                    endpoint_builder,
+                    filter_list,
+                    filter_mode,
+                    dump_mode,
+                    is_not_recursive,
+                    iteration,
+                    id_hash_set,
+                )
+            )
 
     return set(id_hash_set)

@@ -77,11 +77,11 @@ def pprint_json(json_data):
     print(json.dumps(json_data, indent=2))
 
 
-def return_codes(
-    data: Union[dict, SnowstormResponse]
-):
+def return_codes(data: Union[dict, SnowstormResponse]):
     return_list = []
-    for concept in (snowstorm_response_to_pydantic(data) if isinstance(data, dict) else data).content:
+    for concept in (
+        snowstorm_response_to_pydantic(data) if isinstance(data, dict) else data
+    ).content:
         return_list.append(concept.conceptId)
     return return_list
 
@@ -97,46 +97,55 @@ def filter_by_semantic_tag(
     :param positive: whether to include concepts with said semantic tags (`True`) or to exclude them (`False`).
     """
     if not json_data.get("success", False):
-        return SnowstormResponse(
-            success=False,
-            content=[]
-        )
+        return SnowstormResponse(success=False, content=[])
     snowstorm_response = snowstorm_response_to_pydantic(json_data)
     if tags is None:
         return snowstorm_response
 
-    re_tags = re.compile(fr"\({"|".join([_flexible_whitespace_pattern(t) for t in tags])}\)", re.IGNORECASE)
+    re_tags = re.compile(
+        rf"\({'|'.join([_flexible_whitespace_pattern(t) for t in tags])}\)",
+        re.IGNORECASE,
+    )
 
     if positive:
         bool_check = lambda d: (
-                len(re_tags.findall(cast(SnomedConcept, d).fsn.term.lower())) > 0
+            len(re_tags.findall(cast(SnomedConcept, d).fsn.term.lower())) > 0
         )
     else:
         bool_check = lambda d: (
-                len(re_tags.findall(cast(SnomedConcept, d).fsn.term.lower())) == 0
+            len(re_tags.findall(cast(SnomedConcept, d).fsn.term.lower())) == 0
         )
     return SnowstormResponse(
-        success=True,
-        content=[d for d in snowstorm_response.content if bool_check(d)]
+        success=True, content=[d for d in snowstorm_response.content if bool_check(d)]
     )
 
 
-def snowstorm_response_to_pydantic(
-    json_data: dict
+def snowstorm_response_to_pydantic(json_data: dict):
+    return SnowstormResponse.model_validate_json(
+        json.dumps(json_data, ensure_ascii=False)
+    )
+
+
+def dump_codes_to_hdf5(
+    fi_path: pathlib.Path,
+    codes: set,
+    list_type: ListDumpType,
+    revision: bool = True,
+    force_overwrite: bool = False,
 ):
-    return SnowstormResponse.model_validate_json(json.dumps(json_data, ensure_ascii=False))
-
-
-def dump_codes_to_hdf5(fi_path: pathlib.Path, codes: set, list_type: ListDumpType, revision: bool = True, force_overwrite: bool = False):
-    def _create_dataset(fi: h5py.File, name: str, content: Union[set, list, np.ndarray]):
+    def _create_dataset(
+        fi: h5py.File, name: str, content: Union[set, list, np.ndarray]
+    ):
         if name in fi:
             group = fi[f"/{name}"]
         else:
             group = fi.create_group(name)
 
         _last = sorted(int(group.keys())[-1]) if len(group.keys()) > 0 else -1
-        data = np.array(list(content)) if not isinstance(content, np.ndarray) else content
-        ds = group.create_dataset(str(_last + 1), shape=(data.shape[0],), dtype='T')
+        data = (
+            np.array(list(content)) if not isinstance(content, np.ndarray) else content
+        )
+        ds = group.create_dataset(str(_last + 1), shape=(data.shape[0],), dtype="T")
         ds[:] = data
 
     dataset_name = list_type.name.lower()
