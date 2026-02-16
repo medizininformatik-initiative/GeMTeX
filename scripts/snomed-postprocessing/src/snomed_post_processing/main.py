@@ -86,9 +86,10 @@ def log_documents(zip_file: str):
         with h5py.File(whitelist_path.open("rb"), "r") as h5_file:
             for ft in [ListDumpType.WHITELIST, ListDumpType.BLACKLIST]:
                 if ft.name.lower() in h5_file.keys():
-                    filter_list = h5_file.get(ft.name.lower()).get("0")
+                    filter_list = h5_file.get(ft.name.lower()).get("0").get("codes")
+                    fsn_list = h5_file.get(ft.name.lower()).get("0").get("codes")
                     erroneous_doc_count += analyze_documents(
-                        result, filter_list[:], ft, output_path
+                        result, filter_list[:], fsn_list[:], ft, output_path, ft == ListDumpType.WHITELIST
                     )
     if erroneous_doc_count > 0:
         logging.warning(
