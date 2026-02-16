@@ -77,12 +77,12 @@ def pprint_json(json_data):
     print(json.dumps(json_data, indent=2))
 
 
-def return_codes(data: Union[dict, SnowstormResponse]):
+def return_codes(data: Union[dict, SnowstormResponse]) -> list[SnomedConcept]:
     return_list = []
     for concept in (
         snowstorm_response_to_pydantic(data) if isinstance(data, dict) else data
     ).content:
-        return_list.append(concept.conceptId)
+        return_list.append(concept)
     return return_list
 
 
@@ -122,6 +122,8 @@ def filter_by_semantic_tag(
 
 def snowstorm_response_to_pydantic(json_data: dict):
     try:
+        if not isinstance(json_data.get("content", []), list):
+            json_data["content"] = [json_data.get("content", {})]
         json_dump = json.dumps(json_data, ensure_ascii=False)
     except Exception as e:
         logging.error(f"{e}")
@@ -132,24 +134,44 @@ def snowstorm_response_to_pydantic(json_data: dict):
 def dump_codes_to_hdf5(
     fi_path: pathlib.Path,
     codes: set,
+    id_to_fsn_dict: dict[str, str],
     list_type: ListDumpType,
     revision: bool = True,
     force_overwrite: bool = False,
 ):
     def _create_dataset(
-        fi: h5py.File, name: str, content: Union[set, list, np.ndarray]
+        fi: h5py.File, name: str, content: Union[set, list, np.ndarray], mappings: dict
     ):
         if name in fi:
             group = fi[f"/{name}"]
         else:
             group = fi.create_group(name)
 
-        _last = sorted(int(group.keys())[-1]) if len(group.keys()) > 0 else -1
-        data = (
-            np.array(list(content)) if not isinstance(content, np.ndarray) else content
+        _last = sorted(int(k) for k in group.keys())[-1] if len(group.keys()) > 0 else -1
+        last_group = group.create_group(str(_last + 1))
+
+        code_data = (
+            np.array(sorted(content))
+            if not isinstance(content, np.ndarray)
+            else content
         )
-        ds = group.create_dataset(str(_last + 1), shape=(data.shape[0],), dtype="T")
-        ds[:] = data
+        fsn_data = np.array(
+            [
+                mappings.get(code)
+                for code in (
+                    sorted(content) if not isinstance(content, np.ndarray) else content
+                )
+            ]
+        )
+
+        ds_codes = last_group.create_dataset(
+            "codes", shape=(code_data.shape[0],), dtype="T"
+        )
+        ds_codes[:] = code_data
+        fs_codes = last_group.create_dataset(
+            "fsn", shape=(fsn_data.shape[0],), dtype="T"
+        )
+        fs_codes[:] = fsn_data
 
     dataset_name = list_type.name.lower()
     file_exists = False
@@ -164,12 +186,12 @@ def dump_codes_to_hdf5(
             return
 
         if not file_exists:
-            _create_dataset(f, dataset_name, np.array(list(codes)))
+            _create_dataset(f, dataset_name, codes, id_to_fsn_dict)
         else:
             if dataset_exists:
                 if force_overwrite:
                     del f[dataset_name]
-                    _create_dataset(f, dataset_name, np.array(list(codes)))
+                    _create_dataset(f, dataset_name, codes, id_to_fsn_dict)
                 elif revision:
                     pass
                     # df: np.ndarray = f[dataset_name]
@@ -177,4 +199,4 @@ def dump_codes_to_hdf5(
                     # df[-len(codes):] = np.array(list(codes))
                     # comment
             else:
-                _create_dataset(f, dataset_name, np.array(list(codes)))
+                _create_dataset(f, dataset_name, codes, id_to_fsn_dict)

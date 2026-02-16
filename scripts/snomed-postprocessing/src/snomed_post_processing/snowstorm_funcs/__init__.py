@@ -1,6 +1,6 @@
 import logging
 import sys
-from typing import Union, Optional, Iterable
+from typing import Union, Optional, Iterable, Tuple
 
 import requests.exceptions
 from scttsrapy.api import EndpointBuilder
@@ -41,8 +41,18 @@ def get_branches(endpoint_builder: EndpointBuilder, host: str):
     return path_ids, path_names
 
 
+def get_root_code(code: str, endpoint_builder: EndpointBuilder):
+    response = return_codes(
+        concepts.get_concept(code, endpoint_builder=endpoint_builder)
+    )
+    if len(response) == 0:
+        return None
+    return response[0]
+
+
 def dump_concept_ids(
     root_code: str,
+    fsn_term: str,
     endpoint_builder: EndpointBuilder,
     filter_list: Optional[Iterable] = None,
     filter_mode: FilterMode = FilterMode.POSITIVE,
@@ -51,21 +61,26 @@ def dump_concept_ids(
     up_to_including: int = -1,
     iteration: int = 0,
     id_hash_set: set = None,
-) -> set[str]:
+    id_to_fsn_dict: dict = None,
+) -> Tuple[set[str], dict[str, str]]:
     if id_hash_set is None:
         id_hash_set = set()
+    if id_to_fsn_dict is None:
+        id_to_fsn_dict = {}
     if root_code in id_hash_set:
-        return id_hash_set
+        return id_hash_set, id_to_fsn_dict
+    if root_code not in id_to_fsn_dict:
+        id_to_fsn_dict[root_code] = fsn_term
     if (is_not_recursive and iteration >= 2) or (
         not is_not_recursive
         and up_to_including != -1
         and iteration >= (up_to_including + 1)
     ):
-        return id_hash_set
+        return id_hash_set, id_to_fsn_dict
 
     concept_children = concepts.get_concept_children(
         root_code, endpoint_builder=endpoint_builder
-    )
+    )  # TODO: add fsn.term as well
 
     id_hash_set.add(root_code)
     is_semantic_tags = False
@@ -88,18 +103,20 @@ def dump_concept_ids(
                     positive=filter_mode == FilterMode.POSITIVE,
                 )
             ):
-                id_hash_set.update(
-                    dump_concept_ids(
-                        code,
-                        endpoint_builder,
-                        filter_list,
-                        filter_mode,
-                        dump_mode,
-                        is_not_recursive,
-                        iteration,
-                        id_hash_set,
-                    )
+                _id_hash_set, _id_to_fsn_dict = dump_concept_ids(
+                    code.conceptId,
+                    code.fsn.term,
+                    endpoint_builder,
+                    filter_list,
+                    filter_mode,
+                    dump_mode,
+                    is_not_recursive,
+                    up_to_including,
+                    iteration,
+                    id_hash_set,
+                    id_to_fsn_dict,
                 )
+                id_hash_set.update(_id_hash_set)
         else:
             # Filter not by tags but by codes
             raise NotImplementedError(
@@ -107,17 +124,19 @@ def dump_concept_ids(
             )
     else:
         for code in return_codes(concept_children):
-            id_hash_set.update(
-                dump_concept_ids(
-                    code,
-                    endpoint_builder,
-                    filter_list,
-                    filter_mode,
-                    dump_mode,
-                    is_not_recursive,
-                    iteration,
-                    id_hash_set,
-                )
+            _id_hash_set, _id_to_fsn_dict = dump_concept_ids(
+                code.conceptId,
+                code.fsn.term,
+                endpoint_builder,
+                filter_list,
+                filter_mode,
+                dump_mode,
+                is_not_recursive,
+                up_to_including,
+                iteration,
+                id_hash_set,
+                id_to_fsn_dict,
             )
+            id_hash_set.update(_id_hash_set)
 
-    return set(id_hash_set)
+    return set(id_hash_set), id_to_fsn_dict

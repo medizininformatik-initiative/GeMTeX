@@ -1,3 +1,4 @@
+import datetime
 import sys
 import logging
 import pathlib
@@ -10,11 +11,21 @@ import yaspin
 
 if __name__ == "__main__":
     sys.path.append(".")
-    from snowstorm_funcs import build_endpoint, get_branches, dump_concept_ids
+    from snowstorm_funcs import (
+        build_endpoint,
+        get_branches,
+        dump_concept_ids,
+        get_root_code,
+    )
     from utils import DumpMode, FilterMode, dump_codes_to_hdf5, ListDumpType
     from uima_processing import process_inception_zip, analyze_documents
 else:
-    from .snowstorm_funcs import build_endpoint, get_branches, dump_concept_ids
+    from .snowstorm_funcs import (
+        build_endpoint,
+        get_branches,
+        dump_concept_ids,
+        get_root_code,
+    )
     from .utils import DumpMode, FilterMode, dump_codes_to_hdf5, ListDumpType
     from .uima_processing import process_inception_zip, analyze_documents
 
@@ -55,21 +66,36 @@ def common_click_args(fnc):
 @click.command()
 # @common_click_args
 # @common_click_options
-def log_documents():
+@click.option("--zip-file", type=click.Path(exists=True), help="Path to the zip file.")
+def log_documents(zip_file: str):
     test_base = pathlib.Path(__file__, "../../../test/").resolve()
-    test_zip = pathlib.Path(
-        test_base, "snomed-verification-test-project.zip"
-    ).resolve()
+    # test_zip = pathlib.Path(
+    #     test_base, "snomed-verification-test-project.zip"
+    # ).resolve()
+    test_zip = pathlib.Path(zip_file).resolve()
     whitelist_path = pathlib.Path(
         test_base.parent, "data", "gemtex_snomedct_codes.hdf5"
     ).resolve()
+    output_path = (
+        test_zip.parent
+        / f"critical_documents_{datetime.datetime.today().strftime('%d-%m-%Y_%H-%M-%S')}.md"
+    )
+
+    erroneous_doc_count = 0
     if result := process_inception_zip(test_zip):
-        whitelist = (
-            h5py.File(whitelist_path.open("rb"), "r")
-            .get(ListDumpType.WHITELIST.name.lower())
-            .get("0")
+        with h5py.File(whitelist_path.open("rb"), "r") as h5_file:
+            for ft in [ListDumpType.WHITELIST, ListDumpType.BLACKLIST]:
+                if ft.name.lower() in h5_file.keys():
+                    filter_list = h5_file.get(ft.name.lower()).get("0")
+                    erroneous_doc_count += analyze_documents(
+                        result, filter_list[:], ft, output_path
+                    )
+    if erroneous_doc_count > 0:
+        logging.warning(
+            f"{erroneous_doc_count:>4} critical document(s) found. See {output_path.resolve()} for details."
         )
-        analyze_documents(result, whitelist[:], test_zip.parent)
+    else:
+        logging.info("No critical document(s) found.")
 
 
 @click.command()
@@ -158,23 +184,25 @@ def create_concept_id_dump(
                 code_filter = None
 
     with yaspin.yaspin(text="Processing...") as spinner:
-        codes = set(
-            dump_concept_ids(
-                root_code=root_code,
-                endpoint_builder=endpoint_builder,
-                filter_list=code_filter,
-                filter_mode=filter_mode,
-                dump_mode=dump_mode,
-                is_not_recursive=not_recursive,
-            )
+        root = get_root_code(root_code, endpoint_builder)
+        id_hash_set, id_to_fsn_dict = dump_concept_ids(
+            root_code=root_code,
+            fsn_term=root.fsn.term,
+            endpoint_builder=endpoint_builder,
+            filter_list=code_filter,
+            filter_mode=filter_mode,
+            dump_mode=dump_mode,
+            is_not_recursive=not_recursive,
         )
+        codes = set(id_hash_set)
     hdf5_path = pathlib.Path(
-        __file__, "../../../data/gemtex_snomedct_codes.hdf5"
+        __file__, f"../../../data/gemtex_snomedct_codes_{endpoint_builder.branch.split("/")[-1]}.hdf5"
     ).resolve()
     hdf5_path.parent.mkdir(exist_ok=True, parents=True)
     dump_codes_to_hdf5(
         hdf5_path,
         codes,
+        id_to_fsn_dict,
         ListDumpType.BLACKLIST
         if dump_mode == DumpMode.SEMANTIC
         else ListDumpType.WHITELIST,
@@ -195,7 +223,20 @@ if __name__ == "__main__":
     # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--filter-list", "social concept", "--filter-list", "procedure", "--filter-list", "physical force", "--filter-list", "body structure", "--dump-mode", "semantic", "--filter-mode", "positive", "--not-recursive"])
     # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--filter-list", "./config/blacklist_filter_codes.txt", "--dump-mode", "semantic", "--filter-mode", "negative"])
     # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--dump-mode", "version"])
+    create_concept_id_dump(
+        [
+            "--ip",
+            "nlp-prod",
+            "--port",
+            "9021",
+            "--dump-mode",
+            "version",
+            "--branch",
+            "MAIN/2024-04-01",
+            "--not-recursive",
+        ]
+    )
     # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--dump-mode", "semantic", "--not-recursive"])
     # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--dump-mode", "version", "298011007"])
     # create_concept_id_dump(["--dump-mode", "semantic", "--not-recursive"])
-    log_documents()
+    # log_documents()

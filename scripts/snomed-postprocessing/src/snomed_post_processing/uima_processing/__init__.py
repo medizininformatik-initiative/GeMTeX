@@ -6,14 +6,19 @@ import dataclasses
 import sys
 import zipfile
 import gc
-from collections import defaultdict
-from functools import partial
 from io import TextIOWrapper
 from typing import Union
 
 import cassis
 import numpy as np
 import yaspin
+
+
+if __name__.find(".uima_processing") != -1:
+    from ..utils import ListDumpType
+else:
+    sys.path.append(".")
+    from utils import ListDumpType
 
 
 @dataclasses.dataclass
@@ -183,12 +188,14 @@ def process_inception_zip(
 
 
 def analyze_documents(
-    project: TemporaryCorpus, filter_array: np.ndarray, out_path: pathlib.Path
+    project: TemporaryCorpus,
+    filter_array: np.ndarray,
+    filter_type: ListDumpType,
+    out_path: pathlib.Path,
 ):
+    erroneous_doc_count = 0
     filter_array = filter_array.astype(np.dtypes.StringDType)
-    log_doc = pathlib.Path(
-        out_path, f"critical_documents_{datetime.datetime.today().strftime("%d-%m-%Y_%H-%M-%S")}.md"
-    ).open("w", encoding="utf-8")
+    log_doc = out_path.open("w", encoding="utf-8")
     with yaspin.yaspin() as spinner:
         for annotator_name, documents in project.annotators.items():
             new_annotator = True
@@ -201,16 +208,21 @@ def analyze_documents(
                     doc_error_count += 1
                     concept_error_count += np.count_nonzero(~truth_arr)
                     log_critical_docs(
-                        annotator_name, doc_name, annotations, truth_arr, log_doc, new_annotator
+                        annotator_name,
+                        doc_name,
+                        annotations,
+                        truth_arr,
+                        log_doc,
+                        new_annotator,
                     )
                     new_annotator = False
-            concept_error_text = (
-                f" With {concept_error_count} concept(s) not on the Whitelist."
-            )
+            concept_error_text = f" With {concept_error_count} concept(s) not on '{filter_type.name.lower()}'."
             spinner.write(
                 f"{annotator_name}: Done. Found {doc_error_count} critical document(s).{concept_error_text if doc_error_count > 0 else ''}"
             )
+            erroneous_doc_count += doc_error_count
     log_doc.close()
+    return erroneous_doc_count
 
 
 def log_critical_docs(
@@ -221,12 +233,14 @@ def log_critical_docs(
     output_file: TextIOWrapper,
     is_new_annotator: bool,
 ):
-    stacked = np.stack([
-        document_dump.snomed_codes[~truth_array],
-        document_dump.text[~truth_array],
-        document_dump.offsets[~truth_array]],
+    stacked = np.stack(
+        [
+            document_dump.snomed_codes[~truth_array],
+            document_dump.text[~truth_array],
+            document_dump.offsets[~truth_array],
+        ],
         axis=-1,
-        dtype=object
+        dtype=object,
     )
     lines = []
     if is_new_annotator:
