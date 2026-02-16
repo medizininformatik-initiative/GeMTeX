@@ -56,11 +56,9 @@ def common_click_args(fnc):
 # @common_click_args
 # @common_click_options
 def log_documents():
-    # input uima json/xmi
-    # dkpro-cassis
     test_base = pathlib.Path(__file__, "../../../test/").resolve()
     test_zip = pathlib.Path(
-        test_base, "project-gemtex-sem-ann-grascco-2026-02-10-135207.zip"
+        test_base, "snomed-verification-test-project.zip"
     ).resolve()
     whitelist_path = pathlib.Path(
         test_base.parent, "data", "gemtex_snomedct_codes.hdf5"

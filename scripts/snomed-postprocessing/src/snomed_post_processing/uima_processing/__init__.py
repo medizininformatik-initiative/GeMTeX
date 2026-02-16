@@ -185,10 +185,6 @@ def process_inception_zip(
 def analyze_documents(
     project: TemporaryCorpus, filter_array: np.ndarray, out_path: pathlib.Path
 ):
-    # np.stack((doc1_arr, np.pad(doc2_arr, (0, 1), mode='constant', constant_values=138875005)))
-    # .tolist() --> gets the python values like tuple, str etc.
-    # np.isin(document_array, filter_array) returns --> returns document_array shaped bool array
-    # ToDo: did it without stacking; makes no meaningful difference and this way I can visualize progress better
     filter_array = filter_array.astype(np.dtypes.StringDType)
     log_doc = pathlib.Path(
         out_path, f"critical_documents_{datetime.datetime.today().strftime("%d-%m-%Y_%H-%M-%S")}.md"
@@ -199,7 +195,7 @@ def analyze_documents(
             doc_error_count = 0
             concept_error_count = 0
             for i, (doc_name, annotations) in enumerate(documents.documents.items()):
-                spinner.text = f"Processing ({annotator_name} [{i:>3}/{len(documents.documents)}]) ..."
+                spinner.text = f"Processing ({annotator_name} [{i:>3}/{len(documents.documents)}]: '{doc_name}') ..."
                 truth_arr = np.isin(annotations.snomed_codes, filter_array)
                 if not (no_errors := np.all(truth_arr)):
                     doc_error_count += 1
@@ -209,12 +205,11 @@ def analyze_documents(
                     )
                     new_annotator = False
             concept_error_text = (
-                f" With {concept_error_count} concepts not on the Whitelist."
+                f" With {concept_error_count} concept(s) not on the Whitelist."
             )
             spinner.write(
                 f"{annotator_name}: Done. Found {doc_error_count} critical document(s).{concept_error_text if doc_error_count > 0 else ''}"
             )
-        spinner.ok(f"Finished processing.")
     log_doc.close()
 
 
@@ -243,4 +238,3 @@ def log_critical_docs(
         lines.append(f"| {line[0]} | {line[1]} | {line[2]} |\n")
     output_file.writelines(lines)
     output_file.write("\n\n")
-    sys.exit()
