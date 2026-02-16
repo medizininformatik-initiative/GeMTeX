@@ -120,17 +120,12 @@ def filter_by_semantic_tag(
     )
 
 
-def snowstorm_response_to_pydantic(
-    json_data: dict
-):
+def snowstorm_response_to_pydantic(json_data: dict):
     try:
         json_dump = json.dumps(json_data, ensure_ascii=False)
     except Exception as e:
         logging.error(f"{e}")
-        return SnowstormResponse(
-            success=False,
-            content=[]
-        )
+        return SnowstormResponse(success=False, content=[])
     return SnowstormResponse.model_validate_json(json_dump)
 
 

@@ -1,11 +1,14 @@
+import datetime
 import json
 import logging
 import pathlib
 import dataclasses
+import sys
 import zipfile
 import gc
 from collections import defaultdict
 from functools import partial
+from io import TextIOWrapper
 from typing import Union
 
 import cassis
@@ -179,14 +182,20 @@ def process_inception_zip(
     return annotations
 
 
-def analyze_documents(project: TemporaryCorpus, filter_array: np.ndarray = None):
+def analyze_documents(
+    project: TemporaryCorpus, filter_array: np.ndarray, out_path: pathlib.Path
+):
     # np.stack((doc1_arr, np.pad(doc2_arr, (0, 1), mode='constant', constant_values=138875005)))
     # .tolist() --> gets the python values like tuple, str etc.
     # np.isin(document_array, filter_array) returns --> returns document_array shaped bool array
     # ToDo: did it without stacking; makes no meaningful difference and this way I can visualize progress better
     filter_array = filter_array.astype(np.dtypes.StringDType)
+    log_doc = pathlib.Path(
+        out_path, f"critical_documents_{datetime.datetime.today().strftime("%d-%m-%Y_%H-%M-%S")}.md"
+    ).open("w", encoding="utf-8")
     with yaspin.yaspin() as spinner:
         for annotator_name, documents in project.annotators.items():
+            new_annotator = True
             doc_error_count = 0
             concept_error_count = 0
             for i, (doc_name, annotations) in enumerate(documents.documents.items()):
@@ -195,14 +204,43 @@ def analyze_documents(project: TemporaryCorpus, filter_array: np.ndarray = None)
                 if not (no_errors := np.all(truth_arr)):
                     doc_error_count += 1
                     concept_error_count += np.count_nonzero(~truth_arr)
-                    log_critical_docs(doc_name)
+                    log_critical_docs(
+                        annotator_name, doc_name, annotations, truth_arr, log_doc, new_annotator
+                    )
+                    new_annotator = False
             concept_error_text = (
                 f" With {concept_error_count} concepts not on the Whitelist."
             )
             spinner.write(
                 f"{annotator_name}: Done. Found {doc_error_count} critical document(s).{concept_error_text if doc_error_count > 0 else ''}"
             )
+        spinner.ok(f"Finished processing.")
+    log_doc.close()
 
 
-def log_critical_docs():
-    pass
+def log_critical_docs(
+    annotator_name: str,
+    document_name: str,
+    document_dump: DocumentAnnotations,
+    truth_array: np.ndarray,
+    output_file: TextIOWrapper,
+    is_new_annotator: bool,
+):
+    stacked = np.stack([
+        document_dump.snomed_codes[~truth_array],
+        document_dump.text[~truth_array],
+        document_dump.offsets[~truth_array]],
+        axis=-1,
+        dtype=object
+    )
+    lines = []
+    if is_new_annotator:
+        lines.append(f"## {annotator_name}\n")
+    lines.append(f"#### {document_name}\n")
+    lines.append(f"| Snomed CT Code | Covered Text | Offset in Document |\n")
+    lines.append(f"| -------------: | -----------: | -----------------: |\n")
+    for line in stacked:
+        lines.append(f"| {line[0]} | {line[1]} | {line[2]} |\n")
+    output_file.writelines(lines)
+    output_file.write("\n\n")
+    sys.exit()

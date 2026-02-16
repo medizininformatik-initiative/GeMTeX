@@ -71,7 +71,7 @@ def log_documents():
             .get(ListDumpType.WHITELIST.name.lower())
             .get("0")
         )
-        analyze_documents(result, whitelist[:])
+        analyze_documents(result, whitelist[:], test_zip.parent)
 
 
 @click.command()

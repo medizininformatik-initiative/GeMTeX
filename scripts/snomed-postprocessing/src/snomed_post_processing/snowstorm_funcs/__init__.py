@@ -56,7 +56,11 @@ def dump_concept_ids(
         id_hash_set = set()
     if root_code in id_hash_set:
         return id_hash_set
-    if (is_not_recursive and iteration >= 2) or (not is_not_recursive and up_to_including != -1 and iteration >= (up_to_including + 1)):
+    if (is_not_recursive and iteration >= 2) or (
+        not is_not_recursive
+        and up_to_including != -1
+        and iteration >= (up_to_including + 1)
+    ):
         return id_hash_set
 
     concept_children = concepts.get_concept_children(
