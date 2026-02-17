@@ -200,6 +200,7 @@ def analyze_documents(
     # filter_array = filter_array.astype(np.dtypes.StringDType)
     log_doc = out_path.open("w", encoding="utf-8")
     with yaspin.yaspin() as spinner:
+        annotator_names_max = len(max(project.annotators.keys(), key=len))
         for annotator_name, documents in project.annotators.items():
             new_annotator = True
             doc_error_count = 0
@@ -227,9 +228,9 @@ def analyze_documents(
                         as_whitelist,
                     )
                     new_annotator = False
-            concept_error_text = f" With {concept_error_count} concept(s) not on '{filter_type.name.lower()}'."
+            concept_error_text = f" With {concept_error_count:>3} concept(s) not on '{filter_type.name.lower()}'."
             spinner.write(
-                f"{annotator_name}: Done. Found {doc_error_count} critical document(s).{concept_error_text if doc_error_count > 0 else ''}"
+                f"{annotator_name}:{' ' * (annotator_names_max - len(annotator_name) + 1)}Done. Found {doc_error_count:>3} critical document(s).{concept_error_text if doc_error_count > 0 else ''}"
             )
             erroneous_doc_count += doc_error_count
     log_doc.close()

@@ -1,0 +1,25 @@
+environment
+geographic location
+physical force
+record artifact
+situation
+attribute
+core metadata concept
+foundation metadata concept
+link assertion
+linkage concept
+namespace concept
+OWL metadata concept
+social concept
+ethnic group
+life style
+occupation
+racial group
+religion/philosophy
+inactive concept
+navigational concept
+staging scale
+assessment scale
+tumor staging
+129264002
+276825009

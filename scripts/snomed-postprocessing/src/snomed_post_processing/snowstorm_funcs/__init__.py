@@ -63,6 +63,44 @@ def dump_concept_ids(
     id_hash_set: set = None,
     id_to_fsn_dict: dict = None,
 ) -> Tuple[set[str], dict[str, str]]:
+    """
+    Dumps concept IDs and their fully specified names (FSNs) with configurable filtering and recursion.
+
+    The function retrieves a set of concept IDs and a dictionary mapping concept IDs to their
+    fully specified names (FSNs). It utilizes hierarchical relationships of concepts and applies
+    filters based on semantic tags or inclusion/exclusion lists. Recursive exploration of child
+    concepts is optionally limited by specified parameters.
+
+    Parameters:
+        root_code (str): The concept identifier to start dumping IDs from.
+        fsn_term (str): The fully specified name (FSN) of the root concept.
+        endpoint_builder (EndpointBuilder): An instance responsible for constructing and managing
+            API endpoint interactions.
+        filter_list (Optional[Iterable]): A list of filters for the concepts, which can be either
+            semantic tags or concept codes.
+        filter_mode (FilterMode): Determines whether the filtering should include
+            (FilterMode.POSITIVE) or exclude (FilterMode.NEGATIVE) the concepts provided in
+            the filter_list. Defaults to FilterMode.POSITIVE.
+        dump_mode (DumpMode): Specifies the mode of dumping concepts, such as version-based
+            or semantic tag-based filtering.
+        is_not_recursive (bool): If True, recursion into child concepts is restricted.
+        up_to_including (int): Limits the recursion depth to a specified level. A value of -1
+            disables this constraint.
+        iteration (int): Tracks the current recursion depth.
+        id_hash_set (set): A set of concept IDs accumulated during the dumping process. Defaults to
+            an empty set if None is provided.
+        id_to_fsn_dict (dict): A dictionary mapping concept IDs to their FSNs, populated dynamically.
+            Defaults to an empty dictionary if None is provided.
+
+    Returns:
+        Tuple[set[str], dict[str, str]]: A tuple containing:
+            - A set of unique concept IDs encountered during traversal.
+            - A dictionary mapping concept IDs to their corresponding FSNs.
+
+    Raises:
+        NotImplementedError: If filtering by concept codes (as opposed to semantic tags)
+            is requested but not implemented.
+    """
     if id_hash_set is None:
         id_hash_set = set()
     if id_to_fsn_dict is None:
@@ -80,48 +118,54 @@ def dump_concept_ids(
 
     concept_children = concepts.get_concept_children(
         root_code, endpoint_builder=endpoint_builder
-    )  # TODO: add fsn.term as well
+    )
 
     id_hash_set.add(root_code)
-    is_semantic_tags = False
-    if filter_list is not None:
-        filter_list = list(filter_list)
-        filter_list_int = [f for f in filter_list if f.isdigit()]
-        if len(filter_list_int) > round(len(filter_list) / 2):
-            filter_list = filter_list_int
-        else:
-            is_semantic_tags = True
-            filter_list = [f for f in filter_list.copy() if not f.isdigit()]
+    # is_semantic_tags = False
+    if iteration == 0: #ToDo: WORK!
+        filter_list_tags = []
+        filter_list_codes = []
+        if filter_list is not None:
+            filter_list_codes = [f for f in filter_list if f.isdigit()]
+            filter_list_tags = [f for f in filter_list if f not in filter_list_codes]
+    #
+    #     # filter_list = list(filter_list)
+    #     # filter_list_int = [f for f in filter_list if f.isdigit()]
+    #     # if len(filter_list_int) > round(len(filter_list) / 2):
+    #     #     filter_list = filter_list_int
+    #     # else:
+    #     #     is_semantic_tags = True
+    #     #     filter_list = [f for f in filter_list.copy() if not f.isdigit()]
 
     iteration += 1
     if dump_mode == dump_mode.SEMANTIC and filter_list is not None:
-        if is_semantic_tags:
-            for code in return_codes(
-                filter_by_semantic_tag(
-                    concept_children,
-                    tags=filter_list,
-                    positive=filter_mode == FilterMode.POSITIVE,
-                )
-            ):
-                _id_hash_set, _id_to_fsn_dict = dump_concept_ids(
-                    code.conceptId,
-                    code.fsn.term,
-                    endpoint_builder,
-                    filter_list,
-                    filter_mode,
-                    dump_mode,
-                    is_not_recursive,
-                    up_to_including,
-                    iteration,
-                    id_hash_set,
-                    id_to_fsn_dict,
-                )
-                id_hash_set.update(_id_hash_set)
-        else:
-            # Filter not by tags but by codes
-            raise NotImplementedError(
-                "Filtering by codes is not yet implemented; only filtering by semantic tags."
+        # if is_semantic_tags:
+        for code in return_codes(
+            filter_by_semantic_tag(
+                concept_children,
+                tags=filter_list_tags,
+                positive=filter_mode == FilterMode.POSITIVE,
             )
+        ):
+            _id_hash_set, _id_to_fsn_dict = dump_concept_ids(
+                code.conceptId,
+                code.fsn.term,
+                endpoint_builder,
+                filter_list_tags,
+                filter_mode,
+                dump_mode,
+                is_not_recursive,
+                up_to_including,
+                iteration,
+                id_hash_set,
+                id_to_fsn_dict,
+            )
+            id_hash_set.update(_id_hash_set)
+        # else:
+        #     # Filter not by tags but by codes
+        #     raise NotImplementedError(
+        #         "Filtering by codes is not yet implemented; only filtering by semantic tags."
+        #     )
     else:
         for code in return_codes(concept_children):
             _id_hash_set, _id_to_fsn_dict = dump_concept_ids(
