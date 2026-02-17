@@ -76,7 +76,8 @@ def get_annotations_from_document(
             except Exception as e:
                 pass
     return DocumentAnnotations(
-        snomed_codes=np.asarray(codes, dtype=np.dtypes.StringDType),
+        # snomed_codes=np.asarray(codes, dtype=np.dtypes.StringDType),
+        snomed_codes=np.asarray(codes, dtype="bytes"),
         offsets=np.asarray(offsets, dtype="i,i"),
         text=np.asarray(text, dtype=np.dtypes.StringDType),
         length=len(codes),
@@ -193,10 +194,10 @@ def analyze_documents(
     mapping_array: np.ndarray,
     filter_type: ListDumpType,
     out_path: pathlib.Path,
-    positive_filter: bool,
+    as_whitelist: bool,
 ):
     erroneous_doc_count = 0
-    filter_array = filter_array.astype(np.dtypes.StringDType)
+    # filter_array = filter_array.astype(np.dtypes.StringDType)
     log_doc = out_path.open("w", encoding="utf-8")
     with yaspin.yaspin() as spinner:
         for annotator_name, documents in project.annotators.items():
@@ -205,7 +206,7 @@ def analyze_documents(
             concept_error_count = 0
             for i, (doc_name, annotations) in enumerate(documents.documents.items()):
                 spinner.text = f"Processing ({annotator_name} [{i:>3}/{len(documents.documents)}]: '{doc_name}') ..."
-                if positive_filter:
+                if as_whitelist:
                     erroneous_codes_array = ~np.isin(annotations.snomed_codes, filter_array)
                 else:
                     erroneous_codes_array = np.isin(annotations.snomed_codes, filter_array)
@@ -213,15 +214,17 @@ def analyze_documents(
                 if not (no_errors := np.all(~erroneous_codes_array)):
                     doc_error_count += 1
                     concept_error_count += np.count_nonzero(erroneous_codes_array)
-                    erroneous_fsn = mapping_array[erroneous_codes_array]
+                    if not as_whitelist:
+                        #ToDo: Here mapping of erroneous codes to FSN should be done
+                        pass
                     log_critical_docs(
                         annotator_name,
                         doc_name,
                         annotations,
                         erroneous_codes_array,
-                        erroneous_fsn,
                         log_doc,
                         new_annotator,
+                        as_whitelist,
                     )
                     new_annotator = False
             concept_error_text = f" With {concept_error_count} concept(s) not on '{filter_type.name.lower()}'."
@@ -238,9 +241,10 @@ def log_critical_docs(
     document_name: str,
     document_dump: DocumentAnnotations,
     bool_index_array: np.ndarray,
-    fsn_array: np.ndarray,
     output_file: TextIOWrapper,
     is_new_annotator: bool,
+    is_whitelist: bool
+
 ):
     stacked = np.stack(
         [
@@ -258,6 +262,6 @@ def log_critical_docs(
     lines.append(f"| Snomed CT Code | Covered Text | Offset in Document |\n")
     lines.append(f"| -------------: | -----------: | -----------------: |\n")
     for line in stacked:
-        lines.append(f"| {line[0]} | {line[1]} | {line[2]} |\n")
+        lines.append(f"| {line[0].decode('utf-8')} | {line[1]} | {line[2]} |\n")
     output_file.writelines(lines)
     output_file.write("\n\n")
