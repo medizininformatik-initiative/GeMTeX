@@ -37,8 +37,10 @@ Ordner für verschiedene Skripte/Demos.
 Eine Demo bzw. Machbarkeitsnachweis wie CDA Dokumente Level One über XSLT Stylesheets in HTML oder Plain-Text gewandelt werden können.
 * [`health-discovery-scripts`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/scripts/health-discovery-scripts)  
 Python-Skripte um die [Averbis Health Discovery](https://averbis.com/health-discovery/) per API anzusprechen.
-* `snomed-postprocessing`  
-Skript um SNOMED Codes zu identifzieren, die nicht mit der Version 04/2024 kompatibel sind.
+
+### [`snomed-postprocessing`]()  
+Programm um Dokumente zu identifizieren, die SNOMED CT Codes enthalten, die nicht mit einer Version kompatibel sind.
+(Im GeMTeX Fall: 04/2024) bzw. Codes, die auf einer Blacklist stehen.
 
 ### [`surrogator`](/surrogator/Readme.md)
 Werkzeug für Pseudonymisierung von Textdocumenten nach Detektion von PII-Entitäten.
