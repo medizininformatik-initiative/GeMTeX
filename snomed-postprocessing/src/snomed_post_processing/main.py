@@ -1,4 +1,5 @@
 import datetime
+import os
 import sys
 import logging
 import pathlib
@@ -66,17 +67,23 @@ def common_click_args(fnc):
 
 @click.command()
 @click.argument("zip-file", type=click.Path(exists=True))
-@click.option("--lists-path", default=None, help="The path to the lists file in 'hdf5' format.")
+@click.option(
+    "--lists-path", default=None, help="The path to the lists file in 'hdf5' format."
+)
 def log_documents(zip_file: str, lists_path: Optional[str]):
     test_base = pathlib.Path(__file__, "../../../test/").resolve()
     project_zip = pathlib.Path(zip_file).resolve()
-    default_lists_path = pathlib.Path(test_base.parent, "data", "gemtex_snomedct_codes_2024-04-01.hdf5").resolve()
+    default_lists_path = pathlib.Path(
+        test_base.parent, "data", "gemtex_snomedct_codes_2024-04-01.hdf5"
+    ).resolve()
     if lists_path is not None:
         lists_path_tmp = pathlib.Path(lists_path).resolve()
         if lists_path_tmp.exists() and lists_path_tmp.is_file():
             lists_path = lists_path_tmp
         else:
-            logging.warning(f"The given list doesn't seem to exist or is not a file in hdf5 format: '{lists_path_tmp}'\nUsing default one.")
+            logging.warning(
+                f"The given list doesn't seem to exist or is not a file in hdf5 format: '{lists_path_tmp}'\nUsing default one."
+            )
             lists_path = default_lists_path
     else:
         logging.info("No filter list given, using default one.")
@@ -95,7 +102,12 @@ def log_documents(zip_file: str, lists_path: Optional[str]):
                         filter_list = h5_file.get(ft.name.lower()).get("0").get("codes")
                         fsn_list = h5_file.get(ft.name.lower()).get("0").get("fsn")
                         erroneous_doc_count += analyze_documents(
-                            result, filter_list[:], fsn_list[:], ft, log_doc, ft == ListDumpType.WHITELIST
+                            result,
+                            filter_list[:],
+                            fsn_list[:],
+                            ft,
+                            log_doc,
+                            ft == ListDumpType.WHITELIST,
                         )
     if erroneous_doc_count > 0:
         logging.warning(
@@ -181,14 +193,19 @@ def create_concept_id_dump(
     if dump_mode == dump_mode.SEMANTIC:
         if len(filter_list) < 1:
             code_filter = None
-        elif pathlib.Path(filter_list[0]).is_file():
-            code_filter = (
-                pathlib.Path(filter_list[0]).read_text(encoding="utf-8").splitlines()
-            )
         else:
-            code_filter = filter_list
-            if len(filter_list) == 0:
-                code_filter = None
+            fi = pathlib.Path(filter_list[0])
+            if fi.is_file():
+                code_filter = (
+                    fi.read_text(encoding="utf-8").splitlines()
+                )
+            else:
+                if os.sep in str(fi):
+                    code_filter = None
+                else:
+                    code_filter = filter_list
+                    if len(filter_list) == 0:
+                        code_filter = None
 
     with yaspin.yaspin(text="Processing...") as spinner:
         root = get_root_code(root_code, endpoint_builder)
@@ -203,7 +220,8 @@ def create_concept_id_dump(
         )
         codes = set(id_hash_set)
     hdf5_path = pathlib.Path(
-        __file__, f"../../../data/gemtex_snomedct_codes_{endpoint_builder.branch.split("/")[-1]}.hdf5"
+        __file__,
+        f"../../../data/gemtex_snomedct_codes_{endpoint_builder.branch.split('/')[-1]}.hdf5",
     ).resolve()
     hdf5_path.parent.mkdir(exist_ok=True, parents=True)
     dump_codes_to_hdf5(
@@ -245,5 +263,7 @@ if __name__ == "__main__":
     # )
     # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--dump-mode", "semantic", "--not-recursive"])
     # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--dump-mode", "version", "298011007"])
-    # create_concept_id_dump(["--dump-mode", "semantic", "--not-recursive"])
-    log_documents([str(pathlib.Path("test/snomed-verification-test-project.zip").resolve())])
+    create_concept_id_dump(["--dump-mode", "semantic", "--filter-list", "../../config/blacklist_filter_tags.txt", "--not-recursive"])
+    # log_documents(
+    #     [str(pathlib.Path("test/snomed-verification-test-project.zip").resolve())]
+    # )

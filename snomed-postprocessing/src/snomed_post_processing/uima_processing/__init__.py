@@ -207,15 +207,19 @@ def analyze_documents(
             for i, (doc_name, annotations) in enumerate(documents.documents.items()):
                 spinner.text = f"Processing ({annotator_name} [{i:>3}/{len(documents.documents)}]: '{doc_name}') ..."
                 if as_whitelist:
-                    erroneous_codes_array = ~np.isin(annotations.snomed_codes, filter_array)
+                    erroneous_codes_array = ~np.isin(
+                        annotations.snomed_codes, filter_array
+                    )
                 else:
-                    erroneous_codes_array = np.isin(annotations.snomed_codes, filter_array)
+                    erroneous_codes_array = np.isin(
+                        annotations.snomed_codes, filter_array
+                    )
 
                 if not (no_errors := np.all(~erroneous_codes_array)):
                     doc_error_count += 1
                     concept_error_count += np.count_nonzero(erroneous_codes_array)
                     if not as_whitelist:
-                        #ToDo: Here mapping of erroneous codes to FSN should be done
+                        # ToDo: Here mapping of erroneous codes to FSN should be done
                         pass
                     log_critical_docs(
                         annotator_name,
@@ -242,8 +246,7 @@ def log_critical_docs(
     bool_index_array: np.ndarray,
     output_file: TextIOWrapper,
     is_new_annotator: bool,
-    is_whitelist: bool
-
+    is_whitelist: bool,
 ):
     stacked = np.stack(
         [

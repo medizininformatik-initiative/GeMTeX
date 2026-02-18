@@ -8,9 +8,21 @@ import scttsrapy.concepts as concepts
 import scttsrapy.branching as branching
 
 if __name__.find(".snowstorm_funcs") != -1:
-    from ..utils import filter_by_semantic_tag, DumpMode, return_codes, FilterMode, FilterLists
+    from ..utils import (
+        filter_by_semantic_tag,
+        DumpMode,
+        return_codes,
+        FilterMode,
+        FilterLists,
+    )
 else:
-    from utils import filter_by_semantic_tag, DumpMode, return_codes, FilterMode, FilterLists
+    from utils import (
+        filter_by_semantic_tag,
+        DumpMode,
+        return_codes,
+        FilterMode,
+        FilterLists,
+    )
 
 
 def build_endpoint(ip: str, port: Union[int, str], use_secure_protocol: bool):
@@ -129,22 +141,25 @@ def dump_concept_ids(
 
     iteration += 1
     if dump_mode == dump_mode.SEMANTIC and filter_list is not None:
-        for code in return_codes(
-            filter_by_semantic_tag(
-                concept_children,
-                tags=filter_list.tags,
-                positive=filter_mode == FilterMode.POSITIVE,
+        tag_filter = set(
+            (c.conceptId, c.fsn.term)
+            for c in return_codes(
+                filter_by_semantic_tag(
+                    concept_children,
+                    tags=filter_list.tags,
+                    positive=filter_mode == FilterMode.POSITIVE,
+                )
             )
-        ):
-            if code.conceptId in filter_list.codes:
-                if filter_mode == FilterMode.NEGATIVE:
-                    continue
-            else:
-                if filter_mode == FilterMode.POSITIVE:
-                    continue
+        )
+        code_filter = set(
+            (c.conceptId, c.fsn.term)
+            for c in return_codes(concept_children)
+            if (c.conceptId in filter_list.codes) and filter_mode == FilterMode.POSITIVE
+        )
+        for concept_id, fsn_term in tag_filter | code_filter:
             _id_hash_set, _id_to_fsn_dict = dump_concept_ids(
-                code.conceptId,
-                code.fsn.term,
+                concept_id,
+                fsn_term,
                 endpoint_builder,
                 filter_list,
                 filter_mode,

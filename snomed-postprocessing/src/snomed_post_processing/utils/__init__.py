@@ -154,7 +154,9 @@ def dump_codes_to_hdf5(
         else:
             group = fi.create_group(name)
 
-        _last = sorted(int(k) for k in group.keys())[-1] if len(group.keys()) > 0 else -1
+        _last = (
+            sorted(int(k) for k in group.keys())[-1] if len(group.keys()) > 0 else -1
+        )
         last_group = group.create_group(str(_last + 1))
 
         code_data = (
