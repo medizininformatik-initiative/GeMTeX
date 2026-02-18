@@ -137,7 +137,11 @@ def dump_concept_ids(
             )
         ):
             if code.conceptId in filter_list.codes:
-                continue
+                if filter_mode == FilterMode.NEGATIVE:
+                    continue
+            else:
+                if filter_mode == FilterMode.POSITIVE:
+                    continue
             _id_hash_set, _id_to_fsn_dict = dump_concept_ids(
                 code.conceptId,
                 code.fsn.term,
