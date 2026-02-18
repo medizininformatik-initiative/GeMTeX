@@ -193,12 +193,11 @@ def analyze_documents(
     filter_array: np.ndarray,
     mapping_array: np.ndarray,
     filter_type: ListDumpType,
-    out_path: pathlib.Path,
+    log_doc: TextIOWrapper,
     as_whitelist: bool,
 ):
     erroneous_doc_count = 0
     # filter_array = filter_array.astype(np.dtypes.StringDType)
-    log_doc = out_path.open("w", encoding="utf-8")
     with yaspin.yaspin() as spinner:
         annotator_names_max = len(max(project.annotators.keys(), key=len))
         for annotator_name, documents in project.annotators.items():
@@ -233,7 +232,6 @@ def analyze_documents(
                 f"{annotator_name}:{' ' * (annotator_names_max - len(annotator_name) + 1)}Done. Found {doc_error_count:>3} critical document(s).{concept_error_text if doc_error_count > 0 else ''}"
             )
             erroneous_doc_count += doc_error_count
-    log_doc.close()
     return erroneous_doc_count
 
 

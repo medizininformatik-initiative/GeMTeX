@@ -1,3 +1,4 @@
+import dataclasses
 import logging
 import pathlib
 from typing import cast, Union
@@ -49,6 +50,12 @@ class FilterMode(enum.Enum):
 class ListDumpType(enum.Enum):
     BLACKLIST = enum.auto()
     WHITELIST = enum.auto()
+
+
+@dataclasses.dataclass
+class FilterLists:
+    codes: list[str]
+    tags: list[str]
 
 
 def _flexible_whitespace_pattern(s: str) -> str:

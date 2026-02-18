@@ -3,7 +3,8 @@ import sys
 import logging
 import pathlib
 import sys
-from typing import Union
+from email.policy import default
+from typing import Union, Optional
 
 import click
 import h5py
@@ -64,33 +65,38 @@ def common_click_args(fnc):
 
 
 @click.command()
-# @common_click_args
-# @common_click_options
-@click.argument("zip_file", type=click.Path(exists=True))
-def log_documents(zip_file: str):
+@click.argument("zip-file", type=click.Path(exists=True))
+@click.option("--lists-path", default=None, help="The path to the lists file in 'hdf5' format.")
+def log_documents(zip_file: str, lists_path: Optional[str]):
     test_base = pathlib.Path(__file__, "../../../test/").resolve()
-    # test_zip = pathlib.Path(
-    #     test_base, "snomed-verification-test-project.zip"
-    # ).resolve()
-    test_zip = pathlib.Path(zip_file).resolve()
-    whitelist_path = pathlib.Path(
-        test_base.parent, "data", "gemtex_snomedct_codes_2024-04-01.hdf5"
-    ).resolve()
+    project_zip = pathlib.Path(zip_file).resolve()
+    default_lists_path = pathlib.Path(test_base.parent, "data", "gemtex_snomedct_codes_2024-04-01.hdf5").resolve()
+    if lists_path is not None:
+        lists_path_tmp = pathlib.Path(lists_path).resolve()
+        if lists_path_tmp.exists() and lists_path_tmp.is_file():
+            lists_path = lists_path_tmp
+        else:
+            logging.warning(f"The given list doesn't seem to exist or is not a file in hdf5 format: '{lists_path_tmp}'\nUsing default one.")
+            lists_path = default_lists_path
+    else:
+        logging.info("No filter list given, using default one.")
+        lists_path = default_lists_path
     output_path = (
-        test_zip.parent
+        project_zip.parent
         / f"critical_documents_{datetime.datetime.today().strftime('%d-%m-%Y_%H-%M-%S')}.md"
     )
 
     erroneous_doc_count = 0
-    if result := process_inception_zip(test_zip):
-        with h5py.File(whitelist_path.open("rb"), "r") as h5_file:
-            for ft in [ListDumpType.WHITELIST, ListDumpType.BLACKLIST]:
-                if ft.name.lower() in h5_file.keys():
-                    filter_list = h5_file.get(ft.name.lower()).get("0").get("codes")
-                    fsn_list = h5_file.get(ft.name.lower()).get("0").get("fsn")
-                    erroneous_doc_count += analyze_documents(
-                        result, filter_list[:], fsn_list[:], ft, output_path, ft == ListDumpType.WHITELIST
-                    )
+    if result := process_inception_zip(project_zip):
+        with output_path.open("w", encoding="utf-8") as log_doc:
+            with h5py.File(lists_path.open("rb"), "r") as h5_file:
+                for ft in [ListDumpType.WHITELIST, ListDumpType.BLACKLIST]:
+                    if ft.name.lower() in h5_file.keys():
+                        filter_list = h5_file.get(ft.name.lower()).get("0").get("codes")
+                        fsn_list = h5_file.get(ft.name.lower()).get("0").get("fsn")
+                        erroneous_doc_count += analyze_documents(
+                            result, filter_list[:], fsn_list[:], ft, log_doc, ft == ListDumpType.WHITELIST
+                        )
     if erroneous_doc_count > 0:
         logging.warning(
             f"{erroneous_doc_count:>4} critical document(s) found. See '{output_path.resolve()}' for details."
@@ -201,10 +207,10 @@ def create_concept_id_dump(
     ).resolve()
     hdf5_path.parent.mkdir(exist_ok=True, parents=True)
     dump_codes_to_hdf5(
-        hdf5_path,
-        codes,
-        id_to_fsn_dict,
-        ListDumpType.BLACKLIST
+        fi_path=hdf5_path,
+        codes=codes,
+        id_to_fsn_dict=id_to_fsn_dict,
+        list_type=ListDumpType.BLACKLIST
         if dump_mode == DumpMode.SEMANTIC
         else ListDumpType.WHITELIST,
     )

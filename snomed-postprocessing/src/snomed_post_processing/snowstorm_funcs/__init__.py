@@ -8,9 +8,9 @@ import scttsrapy.concepts as concepts
 import scttsrapy.branching as branching
 
 if __name__.find(".snowstorm_funcs") != -1:
-    from ..utils import filter_by_semantic_tag, DumpMode, return_codes, FilterMode
+    from ..utils import filter_by_semantic_tag, DumpMode, return_codes, FilterMode, FilterLists
 else:
-    from utils import filter_by_semantic_tag, DumpMode, return_codes, FilterMode
+    from utils import filter_by_semantic_tag, DumpMode, return_codes, FilterMode, FilterLists
 
 
 def build_endpoint(ip: str, port: Union[int, str], use_secure_protocol: bool):
@@ -54,7 +54,7 @@ def dump_concept_ids(
     root_code: str,
     fsn_term: str,
     endpoint_builder: EndpointBuilder,
-    filter_list: Optional[Iterable] = None,
+    filter_list: Optional[Union[Iterable, FilterLists]] = None,
     filter_mode: FilterMode = FilterMode.POSITIVE,
     dump_mode: DumpMode = DumpMode.VERSION,
     is_not_recursive: bool = False,
@@ -121,37 +121,28 @@ def dump_concept_ids(
     )
 
     id_hash_set.add(root_code)
-    # is_semantic_tags = False
-    if iteration == 0: #ToDo: WORK!
-        filter_list_tags = []
-        filter_list_codes = []
+    if iteration == 0:
         if filter_list is not None:
-            filter_list_codes = [f for f in filter_list if f.isdigit()]
-            filter_list_tags = [f for f in filter_list if f not in filter_list_codes]
-    #
-    #     # filter_list = list(filter_list)
-    #     # filter_list_int = [f for f in filter_list if f.isdigit()]
-    #     # if len(filter_list_int) > round(len(filter_list) / 2):
-    #     #     filter_list = filter_list_int
-    #     # else:
-    #     #     is_semantic_tags = True
-    #     #     filter_list = [f for f in filter_list.copy() if not f.isdigit()]
+            c = [f for f in filter_list if f.isdigit()]
+            t = [f for f in filter_list if f not in c]
+            filter_list = FilterLists(c, t)
 
     iteration += 1
     if dump_mode == dump_mode.SEMANTIC and filter_list is not None:
-        # if is_semantic_tags:
         for code in return_codes(
             filter_by_semantic_tag(
                 concept_children,
-                tags=filter_list_tags,
+                tags=filter_list.tags,
                 positive=filter_mode == FilterMode.POSITIVE,
             )
         ):
+            if code.conceptId in filter_list.codes:
+                continue
             _id_hash_set, _id_to_fsn_dict = dump_concept_ids(
                 code.conceptId,
                 code.fsn.term,
                 endpoint_builder,
-                filter_list_tags,
+                filter_list,
                 filter_mode,
                 dump_mode,
                 is_not_recursive,
@@ -161,11 +152,6 @@ def dump_concept_ids(
                 id_to_fsn_dict,
             )
             id_hash_set.update(_id_hash_set)
-        # else:
-        #     # Filter not by tags but by codes
-        #     raise NotImplementedError(
-        #         "Filtering by codes is not yet implemented; only filtering by semantic tags."
-        #     )
     else:
         for code in return_codes(concept_children):
             _id_hash_set, _id_to_fsn_dict = dump_concept_ids(
