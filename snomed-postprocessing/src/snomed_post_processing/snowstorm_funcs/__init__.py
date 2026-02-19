@@ -14,6 +14,7 @@ if __name__.find(".snowstorm_funcs") != -1:
         return_codes,
         FilterMode,
         FilterLists,
+        SnomedConcept,
     )
 else:
     from utils import (
@@ -22,6 +23,7 @@ else:
         return_codes,
         FilterMode,
         FilterLists,
+        SnomedConcept,
     )
 
 
@@ -63,8 +65,7 @@ def get_root_code(code: str, endpoint_builder: EndpointBuilder):
 
 
 def dump_concept_ids(
-    root_code: str,
-    fsn_term: str,
+    root_concept: Optional[SnomedConcept],
     endpoint_builder: EndpointBuilder,
     filter_list: Optional[Union[Iterable, FilterLists]] = None,
     filter_mode: FilterMode = FilterMode.POSITIVE,
@@ -74,6 +75,7 @@ def dump_concept_ids(
     iteration: int = 0,
     id_hash_set: set = None,
     id_to_fsn_dict: dict = None,
+    dump_whole_subtree: bool = False,
 ) -> Tuple[set[str], dict[str, str]]:
     """
     Dumps concept IDs and their fully specified names (FSNs) with configurable filtering and recursion.
@@ -84,7 +86,7 @@ def dump_concept_ids(
     concepts is optionally limited by specified parameters.
 
     Parameters:
-        root_code (str): The concept identifier to start dumping IDs from.
+        root_concept (str): The concept identifier to start dumping IDs from.
         fsn_term (str): The fully specified name (FSN) of the root concept.
         endpoint_builder (EndpointBuilder): An instance responsible for constructing and managing
             API endpoint interactions.
@@ -103,6 +105,7 @@ def dump_concept_ids(
             an empty set if None is provided.
         id_to_fsn_dict (dict): A dictionary mapping concept IDs to their FSNs, populated dynamically.
             Defaults to an empty dictionary if None is provided.
+        dump_whole_subtree (bool): ...
 
     Returns:
         Tuple[set[str], dict[str, str]]: A tuple containing:
@@ -117,75 +120,64 @@ def dump_concept_ids(
         id_hash_set = set()
     if id_to_fsn_dict is None:
         id_to_fsn_dict = {}
-    if root_code in id_hash_set:
+    if root_concept is None or root_concept.conceptId in id_hash_set:
         return id_hash_set, id_to_fsn_dict
-    if root_code not in id_to_fsn_dict:
-        id_to_fsn_dict[root_code] = fsn_term
+    if root_concept.conceptId not in id_to_fsn_dict:
+        id_to_fsn_dict[root_concept.conceptId] = root_concept.fsn.term
     if (is_not_recursive and iteration >= 2) or (
         not is_not_recursive
         and up_to_including != -1
         and iteration >= (up_to_including + 1)
     ):
         return id_hash_set, id_to_fsn_dict
-
-    concept_children = concepts.get_concept_children(
-        root_code, endpoint_builder=endpoint_builder
-    )
-
-    id_hash_set.add(root_code)
     if iteration == 0:
         if filter_list is not None:
-            c = [f for f in filter_list if f.isdigit()]
-            t = [f for f in filter_list if f not in c]
+            c = [f.strip() for f in filter_list if f.isdigit()]
+            t = [f.strip() for f in filter_list if f not in c]
             filter_list = FilterLists(c, t)
 
-    iteration += 1
+    concept_children = concepts.get_concept_children(
+        root_concept.conceptId, endpoint_builder=endpoint_builder
+    )
+
+    # If dump_mode is "semantic", only add concept to list when on the filter list
     if dump_mode == dump_mode.SEMANTIC and filter_list is not None:
-        tag_filter = set(
-            (c.conceptId, c.fsn.term)
-            for c in return_codes(
+        if (root_concept.conceptId in filter_list.codes) or dump_whole_subtree:
+            # When a code and not a tag is on the filter list, the whole subtree should be regarded
+            id_hash_set.add(root_concept.conceptId)
+            dump_whole_subtree = True
+        else:
+            id_hash_set.update(c.conceptId for c in return_codes(
                 filter_by_semantic_tag(
-                    concept_children,
+                    root_concept,
                     tags=filter_list.tags,
                     positive=filter_mode == FilterMode.POSITIVE,
                 )
             )
-        )
-        code_filter = set(
-            (c.conceptId, c.fsn.term)
-            for c in return_codes(concept_children)
-            if (c.conceptId in filter_list.codes) and filter_mode == FilterMode.POSITIVE
-        )
-        for concept_id, fsn_term in tag_filter | code_filter:
-            _id_hash_set, _id_to_fsn_dict = dump_concept_ids(
-                concept_id,
-                fsn_term,
-                endpoint_builder,
-                filter_list,
-                filter_mode,
-                dump_mode,
-                is_not_recursive,
-                up_to_including,
-                iteration,
-                id_hash_set,
-                id_to_fsn_dict,
             )
-            id_hash_set.update(_id_hash_set)
+        # code_filter = set(
+        #     (c.conceptId, c.fsn.term)
+        #     for c in return_codes(concept_children)
+        #     if (c.conceptId in filter_list.codes) and filter_mode == FilterMode.POSITIVE
+        # )
     else:
-        for code in return_codes(concept_children):
-            _id_hash_set, _id_to_fsn_dict = dump_concept_ids(
-                code.conceptId,
-                code.fsn.term,
-                endpoint_builder,
-                filter_list,
-                filter_mode,
-                dump_mode,
-                is_not_recursive,
-                up_to_including,
-                iteration,
-                id_hash_set,
-                id_to_fsn_dict,
-            )
-            id_hash_set.update(_id_hash_set)
+        id_hash_set.add(root_concept.conceptId)
+
+    iteration += 1
+    for code in return_codes(concept_children):
+        _id_hash_set, _id_to_fsn_dict = dump_concept_ids(
+            code,
+            endpoint_builder,
+            filter_list,
+            filter_mode,
+            dump_mode,
+            is_not_recursive,
+            up_to_including,
+            iteration,
+            id_hash_set,
+            id_to_fsn_dict,
+            dump_whole_subtree
+        )
+        id_hash_set.update(_id_hash_set)
 
     return set(id_hash_set), id_to_fsn_dict

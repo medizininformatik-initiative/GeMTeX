@@ -208,17 +208,19 @@ def create_concept_id_dump(
                         code_filter = None
 
     with yaspin.yaspin(text="Processing...") as spinner:
-        root = get_root_code(root_code, endpoint_builder)
-        id_hash_set, id_to_fsn_dict = dump_concept_ids(
-            root_code=root_code,
-            fsn_term=root.fsn.term,
-            endpoint_builder=endpoint_builder,
-            filter_list=code_filter,
-            filter_mode=filter_mode,
-            dump_mode=dump_mode,
-            is_not_recursive=not_recursive,
-        )
-        codes = set(id_hash_set)
+        if root := get_root_code(root_code, endpoint_builder):
+            id_hash_set, id_to_fsn_dict = dump_concept_ids(
+                root_concept=root,
+                endpoint_builder=endpoint_builder,
+                filter_list=code_filter,
+                filter_mode=filter_mode,
+                dump_mode=dump_mode,
+                is_not_recursive=not_recursive,
+            )
+            codes = set(id_hash_set)
+        else:
+            logging.error(f"Could not find root code '{root_code}'. Exiting.")
+            sys.exit(-1)
     hdf5_path = pathlib.Path(
         __file__,
         f"../../../data/gemtex_snomedct_codes_{endpoint_builder.branch.split('/')[-1]}.hdf5",
@@ -263,7 +265,9 @@ if __name__ == "__main__":
     # )
     # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--dump-mode", "semantic", "--not-recursive"])
     # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--dump-mode", "version", "298011007"])
-    create_concept_id_dump(["--dump-mode", "semantic", "--filter-list", "../../config/blacklist_filter_tags.txt", "--not-recursive"])
+    # create_concept_id_dump(["--dump-mode", "semantic", "--filter-list", "../../config/blacklist_filter_tags.txt", "--not-recursive"])
+    # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--dump-mode", "semantic", "--filter-list", "./config/blacklist_filter_tags.txt", "--not-recursive", "129264002"])
+    create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--dump-mode", "semantic", "--filter-list", "./config/blacklist_filter_tags.txt", "129264002"])
     # log_documents(
     #     [str(pathlib.Path("test/snomed-verification-test-project.zip").resolve())]
     # )

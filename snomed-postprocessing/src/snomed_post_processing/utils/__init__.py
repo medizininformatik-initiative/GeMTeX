@@ -94,18 +94,24 @@ def return_codes(data: Union[dict, SnowstormResponse]) -> list[SnomedConcept]:
 
 
 def filter_by_semantic_tag(
-    json_data: dict, tags: list[str] = None, positive: bool = True
+    data: Union[dict, SnowstormResponse, SnomedConcept], tags: list[str] = None, positive: bool = True
 ) -> SnowstormResponse:
     """
     Filters the results of e.g. "scttsrapy"´s `get_concept_children` by the respective "semantic tag".
 
-    :param json_data: the result dict, containing at least a "content" field that features a list of concepts.
+    :param data: the result dict, containing at least a "content" field that features a list of concepts.
     :param tags: a list of the semantic tags to filter by (e.g. "disorder", "finding", etc.).
     :param positive: whether to include concepts with said semantic tags (`True`) or to exclude them (`False`).
     """
-    if not json_data.get("success", False):
-        return SnowstormResponse(success=False, content=[])
-    snowstorm_response = snowstorm_response_to_pydantic(json_data)
+    if isinstance(data, SnomedConcept):
+        snowstorm_response = SnowstormResponse(success=True, content=[data])
+    elif isinstance(data, SnowstormResponse):
+        snowstorm_response = data
+    else:
+        if not data.get("success", False):
+            return SnowstormResponse(success=False, content=[])
+        snowstorm_response = snowstorm_response_to_pydantic(data)
+
     if tags is None:
         return snowstorm_response
 
