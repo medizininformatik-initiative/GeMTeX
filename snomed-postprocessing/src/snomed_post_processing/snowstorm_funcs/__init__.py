@@ -184,6 +184,7 @@ def dump_concept_ids(
             id_hash_set,
             id_to_fsn_dict,
             dump_whole_subtree,
+            visited_nodes,
         )
         id_hash_set.update(_id_hash_set)
 
