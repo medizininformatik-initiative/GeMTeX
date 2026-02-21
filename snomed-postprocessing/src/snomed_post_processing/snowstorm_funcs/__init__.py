@@ -76,6 +76,7 @@ def dump_concept_ids(
     id_hash_set: set = None,
     id_to_fsn_dict: dict = None,
     dump_whole_subtree: bool = False,
+    visited_nodes: set = None,
 ) -> Tuple[set[str], dict[str, str]]:
     """
     Dumps concept IDs and their fully specified names (FSNs) with configurable filtering and recursion.
@@ -106,6 +107,7 @@ def dump_concept_ids(
         id_to_fsn_dict (dict): A dictionary mapping concept IDs to their FSNs, populated dynamically.
             Defaults to an empty dictionary if None is provided.
         dump_whole_subtree (bool): ...
+        visited_nodes (set): ...
 
     Returns:
         Tuple[set[str], dict[str, str]]: A tuple containing:
@@ -116,11 +118,18 @@ def dump_concept_ids(
         NotImplementedError: If filtering by concept codes (as opposed to semantic tags)
             is requested but not implemented.
     """
+    if visited_nodes is None:
+        visited_nodes = set()
     if id_hash_set is None:
         id_hash_set = set()
     if id_to_fsn_dict is None:
         id_to_fsn_dict = {}
-    if root_concept is None or root_concept.conceptId in id_hash_set:
+    if (
+        root_concept is None
+        or root_concept.conceptId is None
+        or root_concept.conceptId in id_hash_set
+        or root_concept.conceptId in visited_nodes
+    ):
         return id_hash_set, id_to_fsn_dict
     if root_concept.conceptId not in id_to_fsn_dict:
         id_to_fsn_dict[root_concept.conceptId] = root_concept.fsn.term
@@ -136,6 +145,7 @@ def dump_concept_ids(
             t = [f.strip() for f in filter_list if f not in c]
             filter_list = FilterLists(c, t)
 
+    visited_nodes.add(root_concept.conceptId)
     concept_children = concepts.get_concept_children(
         root_concept.conceptId, endpoint_builder=endpoint_builder
     )
@@ -147,19 +157,16 @@ def dump_concept_ids(
             id_hash_set.add(root_concept.conceptId)
             dump_whole_subtree = True
         else:
-            id_hash_set.update(c.conceptId for c in return_codes(
-                filter_by_semantic_tag(
-                    root_concept,
-                    tags=filter_list.tags,
-                    positive=filter_mode == FilterMode.POSITIVE,
+            id_hash_set.update(
+                c.conceptId
+                for c in return_codes(
+                    filter_by_semantic_tag(
+                        root_concept,
+                        tags=filter_list.tags,
+                        positive=filter_mode == FilterMode.POSITIVE,
+                    )
                 )
             )
-            )
-        # code_filter = set(
-        #     (c.conceptId, c.fsn.term)
-        #     for c in return_codes(concept_children)
-        #     if (c.conceptId in filter_list.codes) and filter_mode == FilterMode.POSITIVE
-        # )
     else:
         id_hash_set.add(root_concept.conceptId)
 
@@ -176,7 +183,7 @@ def dump_concept_ids(
             iteration,
             id_hash_set,
             id_to_fsn_dict,
-            dump_whole_subtree
+            dump_whole_subtree,
         )
         id_hash_set.update(_id_hash_set)
 

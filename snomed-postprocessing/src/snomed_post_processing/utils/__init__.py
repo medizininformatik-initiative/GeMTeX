@@ -94,7 +94,9 @@ def return_codes(data: Union[dict, SnowstormResponse]) -> list[SnomedConcept]:
 
 
 def filter_by_semantic_tag(
-    data: Union[dict, SnowstormResponse, SnomedConcept], tags: list[str] = None, positive: bool = True
+    data: Union[dict, SnowstormResponse, SnomedConcept],
+    tags: list[str] = None,
+    positive: bool = True,
 ) -> SnowstormResponse:
     """
     Filters the results of e.g. "scttsrapy"´s `get_concept_children` by the respective "semantic tag".

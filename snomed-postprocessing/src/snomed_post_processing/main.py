@@ -1,5 +1,7 @@
 import datetime
+import json
 import os
+import pickle
 import sys
 import logging
 import pathlib
@@ -196,9 +198,7 @@ def create_concept_id_dump(
         else:
             fi = pathlib.Path(filter_list[0])
             if fi.is_file():
-                code_filter = (
-                    fi.read_text(encoding="utf-8").splitlines()
-                )
+                code_filter = fi.read_text(encoding="utf-8").splitlines()
             else:
                 if os.sep in str(fi):
                     code_filter = None
@@ -221,6 +221,9 @@ def create_concept_id_dump(
         else:
             logging.error(f"Could not find root code '{root_code}'. Exiting.")
             sys.exit(-1)
+    pickle.dump(
+        codes, (pathlib.Path(__file__).parent / "dump.pickle").open("wb")
+    )  # ToDo: remove later
     hdf5_path = pathlib.Path(
         __file__,
         f"../../../data/gemtex_snomedct_codes_{endpoint_builder.branch.split('/')[-1]}.hdf5",
@@ -267,7 +270,18 @@ if __name__ == "__main__":
     # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--dump-mode", "version", "298011007"])
     # create_concept_id_dump(["--dump-mode", "semantic", "--filter-list", "../../config/blacklist_filter_tags.txt", "--not-recursive"])
     # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--dump-mode", "semantic", "--filter-list", "./config/blacklist_filter_tags.txt", "--not-recursive", "129264002"])
-    create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--dump-mode", "semantic", "--filter-list", "./config/blacklist_filter_tags.txt", "129264002"])
+    create_concept_id_dump(
+        [
+            "--ip",
+            "nlp-prod",
+            "--port",
+            "9021",
+            "--dump-mode",
+            "semantic",
+            "--filter-list",
+            "./config/blacklist_filter_tags.txt",
+        ]
+    )
     # log_documents(
     #     [str(pathlib.Path("test/snomed-verification-test-project.zip").resolve())]
     # )
