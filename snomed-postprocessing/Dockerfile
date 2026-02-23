@@ -9,10 +9,8 @@ RUN apt-get update --yes && \
 
 COPY . .
 
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-
 RUN uv sync && uv cache clean
 
-ENV cmd_command="program-entry"
+ENV COMMAND="program-entry"
 
-ENTRYPOINT ["uv", "run", "$cmd_command"]
+ENTRYPOINT "uv run ${COMMAND}"
