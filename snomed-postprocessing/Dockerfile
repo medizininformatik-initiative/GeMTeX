@@ -4,6 +4,9 @@ RUN pip install uv
 
 WORKDIR /snomed_postprocessing
 
+RUN apt-get update --yes && \
+    apt-get install --yes git
+
 COPY . .
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
