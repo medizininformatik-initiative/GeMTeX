@@ -109,7 +109,6 @@ def log_documents(zip_file: str, lists_path: Optional[str]):
                             fsn_list[:],
                             ft,
                             log_doc,
-                            ft == ListDumpType.WHITELIST,
                         )
     if erroneous_doc_count > 0:
         logging.warning(
@@ -270,18 +269,18 @@ if __name__ == "__main__":
     # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--dump-mode", "version", "298011007"])
     # create_concept_id_dump(["--dump-mode", "semantic", "--filter-list", "../../config/blacklist_filter_tags.txt", "--not-recursive"])
     # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--dump-mode", "semantic", "--filter-list", "./config/blacklist_filter_tags.txt", "--not-recursive", "129264002"])
-    create_concept_id_dump(
-        [
-            "--ip",
-            "nlp-prod",
-            "--port",
-            "9021",
-            "--dump-mode",
-            "semantic",
-            "--filter-list",
-            "./config/blacklist_filter_tags.txt",
-        ]
-    )
-    # log_documents(
-    #     [str(pathlib.Path("test/snomed-verification-test-project.zip").resolve())]
+    # create_concept_id_dump(
+    #     [
+    #         "--ip",
+    #         "nlp-prod",
+    #         "--port",
+    #         "9021",
+    #         "--dump-mode",
+    #         "semantic",
+    #         "--filter-list",
+    #         "./config/blacklist_filter_tags.txt",
+    #     ]
     # )
+    log_documents(
+        [str(pathlib.Path("test/snomed-verification-test-project.bak.zip").resolve())]
+    )
