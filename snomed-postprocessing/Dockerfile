@@ -45,6 +45,4 @@ ENTRYPOINT []
 # Use the non-root user to run our application
 USER nonroot
 
-ENV COMMAND="program-entry"
-
-CMD "${COMMAND}"
+ENTRYPOINT ["./start.sh"]
