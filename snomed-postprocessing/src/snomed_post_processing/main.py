@@ -70,13 +70,20 @@ def common_click_args(fnc):
 @click.command()
 @click.argument("zip-file", type=click.Path(exists=True))
 @click.option(
-    "--lists-path", default=None, help="The path to the lists file in 'hdf5' format."
+    "--lists-path",
+    default=None,
+    help="The path to the lists file in 'hdf5' format. (default: default lists are used)",
 )
 def log_documents(zip_file: str, lists_path: Optional[str]):
-    test_base = pathlib.Path(__file__, "../../../test/").resolve()
+    """
+    Analyzes an INCEpTION project "ZIP_FILE" and logs all documents that contain erroneous concepts
+    according to the given filter lists in a hdf5 file ("lists-path").
+    """
     project_zip = pathlib.Path(zip_file).resolve()
     default_lists_path = pathlib.Path(
-        test_base.parent, "data", "gemtex_snomedct_codes_2024-04-01.hdf5"
+        pathlib.Path(__file__).parent.parent.parent,
+        "data",
+        "gemtex_snomedct_codes_2024-04-01.hdf5",
     ).resolve()
     if lists_path is not None:
         lists_path_tmp = pathlib.Path(lists_path).resolve()
@@ -163,6 +170,8 @@ def create_concept_id_dump(
     filter_mode: FilterMode,
     not_recursive: bool,
 ):
+    """Creates a dump of all concept IDs (if filter-mode == 'version') or only for the ones that match the given filter criteria
+    (if a filter-list is given and filter-mode == 'semantic') for a SNOMED CT release version (--branch)."""
     endpoint_builder, host = build_endpoint(ip, port, use_secure_protocol)
     path_ids, path_names = get_branches(endpoint_builder, host)
 
@@ -241,6 +250,7 @@ def create_concept_id_dump(
 @click.command()
 @common_click_options
 def list_branches(ip: str, port: Union[int, str], use_secure_protocol: bool):
+    """Lists all available branches on the server."""
     endpoint_builder, host = build_endpoint(ip, port, use_secure_protocol)
     path_ids, _ = get_branches(endpoint_builder, host)
     pad = len(max([str(x) for x in path_ids.get("path").keys()], key=len))
@@ -248,39 +258,19 @@ def list_branches(ip: str, port: Union[int, str], use_secure_protocol: bool):
         print(f"{str(_id).ljust(pad, ' ')} : {path}")
 
 
+@click.command()
+def help_me():
+    """Please use one of the following commands:
+
+    \b
+     * log-critical-documents
+     * create-concepts-dump
+     * list-branches
+
+    Each command has a '--help' option that provides further information, e.g. 'log-critical-documents --help'
+    """
+    pass
+
+
 if __name__ == "__main__":
-    # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--filter-list", "social concept", "--filter-list", "procedure", "--filter-list", "physical force", "--filter-list", "body structure", "--dump-mode", "semantic", "--filter-mode", "positive", "--not-recursive"])
-    # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--filter-list", "./config/blacklist_filter_codes.txt", "--dump-mode", "semantic", "--filter-mode", "negative"])
-    # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--dump-mode", "version"])
-    # create_concept_id_dump(
-    #     [
-    #         "--ip",
-    #         "nlp-prod",
-    #         "--port",
-    #         "9021",
-    #         "--dump-mode",
-    #         "version",
-    #         "--branch",
-    #         "MAIN/2024-04-01",
-    #         "--not-recursive",
-    #     ]
-    # )
-    # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--dump-mode", "semantic", "--not-recursive"])
-    # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--dump-mode", "version", "298011007"])
-    # create_concept_id_dump(["--dump-mode", "semantic", "--filter-list", "../../config/blacklist_filter_tags.txt", "--not-recursive"])
-    # create_concept_id_dump(["--ip", "nlp-prod", "--port", "9021", "--dump-mode", "semantic", "--filter-list", "./config/blacklist_filter_tags.txt", "--not-recursive", "129264002"])
-    # create_concept_id_dump(
-    #     [
-    #         "--ip",
-    #         "nlp-prod",
-    #         "--port",
-    #         "9021",
-    #         "--dump-mode",
-    #         "semantic",
-    #         "--filter-list",
-    #         "./config/blacklist_filter_tags.txt",
-    #     ]
-    # )
-    log_documents(
-        [str(pathlib.Path("test/snomed-verification-test-project.bak.zip").resolve())]
-    )
+    help_me(["--help"])

@@ -222,7 +222,10 @@ def analyze_documents(
                     _map_dict = None
                     if not as_whitelist:
                         _map_dict = {}
-                        idx = np.searchsorted(filter_array, annotations.snomed_codes[erroneous_codes_array])
+                        idx = np.searchsorted(
+                            filter_array,
+                            annotations.snomed_codes[erroneous_codes_array],
+                        )
                         for _idx in idx:
                             _map_dict[filter_array[_idx]] = mapping_array[_idx]
                     log_critical_docs(
@@ -235,7 +238,7 @@ def analyze_documents(
                         as_whitelist,
                         _map_dict,
                         filter_type,
-                        new_section
+                        new_section,
                     )
                     new_annotator = False
             concept_error_text = f" With {concept_error_count:>3} concept(s) {'not' if as_whitelist else ''} on '{filter_type.name.lower()}'."
@@ -257,14 +260,22 @@ def log_critical_docs(
     is_whitelist: bool,
     mapping_dict: dict,
     filter_type: ListDumpType,
-    new_section: bool
+    new_section: bool,
 ):
     stacked = np.stack(
         [
             document_dump.snomed_codes[bool_index_array],
             document_dump.text[bool_index_array],
             document_dump.offsets[bool_index_array],
-            np.asarray([mapping_dict.get(x) for x in document_dump.snomed_codes if x in mapping_dict]) if not is_whitelist else np.zeros(sum(bool_index_array))
+            np.asarray(
+                [
+                    mapping_dict.get(x)
+                    for x in document_dump.snomed_codes
+                    if x in mapping_dict
+                ]
+            )
+            if not is_whitelist
+            else np.zeros(sum(bool_index_array)),
         ],
         axis=-1,
         dtype=object,
@@ -284,6 +295,8 @@ def log_critical_docs(
         lines.append(f"| Snomed CT Code | Covered Text | Offset in Document | FSN |\n")
         lines.append(f"| -------------: | -----------: | -----------------: | --: |\n")
         for line in stacked:
-            lines.append(f"| {line[0].decode('utf-8')} | {line[1]} | {line[2]} | {line[3].decode('utf-8')} |\n")
+            lines.append(
+                f"| {line[0].decode('utf-8')} | {line[1]} | {line[2]} | {line[3].decode('utf-8')} |\n"
+            )
     output_file.writelines(lines)
     output_file.write("\n\n")

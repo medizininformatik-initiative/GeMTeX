@@ -1,6 +1,6 @@
 [project]
 name = "snomed_post_processing"
-version = "0.1.0"
+version = "0.9.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -22,6 +22,7 @@ scttsrapy = { git = "https://github.com/AberystwythSystemsBiology/SCTTSRApy" }
 log-critical-documents = "snomed_post_processing.main:log_documents"
 create-concepts-dump = "snomed_post_processing.main:create_concept_id_dump"
 list-branches = "snomed_post_processing.main:list_branches"
+programm-entry = "snomed_post_processing.main:help_me"
 
 [build-system]
 requires = ["uv_build>=0.9.9,<0.10.0"]
