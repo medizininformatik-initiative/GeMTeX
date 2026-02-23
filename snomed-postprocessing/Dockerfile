@@ -8,6 +8,6 @@ COPY . .
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-RUN uvx install . && uv cache clean
+RUN uv tool install . && uv tool update-shell && uv cache clean
 
 ENTRYPOINT ["programm-entry"]
