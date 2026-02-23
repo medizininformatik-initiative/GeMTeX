@@ -46,4 +46,4 @@ ENTRYPOINT []
 #USER nonroot
 RUN chmod +x ./entrypoint.sh
 
-ENTRYPOINT ["bash", "-c", "./entrypoint.sh"]
+ENTRYPOINT ["bash", "-c", "./entrypoint.sh \"$@\"", "--"]
