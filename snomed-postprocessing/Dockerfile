@@ -11,6 +11,8 @@ COPY . .
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-RUN uv tool install . && uv tool update-shell && uv cache clean
+RUN uv sync && uv cache clean
 
-ENTRYPOINT ["programm-entry"]
+ENV cmd_command="program-entry"
+
+ENTRYPOINT ["uv", "run", "$cmd_command"]
