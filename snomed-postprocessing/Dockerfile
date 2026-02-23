@@ -47,4 +47,4 @@ USER nonroot
 
 ENV COMMAND="program-entry"
 
-CMD "uv run ${COMMAND}"
+CMD "${COMMAND}"

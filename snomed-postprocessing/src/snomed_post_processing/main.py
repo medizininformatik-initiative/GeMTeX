@@ -269,7 +269,13 @@ def help_me():
 
     Each command has a '--help' option that provides further information, e.g. 'log-critical-documents --help'
     """
-    pass
+    print(
+        "Please use one of the following commands:"
+        "\n\n * log-critical-documents"
+        "\n * create-concepts-dump"
+        "\n * list-branches"
+        "\n\nEach command has a '--help' option that provides further information, e.g. 'log-critical-documents --help'"
+    )
 
 
 if __name__ == "__main__":
