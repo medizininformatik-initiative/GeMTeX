@@ -194,10 +194,10 @@ def analyze_documents(
     mapping_array: np.ndarray,
     filter_type: ListDumpType,
     log_doc: TextIOWrapper,
+    new_section: bool,
 ):
     as_whitelist = filter_type == ListDumpType.WHITELIST
     erroneous_doc_count = 0
-    new_section = True
     # filter_array = filter_array.astype(np.dtypes.StringDType)
     with yaspin.yaspin() as spinner:
         annotator_names_max = len(max(project.annotators.keys(), key=len))
@@ -240,13 +240,13 @@ def analyze_documents(
                         filter_type,
                         new_section,
                     )
+                    new_section = False
                     new_annotator = False
             concept_error_text = f" With {concept_error_count:>3} concept(s) {'not' if as_whitelist else ''} on '{filter_type.name.lower()}'."
             spinner.write(
                 f"{annotator_name}:{' ' * (annotator_names_max - len(annotator_name) + 1)}Done. Found {doc_error_count:>3} critical document(s).{concept_error_text if doc_error_count > 0 else ''}"
             )
             erroneous_doc_count += doc_error_count
-            new_section = False
     return erroneous_doc_count
 
 

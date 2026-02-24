@@ -99,7 +99,7 @@ def log_documents(zip_file: str, lists_path: Optional[str]):
         lists_path = default_lists_path
     output_path = (
         project_zip.parent
-        / f"critical_documents_{datetime.datetime.today().strftime('%d-%m-%Y_%H-%M-%S')}.md"
+        / f"critical_documents_{datetime.datetime.today().strftime('%d-%m-%Y_%H-%M')}.md"
     )
 
     erroneous_doc_count = 0
@@ -107,6 +107,7 @@ def log_documents(zip_file: str, lists_path: Optional[str]):
         with output_path.open("w", encoding="utf-8") as log_doc:
             with h5py.File(lists_path.open("rb"), "r") as h5_file:
                 for ft in [ListDumpType.WHITELIST, ListDumpType.BLACKLIST]:
+                    print(f"-- {ft.name.capitalize()} --")
                     if ft.name.lower() in h5_file.keys():
                         filter_list = h5_file.get(ft.name.lower()).get("0").get("codes")
                         fsn_list = h5_file.get(ft.name.lower()).get("0").get("fsn")
@@ -116,10 +117,11 @@ def log_documents(zip_file: str, lists_path: Optional[str]):
                             fsn_list[:],
                             ft,
                             log_doc,
+                            True
                         )
     if erroneous_doc_count > 0:
         logging.warning(
-            f"{erroneous_doc_count:>4} critical document(s) found. See '{output_path.resolve()}' for details."
+            f"-- Result --\n{erroneous_doc_count:>4} critical document(s) found. See '{output_path.resolve()}' for details."
         )
     else:
         logging.info("No critical document(s) found.")
