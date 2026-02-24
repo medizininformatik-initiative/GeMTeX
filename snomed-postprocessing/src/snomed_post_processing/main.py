@@ -119,9 +119,10 @@ def log_documents(zip_file: str, lists_path: Optional[str]):
                             log_doc,
                             True
                         )
+    print("-- Result --")
     if erroneous_doc_count > 0:
         logging.warning(
-            f"-- Result --\n{erroneous_doc_count:>4} critical document(s) found. See '{output_path.resolve()}' for details."
+            f"{erroneous_doc_count:>4} critical document(s) found. See '{output_path.resolve()}' for details."
         )
     else:
         logging.info("No critical document(s) found.")
