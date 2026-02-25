@@ -37,7 +37,7 @@ There is a convenience script with `./log-inception-docs.sh` that runs the above
 * _arg1_ (mandatory): name of the inception dump zip (in the ``data`` folder)
 * _arg2_ (optional): version of the docker image 
 
-_[1] the discrepancy between `/app/data/...` and `./data/...` is no error,
+_[1] the discrepancy between `/app/data/...` in the docker command and `./data/...` for the requirements is no error,
 because the local `./data` will be mounted into the containers `/app/data` and the script that runs in the container will need the location relative to its filesystem._
 
 ### CLI Output:
@@ -49,10 +49,15 @@ INITIAL_CAS: Done. Found   0 critical document(s).
 INITIAL_CAS: Done. Found  13 critical document(s). With  19 concept(s)  on 'blacklist'.
 [...]
 -- Result --
-WARNING:root:  13 critical document(s) found. See '[...]/critical_documents_24-02-2026_08-46-07.md' for details.
+WARNING:root:  13 critical document(s) found. See '[...]/critical_documents_24-02-2026_08-46.md' for details.
 ```
 
-## Resulting LOG File:
+## Additional Information
+* Since the script needs to compare every document and its SNOMED CT codes against the whitelist/blacklist, it might take a while to complete.
+The script will show the progress in the console, and on the bright side, if it completed the whitelist, the comparion against the blacklist should be much faster, since it contains fewer concepts. 
+
+
+## Resulting LOG File Example:
 ### Whitelist
 [...]
 ### Blacklist

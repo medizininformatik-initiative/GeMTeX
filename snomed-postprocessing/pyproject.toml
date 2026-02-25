@@ -1,9 +1,16 @@
 [project]
 name = "snomed_post_processing"
+
 version = "0.9.3"
-description = "Add your description here"
+description = "Program that creates SNOMED CT dumps of a particular version and/or with some filters for semantic tags or concept ids applied. It also logs SNOMED CT annotated documents under these filters in mind."
 readme = "README.md"
 requires-python = ">=3.11"
+authors = [
+  {name = "Franz Matthies", email = "franz.matthies@imise.uni-leipzig.de"},
+]
+maintainers = [
+  {name = "Franz Matthies", email = "franz.matthies@imise.uni-leipzig.de"},
+]
 dependencies = [
     "click>=8.3.1",
     "dkpro-cassis>=0.10.1",
