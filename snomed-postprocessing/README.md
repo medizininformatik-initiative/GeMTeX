@@ -13,6 +13,11 @@ docker run
 - `inception-json-dump.zip` muss in `./data` vorhanden sein.
 - [gemtex_snomedct_codes_2024-04-01.hdf5](https://confluence.imi.med.fau.de/spaces/GEM/pages/317216732/SNOMED+CT+Semantic+Tag+Dashboard?preview=/317216732/359075603/gemtex_snomedct_codes_2024-04-01.hdf5) muss in `./data` vorhanden sein.
 
+##### Convenience Script
+There is a convenience script with `./log-inception-docs.sh` that runs the above docker command with the given arguments:
+* _arg1_ (mandatory): name of the inception dump zip (in the ``data`` folder)
+* _arg2_ (optional): version of the docker image 
+
 #### CLI Output:
 ```
 -- Whitelist --
