@@ -57,7 +57,6 @@ def get_annotations_from_document(
     if not annotation_types:
         annotation_types = ["gemtex.Concept"]
     id_prefix = id_prefix + "/" if not id_prefix.endswith("/") else id_prefix
-    # annotations = DocumentAnnotations([], [], [], 0)
 
     if not isinstance(document, cassis.Cas):
         document = _load_document(document)
@@ -76,7 +75,6 @@ def get_annotations_from_document(
             except Exception as e:
                 pass
     return DocumentAnnotations(
-        # snomed_codes=np.asarray(codes, dtype=np.dtypes.StringDType),
         snomed_codes=np.asarray(codes, dtype="bytes"),
         offsets=np.asarray(offsets, dtype="i,i"),
         text=np.asarray(text, dtype=np.dtypes.StringDType),
@@ -117,7 +115,6 @@ def process_inception_zip(
             for doc in project_documents:
                 doc_name = doc["name"]
                 state = doc.get("state", "")
-                # annotations[doc_name] = {}
 
                 # Determine path (curation or annotation)
                 folder_prefix = (
@@ -198,7 +195,6 @@ def analyze_documents(
 ):
     as_whitelist = filter_type == ListDumpType.WHITELIST
     erroneous_doc_count = 0
-    # filter_array = filter_array.astype(np.dtypes.StringDType)
     with yaspin.yaspin() as spinner:
         annotator_names_max = len(max(project.annotators.keys(), key=len))
         for annotator_name, documents in project.annotators.items():

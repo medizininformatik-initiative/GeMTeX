@@ -1,12 +1,9 @@
 import datetime
-import json
 import os
-import pickle
 import sys
 import logging
 import pathlib
 import sys
-from email.policy import default
 from typing import Union, Optional
 
 import click
@@ -102,6 +99,10 @@ def log_documents(zip_file: str, lists_path: Optional[str]):
         / f"critical_documents_{datetime.datetime.today().strftime('%d-%m-%Y_%H-%M')}.md"
     )
 
+    if not lists_path.exists():
+        logging.error(f"The given list doesn't exist: '{lists_path}'. Exiting.")
+        sys.exit(-1)
+
     erroneous_doc_count = 0
     if result := process_inception_zip(project_zip):
         with output_path.open("w", encoding="utf-8") as log_doc:
@@ -112,12 +113,7 @@ def log_documents(zip_file: str, lists_path: Optional[str]):
                         filter_list = h5_file.get(ft.name.lower()).get("0").get("codes")
                         fsn_list = h5_file.get(ft.name.lower()).get("0").get("fsn")
                         erroneous_doc_count += analyze_documents(
-                            result,
-                            filter_list[:],
-                            fsn_list[:],
-                            ft,
-                            log_doc,
-                            True
+                            result, filter_list[:], fsn_list[:], ft, log_doc, True
                         )
     print("-- Result --")
     if erroneous_doc_count > 0:
@@ -232,9 +228,6 @@ def create_concept_id_dump(
         else:
             logging.error(f"Could not find root code '{root_code}'. Exiting.")
             sys.exit(-1)
-    pickle.dump(
-        codes, (pathlib.Path(__file__).parent / "dump.pickle").open("wb")
-    )  # ToDo: remove later
     hdf5_path = pathlib.Path(
         __file__,
         f"../../../data/gemtex_snomedct_codes_{endpoint_builder.branch.split('/')[-1]}.hdf5",
