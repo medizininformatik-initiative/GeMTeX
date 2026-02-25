@@ -38,6 +38,10 @@ Eine Demo bzw. Machbarkeitsnachweis wie CDA Dokumente Level One über XSLT Style
 * [`health-discovery-scripts`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/scripts/health-discovery-scripts)  
 Python-Skripte um die [Averbis Health Discovery](https://averbis.com/health-discovery/) per API anzusprechen.
 
+### [`snomed-postprocessing`](https://github.com/medizininformatik-initiative/GeMTeX/tree/7c1605db3b280e0e03eb4b97e04e025cb9384a3f/snomed-postprocessing)  
+Programm um Dokumente zu identifizieren, die SNOMED CT Codes enthalten, die nicht mit einer Version kompatibel sind.
+(Im GeMTeX Fall: 04/2024) bzw. Codes, die auf einer Blacklist stehen.
+
 ### [`surrogator`](/surrogator/Readme.md)
 Werkzeug für Pseudonymisierung von Textdocumenten nach Detektion von PII-Entitäten.
 

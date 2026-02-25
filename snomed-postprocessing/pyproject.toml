@@ -1,0 +1,36 @@
+[project]
+name = "snomed_post_processing"
+
+version = "0.9.3"
+description = "Program that creates SNOMED CT dumps of a particular version and/or with some filters for semantic tags or concept ids applied. It also logs SNOMED CT annotated documents under these filters in mind."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+  {name = "Franz Matthies", email = "franz.matthies@imise.uni-leipzig.de"},
+]
+maintainers = [
+  {name = "Franz Matthies", email = "franz.matthies@imise.uni-leipzig.de"},
+]
+dependencies = [
+    "click>=8.3.1",
+    "dkpro-cassis>=0.10.1",
+    "h5py>=3.15.1",
+    "pandas>=3.0.0",
+    "pydantic>=2.12.5",
+    "requests==2.27.1",
+    "scttsrapy",
+    "yaspin>=3.4.0",
+]
+
+[tool.uv.sources]
+scttsrapy = { git = "https://github.com/AberystwythSystemsBiology/SCTTSRApy" }
+
+[project.scripts]
+log-critical-documents = "snomed_post_processing.main:log_documents"
+create-concepts-dump = "snomed_post_processing.main:create_concept_id_dump"
+list-branches = "snomed_post_processing.main:list_branches"
+program-entry = "snomed_post_processing.main:help_me"
+
+[build-system]
+requires = ["uv_build>=0.9.9,<0.10.0"]
+build-backend = "uv_build"
