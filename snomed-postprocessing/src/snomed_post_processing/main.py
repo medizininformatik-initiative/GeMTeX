@@ -1,5 +1,6 @@
 import datetime
 import os
+import pickle
 import sys
 import logging
 import pathlib
@@ -233,15 +234,20 @@ def create_concept_id_dump(
         f"../../../data/gemtex_snomedct_codes_{endpoint_builder.branch.split('/')[-1]}.hdf5",
     ).resolve()
     hdf5_path.parent.mkdir(exist_ok=True, parents=True)
-    dump_codes_to_hdf5(
-        fi_path=hdf5_path,
-        codes=codes,
-        id_to_fsn_dict=id_to_fsn_dict,
-        list_type=ListDumpType.BLACKLIST
-        if dump_mode == DumpMode.SEMANTIC
-        else ListDumpType.WHITELIST,
-    )
-
+    try:
+        dump_codes_to_hdf5(
+            fi_path=hdf5_path,
+            codes=codes,
+            id_to_fsn_dict=id_to_fsn_dict,
+            list_type=ListDumpType.BLACKLIST
+            if dump_mode == DumpMode.SEMANTIC
+            else ListDumpType.WHITELIST,
+        )
+    except Exception as e:
+        logging.error(f"Error while creating hdf5 dump: '{e}'. Exiting.")
+        pickle_path = hdf5_path.with_suffix(f"-{dump_mode.name.lower()}.pickle")
+        logging.error(f"Dumping as pickle file: '{pickle_path}'.")
+        pickle.dump(codes, open(pickle_path, "wb"))
 
 @click.command()
 @common_click_options
