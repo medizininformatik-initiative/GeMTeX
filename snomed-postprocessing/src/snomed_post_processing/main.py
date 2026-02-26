@@ -11,6 +11,7 @@ from typing import Union, Optional
 import click
 import h5py
 import yaspin
+from pycaprio import Pycaprio
 
 if __name__ == "__main__":
     sys.path.append(".")
@@ -56,7 +57,7 @@ class ClickUnion(click.ParamType):
         self.fail("Didn't match any of the accepted types.")
 
 
-def common_click_options(fnc):
+def click_server_options(fnc):
     fnc = click.option(
         "--use-secure_protocol", is_flag=True, help="Whether to use 'https'."
     )(fnc)
@@ -69,8 +70,13 @@ def common_click_options(fnc):
     return fnc
 
 
-def common_click_args(fnc):
-    fnc = click.argument("root_code", default="138875005")(fnc)
+def click_inception_client_options(fnc):
+    fnc = click.option(
+        "--inception-password", default=None, help="The username for the INCEpTION client (needs to have REMOTE role). [NOT YET IMPLEMENTED!]"
+    )(fnc)
+    fnc = click.option(
+        "--inception-username", default=None, help="The password for the INCEpTION client. [NOT YET IMPLEMENTED!]"
+    )(fnc)
     return fnc
 
 
@@ -84,6 +90,11 @@ def click_log_level(fnc):
     return fnc
 
 
+def common_click_args(fnc):
+    fnc = click.argument("root_code", default="138875005")(fnc)
+    return fnc
+
+
 @click.command()
 @click.argument("zip-file", type=click.Path(exists=True))
 @click.option(
@@ -91,13 +102,35 @@ def click_log_level(fnc):
     default=None,
     help="The path to the lists file in 'hdf5' format. (default: default lists are used)",
 )
+# @click_server_options
+# @click_inception_client_options
 @click_log_level
-def log_documents(zip_file: str, lists_path: Optional[str], log_level: str):
+def log_documents(
+        zip_file: str,
+        lists_path: Optional[str],
+        # ip: str,
+        # port: Union[int, str],
+        # use_secure_protocol: bool,
+        # inception_password: Optional[str],
+        # inception_username: Optional[str],
+        log_level: str
+):
     """
     Analyzes an INCEpTION project "ZIP_FILE" and logs all documents that contain erroneous concepts
     according to the given filter lists in a hdf5 file ("lists-path").
     """
     set_log_level(log_level)
+
+    #ToDo: log in inception if password and username
+    # host = f"http{'s' if use_secure_protocol else ''}://{ip}:{port}"
+    # if inception_username is not None and inception_password is not None:
+    #     logging.error("Usage of Inception client not yet implemented.")
+    #     sys.exit(-1)
+    #     inception_client = Pycaprio(host, (inception_username, inception_password))
+    # else:
+    #     logging.info("Inception client credentials were not complete. Using zipped project.")
+    #     inception_client = None
+
     project_zip = pathlib.Path(zip_file).resolve()
     default_lists_path = pathlib.Path(
         pathlib.Path(__file__).parent.parent.parent,
@@ -158,7 +191,7 @@ def log_documents(zip_file: str, lists_path: Optional[str], log_level: str):
 
 @click.command()
 @common_click_args
-@common_click_options
+@click_server_options
 @click.option(
     "--branch",
     default=0,
@@ -294,7 +327,7 @@ def create_concept_id_dump(
 
 
 @click.command()
-@common_click_options
+@click_server_options
 @click_log_level
 def list_branches(ip: str, port: Union[int, str], use_secure_protocol: bool, log_level: str):
     """Lists all available branches on the server."""

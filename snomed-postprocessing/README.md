@@ -50,9 +50,9 @@ INITIAL_CAS: Done.   13 critical document(s) found - with  19 concept(s) on 'bla
 WARNING:root:  13 critical document(s) found. See '[...]/critical_documents_24-02-2026_08-46.md' for details.
 ```
 
-## Additional Information
-* Since the script needs to compare every document and its SNOMED CT codes (whitelist, appr. 367 000) against the whitelist/blacklist, it might take a while to complete.
-The script will show the progress in the console, and on the bright side, if it completed the whitelist, the comparion against the blacklist should be much faster, since it contains fewer concepts (only appr. 16 300). 
+## Additional Information / Footnotes
+* Since the script needs to compare every document and its SNOMED CT codes (three digits in most documents) against the whitelist/blacklist, it might take a while to complete.
+The script will show the progress in the console, and on the bright side, if it completed the whitelist (appr. 367 000 concepts), the comparison against the blacklist should be much faster, since it contains fewer concepts (only appr. 15 700). 
 
 [1] Export > Export backup archive > Secondary format > UIMA CAS JSON 0.4.0  
 
