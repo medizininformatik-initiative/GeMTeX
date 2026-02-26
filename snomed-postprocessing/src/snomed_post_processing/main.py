@@ -74,6 +74,16 @@ def common_click_args(fnc):
     return fnc
 
 
+def click_log_level(fnc):
+    fnc = click.option(
+        "--log-level",
+        default="INFO",
+        type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], case_sensitive=False),
+        help="The log level.",
+    )(fnc)
+    return fnc
+
+
 @click.command()
 @click.argument("zip-file", type=click.Path(exists=True))
 @click.option(
@@ -81,11 +91,13 @@ def common_click_args(fnc):
     default=None,
     help="The path to the lists file in 'hdf5' format. (default: default lists are used)",
 )
-def log_documents(zip_file: str, lists_path: Optional[str]):
+@click_log_level
+def log_documents(zip_file: str, lists_path: Optional[str], log_level: str):
     """
     Analyzes an INCEpTION project "ZIP_FILE" and logs all documents that contain erroneous concepts
     according to the given filter lists in a hdf5 file ("lists-path").
     """
+    set_log_level(log_level)
     project_zip = pathlib.Path(zip_file).resolve()
     default_lists_path = pathlib.Path(
         pathlib.Path(__file__).parent.parent.parent,
@@ -117,7 +129,8 @@ def log_documents(zip_file: str, lists_path: Optional[str]):
     if result := process_inception_zip(project_zip):
         with output_path.open("w", encoding="utf-8") as log_doc:
             with h5py.File(lists_path.open("rb"), "r") as h5_file:
-                tag_counter = Counter()
+                blacklist_tag_counter = Counter()
+                whitelist_code_counter = Counter()
                 for ft in [ListDumpType.WHITELIST, ListDumpType.BLACKLIST]:
                     print(f"-- {ft.name.capitalize()} --")
                     if ft.name.lower() in h5_file.keys():
@@ -130,9 +143,10 @@ def log_documents(zip_file: str, lists_path: Optional[str]):
                             ft,
                             log_doc,
                             True,
-                            tag_counter,
+                            blacklist_tag_counter,
+                            whitelist_code_counter,
                         )
-                log_final_tag_count(tag_counter, log_doc)
+                log_final_tag_count(whitelist_code_counter, blacklist_tag_counter, log_doc)
     print("-- Result --")
     if erroneous_doc_count > 0:
         logging.warning(
@@ -181,6 +195,7 @@ def log_documents(zip_file: str, lists_path: Optional[str]):
     is_flag=True,
     help="If this flag is set, the codes will not be resolved recursively and only the first level children will be returned.",
 )
+@click_log_level
 def create_concept_id_dump(
     root_code: str,
     ip: str,
@@ -192,9 +207,11 @@ def create_concept_id_dump(
     filter_mode: FilterMode,
     not_recursive: bool,
     force_overwrite: bool,
+    log_level: str,
 ):
     """Creates a dump of all concept IDs (if filter-mode == 'version') or only for the ones that match the given filter criteria
     (if a filter-list is given and filter-mode == 'semantic') for a SNOMED CT release version (--branch)."""
+    set_log_level(log_level)
     endpoint_builder, host = build_endpoint(ip, port, use_secure_protocol)
     path_ids, path_names = get_branches(endpoint_builder, host)
 
@@ -237,6 +254,7 @@ def create_concept_id_dump(
                     code_filter = filter_list
                     if len(filter_list) == 0:
                         code_filter = None
+    logging.info(f"Using filter list: '{[c for c in code_filter]}'.")
 
     with yaspin.yaspin(text="Processing...") as spinner:
         if root := get_root_code(root_code, endpoint_builder):
@@ -277,8 +295,10 @@ def create_concept_id_dump(
 
 @click.command()
 @common_click_options
-def list_branches(ip: str, port: Union[int, str], use_secure_protocol: bool):
+@click_log_level
+def list_branches(ip: str, port: Union[int, str], use_secure_protocol: bool, log_level: str):
     """Lists all available branches on the server."""
+    set_log_level(log_level)
     endpoint_builder, host = build_endpoint(ip, port, use_secure_protocol)
     path_ids, _ = get_branches(endpoint_builder, host)
     pad = len(max([str(x) for x in path_ids.get("path").keys()], key=len))
@@ -304,6 +324,17 @@ def help_me():
         "\n * list-branches"
         "\n\nEach command has a '--help' option that provides further information, e.g. 'log-critical-documents --help'"
     )
+
+
+def set_log_level(log_level: str):
+    log_level_ = {
+        "debug": logging.DEBUG,
+        "info": logging.INFO,
+        "warning": logging.WARNING,
+        "error": logging.ERROR,
+        "critical": logging.CRITICAL,
+    }.get(log_level.lower(), logging.INFO)
+    logging.basicConfig(level=log_level_)
 
 
 if __name__ == "__main__":

@@ -1,15 +1,15 @@
 # SNOMED Postprocessing
 
-This script logs all critical documents in the given inception dump (supported export formats: ``json``).
+This script logs all critical documents in the given inception dump (supported export formats: ``json`` ***[1]***).
 Critical are documents when they contain SNOMED CT codes that are either on the blacklist or are not on the whitelist.
 Whitelist and blacklist are both defined in a ``hdf5`` file, that must be provided.
 
 ## Usage
 The script can be run either via the command line or via docker.
-In both cases you need a hdf5 file ([gemtex_snomedct_codes_2024-04-01.hdf5](https://confluence.imi.med.fau.de/spaces/GEM/pages/317216732/SNOMED+CT+Semantic+Tag+Dashboard?preview=/317216732/359075603/gemtex_snomedct_codes_2024-04-01.hdf5)) containing the whitelist/blacklist and a zip file containing the inception dump.  
+In both cases you need a hdf5 file ([gemtex_snomedct_codes_2024-04-01.hdf5](https://confluence.imi.med.fau.de/spaces/GEM/pages/317216732/SNOMED+CT+Semantic+Tag+Dashboard?preview=/317216732/359075603/gemtex_snomedct_codes_2024-04-01.hdf5); should be around 45MB) containing the whitelist/blacklist and a zip file containing the inception dump.  
 The hdf5 file could also be created with this script itself if you ever need it for a different whitelist/blacklist. You would need a running SNOWSTORM instance though.
 See ``uv run create-concepts-dump --help`` or 
-``docker run ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:0.9.4 create-concepts-dump --help`` for further information. ***[1]***  
+``docker run ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:0.9.4 create-concepts-dump --help`` for further information. ***[2]***  
 The simple usage for the use case in GeMTex is described in the following, however:
 
 ### CLI
@@ -29,7 +29,7 @@ docker run
  log-critical-documents /app/data/inception-json-dump.zip
 ```
 - log file will be in the `./data` folder (the script will show the final path as well).
-- `inception-json-dump.zip` has to be in `./data`. ***[2]***
+- `inception-json-dump.zip` has to be in `./data`. ***[3]***
 - [gemtex_snomedct_codes_2024-04-01.hdf5](https://confluence.imi.med.fau.de/spaces/GEM/pages/317216732/SNOMED+CT+Semantic+Tag+Dashboard?preview=/317216732/359075603/gemtex_snomedct_codes_2024-04-01.hdf5) has to be in `./data`, too.
 
 #### Convenience Script
@@ -41,10 +41,10 @@ There is a convenience script with `./log-inception-docs.sh` that runs the above
 ### CLI Output:
 ```
 -- Whitelist --
-INITIAL_CAS: Done. Found   0 critical document(s).
+INITIAL_CAS: Done.    0 critical document(s) found.
 [...]
 -- Blacklist --
-INITIAL_CAS: Done. Found  13 critical document(s). With  19 concept(s)  on 'blacklist'.
+INITIAL_CAS: Done.   13 critical document(s) found - with  19 concept(s) on 'blacklist'.
 [...]
 -- Result --
 WARNING:root:  13 critical document(s) found. See '[...]/critical_documents_24-02-2026_08-46.md' for details.
@@ -54,11 +54,13 @@ WARNING:root:  13 critical document(s) found. See '[...]/critical_documents_24-0
 * Since the script needs to compare every document and its SNOMED CT codes (whitelist, appr. 367 000) against the whitelist/blacklist, it might take a while to complete.
 The script will show the progress in the console, and on the bright side, if it completed the whitelist, the comparion against the blacklist should be much faster, since it contains fewer concepts (only appr. 16 300). 
 
-[1] The available dump `gemtex_snomedct_codes_2024-04-01.hdf5` was created with the following two commands respectively:  
-* `uv run create-concepts-dump --ip SNOWSTORM_IP --port SNOWSTORM_PORT --branch MAIN/2024-04-01 --dump-mode version` (whitelist)  
-* `uv run create-concepts-dump --ip SNOWSTORM_IP --port SNOWSTORM_PORT --branch MAIN/2024-04-01 --dump-mode semantic` (blacklist)  
+[1] Export > Export backup archive > Secondary format > UIMA CAS JSON 0.4.0  
 
-[2] the discrepancy between `/app/data/...` in the docker command and `./data/...` for the requirements is no error,
+[2] The available dump `gemtex_snomedct_codes_2024-04-01.hdf5` was created with the following two commands respectively:  
+* `uv run create-concepts-dump --ip SNOWSTORM_IP --port SNOWSTORM_PORT --branch MAIN/2024-04-01 --dump-mode version` (whitelist)  
+* `uv run create-concepts-dump --ip SNOWSTORM_IP --port SNOWSTORM_PORT --branch MAIN/2024-04-01 --filter-list ./config/blacklist_filter_tags.txt --dump-mode semantic` (blacklist)  
+
+[3] the discrepancy between `/app/data/...` in the docker command and `./data/...` for the requirements is no error,
 because the local `./data` will be mounted into the containers `/app/data` and the script that runs in the container will need the location relative to its filesystem.
 
 ## Resulting LOG File Example:
@@ -91,7 +93,15 @@ because the local `./data` will be mounted into the containers `/app/data` and t
 |      246106000 |                                                                                                  Kontrolle |       (3401, 3410) |                                       Control (attribute) |
 |      720378001 | allerdings sollte er dabei vorsichtig sein mit Autofahren, da diese Medikamente bekanntlich sedierend sind |       (3498, 3604) | Patient advised medication may affect driving (situation) |
 
-### Final Tag Count
+### Final Count
+#### SNOMED CT Codes
+| SNOMED CT Codes | Count |
+|----------------:|------:|
+|           33333 |     2 |
+|         1234567 |    10 |
+|           [...] | [...] |
+
+#### Semantic Tags
 | Semantic Tag | Count |
 |-------------:|------:|
 |    attribute |    65 |

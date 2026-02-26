@@ -193,7 +193,8 @@ def analyze_documents(
     filter_type: ListDumpType,
     log_doc: TextIOWrapper,
     new_section: bool,
-    tag_counter: Counter,
+    blacklist_tag_counter: Counter,
+    whitelist_code_counter: Counter,
 ):
     as_whitelist = filter_type == ListDumpType.WHITELIST
     erroneous_doc_count = 0
@@ -204,7 +205,7 @@ def analyze_documents(
             doc_error_count = 0
             concept_error_count = 0
             for i, (doc_name, annotations) in enumerate(documents.documents.items()):
-                spinner.text = f"Processing ({annotator_name} [{i:>3}/{len(documents.documents)}]: '{doc_name}') ..."
+                spinner.text = f"Processing ({annotator_name} [{i+1:>3}/{len(documents.documents)}]: '{doc_name}') ..."
                 if as_whitelist:
                     erroneous_codes_array = ~np.isin(
                         annotations.snomed_codes, filter_array
@@ -237,11 +238,12 @@ def analyze_documents(
                         _map_dict,
                         filter_type,
                         new_section,
-                        tag_counter,
+                        blacklist_tag_counter,
+                        whitelist_code_counter,
                     )
                     new_section = False
                     new_annotator = False
-            concept_error_text = f" - with {concept_error_count:>3} concept(s) {'not' if as_whitelist else ''} on '{filter_type.name.lower()}'."
+            concept_error_text = f" - with {concept_error_count:>3} concept(s) {'not ' if as_whitelist else ''}on '{filter_type.name.lower()}'."
             spinner.write(
                 f"{annotator_name}:{' ' * (annotator_names_max - len(annotator_name) + 1)}Done. {doc_error_count:>3} critical document(s) found.{concept_error_text if doc_error_count > 0 else ''}"
             )
@@ -260,7 +262,8 @@ def log_critical_docs(
     mapping_dict: dict,
     filter_type: ListDumpType,
     new_section: bool,
-    tag_counter: Counter,
+    blacklist_tag_counter: Counter,
+    whitelist_code_counter: Counter,
 ):
     stacked = np.stack(
         [
@@ -290,25 +293,43 @@ def log_critical_docs(
         lines.append(f"| Snomed CT Code | Covered Text | Offset in Document |\n")
         lines.append(f"| -------------: | -----------: | -----------------: |\n")
         for line in stacked:
-            lines.append(f"| {line[0].decode('utf-8')} | {line[1]} | {line[2]} |\n")
+            code_ = line[0].decode('utf-8')
+            lines.append(f"| { code_ } | { line[1] } | { line[2] } |\n")
+            whitelist_code_counter.update([code_])
     else:
         lines.append(f"| Snomed CT Code | Covered Text | Offset in Document | FSN |\n")
         lines.append(f"| -------------: | -----------: | -----------------: | --: |\n")
         for line in stacked:
+            code_, tag_ = line[0].decode('utf-8'), line[3].decode('utf-8')
             lines.append(
-                f"| {line[0].decode('utf-8')} | {line[1]} | {line[2]} | {line[3].decode('utf-8')} |\n"
+                f"| { code_ } | {line[1]} | {line[2]} | { tag_ } |\n"
             )
-            tag_counter.update([line[3].decode("utf-8").split("(", 1)[1].split(")")[0]])
+            whitelist_code_counter.update([code_])
+            blacklist_tag_counter.update([tag_.split("(", 1)[1].split(")")[0]])
     output_file.writelines(lines)
     output_file.write("\n\n")
 
 
-def log_final_tag_count(tag_counter: Counter, output_file: TextIOWrapper):
-    output_file.write(f"# Final Tag Count\n")
-    if tag_counter.total() > 0:
+def log_final_tag_count(whitelist_tag_counter: Counter, blacklist_tag_counter: Counter, output_file: TextIOWrapper):
+    def no_count(list_type: str):
+        is_whitelist = list_type == "whitelist"
+        type_ = "SNOMED CT codes" if is_whitelist else "semantic tags"
+        output_file.write(f"_No {type_} found that are {'not ' if is_whitelist else ''}on the {list_type}_.\n")
+
+    output_file.write(f"# Final Count\n")
+    output_file.write(f"## Snomed CT Codes\n")
+    if whitelist_tag_counter.total() > 0:
+        output_file.write(f"| Snomed CT Code | Count |\n")
+        output_file.write(f"| -------------: | ----: |\n")
+        for code, count in whitelist_tag_counter.most_common():
+            output_file.write(f"| {code} | {count} |\n")
+    else:
+        no_count("whitelist")
+    output_file.write(f"## Semantic Tags\n")
+    if blacklist_tag_counter.total() > 0:
         output_file.write(f"| Semantic Tag | Count |\n")
         output_file.write(f"| -----------: | ----: |\n")
-        for tag, count in tag_counter.most_common():
+        for tag, count in blacklist_tag_counter.most_common():
             output_file.write(f"| {tag} | {count} |\n")
     else:
-        output_file.write(f"_No semantic tags found that are on the blacklist_.\n")
+        no_count("blacklist")
