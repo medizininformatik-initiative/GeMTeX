@@ -6,6 +6,7 @@ import dataclasses
 import sys
 import zipfile
 import gc
+from collections import Counter
 from io import TextIOWrapper
 from typing import Union
 
@@ -192,6 +193,7 @@ def analyze_documents(
     filter_type: ListDumpType,
     log_doc: TextIOWrapper,
     new_section: bool,
+    tag_counter: Counter,
 ):
     as_whitelist = filter_type == ListDumpType.WHITELIST
     erroneous_doc_count = 0
@@ -235,12 +237,13 @@ def analyze_documents(
                         _map_dict,
                         filter_type,
                         new_section,
+                        tag_counter,
                     )
                     new_section = False
                     new_annotator = False
-            concept_error_text = f" With {concept_error_count:>3} concept(s) {'not' if as_whitelist else ''} on '{filter_type.name.lower()}'."
+            concept_error_text = f" - with {concept_error_count:>3} concept(s) {'not' if as_whitelist else ''} on '{filter_type.name.lower()}'."
             spinner.write(
-                f"{annotator_name}:{' ' * (annotator_names_max - len(annotator_name) + 1)}Done. Found {doc_error_count:>3} critical document(s).{concept_error_text if doc_error_count > 0 else ''}"
+                f"{annotator_name}:{' ' * (annotator_names_max - len(annotator_name) + 1)}Done. {doc_error_count:>3} critical document(s) found.{concept_error_text if doc_error_count > 0 else ''}"
             )
             erroneous_doc_count += doc_error_count
     return erroneous_doc_count
@@ -257,6 +260,7 @@ def log_critical_docs(
     mapping_dict: dict,
     filter_type: ListDumpType,
     new_section: bool,
+    tag_counter: Counter,
 ):
     stacked = np.stack(
         [
@@ -294,5 +298,17 @@ def log_critical_docs(
             lines.append(
                 f"| {line[0].decode('utf-8')} | {line[1]} | {line[2]} | {line[3].decode('utf-8')} |\n"
             )
+            tag_counter.update([line[3].decode("utf-8").split("(", 1)[1].split(")")[0]])
     output_file.writelines(lines)
     output_file.write("\n\n")
+
+
+def log_final_tag_count(tag_counter: Counter, output_file: TextIOWrapper):
+    output_file.write(f"# Final Tag Count\n")
+    if tag_counter.total() > 0:
+        output_file.write(f"| Semantic Tag | Count |\n")
+        output_file.write(f"| -----------: | ----: |\n")
+        for tag, count in tag_counter.most_common():
+            output_file.write(f"| {tag} | {count} |\n")
+    else:
+        output_file.write(f"_No semantic tags found that are on the blacklist_.\n")

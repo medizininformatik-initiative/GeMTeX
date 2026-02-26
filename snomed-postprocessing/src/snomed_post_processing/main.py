@@ -5,6 +5,7 @@ import sys
 import logging
 import pathlib
 import sys
+from collections import Counter
 from typing import Union, Optional
 
 import click
@@ -20,7 +21,11 @@ if __name__ == "__main__":
         get_root_code,
     )
     from utils import DumpMode, FilterMode, dump_codes_to_hdf5, ListDumpType
-    from uima_processing import process_inception_zip, analyze_documents
+    from uima_processing import (
+        process_inception_zip,
+        analyze_documents,
+        log_final_tag_count,
+    )
 else:
     from .snowstorm_funcs import (
         build_endpoint,
@@ -29,7 +34,11 @@ else:
         get_root_code,
     )
     from .utils import DumpMode, FilterMode, dump_codes_to_hdf5, ListDumpType
-    from .uima_processing import process_inception_zip, analyze_documents
+    from .uima_processing import (
+        process_inception_zip,
+        analyze_documents,
+        log_final_tag_count,
+    )
 
 
 class ClickUnion(click.ParamType):
@@ -108,14 +117,22 @@ def log_documents(zip_file: str, lists_path: Optional[str]):
     if result := process_inception_zip(project_zip):
         with output_path.open("w", encoding="utf-8") as log_doc:
             with h5py.File(lists_path.open("rb"), "r") as h5_file:
+                tag_counter = Counter()
                 for ft in [ListDumpType.WHITELIST, ListDumpType.BLACKLIST]:
                     print(f"-- {ft.name.capitalize()} --")
                     if ft.name.lower() in h5_file.keys():
                         filter_list = h5_file.get(ft.name.lower()).get("0").get("codes")
                         fsn_list = h5_file.get(ft.name.lower()).get("0").get("fsn")
                         erroneous_doc_count += analyze_documents(
-                            result, filter_list[:], fsn_list[:], ft, log_doc, True
+                            result,
+                            filter_list[:],
+                            fsn_list[:],
+                            ft,
+                            log_doc,
+                            True,
+                            tag_counter,
                         )
+                log_final_tag_count(tag_counter, log_doc)
     print("-- Result --")
     if erroneous_doc_count > 0:
         logging.warning(
@@ -159,6 +176,11 @@ def log_documents(zip_file: str, lists_path: Optional[str]):
     is_flag=True,
     help="If this flag is set, the codes will not be resolved recursively and only the first level children will be returned.",
 )
+@click.option(
+    "--force-overwrite",
+    is_flag=True,
+    help="If this flag is set, the codes will not be resolved recursively and only the first level children will be returned.",
+)
 def create_concept_id_dump(
     root_code: str,
     ip: str,
@@ -169,6 +191,7 @@ def create_concept_id_dump(
     filter_list: Union[str, click.File],
     filter_mode: FilterMode,
     not_recursive: bool,
+    force_overwrite: bool,
 ):
     """Creates a dump of all concept IDs (if filter-mode == 'version') or only for the ones that match the given filter criteria
     (if a filter-list is given and filter-mode == 'semantic') for a SNOMED CT release version (--branch)."""
@@ -242,12 +265,15 @@ def create_concept_id_dump(
             list_type=ListDumpType.BLACKLIST
             if dump_mode == DumpMode.SEMANTIC
             else ListDumpType.WHITELIST,
+            revision=not force_overwrite,
+            force_overwrite=force_overwrite,
         )
     except Exception as e:
         logging.error(f"Error while creating hdf5 dump: '{e}'. Exiting.")
         pickle_path = hdf5_path.with_suffix(f"-{dump_mode.name.lower()}.pickle")
         logging.error(f"Dumping as pickle file: '{pickle_path}'.")
         pickle.dump(codes, open(pickle_path, "wb"))
+
 
 @click.command()
 @common_click_options

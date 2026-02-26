@@ -118,7 +118,7 @@ def filter_by_semantic_tag(
         return snowstorm_response
 
     re_tags = re.compile(
-        rf"\({'|'.join([_flexible_whitespace_pattern(t) for t in tags])}\)",
+        rf"{'|'.join([r'\(' + _flexible_whitespace_pattern(t) + r'\)' for t in tags])}\)",
         re.IGNORECASE,
     )
 
@@ -210,10 +210,7 @@ def dump_codes_to_hdf5(
                     del f[dataset_name]
                     _create_dataset(f, dataset_name, codes, id_to_fsn_dict)
                 elif revision:
-                    pass
-                    # df: np.ndarray = f[dataset_name]
-                    # df.resize(df.shape[0] + len(codes))
-                    # df[-len(codes):] = np.array(list(codes))
-                    # comment
+                    #ToDo: Implement revision
+                    logging.warning(f"Dataset '{dataset_name}' already exists and 'force_overwrite' is FALSE. Revision is not yet implemented. Skipping.")
             else:
                 _create_dataset(f, dataset_name, codes, id_to_fsn_dict)
