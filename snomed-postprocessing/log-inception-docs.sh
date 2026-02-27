@@ -1,6 +1,6 @@
 #!/bin/bash
 
-CURRENT_VERSION="0.9.4"
+CURRENT_VERSION="0.9.5"
 
 if [[ ! -d ./data ]]; then
   echo "This script assumes that a './data' folder exists here that will be mounted into the docker container."

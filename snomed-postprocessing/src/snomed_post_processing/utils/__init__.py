@@ -58,6 +58,21 @@ class FilterLists:
     tags: list[str]
 
 
+@dataclasses.dataclass
+class Information:
+    log_dump_pretext_caption: str = "Vorbemerkung"
+    log_dump_pretext: str = (
+        f"### {log_dump_pretext_caption}\n"
+        "Manche Codes, die als 'blacklisted' gekenzeichnet sind, mögen ersteinmal verwundern, da sie den Semantic Tag `(qualifier value)` haben,\n"
+        "der nicht verboten ist. Diese fallen dann jedoch unter die Kategorien `Overlapping sites` oder `action`,\n"
+        "welche wiederum als ganzes ausgeschlossen wurden.\n\n"
+        "Es folgt:\n"
+        "* eine Auflistung nach Annotator*in und dazugehörige Dokumente für: [Whitelist](#whitelist) und [Blacklist](#blacklist)\n"
+        "* eine Tabelle, mit allen gefundenen [Whitelist Codes](#snomed-ct-codes) (mit Anzahl über das gesamte Projekt)\n"
+        "* eine Tabelle, mit allen gefundenen [Semantic Tags](#semantic-tags) (mit Anzahl über das gesamte Projekt)\n\n"
+    )
+
+
 def _flexible_whitespace_pattern(s: str) -> str:
     """
     Build a regex pattern from `s` where any whitespace sequence matches \\s+.
@@ -210,7 +225,9 @@ def dump_codes_to_hdf5(
                     del f[dataset_name]
                     _create_dataset(f, dataset_name, codes, id_to_fsn_dict)
                 elif revision:
-                    #ToDo: Implement revision
-                    logging.warning(f"Dataset '{dataset_name}' already exists and 'force_overwrite' is FALSE. Revision is not yet implemented. Skipping.")
+                    # ToDo: Implement revision
+                    logging.warning(
+                        f"Dataset '{dataset_name}' already exists and 'force_overwrite' is FALSE. Revision is not yet implemented. Skipping."
+                    )
             else:
                 _create_dataset(f, dataset_name, codes, id_to_fsn_dict)

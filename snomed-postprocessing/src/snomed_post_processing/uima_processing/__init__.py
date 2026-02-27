@@ -16,10 +16,10 @@ import yaspin
 
 
 if __name__.find(".uima_processing") != -1:
-    from ..utils import ListDumpType
+    from ..utils import ListDumpType, Information
 else:
     sys.path.append(".")
-    from utils import ListDumpType
+    from utils import ListDumpType, Information
 
 
 @dataclasses.dataclass
@@ -193,19 +193,21 @@ def analyze_documents(
     filter_type: ListDumpType,
     log_doc: TextIOWrapper,
     new_section: bool,
+    section_count: dict[str, int],
     blacklist_tag_counter: Counter,
     whitelist_code_counter: Counter,
 ):
     as_whitelist = filter_type == ListDumpType.WHITELIST
     erroneous_doc_count = 0
     with yaspin.yaspin() as spinner:
-        annotator_names_max = len(max(project.annotators.keys(), key=len))
+        annotator_names = sorted(project.annotators.keys())
+        annotator_names_max = len(max(annotator_names, key=len))
         for annotator_name, documents in project.annotators.items():
             new_annotator = True
             doc_error_count = 0
             concept_error_count = 0
             for i, (doc_name, annotations) in enumerate(documents.documents.items()):
-                spinner.text = f"Processing ({annotator_name} [{i+1:>3}/{len(documents.documents)}]: '{doc_name}') ..."
+                spinner.text = f"Processing ({annotator_name} [{i + 1:>3}/{len(documents.documents)}]: '{doc_name}') ..."
                 if as_whitelist:
                     erroneous_codes_array = ~np.isin(
                         annotations.snomed_codes, filter_array
@@ -238,14 +240,16 @@ def analyze_documents(
                         _map_dict,
                         filter_type,
                         new_section,
+                        section_count,
                         blacklist_tag_counter,
                         whitelist_code_counter,
+                        annotator_names,
                     )
                     new_section = False
                     new_annotator = False
-            concept_error_text = f" - with {concept_error_count:>3} concept(s) {'not ' if as_whitelist else ''}on '{filter_type.name.lower()}'."
+            concept_error_text = f"- with {concept_error_count:>3} concept(s) {'not ' if as_whitelist else ''}on '{filter_type.name.lower()}'."
             spinner.write(
-                f"{annotator_name}:{' ' * (annotator_names_max - len(annotator_name) + 1)}Done. {doc_error_count:>3} critical document(s) found.{concept_error_text if doc_error_count > 0 else ''}"
+                f"{annotator_name}:{' ' * (annotator_names_max - len(annotator_name) + 1)}Done. {doc_error_count:>3} critical document(s) found {concept_error_text if doc_error_count > 0 else ''}"
             )
             erroneous_doc_count += doc_error_count
     return erroneous_doc_count
@@ -262,8 +266,10 @@ def log_critical_docs(
     mapping_dict: dict,
     filter_type: ListDumpType,
     new_section: bool,
+    section_count: dict[str, int],
     blacklist_tag_counter: Counter,
     whitelist_code_counter: Counter,
+    annotator_names: list[str],
 ):
     stacked = np.stack(
         [
@@ -284,40 +290,63 @@ def log_critical_docs(
         dtype=object,
     )
     lines = []
+    if annotator_name not in section_count:
+        section_count[annotator_name] = 0
+    else:
+        section_count[annotator_name] += 1
     if new_section:
-        lines = [f"# {filter_type.name.capitalize()}\n"]
+        lines = [
+            f"# {filter_type.name.capitalize()}\n",
+            f"[Zum Inhalt](#{Information.log_dump_pretext_caption.lower()})  \n",
+            "Zu den Annotator*innen: ",
+        ]
+        for n in annotator_names:
+            lines.append(
+                f"[{n}](#{n.lower()}{('-' + str(section_count.get(annotator_name))) if section_count.get(annotator_name) > 0 else ''}), "
+            )
+        if len(lines) > 0:
+            ll = lines.pop(-1)
+            lines.append(ll[:-2])
+        lines.append("\n")
     if is_new_annotator:
-        lines.append(f"## {annotator_name}\n")
+        lines.append(
+            f"## {annotator_name}\n([Zum Sektionsanfang](#{filter_type.name.lower()}))\n"
+        )
     lines.append(f"#### {document_name}\n")
     if is_whitelist:
         lines.append(f"| Snomed CT Code | Covered Text | Offset in Document |\n")
         lines.append(f"| -------------: | -----------: | -----------------: |\n")
         for line in stacked:
-            code_ = line[0].decode('utf-8')
-            lines.append(f"| { code_ } | { line[1] } | { line[2] } |\n")
+            code_ = line[0].decode("utf-8")
+            lines.append(f"| {code_} | {line[1]} | {line[2]} |\n")
             whitelist_code_counter.update([code_])
     else:
         lines.append(f"| Snomed CT Code | Covered Text | Offset in Document | FSN |\n")
         lines.append(f"| -------------: | -----------: | -----------------: | --: |\n")
         for line in stacked:
-            code_, tag_ = line[0].decode('utf-8'), line[3].decode('utf-8')
-            lines.append(
-                f"| { code_ } | {line[1]} | {line[2]} | { tag_ } |\n"
-            )
+            code_, tag_ = line[0].decode("utf-8"), line[3].decode("utf-8")
+            lines.append(f"| {code_} | {line[1]} | {line[2]} | {tag_} |\n")
             whitelist_code_counter.update([code_])
             blacklist_tag_counter.update([tag_.split("(", 1)[1].split(")")[0]])
     output_file.writelines(lines)
     output_file.write("\n\n")
 
 
-def log_final_tag_count(whitelist_tag_counter: Counter, blacklist_tag_counter: Counter, output_file: TextIOWrapper):
+def log_final_tag_count(
+    whitelist_tag_counter: Counter,
+    blacklist_tag_counter: Counter,
+    output_file: TextIOWrapper,
+):
     def no_count(list_type: str):
         is_whitelist = list_type == "whitelist"
         type_ = "SNOMED CT codes" if is_whitelist else "semantic tags"
-        output_file.write(f"_No {type_} found that are {'not ' if is_whitelist else ''}on the {list_type}_.\n")
+        output_file.write(
+            f"_No {type_} found that are {'not ' if is_whitelist else ''}on the {list_type}_.\n"
+        )
 
     output_file.write(f"# Final Count\n")
     output_file.write(f"## Snomed CT Codes\n")
+    output_file.write(f"[Zum Inhalt](#{Information.log_dump_pretext_caption})  \n\n")
     if whitelist_tag_counter.total() > 0:
         output_file.write(f"| Snomed CT Code | Count |\n")
         output_file.write(f"| -------------: | ----: |\n")
@@ -326,6 +355,7 @@ def log_final_tag_count(whitelist_tag_counter: Counter, blacklist_tag_counter: C
     else:
         no_count("whitelist")
     output_file.write(f"## Semantic Tags\n")
+    output_file.write(f"[Zum Inhalt](#{Information.log_dump_pretext_caption})  \n\n")
     if blacklist_tag_counter.total() > 0:
         output_file.write(f"| Semantic Tag | Count |\n")
         output_file.write(f"| -----------: | ----: |\n")

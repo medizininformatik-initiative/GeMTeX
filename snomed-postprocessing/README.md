@@ -2,22 +2,34 @@
 
 This script logs all critical documents in the given inception dump (supported export formats: ``json`` ***[1]***).
 Critical are documents when they contain SNOMED CT codes that are either on the blacklist or are not on the whitelist.
-Whitelist and blacklist are both defined in a ``hdf5`` file, that must be provided.
+Whitelist and blacklist are both defined in a ``hdf5`` file, that must be provided.  
+The resulting log file (a markdown document) also contains intra-document links for better traversal. So you should view it with an appropriate markdown viewer. 
 
 ## Usage
 The script can be run either via the command line or via docker.
-In both cases you need a hdf5 file ([gemtex_snomedct_codes_2024-04-01.hdf5](https://confluence.imi.med.fau.de/spaces/GEM/pages/317216732/SNOMED+CT+Semantic+Tag+Dashboard?preview=/317216732/359075603/gemtex_snomedct_codes_2024-04-01.hdf5); should be around 45MB) containing the whitelist/blacklist and a zip file containing the inception dump.  
+In both cases you need a hdf5 file ([gemtex_snomedct_codes_2024-04-01.hdf5](https://confluence.imi.med.fau.de/spaces/GEM/pages/317216732/SNOMED+CT+Semantic+Tag+Dashboard?preview=/317216732/359075603/gemtex_snomedct_codes_2024-04-01.hdf5); should be around 50MB) containing the whitelist/blacklist and a zip file containing the inception dump.  
 The hdf5 file could also be created with this script itself if you ever need it for a different whitelist/blacklist. You would need a running SNOWSTORM instance though.
 See ``uv run create-concepts-dump --help`` or 
-``docker run ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:0.9.4 create-concepts-dump --help`` for further information. ***[2]***  
+``docker run ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:0.9.5 create-concepts-dump --help`` for further information. ***[2]***  
 The simple usage for the use case in GeMTex is described in the following, however:
 
 ### CLI
 You can run the logging script from within an [uv](https://docs.astral.sh/uv/getting-started/installation/) environment:
 ```
-uv sync
-uv run log-critical-documents --lists-path /path/to/hdf5-file /path/to/inception-json-dump.zip
+uv run log-critical-documents \
+  --lists-path /path/to/hdf5-file \
+  /path/to/inception-json-dump.zip
 ```
+for a local dump of an INCEpTION project, or
+```
+uv run log-critical-documents \
+  --lists-path /path/to/hdf5-file --ip INCEPTION_IP --port INCEPTION_PORT \
+  --inception-username INCEPTION_USERNAME \
+  --inception-password INCEPTION_PASSWORD \
+  --inception-project INCEPTION_PROJECT_URL_SLUG
+  /path/to/temp/export
+```
+for a remote connection to the INCEpTION instance.
 
 ### Docker
 There is also a docker image available:
@@ -25,7 +37,7 @@ There is also a docker image available:
 docker run
  --volume ./data:/app/data
  --rm
- ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:0.9.4
+ ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:0.9.5
  log-critical-documents /app/data/inception-json-dump.zip
 ```
 - log file will be in the `./data` folder (the script will show the final path as well).
