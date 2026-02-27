@@ -1,6 +1,6 @@
 #!/bin/bash
 
-CURRENT_VERSION="0.9.3"
+CURRENT_VERSION="0.9.5"
 
 if [[ ! -d ./data ]]; then
   echo "This script assumes that a './data' folder exists here that will be mounted into the docker container."
@@ -9,7 +9,7 @@ if [[ ! -d ./data ]]; then
 fi
 
 if [[ $# -eq 0 ]]; then
-  echo "Please provide at least the name of the INCEpTION Project zip file in the 'data' folder!"
+  echo "Please provide at least the name of the INCEpTION Project zip file in the 'data' folder as first argument!"
   echo "Second argument is optional and can be the version of the script (default: ${CURRENT_VERSION})."
   exit 0
 fi

@@ -1,6 +1,5 @@
 environment
 geographic location
-physical force
 record artifact
 situation
 attribute
