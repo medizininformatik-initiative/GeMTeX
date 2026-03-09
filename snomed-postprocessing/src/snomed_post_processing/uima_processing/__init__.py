@@ -346,7 +346,7 @@ def log_final_tag_count(
 
     output_file.write(f"# Final Count\n")
     output_file.write(f"## Snomed CT Codes\n")
-    output_file.write(f"[Zum Inhalt](#{Information.log_dump_pretext_caption})  \n\n")
+    output_file.write(f"[Zum Inhalt](#{Information.log_dump_pretext_caption.lower()})  \n\n")
     if whitelist_tag_counter.total() > 0:
         output_file.write(f"| Snomed CT Code | Count |\n")
         output_file.write(f"| -------------: | ----: |\n")
@@ -355,7 +355,7 @@ def log_final_tag_count(
     else:
         no_count("whitelist")
     output_file.write(f"## Semantic Tags\n")
-    output_file.write(f"[Zum Inhalt](#{Information.log_dump_pretext_caption})  \n\n")
+    output_file.write(f"[Zum Inhalt](#{Information.log_dump_pretext_caption.lower()})  \n\n")
     if blacklist_tag_counter.total() > 0:
         output_file.write(f"| Semantic Tag | Count |\n")
         output_file.write(f"| -----------: | ----: |\n")
