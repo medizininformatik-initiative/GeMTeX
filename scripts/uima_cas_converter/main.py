@@ -95,6 +95,9 @@ def main(input_file, output_file, typesystem):
     if to_json:
         cas.to_json(output_path, pretty_print=True, ensure_ascii=False)
     else:
+        #ToDo: check if typesystem exists at loc and merges them?
+        # or .bak the old? --> with flag?
+        cas.typesystem.to_xml(output_path.with_suffix(".xml"))
         cas.to_xmi(output_path)
 
 
