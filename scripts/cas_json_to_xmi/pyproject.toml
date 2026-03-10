@@ -1,0 +1,10 @@
+[project]
+name = "cas-json-to-xmi"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "click>=8.3.1",
+    "dkpro-cassis>=0.10.1",
+]
