@@ -1,5 +1,5 @@
 [project]
-name = "cas-json-to-xmi"
+name = "uima-cas-converter"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
