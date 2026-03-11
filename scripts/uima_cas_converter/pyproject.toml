@@ -1,0 +1,17 @@
+[project]
+name = "uima-cas-converter"
+version = "0.5.0"
+description = "A simple CLI to convert UIMA CAS XMI to JSON and vice versa."
+readme = "README.md"
+requires-python = "~=3.9.0"
+dependencies = [
+    "click>=8.1.8",
+    "dkpro-cassis>=0.10.1",
+    "pyinquirer>=1.0.3",
+]
+[project.scripts]
+convert-cas = "uima_cas_converter.main:main"
+
+[build-system]
+requires = ["uv_build>=0.9.9,<0.10.0"]
+build-backend = "uv_build"
