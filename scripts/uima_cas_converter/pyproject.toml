@@ -1,6 +1,6 @@
 [project]
 name = "uima-cas-converter"
-version = "0.1.0"
+version = "0.5.0"
 description = "A simple CLI to convert UIMA CAS XMI to JSON and vice versa."
 readme = "README.md"
 requires-python = "~=3.9.0"

@@ -3,11 +3,11 @@ import logging
 import pathlib
 import shutil
 import sys
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple
 
 import click
 from cassis import *
-from PyInquirer import prompt, print_json
+from PyInquirer import prompt
 
 
 class TypeSystemHandling(enum.Enum):
@@ -97,17 +97,17 @@ def _check_output_file(
         return input_file.with_suffix(f".{'json' if to_json else 'xmi'}")
 
 
-def _check_present_typesystem(output_path: pathlib.Path, cas: Cas):
+def _check_present_typesystem(output_path: pathlib.Path, cas: Cas, exclude_option: TypeSystemHandling = None, message: str = None):
     ts_output = output_path.parent / f"TypeSystem.xml"
     _ts = cas.typesystem
     if ts_output.exists():
         _menu_entry = "menu_entry"
-        options = [to.name for to in TypeSystemHandling]
+        options = [to.name for to in TypeSystemHandling if (exclude_option is None) or (exclude_option != to)]
         questions = [
             {
                 "type": "list",
                 "name": _menu_entry,
-                "message": f"A 'TypeSystem.xml' already exists at the location {output_path.parent.resolve()}. How to proceed?",
+                "message": f"A 'TypeSystem.xml' already exists at the location {output_path.parent.resolve()}. How to proceed?" if message is None else message,
                 "choices": options,
                 "default": 0,
             }
@@ -116,7 +116,7 @@ def _check_present_typesystem(output_path: pathlib.Path, cas: Cas):
         try:
             if TypeSystemHandling[answer.get(_menu_entry)] == TypeSystemHandling.BACKUP:
                 logging.info(
-                    "Chosen Backup option. Old 'TypeSystem.xml' will be backed up as 'TypeSystem.xml.bak'."
+                    "Chosen 'BACKUP' option. Old 'TypeSystem.xml' will be backed up as 'TypeSystem.xml.bak'."
                 )
                 shutil.copy(ts_output, pathlib.Path(f"{ts_output.resolve()}.bak"))
             elif (
@@ -124,23 +124,25 @@ def _check_present_typesystem(output_path: pathlib.Path, cas: Cas):
                 == TypeSystemHandling.OVERWRITE
             ):
                 logging.info(
-                    "Chosen 'Overwrite' option. 'TypeSystem.xml' will be replaced."
+                    "Chosen 'OVERWRITE' option. 'TypeSystem.xml' will be replaced."
                 )
             elif (
                 TypeSystemHandling[answer.get(_menu_entry)] == TypeSystemHandling.MERGE
             ):
-                logging.info("Chosen Merge option. Trying to merge typesystems.")
+                logging.info("Chosen 'MERGE' option. Trying to merge typesystems.")
                 try:
                     _ts = merge_typesystems(cas.typesystem, load_typesystem(ts_output))
                 except Exception as e:
-                    raise RuntimeError(
-                        f"Could not merge typesystems: '{e}'. Maybe try another handling option (BACKUP, OVERWRITE)."
+                    logging.error(
+                        f" Could not merge typesystems: '{e}'."
                     )
+                    _check_present_typesystem(output_path, cas, TypeSystemHandling.MERGE, "Maybe try another handling option:")
+                    sys.exit(0)
             else:
                 raise ValueError(
                     f"Unknown option '{answer.get(_menu_entry)}' selected."
                 )
-        except (ValueError, KeyError, RuntimeError) as e:
+        except (ValueError, KeyError) as e:
             logging.error(f" {e}")
             sys.exit(-1)
     _ts.to_xml(ts_output)
