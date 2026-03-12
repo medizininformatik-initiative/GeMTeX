@@ -1,4 +1,3 @@
-import datetime
 import json
 import logging
 import pathlib
@@ -8,7 +7,7 @@ import zipfile
 import gc
 from collections import Counter
 from io import TextIOWrapper
-from typing import Union
+from typing import Union, Optional
 
 import cassis
 import numpy as np
@@ -50,6 +49,57 @@ def _load_document(path: Union[str, pathlib.Path]) -> cassis.Cas:
     return cassis.load_cas_from_json(path.open("r", encoding="utf-8"))
 
 
+def _read_project(zip_file: zipfile.ZipFile, file_name: str) -> Optional[list[dict]]:
+    try:
+        project_meta = json.loads(
+            zip_file.read("exportedproject.json").decode("utf-8")
+        )
+    except KeyError:
+        logging.warning(f"No exportedproject.json found in {file_name}")
+        return None
+
+    project_documents = project_meta.get("source_documents", [])
+    if not project_documents:
+        logging.warning(f"No source documents found in project {file_name}")
+        return None
+    return project_documents
+
+
+def _yield_matching_files(project_documents: list[dict], zip_file: zipfile.ZipFile, file_name: str = None):
+    for doc in project_documents:
+        doc_name = doc["name"]
+        state = doc.get("state", "")
+
+        # Determine path (curation or annotation)
+        folder_prefix = (
+            f"curation/{doc_name}/"
+            if state == "CURATION_FINISHED"
+            else f"annotation/{doc_name}/"
+        )
+
+        # Collect CAS JSON files
+        matching_files = [
+            info.filename
+            for info in zip_file.infolist()
+            if info.filename.startswith(folder_prefix)
+               and info.filename.endswith(".json")
+               and not info.is_dir()
+        ]
+
+        # Use INITIAL_CAS.json only if it is the *only* file
+        if len(matching_files) > 1:
+            matching_files = [
+                p for p in matching_files if not p.endswith("INITIAL_CAS.json")
+            ]
+
+        if not matching_files:
+            logging.warning(
+                f"No CAS found for {doc_name} in {file_name} ({folder_prefix})"
+            )
+            continue
+        yield doc_name, matching_files
+
+
 def get_annotations_from_document(
     document: Union[cassis.Cas, str, pathlib.Path],
     annotation_types: list[str] = None,
@@ -73,7 +123,7 @@ def get_annotations_from_document(
                     )
                 )
                 text.append(annotation.get_covered_text())
-            except Exception as e:
+            except Exception:
                 pass
     return DocumentAnnotations(
         snomed_codes=np.asarray(codes, dtype="bytes"),
@@ -83,11 +133,21 @@ def get_annotations_from_document(
     )
 
 
+def get_annotator_names(project_path: pathlib.Path) -> set[str]:
+    annotator_names = None
+    with zipfile.ZipFile(project_path, "r") as zip_file:
+        file_name = project_path.name
+        project_documents = _read_project(zip_file, file_name)
+        annotator_names = set([str(pathlib.Path(cp).stem) for _, fi in _yield_matching_files(project_documents, zip_file) for cp in fi])
+    return annotator_names
+
+
 def process_inception_zip(
     file_path: Union[str, pathlib.Path],
+    annotator_filter = None,
     annotation_types: list[str] = None,
     id_prefix: str = "http://snomed.info/id/",
-):
+) -> TemporaryCorpus:
     if not annotation_types:
         annotation_types = ["gemtex.Concept"]
 
@@ -97,58 +157,18 @@ def process_inception_zip(
         with zipfile.ZipFile(file_path, "r") as zip_file:
             file_name = file_path.name
             # ---- Read project metadata ----
-            try:
-                project_meta = json.loads(
-                    zip_file.read("exportedproject.json").decode("utf-8")
-                )
-            except KeyError:
-                logging.warning(f"No exportedproject.json found in {file_name}")
-                return None
-
-            project_documents = project_meta.get("source_documents", [])
-            if not project_documents:
-                logging.warning(f"No source documents found in project {file_name}")
-                return None
-
-            logging.info(f"Started processing project {file_name}")
+            project_documents = _read_project(zip_file, file_name)
 
             # ---- Process each document ----
-            for doc in project_documents:
-                doc_name = doc["name"]
-                state = doc.get("state", "")
-
-                # Determine path (curation or annotation)
-                folder_prefix = (
-                    f"curation/{doc_name}/"
-                    if state == "CURATION_FINISHED"
-                    else f"annotation/{doc_name}/"
-                )
-
-                # Collect CAS JSON files
-                matching_files = [
-                    info.filename
-                    for info in zip_file.infolist()
-                    if info.filename.startswith(folder_prefix)
-                    and info.filename.endswith(".json")
-                    and not info.is_dir()
-                ]
-
-                # Use INITIAL_CAS.json only if it is the *only* file
-                if len(matching_files) > 1:
-                    matching_files = [
-                        p for p in matching_files if not p.endswith("INITIAL_CAS.json")
-                    ]
-
-                if not matching_files:
-                    logging.warning(
-                        f"No CAS found for {doc_name} in {file_name} ({folder_prefix})"
-                    )
-                    continue
-
+            logging.info(f" Started processing project {file_name}")
+            if annotator_filter is not None:
+                logging.info(f" Processing only following annotators: {annotator_filter}")
+            for doc_name, matching_files in _yield_matching_files(project_documents, zip_file, file_name):
                 # ---- Load each CAS, compute stats, discard CAS ----
                 for cas_path in matching_files:
                     annotator_name = str(pathlib.Path(cas_path).stem)
-
+                    if annotator_filter is not None and annotator_name.lower() not in annotator_filter:
+                        continue
                     try:
                         with zip_file.open(cas_path) as cas_file:
                             cas = cassis.load_cas_from_json(cas_file)
@@ -217,7 +237,7 @@ def analyze_documents(
                         annotations.snomed_codes, filter_array
                     )
 
-                if not (no_errors := np.all(~erroneous_codes_array)):
+                if not np.all(~erroneous_codes_array):
                     doc_error_count += 1
                     concept_error_count += np.count_nonzero(erroneous_codes_array)
                     _map_dict = None
@@ -314,19 +334,18 @@ def log_critical_docs(
         )
     lines.append(f"#### {document_name}\n")
     if is_whitelist:
-        lines.append(f"| Snomed CT Code | Covered Text | Offset in Document |\n")
-        lines.append(f"| -------------: | -----------: | -----------------: |\n")
+        lines.append("| Snomed CT Code | Covered Text | Offset in Document |\n")
+        lines.append("| -------------: | -----------: | -----------------: |\n")
         for line in stacked:
             code_ = line[0].decode("utf-8")
             lines.append(f"| {code_} | {line[1]} | {line[2]} |\n")
             whitelist_code_counter.update([code_])
     else:
-        lines.append(f"| Snomed CT Code | Covered Text | Offset in Document | FSN |\n")
-        lines.append(f"| -------------: | -----------: | -----------------: | --: |\n")
+        lines.append("| Snomed CT Code | Covered Text | Offset in Document | FSN |\n")
+        lines.append("| -------------: | -----------: | -----------------: | --: |\n")
         for line in stacked:
             code_, tag_ = line[0].decode("utf-8"), line[3].decode("utf-8")
             lines.append(f"| {code_} | {line[1]} | {line[2]} | {tag_} |\n")
-            whitelist_code_counter.update([code_])
             blacklist_tag_counter.update([tag_.split("(", 1)[1].split(")")[0]])
     output_file.writelines(lines)
     output_file.write("\n\n")
@@ -344,21 +363,21 @@ def log_final_tag_count(
             f"_No {type_} found that are {'not ' if is_whitelist else ''}on the {list_type}_.\n"
         )
 
-    output_file.write(f"# Final Count\n")
-    output_file.write(f"## Snomed CT Codes\n")
+    output_file.write("# Final Count\n")
+    output_file.write("## Snomed CT Codes\n")
     output_file.write(f"[Zum Inhalt](#{Information.log_dump_pretext_caption.lower()})  \n\n")
-    if whitelist_tag_counter.total() > 0:
-        output_file.write(f"| Snomed CT Code | Count |\n")
-        output_file.write(f"| -------------: | ----: |\n")
+    if sum(whitelist_tag_counter.values()) > 0:
+        output_file.write("| Snomed CT Code | Count |\n")
+        output_file.write("| -------------: | ----: |\n")
         for code, count in whitelist_tag_counter.most_common():
             output_file.write(f"| {code} | {count} |\n")
     else:
         no_count("whitelist")
-    output_file.write(f"## Semantic Tags\n")
+    output_file.write("## Semantic Tags\n")
     output_file.write(f"[Zum Inhalt](#{Information.log_dump_pretext_caption.lower()})  \n\n")
-    if blacklist_tag_counter.total() > 0:
-        output_file.write(f"| Semantic Tag | Count |\n")
-        output_file.write(f"| -----------: | ----: |\n")
+    if sum(blacklist_tag_counter.values()) > 0:
+        output_file.write("| Semantic Tag | Count |\n")
+        output_file.write("| -----------: | ----: |\n")
         for tag, count in blacklist_tag_counter.most_common():
             output_file.write(f"| {tag} | {count} |\n")
     else:

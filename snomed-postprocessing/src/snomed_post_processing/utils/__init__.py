@@ -5,6 +5,7 @@ from typing import cast, Union
 
 import h5py
 import numpy as np
+from PyInquirer import prompt
 from pydantic import BaseModel
 import enum
 import json
@@ -95,6 +96,43 @@ def _flexible_whitespace_pattern(s: str) -> str:
     return "".join(escaped_parts)
 
 
+def prompt_for_names(annotator_names: set[str]):
+    if len(annotator_names) <= 1:
+        return None
+
+    return_all_name = "return_all"
+    return_all = prompt(
+        [
+            {
+                "type": "confirm",
+                "name": return_all_name,
+                "message": "There are multiple annotators in the project. Do you want to log all of them?",
+                "default": False,
+            }
+        ]
+    )
+    if return_all.get(return_all_name):
+        return None
+
+    annotator_choice_name = "menu_entry"
+    annotator_names_chosen = prompt(
+        [
+            {
+                "type": "checkbox",
+                "name": annotator_choice_name,
+                "message": "Please choose the annotators you want to log:",
+                "choices": [
+                    {
+                        "name": _name
+                    }
+                    for _name in sorted(annotator_names)
+                ]
+            }
+        ]
+    )
+    return annotator_names_chosen.get(annotator_choice_name)
+
+
 def pprint_json(json_data):
     print(json.dumps(json_data, indent=2))
 
@@ -132,8 +170,9 @@ def filter_by_semantic_tag(
     if tags is None:
         return snowstorm_response
 
+    _backslash_car = "\\"
     re_tags = re.compile(
-        rf"{'|'.join([r'\(' + _flexible_whitespace_pattern(t) + r'\)' for t in tags])}\)",
+        rf"{'|'.join([rf'{_backslash_car}(' + _flexible_whitespace_pattern(t) + rf'{_backslash_car})' for t in tags])}\)",
         re.IGNORECASE,
     )
 

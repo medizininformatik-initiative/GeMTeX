@@ -1,7 +1,6 @@
 import datetime
 import os
 import pickle
-import sys
 import logging
 import pathlib
 import sys
@@ -27,12 +26,14 @@ if __name__ == "__main__":
         dump_codes_to_hdf5,
         ListDumpType,
         Information,
-    )
+        prompt_for_names,
+)
     from uima_processing import (
         process_inception_zip,
         analyze_documents,
         log_final_tag_count,
-    )
+        get_annotator_names,
+)
 else:
     from .snowstorm_funcs import (
         build_endpoint,
@@ -46,11 +47,13 @@ else:
         dump_codes_to_hdf5,
         ListDumpType,
         Information,
+        prompt_for_names,
     )
     from .uima_processing import (
         process_inception_zip,
         analyze_documents,
         log_final_tag_count,
+        get_annotator_names,
     )
 
 
@@ -205,7 +208,7 @@ def log_documents(
             sys.exit(-1)
         else:
             logging.info(f"Found project '{inception_project}' in INCEpTION instance.")
-            with yaspin.yaspin(text="Exporting project...") as spinner:
+            with yaspin.yaspin(text="Exporting project..."):
                 project = project[0]
                 project_export = inception_client.api.export_project(project, "jsoncas")
                 folder = pathlib.Path(process_path).resolve()
@@ -250,7 +253,9 @@ def log_documents(
         sys.exit(-1)
 
     erroneous_doc_count = 0
-    if result := process_inception_zip(project_zip):
+    annotator_names = get_annotator_names(project_zip)
+    names_filter = [n.lower() for n in prompt_for_names(annotator_names)]
+    if result := process_inception_zip(project_zip, annotator_filter=names_filter):
         if not keep_export and inception_client is not None:
             logging.info(
                 f"Removing temporary export of project '{project_zip.name}' from filesystem."
@@ -391,7 +396,7 @@ def create_concept_id_dump(
                         code_filter = None
     logging.info(f"Using filter list: '{[c for c in code_filter]}'.")
 
-    with yaspin.yaspin(text="Processing...") as spinner:
+    with yaspin.yaspin(text="Processing..."):
         if root := get_root_code(root_code, endpoint_builder):
             id_hash_set, id_to_fsn_dict = dump_concept_ids(
                 root_concept=root,
