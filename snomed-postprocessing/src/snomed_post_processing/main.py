@@ -1,7 +1,6 @@
 import datetime
 import os
 import pickle
-import sys
 import logging
 import pathlib
 import sys
@@ -27,12 +26,14 @@ if __name__ == "__main__":
         dump_codes_to_hdf5,
         ListDumpType,
         Information,
-    )
+        prompt_for_names,
+)
     from uima_processing import (
         process_inception_zip,
         analyze_documents,
         log_final_tag_count,
-    )
+        get_annotator_names,
+)
 else:
     from .snowstorm_funcs import (
         build_endpoint,
@@ -46,11 +47,13 @@ else:
         dump_codes_to_hdf5,
         ListDumpType,
         Information,
+        prompt_for_names,
     )
     from .uima_processing import (
         process_inception_zip,
         analyze_documents,
         log_final_tag_count,
+        get_annotator_names,
     )
 
 
@@ -137,6 +140,11 @@ def common_click_args(fnc):
     is_flag=True,
     help="Keeps the temporary exported INCEpTION project (when using client) after processing.",
 )
+@click.option(
+    "--forbid-prompt",
+    is_flag=True,
+    help="Forbids prompting the user to select the annotators to log manually (instead of all). Use this flag for e.g. 'docker', when you don't want to mess with providing prompt answers.",
+)
 def log_documents(
     process_path: str,
     lists_path: Optional[str],
@@ -148,6 +156,7 @@ def log_documents(
     inception_project: Optional[str],
     log_level: str,
     keep_export: bool,
+    forbid_prompt: bool,
 ):
     """
     Analyzes an INCEpTION project zip file (if PROCESS_PATH points to a local zip file) or a particular project in an INCEpTION instance
@@ -205,7 +214,7 @@ def log_documents(
             sys.exit(-1)
         else:
             logging.info(f"Found project '{inception_project}' in INCEpTION instance.")
-            with yaspin.yaspin(text="Exporting project...") as spinner:
+            with yaspin.yaspin(text="Exporting project..."):
                 project = project[0]
                 project_export = inception_client.api.export_project(project, "jsoncas")
                 folder = pathlib.Path(process_path).resolve()
@@ -250,7 +259,14 @@ def log_documents(
         sys.exit(-1)
 
     erroneous_doc_count = 0
-    if result := process_inception_zip(project_zip):
+    names_filter = None
+    if not forbid_prompt:
+        annotator_names = get_annotator_names(project_zip)
+        _res = prompt_for_names(annotator_names)
+        if _res and len(_res) > 0:
+            names_filter = [n.lower() for n in _res]
+
+    if result := process_inception_zip(project_zip, annotator_filter=names_filter):
         if not keep_export and inception_client is not None:
             logging.info(
                 f"Removing temporary export of project '{project_zip.name}' from filesystem."
@@ -391,7 +407,7 @@ def create_concept_id_dump(
                         code_filter = None
     logging.info(f"Using filter list: '{[c for c in code_filter]}'.")
 
-    with yaspin.yaspin(text="Processing...") as spinner:
+    with yaspin.yaspin(text="Processing..."):
         if root := get_root_code(root_code, endpoint_builder):
             id_hash_set, id_to_fsn_dict = dump_concept_ids(
                 root_concept=root,

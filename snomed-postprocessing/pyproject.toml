@@ -1,10 +1,10 @@
 [project]
 name = "snomed_post_processing"
 
-version = "0.9.6"
+version = "0.9.7"
 description = "Program that creates SNOMED CT dumps of a particular version and/or with some filters for semantic tags or concept ids applied. It also logs SNOMED CT annotated documents under these filters in mind."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = "~=3.9.0"
 authors = [
   {name = "Franz Matthies", email = "franz.matthies@imise.uni-leipzig.de"},
 ]
@@ -12,15 +12,16 @@ maintainers = [
   {name = "Franz Matthies", email = "franz.matthies@imise.uni-leipzig.de"},
 ]
 dependencies = [
-    "click>=8.3.1",
+    "click>=8.1.8",
     "dkpro-cassis>=0.10.1",
-    "h5py>=3.15.1",
-    "pandas>=3.0.0",
+    "h5py>=3.14.0",
+    "pandas>=2.3.3",
     "pycaprio>=0.3.0",
     "pydantic>=2.12.5",
+    "pyinquirer>=1.0.3",
     "requests==2.27.1",
     "scttsrapy",
-    "yaspin>=3.4.0",
+    "yaspin>=3.3.0",
 ]
 
 [tool.uv.sources]
