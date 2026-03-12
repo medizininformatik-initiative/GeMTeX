@@ -140,6 +140,11 @@ def common_click_args(fnc):
     is_flag=True,
     help="Keeps the temporary exported INCEpTION project (when using client) after processing.",
 )
+@click.option(
+    "--forbid-prompt",
+    is_flag=True,
+    help="Forbids prompting the user to select the annotators to log manually (instead of all). Use this flag for e.g. 'docker', when you don't want to mess with providing prompt answers.",
+)
 def log_documents(
     process_path: str,
     lists_path: Optional[str],
@@ -151,6 +156,7 @@ def log_documents(
     inception_project: Optional[str],
     log_level: str,
     keep_export: bool,
+    forbid_prompt: bool,
 ):
     """
     Analyzes an INCEpTION project zip file (if PROCESS_PATH points to a local zip file) or a particular project in an INCEpTION instance
@@ -253,8 +259,13 @@ def log_documents(
         sys.exit(-1)
 
     erroneous_doc_count = 0
-    annotator_names = get_annotator_names(project_zip)
-    names_filter = [n.lower() for n in prompt_for_names(annotator_names)]
+    names_filter = None
+    if not forbid_prompt:
+        annotator_names = get_annotator_names(project_zip)
+        _res = prompt_for_names(annotator_names)
+        if _res and len(_res) > 0:
+            names_filter = [n.lower() for n in _res]
+
     if result := process_inception_zip(project_zip, annotator_filter=names_filter):
         if not keep_export and inception_client is not None:
             logging.info(

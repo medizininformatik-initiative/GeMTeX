@@ -5,4 +5,8 @@ if [[ $# -eq 0 ]] ; then
     exit 0
 fi
 
-"$1" "${@:2}"
+if [[ $1 = "log-critical-documents" ]] ; then
+    log-critical-documents "${@:2}" --forbid-prompt
+else
+    "$1" "${@:2}"
+fi

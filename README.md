@@ -42,7 +42,7 @@ Ein einfaches Skript um UIMA CAS-Dateien von `json` in `xmi` umzuschreiben oder 
 
 ### [`snomed-postprocessing`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/snomed-postprocessing)  
 Programm um Dokumente zu identifizieren, die SNOMED CT Codes enthalten, die nicht mit einer Version kompatibel sind.
-(Im GeMTeX Fall: 04/2024) bzw. Codes, die auf einer Blacklist stehen.
+(Im GeMTeX Fall: 04/2024) bzw. Codes, die auf einer Blacklist stehen (siehe ``snomed-postprocessing/config/blacklist_filter_tags.txt``).
 
 ### [`surrogator`](/surrogator/Readme.md)
 Werkzeug für Pseudonymisierung von Textdocumenten nach Detektion von PII-Entitäten.
