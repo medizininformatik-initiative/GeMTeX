@@ -216,6 +216,7 @@ def analyze_documents(
     section_count: dict[str, int],
     blacklist_tag_counter: Counter,
     whitelist_code_counter: Counter,
+    progress_obj: Optional[dict] = None,
 ):
     as_whitelist = filter_type == ListDumpType.WHITELIST
     erroneous_doc_count = 0
@@ -227,7 +228,11 @@ def analyze_documents(
             doc_error_count = 0
             concept_error_count = 0
             for i, (doc_name, annotations) in enumerate(documents.documents.items()):
-                spinner.text = f"Processing ({annotator_name} [{i + 1:>3}/{len(documents.documents)}]: '{doc_name}') ..."
+                _text = f"Processing ({annotator_name} [{i + 1:>3}/{len(documents.documents)}]: '{doc_name}') ..."
+                if progress_obj is not None:
+                    progress_obj["current_progress"] = progress_obj["current_progress"] + progress_obj["progress_increment"]
+                    progress_obj["obj"].progress(progress_obj["current_progress"], progress_obj["text_pre"] + _text)
+                spinner.text = _text
                 if as_whitelist:
                     erroneous_codes_array = ~np.isin(
                         annotations.snomed_codes, filter_array
