@@ -121,12 +121,7 @@ def prompt_for_names(annotator_names: set[str]):
                 "type": "checkbox",
                 "name": annotator_choice_name,
                 "message": "Please choose the annotators you want to log:",
-                "choices": [
-                    {
-                        "name": _name
-                    }
-                    for _name in sorted(annotator_names)
-                ]
+                "choices": [{"name": _name} for _name in sorted(annotator_names)],
             }
         ]
     )

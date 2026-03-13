@@ -51,9 +51,7 @@ def _load_document(path: Union[str, pathlib.Path]) -> cassis.Cas:
 
 def _read_project(zip_file: zipfile.ZipFile, file_name: str) -> Optional[list[dict]]:
     try:
-        project_meta = json.loads(
-            zip_file.read("exportedproject.json").decode("utf-8")
-        )
+        project_meta = json.loads(zip_file.read("exportedproject.json").decode("utf-8"))
     except KeyError:
         logging.warning(f"No exportedproject.json found in {file_name}")
         return None
@@ -65,7 +63,9 @@ def _read_project(zip_file: zipfile.ZipFile, file_name: str) -> Optional[list[di
     return project_documents
 
 
-def _yield_matching_files(project_documents: list[dict], zip_file: zipfile.ZipFile, file_name: str = None):
+def _yield_matching_files(
+    project_documents: list[dict], zip_file: zipfile.ZipFile, file_name: str = None
+):
     for doc in project_documents:
         doc_name = doc["name"]
         state = doc.get("state", "")
@@ -82,8 +82,8 @@ def _yield_matching_files(project_documents: list[dict], zip_file: zipfile.ZipFi
             info.filename
             for info in zip_file.infolist()
             if info.filename.startswith(folder_prefix)
-               and info.filename.endswith(".json")
-               and not info.is_dir()
+            and info.filename.endswith(".json")
+            and not info.is_dir()
         ]
 
         # Use INITIAL_CAS.json only if it is the *only* file
@@ -138,13 +138,19 @@ def get_annotator_names(project_path: pathlib.Path) -> set[str]:
     with zipfile.ZipFile(project_path, "r") as zip_file:
         file_name = project_path.name
         project_documents = _read_project(zip_file, file_name)
-        annotator_names = set([str(pathlib.Path(cp).stem) for _, fi in _yield_matching_files(project_documents, zip_file) for cp in fi])
+        annotator_names = set(
+            [
+                str(pathlib.Path(cp).stem)
+                for _, fi in _yield_matching_files(project_documents, zip_file)
+                for cp in fi
+            ]
+        )
     return annotator_names
 
 
 def process_inception_zip(
     file_path: Union[str, pathlib.Path],
-    annotator_filter = None,
+    annotator_filter=None,
     annotation_types: list[str] = None,
     id_prefix: str = "http://snomed.info/id/",
 ) -> TemporaryCorpus:
@@ -162,12 +168,19 @@ def process_inception_zip(
             # ---- Process each document ----
             logging.info(f" Started processing project {file_name}")
             if annotator_filter is not None:
-                logging.info(f" Processing only following annotators: {annotator_filter}")
-            for doc_name, matching_files in _yield_matching_files(project_documents, zip_file, file_name):
+                logging.info(
+                    f" Processing only following annotators: {annotator_filter}"
+                )
+            for doc_name, matching_files in _yield_matching_files(
+                project_documents, zip_file, file_name
+            ):
                 # ---- Load each CAS, compute stats, discard CAS ----
                 for cas_path in matching_files:
                     annotator_name = str(pathlib.Path(cas_path).stem)
-                    if annotator_filter is not None and annotator_name.lower() not in annotator_filter:
+                    if (
+                        annotator_filter is not None
+                        and annotator_name.lower() not in annotator_filter
+                    ):
                         continue
                     try:
                         with zip_file.open(cas_path) as cas_file:
@@ -230,8 +243,14 @@ def analyze_documents(
             for i, (doc_name, annotations) in enumerate(documents.documents.items()):
                 _text = f"Processing ({annotator_name} [{i + 1:>3}/{len(documents.documents)}]: '{doc_name}') ..."
                 if progress_obj is not None:
-                    progress_obj["current_progress"] = progress_obj["current_progress"] + progress_obj["progress_increment"]
-                    progress_obj["obj"].progress(progress_obj["current_progress"], progress_obj["text_pre"] + _text)
+                    progress_obj["current_progress"] = (
+                        progress_obj["current_progress"]
+                        + progress_obj["progress_increment"]
+                    )
+                    progress_obj["obj"].progress(
+                        progress_obj["current_progress"],
+                        progress_obj["text_pre"] + _text,
+                    )
                 spinner.text = _text
                 if as_whitelist:
                     erroneous_codes_array = ~np.isin(
@@ -370,7 +389,9 @@ def log_final_tag_count(
 
     output_file.write("# Final Count\n")
     output_file.write("## Snomed CT Codes\n")
-    output_file.write(f"[Zum Inhalt](#{Information.log_dump_pretext_caption.lower()})  \n\n")
+    output_file.write(
+        f"[Zum Inhalt](#{Information.log_dump_pretext_caption.lower()})  \n\n"
+    )
     if sum(whitelist_tag_counter.values()) > 0:
         output_file.write("| Snomed CT Code | Count |\n")
         output_file.write("| -------------: | ----: |\n")
@@ -379,7 +400,9 @@ def log_final_tag_count(
     else:
         no_count("whitelist")
     output_file.write("## Semantic Tags\n")
-    output_file.write(f"[Zum Inhalt](#{Information.log_dump_pretext_caption.lower()})  \n\n")
+    output_file.write(
+        f"[Zum Inhalt](#{Information.log_dump_pretext_caption.lower()})  \n\n"
+    )
     if sum(blacklist_tag_counter.values()) > 0:
         output_file.write("| Semantic Tag | Count |\n")
         output_file.write("| -----------: | ----: |\n")

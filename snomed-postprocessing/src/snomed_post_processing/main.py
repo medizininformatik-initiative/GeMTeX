@@ -27,13 +27,13 @@ if __name__ == "__main__":
         ListDumpType,
         Information,
         prompt_for_names,
-)
+    )
     from uima_processing import (
         process_inception_zip,
         analyze_documents,
         log_final_tag_count,
         get_annotator_names,
-)
+    )
 else:
     from .snowstorm_funcs import (
         build_endpoint,

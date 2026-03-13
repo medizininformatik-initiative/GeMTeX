@@ -7,6 +7,7 @@ from collections import Counter
 
 import h5py
 import streamlit as st
+
 if __name__ == "__main__":
     sys.path.append(".")
     from uima_processing import (
@@ -36,7 +37,12 @@ def save_uploaded_file(uploaded_file, suffix: str) -> pathlib.Path:
     return target
 
 
-def generate_report(project_zip: pathlib.Path, lists_path: pathlib.Path, annotator_filter=None, progress_obj=dict):
+def generate_report(
+    project_zip: pathlib.Path,
+    lists_path: pathlib.Path,
+    annotator_filter=None,
+    progress_obj=dict,
+):
     output_path = project_zip.parent / (
         f"critical_documents_{datetime.datetime.now().strftime('%d-%m-%Y_%H-%M-%S')}.md"
     )
@@ -55,7 +61,9 @@ def generate_report(project_zip: pathlib.Path, lists_path: pathlib.Path, annotat
             whitelist_code_counter = Counter()
             section_count = {}
 
-            progress_increment = 1 / max(sum([len(x.documents) for x in result.annotators.values()]) * 2, 1)
+            progress_increment = 1 / max(
+                sum([len(x.documents) for x in result.annotators.values()]) * 2, 1
+            )
             _iter_obj = [ListDumpType.WHITELIST, ListDumpType.BLACKLIST]
             for i, ft in enumerate(_iter_obj):
                 group_name = ft.name.lower()
@@ -79,7 +87,7 @@ def generate_report(project_zip: pathlib.Path, lists_path: pathlib.Path, annotat
                         "obj": progress_obj["obj"],
                         "text_pre": f"__{ft.name.capitalize()}__: ",
                         "progress_increment": progress_increment,
-                        "current_progress": 1.0 * (i / len(_iter_obj))
+                        "current_progress": 1.0 * (i / len(_iter_obj)),
                     },
                 )
 
@@ -143,12 +151,18 @@ if st.button("Run analysis", type="primary", disabled=not (zip_file and hdf5_fil
     try:
         if zip_temp_path is None:
             raise RuntimeError("ZIP file was not prepared correctly.")
-        progress_bar = st.progress(0.0, text="Running analysis... this may take a while.")
+        progress_bar = st.progress(
+            0.0, text="Running analysis... this may take a while."
+        )
         time.sleep(1)
 
         hdf5_temp_path = save_uploaded_file(hdf5_file, ".hdf5")
 
-        annotator_filter = [name.lower() for name in annotator_selection] if annotator_selection else None
+        annotator_filter = (
+            [name.lower() for name in annotator_selection]
+            if annotator_selection
+            else None
+        )
 
         output_path, erroneous_doc_count = generate_report(
             project_zip=zip_temp_path,
