@@ -9,7 +9,7 @@ if [[ $# -eq 0 ]] ; then
 fi
 
 if [[ $1 = "start-gui" ]] ; then
-  uv run streamlit run ./src/snomed_postprocessing/streamlit_app.py
+  uv run streamlit run ./src/snomed_post_processing/streamlit_app.py
 elif [[ $1 = "log-critical-documents" ]] ; then
     log-critical-documents "${@:2}" --forbid-prompt
 else
