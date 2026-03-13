@@ -10,17 +10,44 @@ The script can be run either via the command line or via docker.
 In both cases you need a hdf5 file ([gemtex_snomedct_codes_2024-04-01.hdf5](https://confluence.imi.med.fau.de/spaces/GEM/pages/317216732/SNOMED+CT+Semantic+Tag+Dashboard?preview=/317216732/359075603/gemtex_snomedct_codes_2024-04-01.hdf5); should be around 50MB) containing the whitelist/blacklist and a zip file containing the inception dump.  
 The hdf5 file could also be created with this script itself if you ever need it for a different whitelist/blacklist. You would need a running SNOWSTORM instance though.
 See ``uv run create-concepts-dump --help`` or 
-``docker run ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:0.9.7 create-concepts-dump --help`` for further information. ***[2]***  
+``docker run ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:0.9.8 create-concepts-dump --help`` for further information. ***[2]***  
 The simple usage for the use case in GeMTex is described in the following, however:
 
+### GUI
+__Since version 0.9.8__, a gui can be invoked for the logging process:
+#### uv
+```
+uv run streamlit run .\src\snomed_post_processing\streamlit_app.py
+```
+#### Docker
+```
+docker run --rm -p HOST_PORT:8501 ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:0.9.8 start-gui
+```
+* ``HOST_PORT`` needs to be set to the port you want to use for the GUI.
+
+###### Convenience Script
+There is a convenience script with `./start-gui.sh` that runs the above docker command with the given arguments:
+* _arg1_ (optional): Port to use for the GUI (default: 8501)
+* _arg2_ (optional): Version of the docker image
+
+e.g.:
+````
+./start-gui.sh 8080
+````
+
+
 ### CLI
-You can run the logging script from within an [uv](https://docs.astral.sh/uv/getting-started/installation/) environment:
+#### uv
+You can run the logging script from within an [uv](https://docs.astral.sh/uv/getting-started/installation/) environment.
+(__since version 0.9.7__ it allows you to select specific annotators to log via prompts.)
+
+For a local dump of an INCEpTION project:
 ```
 uv run log-critical-documents \
   --lists-path /path/to/hdf5-file \
   /path/to/inception-json-dump.zip
 ```
-for a local dump of an INCEpTION project, or
+or for a remote connection to the INCEpTION instance:
 ```
 uv run log-critical-documents \
   --lists-path /path/to/hdf5-file --ip INCEPTION_IP --port INCEPTION_PORT \
@@ -29,16 +56,14 @@ uv run log-critical-documents \
   --inception-project INCEPTION_PROJECT_URL_SLUG
   /path/to/temp/export
 ```
-for a remote connection to the INCEpTION instance.  
-This CLI version also allows you to select specific annotators to log via prompts.
 
-### Docker
+#### Docker
 There is also a docker image available:
 ```
 docker run
  --volume ./data:/app/data
  --rm
- ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:0.9.7
+ ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:0.9.8
  log-critical-documents /app/data/inception-json-dump.zip
 ```
 - log file will be in the `./data` folder (the script will show the final path as well).
@@ -46,13 +71,17 @@ docker run
 - [gemtex_snomedct_codes_2024-04-01.hdf5](https://confluence.imi.med.fau.de/spaces/GEM/pages/317216732/SNOMED+CT+Semantic+Tag+Dashboard?preview=/317216732/359075603/gemtex_snomedct_codes_2024-04-01.hdf5) has to be in `./data`, too.
 
 If you use ``docker``, however, you won't be able to select specific annotators to log.
-This is only available in the CLI version (see above). 
+This is only available in when starting the script within an uv environment (or similar; see above). 
 
-#### Convenience Script
+###### Convenience Script
 There is a convenience script with `./log-inception-docs.sh` that runs the above docker command with the given arguments:
 * _arg1_ (mandatory): name of the inception dump zip (in the ``data`` folder)
 * _arg2_ (optional): version of the docker image 
 
+e.g.:
+````
+./log-inception-docs.sh data/inception-dump.zip
+````
 
 ### CLI Output:
 ```
