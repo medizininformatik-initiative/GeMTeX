@@ -1,6 +1,6 @@
 #!/bin/bash
 
-CURRENT_VERSION="0.9.8"
+CURRENT_VERSION="0.9.9"
 DEFAULT_PORT="8501"
 
 if [[ $# -eq 0 ]]; then

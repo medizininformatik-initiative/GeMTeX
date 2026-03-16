@@ -1,11 +1,14 @@
 import dataclasses
 import logging
 import pathlib
-from typing import cast, Union
+import sys
+from typing import cast, Union, Optional
 
 import h5py
 import numpy as np
+import yaspin
 from PyInquirer import prompt
+from pycaprio import Pycaprio
 from pydantic import BaseModel
 import enum
 import json
@@ -94,6 +97,78 @@ def _flexible_whitespace_pattern(s: str) -> str:
                 escaped_parts.append(char)
             i += 1
     return "".join(escaped_parts)
+
+
+def get_project_zip(
+    process_path: str,
+    host: str,
+    user_name: Optional[str] = None,
+    password: Optional[str] = None,
+    project_name: Optional[str] = None,
+):
+    inception_client = None
+    project_zip = None
+    if user_name is not None and password is not None and project_name is not None:
+        logging.info(
+            f"Trying to find project '{project_name}' in INCEpTION instance at '{host}'."
+        )
+        try:
+            inception_client = Pycaprio(host, (user_name, password))
+            inception_client.api.projects()
+        except Exception as e:
+            logging.error(
+                f"Something went wrong while trying to connect to INCEpTION instance: '{e}'. Exiting."
+            )
+            sys.exit(-1)
+    else:
+        logging.info(
+            f"Inception client credentials were not complete/given and/or no project name. Assuming zipped project under '{process_path}'."
+        )
+
+    if inception_client is None:
+        project_zip = pathlib.Path(process_path).resolve()
+        if (
+            not project_zip.exists()
+            or not project_zip.is_file()
+            or not project_zip.suffix == ".zip"
+        ):
+            logging.error(f"Could not find project zip file '{process_path}'. Exiting.")
+            sys.exit(-1)
+    else:
+        project = [
+            p
+            for p in inception_client.api.projects()
+            if p.project_name.lower() == project_name.lower()
+            or str(p.project_id) == project_name.lower()
+        ]
+        if len(project) == 0:
+            logging.error(
+                f"Could not find project '{project_name}' in INCEpTION instance at '{host}'. Did you forgot to use the 'URL slug' for the project? Exiting."
+            )
+            logging.error(
+                f"Available projects: {', '.join([p.project_name.lower() for p in inception_client.api.projects()])}"
+            )
+            sys.exit(-1)
+        else:
+            logging.info(f"Found project '{project_name}' in INCEpTION instance.")
+            with yaspin.yaspin(text="Exporting project..."):
+                project = project[0]
+                project_export = inception_client.api.export_project(project, "jsoncas")
+                folder = pathlib.Path(process_path).resolve()
+                if folder.is_file():
+                    folder = folder.parent
+                if not folder.exists():
+                    folder.mkdir(parents=True)
+                file_path = folder / pathlib.Path(project.project_name).with_suffix(
+                    ".zip"
+                )
+                logging.info(
+                    f"Exporting project '{project.project_name}' to '{file_path}'"
+                )
+                with open(file_path, "wb") as f:
+                    f.write(project_export)
+            project_zip = file_path
+    return project_zip
 
 
 def prompt_for_names(annotator_names: set[str]):

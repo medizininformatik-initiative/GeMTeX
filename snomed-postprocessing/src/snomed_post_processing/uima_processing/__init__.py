@@ -10,6 +10,7 @@ from io import TextIOWrapper
 from typing import Union, Optional
 
 import cassis
+import h5py
 import numpy as np
 import yaspin
 
@@ -410,3 +411,51 @@ def log_final_tag_count(
             output_file.write(f"| {tag} | {count} |\n")
     else:
         no_count("blacklist")
+
+
+def create_log_from_results(
+    result: TemporaryCorpus,
+    log_doc: TextIOWrapper,
+    lists: pathlib.Path,
+    progress_obj: Optional[dict] = None,
+) -> int:
+    err_docs = 0
+    log_doc.write(Information.log_dump_pretext)
+    with h5py.File(lists.open("rb"), "r") as h5_file:
+        blacklist_tag_counter = Counter()
+        whitelist_code_counter = Counter()
+        section_count = {}
+
+        if progress_obj is not None:
+            progress_increment = 1 / max(
+                sum([len(x.documents) for x in result.annotators.values()]) * 2, 1
+            )
+
+        ft_iter = [ListDumpType.WHITELIST, ListDumpType.BLACKLIST]
+        for i, ft in enumerate(ft_iter):
+            print(f"-- {ft.name.capitalize()} --")
+            group_name = ft.name.lower()
+            if group_name in h5_file.keys():
+                filter_list = h5_file.get(group_name).get("0").get("codes")
+                fsn_list = h5_file.get(group_name).get("0").get("fsn")
+                err_docs += analyze_documents(
+                    result,
+                    filter_list[:],
+                    fsn_list[:],
+                    ft,
+                    log_doc,
+                    True,
+                    section_count,
+                    blacklist_tag_counter,
+                    whitelist_code_counter,
+                    None
+                    if progress_obj is None
+                    else {
+                        "obj": progress_obj["obj"],
+                        "text_pre": f"__{group_name.capitalize()}__: ",
+                        "progress_increment": progress_increment,
+                        "current_progress": 1.0 * (i / len(ft_iter)),
+                    },
+                )
+        log_final_tag_count(whitelist_code_counter, blacklist_tag_counter, log_doc)
+    return err_docs
