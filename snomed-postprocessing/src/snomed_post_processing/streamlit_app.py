@@ -14,11 +14,17 @@ if __name__ == "__main__":
         process_inception_zip,
         create_log_from_results,
     )
+    from utils import (
+        get_project_zip
+    )
 else:
     from .uima_processing import (
         get_annotator_names,
         process_inception_zip,
         create_log_from_results,
+    )
+    from .utils import (
+        get_project_zip
     )
 
 
@@ -26,6 +32,8 @@ st.set_page_config(page_title="GeMTeX SNOMED CT Postprocessing", layout="wide")
 
 
 def save_uploaded_file(uploaded_file, suffix: str) -> pathlib.Path:
+    if isinstance(uploaded_file, pathlib.Path):
+        return uploaded_file
     temp_dir = pathlib.Path(tempfile.mkdtemp(prefix="snomed_gui_"))
     target = temp_dir / f"upload{suffix}"
     target.write_bytes(uploaded_file.getvalue())
@@ -72,15 +80,38 @@ st.write("""Simple GUI for analyzing all critical documents in the given INCEpTI
 
 with st.sidebar:
     st.header("Inputs")
+    st.session_state["zip_file"] = None
     load_annotators = st.checkbox("Load annotators from ZIP", value=True)
-    zip_file = st.file_uploader("INCEpTION project ZIP", type=["zip"])
+    use_api = st.toggle("Use INCEpTION API", value=False)
+    if use_api:
+        _project_tmp = tempfile.mkdtemp("snomed_gui_dir")
+        with st.form("inception_api_form"):
+            url = st.text_input("INCEpTION API URL", value="http://localhost:8080")
+            username = st.text_input("REMOTE Role Username")
+            password = st.text_input("REMOTE Role Password", type="password")
+            submitted = st.form_submit_button("Get Projects")
+            if submitted:
+                st.session_state["projects"] = get_project_zip(_project_tmp, url, username, password)
+        if st.session_state.get("projects", None) is not None:
+            project = st.selectbox("Select project", st.session_state.get("projects", []), index=None)
+            st.session_state["current_project"] = project
+            if project is not None:
+                _zip = get_project_zip(_project_tmp, url, username, password, project)
+                if isinstance(_zip, pathlib.Path):
+                    st.session_state["zip_file"] = _zip
+                elif isinstance(_zip, list):
+                    pass
+                else:
+                    st.error("Could not load projects from INCEpTION API.")
+    else:
+        st.session_state["zip_file"] = st.file_uploader("INCEpTION project ZIP", type=["zip"])
     hdf5_file = st.file_uploader("Whitelist/Blacklist HDF5", type=["hdf5"])
 
 
 annotator_selection = None
 zip_temp_path = None
 
-if zip_file is not None:
+if zip_file := st.session_state.get("zip_file"):
     zip_temp_path = save_uploaded_file(zip_file, ".zip")
     st.success(f"ZIP uploaded: {zip_file.name}")
 
@@ -137,6 +168,8 @@ if st.button("Run analysis", type="primary", disabled=not (zip_file and hdf5_fil
 
         with st.expander("Preview report"):
             st.markdown(report_text)
+
+        st.session_state["zip_file"] = None
 
     except Exception as exc:
         st.error(f"Analysis failed: {exc}")
