@@ -45,6 +45,8 @@ def _check_input_file(input_file: pathlib.Path) -> Tuple[bool, bool]:
             return True, False
         elif input_file.suffix == ".json":
             return False, True
+        elif input_file.suffix == ".zip":
+            raise NotImplementedError("Zip files are not supported yet.")
         else:
             logging.error(
                 f" Input file '{input_file.resolve()}' has unsupported file extension; needs to be one of '.json' or '.xmi'."
@@ -172,7 +174,7 @@ def _set_log_level(log_level: str):
     ),
     help="The log level.",
 )
-def main(
+def convert_uima_cas(
     input_file: str,
     output_file: Optional[str],
     typesystem: Optional[str],
@@ -207,6 +209,6 @@ def main(
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        main(["--help"])
+        convert_uima_cas(["--help"])
     else:
-        main(sys.argv[1:])
+        convert_uima_cas(sys.argv[1:])

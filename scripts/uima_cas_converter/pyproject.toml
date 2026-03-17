@@ -10,7 +10,7 @@ dependencies = [
     "pyinquirer>=1.0.3",
 ]
 [project.scripts]
-convert-cas = "uima_cas_converter.main:main"
+convert-cas = "uima_cas_converter.main:convert_uima_cas"
 
 [build-system]
 requires = ["uv_build>=0.9.9,<0.10.0"]
