@@ -166,9 +166,17 @@ def log_documents(
         and inception_password is not None
         and inception_project is not None
     )
-    project_zip = get_project_zip(
-        process_path, host, inception_username, inception_password, inception_project
-    )
+    try:
+        project_zip = get_project_zip(
+            process_path,
+            host,
+            inception_username,
+            inception_password,
+            inception_project,
+        )
+    except Exception as e:
+        logging.error(f"Error while getting project zip: '{e}'. Exiting.")
+        sys.exit(-1)
 
     default_lists_path = pathlib.Path(
         pathlib.Path(__file__).parent.parent.parent,

@@ -231,11 +231,14 @@ def analyze_documents(
     blacklist_tag_counter: Counter,
     whitelist_code_counter: Counter,
     progress_obj: Optional[dict] = None,
-):
+) -> Optional[int]:
     as_whitelist = filter_type == ListDumpType.WHITELIST
     erroneous_doc_count = 0
     with yaspin.yaspin() as spinner:
         annotator_names = sorted(project.annotators.keys())
+        if len(annotator_names) <= 0:
+            spinner.write("No annotators found.")
+            return erroneous_doc_count
         annotator_names_max = len(max(annotator_names, key=len))
         for annotator_name, documents in project.annotators.items():
             new_annotator = True
