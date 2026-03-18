@@ -14,9 +14,9 @@ See ``uv run create-concepts-dump --help`` or
 The simple usage for the use case in GeMTex is described in the following, however:
 
 ### GUI
-__Since version 0.9.8__, a gui can be invoked for the logging process.  
-__Since version 0.9.9__, the gui handles connection via credentials to an INCEpTION instance
-and is not restricted to local files anymore.
+* __since version 0.9.9__, the gui handles connection via credentials to an INCEpTION instance and is not restricted to local files anymore (except for the ``hdf5`` file)
+* __since version 0.9.8__, a gui can be invoked for the logging process.  
+
 #### uv
 ```
 uv run streamlit run .\src\snomed_post_processing\streamlit_app.py
