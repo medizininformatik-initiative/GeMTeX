@@ -3,34 +3,33 @@ import pathlib
 import sys
 import tempfile
 import time
-from collections import Counter
+from typing import Optional
 
-import h5py
 import streamlit as st
 
 if __name__ == "__main__":
     sys.path.append(".")
     from uima_processing import (
-        analyze_documents,
         get_annotator_names,
-        log_final_tag_count,
         process_inception_zip,
+        create_log_from_results,
     )
-    from utils import Information, ListDumpType
+    from utils import get_project_zip
 else:
     from .uima_processing import (
-        analyze_documents,
         get_annotator_names,
-        log_final_tag_count,
         process_inception_zip,
+        create_log_from_results,
     )
-    from .utils import Information, ListDumpType
+    from .utils import get_project_zip
 
 
 st.set_page_config(page_title="GeMTeX SNOMED CT Postprocessing", layout="wide")
 
 
 def save_uploaded_file(uploaded_file, suffix: str) -> pathlib.Path:
+    if isinstance(uploaded_file, pathlib.Path):
+        return uploaded_file
     temp_dir = pathlib.Path(tempfile.mkdtemp(prefix="snomed_gui_"))
     target = temp_dir / f"upload{suffix}"
     target.write_bytes(uploaded_file.getvalue())
@@ -40,64 +39,24 @@ def save_uploaded_file(uploaded_file, suffix: str) -> pathlib.Path:
 def generate_report(
     project_zip: pathlib.Path,
     lists_path: pathlib.Path,
-    annotator_filter=None,
-    progress_obj=dict,
+    anno_filter: Optional[list] = None,
+    progress_obj: dict = None,
 ):
-    output_path = project_zip.parent / (
+    output = project_zip.parent / (
         f"critical_documents_{datetime.datetime.now().strftime('%d-%m-%Y_%H-%M-%S')}.md"
     )
 
-    erroneous_doc_count = 0
-
-    result = process_inception_zip(project_zip, annotator_filter=annotator_filter)
+    err_doc_count = 0
+    result = process_inception_zip(project_zip, annotator_filter=anno_filter)
     if result is None:
         raise RuntimeError("Processing failed.")
 
-    with output_path.open("w", encoding="utf-8") as log_doc:
-        log_doc.write(Information.log_dump_pretext)
+    with output.open("w", encoding="utf-8") as log_doc:
+        err_doc_count = create_log_from_results(
+            result, log_doc, lists_path, progress_obj
+        )
 
-        with h5py.File(lists_path, "r") as h5_file:
-            blacklist_tag_counter = Counter()
-            whitelist_code_counter = Counter()
-            section_count = {}
-
-            progress_increment = 1 / max(
-                sum([len(x.documents) for x in result.annotators.values()]) * 2, 1
-            )
-            _iter_obj = [ListDumpType.WHITELIST, ListDumpType.BLACKLIST]
-            for i, ft in enumerate(_iter_obj):
-                group_name = ft.name.lower()
-                if group_name not in h5_file:
-                    continue
-
-                filter_list = h5_file[group_name]["0"]["codes"][:]
-                fsn_list = h5_file[group_name]["0"]["fsn"][:]
-
-                erroneous_doc_count += analyze_documents(
-                    result,
-                    filter_list,
-                    fsn_list,
-                    ft,
-                    log_doc,
-                    True,
-                    section_count,
-                    blacklist_tag_counter,
-                    whitelist_code_counter,
-                    {
-                        "obj": progress_obj["obj"],
-                        "text_pre": f"__{ft.name.capitalize()}__: ",
-                        "progress_increment": progress_increment,
-                        "current_progress": 1.0 * (i / len(_iter_obj)),
-                    },
-                )
-
-            log_final_tag_count(
-                whitelist_code_counter,
-                blacklist_tag_counter,
-                log_doc,
-            )
-
-    return output_path, erroneous_doc_count
+    return output, err_doc_count
 
 
 @st.fragment
@@ -118,16 +77,83 @@ st.write("""Simple GUI for analyzing all critical documents in the given INCEpTI
 with st.sidebar:
     st.header("Inputs")
     load_annotators = st.checkbox("Load annotators from ZIP", value=True)
-    zip_file = st.file_uploader("INCEpTION project ZIP", type=["zip"])
+    use_api = st.toggle("Use INCEpTION API", value=False)
+    if use_api:
+        if "api_credentials" not in st.session_state:
+            st.session_state["api_credentials"] = {
+                "url": "http://localhost:8080",
+                "username": "",
+                "password": "",
+            }
+
+        with st.form("inception_api_form"):
+            url = st.text_input(
+                "INCEpTION API URL", value=st.session_state["api_credentials"]["url"]
+            )
+            username = st.text_input(
+                "REMOTE Role Username",
+                value=st.session_state["api_credentials"]["username"],
+            )
+            password = st.text_input(
+                "REMOTE Role Password",
+                type="password",
+                value=st.session_state["api_credentials"]["password"],
+            )
+            submitted = st.form_submit_button("Get Projects")
+            if submitted:
+                st.session_state["api_credentials"] = {
+                    "url": url,
+                    "username": username,
+                    "password": password,
+                }
+                try:
+                    _project_tmp = tempfile.mkdtemp("snomed_gui_dir")
+                    st.session_state["projects"] = get_project_zip(
+                        _project_tmp, url, username, password
+                    )
+                    st.success(f"Found {len(st.session_state['projects'])} projects.")
+                except Exception as e:
+                    st.error(f"Error: {e}")
+                    st.session_state["projects"] = None
+
+        if st.session_state.get("projects"):
+            project = st.selectbox(
+                "Select project", st.session_state["projects"], index=None
+            )
+            if project and (st.session_state.get("current_project") != project):
+                st.session_state["current_project"] = project
+                with st.spinner(f"Downloading project '{project}'..."):
+                    try:
+                        _project_tmp = tempfile.mkdtemp("snomed_gui_dir")
+                        creds = st.session_state["api_credentials"]
+                        _zip = get_project_zip(
+                            _project_tmp,
+                            creds["url"],
+                            creds["username"],
+                            creds["password"],
+                            project,
+                        )
+                        if isinstance(_zip, pathlib.Path):
+                            st.session_state["zip_file"] = _zip
+                        else:
+                            st.error("Could not load project from INCEpTION API.")
+                    except Exception as e:
+                        st.error(f"Error downloading project: {e}")
+    else:
+        st.session_state["zip_file"] = st.file_uploader(
+            "INCEpTION project ZIP", type=["zip"]
+        )
     hdf5_file = st.file_uploader("Whitelist/Blacklist HDF5", type=["hdf5"])
 
 
 annotator_selection = None
 zip_temp_path = None
 
-if zip_file is not None:
+if zip_file := st.session_state.get("zip_file"):
     zip_temp_path = save_uploaded_file(zip_file, ".zip")
-    st.success(f"ZIP uploaded: {zip_file.name}")
+    # Handle both UploadedFile (has .name) and Path (has .name)
+    zip_name = zip_file.name if hasattr(zip_file, "name") else str(zip_file)
+    st.success(f"ZIP ready: {zip_name}")
 
     if load_annotators:
         try:
@@ -167,7 +193,7 @@ if st.button("Run analysis", type="primary", disabled=not (zip_file and hdf5_fil
         output_path, erroneous_doc_count = generate_report(
             project_zip=zip_temp_path,
             lists_path=hdf5_temp_path,
-            annotator_filter=annotator_filter,
+            anno_filter=annotator_filter,
             progress_obj={"obj": progress_bar, "text_pre": ""},
         )
         progress_bar.empty()
@@ -182,6 +208,9 @@ if st.button("Run analysis", type="primary", disabled=not (zip_file and hdf5_fil
 
         with st.expander("Preview report"):
             st.markdown(report_text)
+
+        st.session_state["zip_file"] = None
+        st.session_state["current_project"] = None
 
     except Exception as exc:
         st.error(f"Analysis failed: {exc}")

@@ -4,13 +4,10 @@ import pickle
 import logging
 import pathlib
 import sys
-from collections import Counter
 from typing import Union, Optional
 
 import click
-import h5py
 import yaspin
-from pycaprio import Pycaprio
 
 if __name__ == "__main__":
     sys.path.append(".")
@@ -25,14 +22,13 @@ if __name__ == "__main__":
         FilterMode,
         dump_codes_to_hdf5,
         ListDumpType,
-        Information,
         prompt_for_names,
+        get_project_zip,
     )
     from uima_processing import (
         process_inception_zip,
-        analyze_documents,
-        log_final_tag_count,
         get_annotator_names,
+        create_log_from_results,
     )
 else:
     from .snowstorm_funcs import (
@@ -46,14 +42,13 @@ else:
         FilterMode,
         dump_codes_to_hdf5,
         ListDumpType,
-        Information,
         prompt_for_names,
+        get_project_zip,
     )
     from .uima_processing import (
         process_inception_zip,
-        analyze_documents,
-        log_final_tag_count,
         get_annotator_names,
+        create_log_from_results,
     )
 
 
@@ -166,71 +161,22 @@ def log_documents(
     set_log_level(log_level)
 
     host = f"http{'s' if use_secure_protocol else ''}://{ip}:{port}"
-    inception_client = None
-    if (
+    use_api = (
         inception_username is not None
         and inception_password is not None
         and inception_project is not None
-    ):
-        logging.info(
-            f"Trying to find project '{inception_project}' in INCEpTION instance at '{host}'."
+    )
+    try:
+        project_zip = get_project_zip(
+            process_path,
+            host,
+            inception_username,
+            inception_password,
+            inception_project,
         )
-        try:
-            inception_client = Pycaprio(host, (inception_username, inception_password))
-            inception_client.api.projects()
-        except Exception as e:
-            logging.error(
-                f"Something went wrong while trying to connect to INCEpTION instance: '{e}'. Exiting."
-            )
-            sys.exit(-1)
-    else:
-        logging.info(
-            f"Inception client credentials were not complete/given and/or no project name. Assuming zipped project under '{process_path}'."
-        )
-
-    if inception_client is None:
-        project_zip = pathlib.Path(process_path).resolve()
-        if (
-            not project_zip.exists()
-            or not project_zip.is_file()
-            or not project_zip.suffix == ".zip"
-        ):
-            logging.error(f"Could not find project zip file '{process_path}'. Exiting.")
-            sys.exit(-1)
-    else:
-        project = [
-            p
-            for p in inception_client.api.projects()
-            if p.project_name.lower() == inception_project.lower()
-            or str(p.project_id) == inception_project.lower()
-        ]
-        if len(project) == 0:
-            logging.error(
-                f"Could not find project '{inception_project}' in INCEpTION instance at '{host}'. Did you forgot to use the 'URL slug' for the project? Exiting."
-            )
-            logging.error(
-                f"Available projects: {', '.join([p.project_name.lower() for p in inception_client.api.projects()])}"
-            )
-            sys.exit(-1)
-        else:
-            logging.info(f"Found project '{inception_project}' in INCEpTION instance.")
-            with yaspin.yaspin(text="Exporting project..."):
-                project = project[0]
-                project_export = inception_client.api.export_project(project, "jsoncas")
-                folder = pathlib.Path(process_path).resolve()
-                if folder.is_file():
-                    folder = folder.parent
-                if not folder.exists():
-                    folder.mkdir(parents=True)
-                file_path = folder / pathlib.Path(project.project_name).with_suffix(
-                    ".zip"
-                )
-                logging.info(
-                    f"Exporting project '{project.project_name}' to '{file_path}'"
-                )
-                with open(file_path, "wb") as f:
-                    f.write(project_export)
-            project_zip = file_path
+    except Exception as e:
+        logging.error(f"Error while getting project zip: '{e}'. Exiting.")
+        sys.exit(-1)
 
     default_lists_path = pathlib.Path(
         pathlib.Path(__file__).parent.parent.parent,
@@ -249,16 +195,11 @@ def log_documents(
     else:
         logging.info("No filter list given, using default one.")
         lists_path = default_lists_path
-    output_path = (
-        project_zip.parent
-        / f"critical_documents_{datetime.datetime.today().strftime('%d-%m-%Y_%H-%M')}.md"
-    )
 
     if not lists_path.exists():
         logging.error(f"The given list doesn't exist: '{lists_path}'. Exiting.")
         sys.exit(-1)
 
-    erroneous_doc_count = 0
     names_filter = None
     if not forbid_prompt:
         annotator_names = get_annotator_names(project_zip)
@@ -266,38 +207,22 @@ def log_documents(
         if _res and len(_res) > 0:
             names_filter = [n.lower() for n in _res]
 
-    if result := process_inception_zip(project_zip, annotator_filter=names_filter):
-        if not keep_export and inception_client is not None:
-            logging.info(
-                f"Removing temporary export of project '{project_zip.name}' from filesystem."
-            )
-            project_zip.unlink()
+    output_path = (
+        project_zip.parent
+        / f"critical_documents_{datetime.datetime.today().strftime('%d-%m-%Y_%H-%M')}.md"
+    )
 
+    erroneous_doc_count = 0
+    if result := process_inception_zip(project_zip, annotator_filter=names_filter):
         with output_path.open("w", encoding="utf-8") as log_doc:
-            log_doc.write(Information.log_dump_pretext)
-            with h5py.File(lists_path.open("rb"), "r") as h5_file:
-                blacklist_tag_counter = Counter()
-                whitelist_code_counter = Counter()
-                section_count = {}
-                for ft in [ListDumpType.WHITELIST, ListDumpType.BLACKLIST]:
-                    print(f"-- {ft.name.capitalize()} --")
-                    if ft.name.lower() in h5_file.keys():
-                        filter_list = h5_file.get(ft.name.lower()).get("0").get("codes")
-                        fsn_list = h5_file.get(ft.name.lower()).get("0").get("fsn")
-                        erroneous_doc_count += analyze_documents(
-                            result,
-                            filter_list[:],
-                            fsn_list[:],
-                            ft,
-                            log_doc,
-                            True,
-                            section_count,
-                            blacklist_tag_counter,
-                            whitelist_code_counter,
-                        )
-                log_final_tag_count(
-                    whitelist_code_counter, blacklist_tag_counter, log_doc
-                )
+            erroneous_doc_count = create_log_from_results(result, log_doc, lists_path)
+
+    if not keep_export and use_api:
+        logging.info(
+            f"Removing temporary export of project '{project_zip.name}' from filesystem."
+        )
+        project_zip.unlink()
+
     print("-- Result --")
     if erroneous_doc_count > 0:
         logging.warning(
