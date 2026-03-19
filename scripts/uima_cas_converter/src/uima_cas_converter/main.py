@@ -1,10 +1,14 @@
 import enum
+import gc
+import json
 import logging
 import pathlib
 import shutil
 import sys
+import zipfile
 from typing import Optional, Tuple
 
+import cassis
 import click
 from cassis import *
 from PyInquirer import prompt
@@ -160,6 +164,130 @@ def _set_log_level(log_level: str):
         "critical": logging.CRITICAL,
     }.get(log_level.lower(), logging.INFO)
     logging.basicConfig(level=log_level_)
+
+
+def _yield_matching_files(
+    project_documents: list[dict],
+    zip_file: zipfile.ZipFile,
+    file_name: str = None
+):
+    _typesystem_file = None
+    for doc in project_documents:
+        doc_name = doc["name"]
+        state = doc.get("state", "")
+
+        if state == "CURATION_FINISHED":
+            folder_prefix = f"curation/{doc_name}/"
+        elif state == "SIMPLE_ZIPPED_JSON_XMI":
+            folder_prefix = ""
+        elif state == "TYPESYSTEM":
+            folder_prefix = ""
+            _typesystem_file = doc_name
+        else:
+            folder_prefix = f"annotation/{doc_name}/"
+
+        matching_files = [
+            info.filename
+            for info in zip_file.infolist()
+            if (len(folder_prefix) == 0 or info.filename.startswith(folder_prefix))
+            and (info.filename.endswith(".json") or info.filename.endswith(".xmi"))
+            and not info.is_dir()
+        ]
+
+        # Use INITIAL_CAS.json only if it is the *only* file
+        if len(matching_files) > 1:
+            matching_files = [
+                p for p in matching_files if not p.endswith("INITIAL_CAS.json")
+            ]
+
+        if not matching_files:
+            logging.warning(
+                f"No CAS found for {doc_name} in {file_name} ({folder_prefix})"
+            )
+            continue
+        yield doc_name, matching_files, _typesystem_file
+
+
+def _read_project(zip_file: zipfile.ZipFile, file_name: str) -> Optional[list[dict]]:
+    try:
+        project_meta = json.loads(zip_file.read("exportedproject.json").decode("utf-8"))
+    except KeyError:
+        logging.warning(f" No exportedproject.json found in {file_name}. Treating file as simple zipped json/xmi files.")
+        project_documents = []
+        for info in zip_file.infolist():
+            if info.filename.endswith(".xml"):
+                project_documents.append({"name": pathlib.Path(info.filename).name, "state": "TYPESYSTEM"})
+                continue
+            if not (info.filename.endswith(".json") or info.filename.endswith(".xmi")):
+                logging.error(f" Non-processable file type (neither 'json' nor 'xmi')): {info.filename}. Skipping.")
+                continue
+            project_documents.append({"name": pathlib.Path(info.filename).name, "state": "SIMPLE_ZIPPED_JSON_XMI"})
+        return project_documents if len(project_documents) > 0 else None
+
+    project_documents = project_meta.get("source_documents", [])
+    if not project_documents:
+        logging.warning(f" No source documents found in project {file_name}")
+        return None
+    return project_documents
+
+
+def _process_zip(
+    file_path: pathlib.Path,
+    annotator_filter=None,
+    annotation_types: list[str] = None,
+):
+    if not annotation_types:
+        annotation_types = ["gemtex.Concept"]
+
+    try:
+        with zipfile.ZipFile(file_path, "r") as zip_file:
+            file_name = file_path.name
+            # ---- Read project metadata ----
+            project_documents = _read_project(zip_file, file_name)
+            if project_documents is None:
+                return None
+
+            # ---- Process each document ----
+            logging.info(f" Started processing project {file_name}")
+            if annotator_filter is not None:
+                logging.info(
+                    f" Processing only following annotators: {annotator_filter}"
+                )
+            for doc_name, matching_files, typesystem_file in _yield_matching_files(
+                project_documents, zip_file, file_name
+            ):
+                # ---- Load each CAS, discard CAS ----
+                for cas_path in matching_files:
+                    annotator_name = str(pathlib.Path(cas_path).stem)
+                    if (
+                        annotator_filter is not None
+                        and annotator_name.lower() not in annotator_filter
+                    ):
+                        continue
+                    try:
+                        with zip_file.open(cas_path) as cas_file:
+                            if cas_path.endswith(".json"):
+                                cas = cassis.load_cas_from_json(cas_file)
+                            elif cas_path.endswith(".xmi"):
+                                cas = cassis.load_cas_from_xmi(cas_file, typesystem_file)
+                            else:
+                                raise ValueError(
+                                    f"Unknown file type: {cas_path.suffix}"
+                                )
+                        # Drop CAS immediately
+                        del cas
+
+                    except Exception as e:
+                        logging.warning(
+                            f"Failed to load {cas_path} from {file_name}: {e}"
+                        )
+
+        # Encourage cleanup
+        gc.collect()
+
+    except Exception as e:
+        logging.error(f"Error processing {file_name}: {e}")
+        return None
 
 
 @click.command()
