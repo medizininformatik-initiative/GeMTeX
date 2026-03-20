@@ -108,6 +108,7 @@ def get_project_zip(
     inception_client = None
     project_zip = None
     projects = None
+    use_local_zip = False
 
     if user_name is not None and password is not None:
         logging.info(
@@ -127,14 +128,16 @@ def get_project_zip(
         logging.info(
             f"Inception client credentials were not complete/given and/or no project name. Assuming zipped project under '{process_path}'."
         )
+        use_local_zip = True
 
-    if project_name is None:
-        if projects is not None:
-            return list(projects.keys())
+    if not use_local_zip:
+        if project_name is None:
+            if projects is not None:
+                return list(projects.keys())
+            else:
+                raise ValueError("No project name given and no API connection established.")
         else:
-            raise ValueError("No project name given and no API connection established.")
-    else:
-        logging.info(f"Project name given: '{project_name}'.")
+            logging.info(f"Project name given: '{project_name}'.")
 
     if inception_client is None:
         project_zip = pathlib.Path(process_path).resolve()

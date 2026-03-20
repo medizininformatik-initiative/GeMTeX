@@ -1,4 +1,5 @@
 import datetime
+import json
 import os
 import pickle
 import logging
@@ -136,6 +137,11 @@ def common_click_args(fnc):
     help="Keeps the temporary exported INCEpTION project (when using client) after processing.",
 )
 @click.option(
+    "--omit-dump",
+    is_flag=True,
+    help="Omits the creation of a dump of all concepts in the project and their respective offsets (if not omitted, it is saved alongside the log file)."
+)
+@click.option(
     "--forbid-prompt",
     is_flag=True,
     help="Forbids prompting the user to select the annotators to log manually (instead of all). Use this flag for e.g. 'docker', when you don't want to mess with providing prompt answers.",
@@ -151,6 +157,7 @@ def log_documents(
     inception_project: Optional[str],
     log_level: str,
     keep_export: bool,
+    omit_dump: bool,
     forbid_prompt: bool,
 ):
     """
@@ -213,9 +220,12 @@ def log_documents(
     )
 
     erroneous_doc_count = 0
+    dump_dictionary = None if omit_dump else {}
     if result := process_inception_zip(project_zip, annotator_filter=names_filter):
         with output_path.open("w", encoding="utf-8") as log_doc:
-            erroneous_doc_count = create_log_from_results(result, log_doc, lists_path)
+            erroneous_doc_count = create_log_from_results(result, log_doc, lists_path, None, dump_dictionary)
+        with output_path.with_suffix(".json").open("w") as json_file:
+            json.dump(dump_dictionary, json_file, ensure_ascii=False, indent=2)
 
     if not keep_export and use_api:
         logging.info(
