@@ -101,6 +101,22 @@ def _yield_matching_files(
         yield doc_name, matching_files
 
 
+def _populate_dump_dictionary(
+        dictionary: dict,
+        code: str,
+        offset: tuple[int, int],
+        fsn: Optional[str] = None
+):
+    if code not in dictionary:
+        dictionary[code] = {
+            "offset": [offset],
+        }
+        if fsn is not None:
+            dictionary[code]["fsn"] = fsn
+    else:
+        dictionary[code]["offset"].append(offset)
+
+
 def get_annotations_from_document(
     document: Union[cassis.Cas, str, pathlib.Path],
     annotation_types: list[str] = None,
@@ -231,6 +247,7 @@ def analyze_documents(
     blacklist_tag_counter: Counter,
     whitelist_code_counter: Counter,
     progress_obj: Optional[dict] = None,
+    dump_dictionary: Optional[dict] = None,
 ) -> Optional[int]:
     as_whitelist = filter_type == ListDumpType.WHITELIST
     erroneous_doc_count = 0
@@ -292,6 +309,7 @@ def analyze_documents(
                         blacklist_tag_counter,
                         whitelist_code_counter,
                         annotator_names,
+                        dump_dictionary
                     )
                     new_section = False
                     new_annotator = False
@@ -318,6 +336,7 @@ def log_critical_docs(
     blacklist_tag_counter: Counter,
     whitelist_code_counter: Counter,
     annotator_names: list[str],
+    dump_dictionary: Optional[dict]
 ):
     stacked = np.stack(
         [
@@ -365,16 +384,20 @@ def log_critical_docs(
         lines.append("| Snomed CT Code | Covered Text | Offset in Document |\n")
         lines.append("| -------------: | -----------: | -----------------: |\n")
         for line in stacked:
-            code_ = line[0].decode("utf-8")
-            lines.append(f"| {code_} | {line[1]} | {line[2]} |\n")
+            code_, offset_ = line[0].decode("utf-8"), line[2]
+            lines.append(f"| {code_} | {line[1]} | {offset_} |\n")
             whitelist_code_counter.update([code_])
+            if dump_dictionary is not None:
+                _populate_dump_dictionary(dump_dictionary, code_, offset_)
     else:
         lines.append("| Snomed CT Code | Covered Text | Offset in Document | FSN |\n")
         lines.append("| -------------: | -----------: | -----------------: | --: |\n")
         for line in stacked:
-            code_, tag_ = line[0].decode("utf-8"), line[3].decode("utf-8")
+            code_, offset_, tag_ = line[0].decode("utf-8"), line[2], line[3].decode("utf-8")
             lines.append(f"| {code_} | {line[1]} | {line[2]} | {tag_} |\n")
             blacklist_tag_counter.update([tag_.split("(", 1)[1].split(")")[0]])
+            if dump_dictionary is not None:
+                _populate_dump_dictionary(dump_dictionary, code_, offset_, tag_)
     output_file.writelines(lines)
     output_file.write("\n\n")
 
@@ -421,6 +444,7 @@ def create_log_from_results(
     log_doc: TextIOWrapper,
     lists: pathlib.Path,
     progress_obj: Optional[dict] = None,
+    dump_dict: Optional[dict] = None,
 ) -> int:
     err_docs = 0
     log_doc.write(Information.log_dump_pretext)
@@ -442,23 +466,25 @@ def create_log_from_results(
                 filter_list = h5_file.get(group_name).get("0").get("codes")
                 fsn_list = h5_file.get(group_name).get("0").get("fsn")
                 err_docs += analyze_documents(
-                    result,
-                    filter_list[:],
-                    fsn_list[:],
-                    ft,
-                    log_doc,
-                    True,
-                    section_count,
-                    blacklist_tag_counter,
-                    whitelist_code_counter,
-                    None
-                    if progress_obj is None
-                    else {
-                        "obj": progress_obj["obj"],
-                        "text_pre": f"__{group_name.capitalize()}__: ",
-                        "progress_increment": progress_increment,
-                        "current_progress": 1.0 * (i / len(ft_iter)),
-                    },
+                    project=result,
+                    filter_array=filter_list[:],
+                    mapping_array=fsn_list[:],
+                    filter_type=ft,
+                    log_doc=log_doc,
+                    new_section=True,
+                    section_count=section_count,
+                    blacklist_tag_counter=blacklist_tag_counter,
+                    whitelist_code_counter=whitelist_code_counter,
+                    progress_obj=(
+                        None if progress_obj is None
+                        else {
+                            "obj": progress_obj["obj"],
+                            "text_pre": f"__{group_name.capitalize()}__: ",
+                            "progress_increment": progress_increment,
+                            "current_progress": 1.0 * (i / len(ft_iter)),
+                        }
+                    ),
+                    dump_dictionary=dump_dict
                 )
         log_final_tag_count(whitelist_code_counter, blacklist_tag_counter, log_doc)
     return err_docs
