@@ -40,20 +40,20 @@ def _check_typesystem(
         sys.exit(-1)
 
 
-def _check_input_file(input_file: pathlib.Path) -> Tuple[bool, bool]:
+def _check_input_file(input_file: pathlib.Path) -> Tuple[bool, bool, bool]:
     if not input_file.exists():
         logging.error(f" Input file '{input_file.resolve()}' not found.")
         sys.exit(-1)
     else:
         if input_file.suffix == ".xmi":
-            return True, False
+            return True, False, False
         elif input_file.suffix == ".json":
-            return False, True
+            return False, True, False
         elif input_file.suffix == ".zip":
-            raise NotImplementedError("Zip files are not supported yet.")
+            return False, False, True
         else:
             logging.error(
-                f" Input file '{input_file.resolve()}' has unsupported file extension; needs to be one of '.json' or '.xmi'."
+                f" Input file '{input_file.resolve()}' has unsupported file extension; needs to be one of '.json', '.xmi' or '.zip'."
             )
             sys.exit(-1)
 
@@ -172,6 +172,7 @@ def _yield_matching_files(
     file_name: str = None
 ):
     _typesystem_file = None
+    _second_pass = []
     for doc in project_documents:
         doc_name = doc["name"]
         state = doc.get("state", "")
@@ -181,8 +182,8 @@ def _yield_matching_files(
         elif state == "SIMPLE_ZIPPED_JSON_XMI":
             folder_prefix = ""
         elif state == "TYPESYSTEM":
-            folder_prefix = ""
             _typesystem_file = doc_name
+            continue
         else:
             folder_prefix = f"annotation/{doc_name}/"
 
@@ -190,14 +191,14 @@ def _yield_matching_files(
             info.filename
             for info in zip_file.infolist()
             if (len(folder_prefix) == 0 or info.filename.startswith(folder_prefix))
-            and (info.filename.endswith(".json") or info.filename.endswith(".xmi"))
+            and (info.filename.endswith(".json") or info.filename.endswith(".zip"))
             and not info.is_dir()
         ]
 
         # Use INITIAL_CAS.json only if it is the *only* file
         if len(matching_files) > 1:
             matching_files = [
-                p for p in matching_files if not p.endswith("INITIAL_CAS.json")
+                p for p in matching_files if not (p.endswith("INITIAL_CAS.json") or p.endswith("INITIAL_CAS.zip"))
             ]
 
         if not matching_files:
@@ -205,6 +206,8 @@ def _yield_matching_files(
                 f"No CAS found for {doc_name} in {file_name} ({folder_prefix})"
             )
             continue
+        _second_pass.append((doc_name, matching_files))
+    for doc_name, matching_files in _second_pass:
         yield doc_name, matching_files, _typesystem_file
 
 
@@ -233,14 +236,10 @@ def _read_project(zip_file: zipfile.ZipFile, file_name: str) -> Optional[list[di
 
 def _process_zip(
     file_path: pathlib.Path,
-    annotator_filter=None,
-    annotation_types: list[str] = None,
 ):
-    if not annotation_types:
-        annotation_types = ["gemtex.Concept"]
-
     try:
         with zipfile.ZipFile(file_path, "r") as zip_file:
+            _typesystem = None
             file_name = file_path.name
             # ---- Read project metadata ----
             project_documents = _read_project(zip_file, file_name)
@@ -249,39 +248,39 @@ def _process_zip(
 
             # ---- Process each document ----
             logging.info(f" Started processing project {file_name}")
-            if annotator_filter is not None:
-                logging.info(
-                    f" Processing only following annotators: {annotator_filter}"
-                )
             for doc_name, matching_files, typesystem_file in _yield_matching_files(
                 project_documents, zip_file, file_name
             ):
-                # ---- Load each CAS, discard CAS ----
+                # ---- Load each CAS ----
                 for cas_path in matching_files:
                     annotator_name = str(pathlib.Path(cas_path).stem)
-                    if (
-                        annotator_filter is not None
-                        and annotator_name.lower() not in annotator_filter
-                    ):
-                        continue
                     try:
                         with zip_file.open(cas_path) as cas_file:
                             if cas_path.endswith(".json"):
                                 cas = cassis.load_cas_from_json(cas_file)
                             elif cas_path.endswith(".xmi"):
-                                cas = cassis.load_cas_from_xmi(cas_file, typesystem_file)
+                                if typesystem_file is None:
+                                    raise TypeError(
+                                        f"No typesystem file found."
+                                    )
+                                else:
+                                    if _typesystem is None:
+                                        _typesystem = cassis.load_typesystem(zip_file.open(typesystem_file))
+                                cas = cassis.load_cas_from_xmi(cas_file, _typesystem)
+                            elif cas_path.endswith(".zip"):
+                                with zipfile.ZipFile(cas_file, "r") as inner_zip:
+                                    inner_file = pathlib.Path(cas_path).with_suffix(".xmi").name
+                                    inner_ts = cassis.load_typesystem(inner_zip.open("TypeSystem.xml"))
+                                    cas = cassis.load_cas_from_xmi(inner_zip.open(inner_file), inner_ts)
                             else:
                                 raise ValueError(
-                                    f"Unknown file type: {cas_path.suffix}"
+                                    f"Unknown file type: {pathlib.Path(cas_path).suffix}"
                                 )
-                        # Drop CAS immediately
-                        del cas
-
+                            yield doc_name, annotator_name, cas
                     except Exception as e:
                         logging.warning(
                             f"Failed to load {cas_path} from {file_name}: {e}"
                         )
-
         # Encourage cleanup
         gc.collect()
 
@@ -315,24 +314,32 @@ def convert_uima_cas(
 
     # Check whether input file exists and what file extension it has
     input_file = pathlib.Path(input_file)
-    to_json, to_xmi = _check_input_file(input_file)
+    to_json, to_xmi, is_zip = _check_input_file(input_file)
 
+    output_list = []
     # check whether typesystem file exists if input file is xmi
-    final_typesystem = None
-    if to_json:
-        final_typesystem = _check_typesystem(typesystem, input_file)
-
-    # load cas from either json or xmi file
-    cas = _load_cas(input_file, final_typesystem, to_json)
-
-    # check and/or create output file
-    output_path = _check_output_file(output_file, input_file, to_json)
-
-    if to_json:
-        cas.to_json(output_path, pretty_print=True, ensure_ascii=False)
+    if is_zip:
+        for doc_name, annotator_name, cas in _process_zip(input_file):
+            print(annotator_name, doc_name)
+            print(cas)
+            # output_path = _check_output_file(output_file, input_file, to_json)
+            # cas.to_xmi(output_path / f"{doc_name}.xmi")
     else:
-        _check_present_typesystem(output_path, cas)
-        cas.to_xmi(output_path)
+        final_typesystem = None
+        if to_json:
+            final_typesystem = _check_typesystem(typesystem, input_file)
+
+        # load cas from either json or xmi file
+        cas = _load_cas(input_file, final_typesystem, to_json)
+
+        # check and/or create output file
+        output_path = _check_output_file(output_file, input_file, to_json)
+
+        if to_json:
+            cas.to_json(output_path, pretty_print=True, ensure_ascii=False)
+        else:
+            _check_present_typesystem(output_path, cas)
+            cas.to_xmi(output_path)
 
 
 if __name__ == "__main__":
