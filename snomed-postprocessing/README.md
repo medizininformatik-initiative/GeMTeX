@@ -69,7 +69,7 @@ docker run
  log-critical-documents /app/data/inception-json-dump.zip
 ```
 - log file will be in the `./data` folder (the script will show the final path as well).
-- `inception-json-dump.zip` has to be in `./data`. ***[3]***
+- `inception-json-dump.zip` can be generated from INCEpTION (Settings > Export > *UIMA CAS JSON 0.4.0* ) and has to be located in `./data`. ***[3]***
 - [gemtex_snomedct_codes_2024-04-01.hdf5](https://confluence.imi.med.fau.de/spaces/GEM/pages/317216732/SNOMED+CT+Semantic+Tag+Dashboard?preview=/317216732/359075603/gemtex_snomedct_codes_2024-04-01.hdf5) has to be in `./data`, too.
 
 If you use ``docker``, however, you won't be able to select specific annotators to log.
@@ -82,6 +82,8 @@ There is a convenience script with `./log-inception-docs.sh` that runs the above
 
 e.g.:
 ````
+# make sure to make it executable
+# chmod +x log-inception-docs.sh
 ./log-inception-docs.sh data/inception-dump.zip
 ````
 
