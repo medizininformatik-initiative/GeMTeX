@@ -135,7 +135,9 @@ def get_project_zip(
             if projects is not None:
                 return list(projects.keys())
             else:
-                raise ValueError("No project name given and no API connection established.")
+                raise ValueError(
+                    "No project name given and no API connection established."
+                )
         else:
             logging.info(f"Project name given: '{project_name}'.")
 

@@ -103,10 +103,7 @@ def _yield_matching_files(
 
 
 def _populate_dump_dictionary(
-        dictionary: dict,
-        code: str,
-        offset: tuple[int, int],
-        fsn: Optional[str] = None
+    dictionary: dict, code: str, offset: tuple[int, int], fsn: Optional[str] = None
 ):
     if code not in dictionary:
         dictionary[code] = {
@@ -254,7 +251,8 @@ def analyze_documents(
     as_whitelist = filter_type == ListDumpType.WHITELIST
     erroneous_doc_count = 0
     annotator_names_masked = {
-        n: f"annotator-{randomname.get_name(adj=('age', 'character', 'emotions', 'appearance'))}" for n in project.annotators.keys()
+        n: f"annotator-{randomname.get_name(adj=('age', 'character', 'emotions', 'appearance'))}"
+        for n in project.annotators.keys()
     }
     documents_masked = {}
 
@@ -272,7 +270,16 @@ def analyze_documents(
                 _text = f"Processing ({annotator_name} [{i + 1:>3}/{len(documents.documents)}]: '{doc_name}') ..."
                 if doc_name not in documents_masked:
                     document_name_masked = randomname.get_name(
-                        adj=("linguistics", "construction", "materials", "geometry", "algorithms", "size", "complexity", "colors")
+                        adj=(
+                            "linguistics",
+                            "construction",
+                            "materials",
+                            "geometry",
+                            "algorithms",
+                            "size",
+                            "complexity",
+                            "colors",
+                        )
                     )
                     document_name_masked = f"document-{document_name_masked}"
                     documents_masked[doc_name] = document_name_masked
@@ -328,7 +335,7 @@ def analyze_documents(
                         whitelist_code_counter,
                         annotator_names,
                         annotator_names_masked,
-                        dump_dictionary
+                        dump_dictionary,
                     )
                     new_section = False
                     new_annotator = False
@@ -358,7 +365,7 @@ def log_critical_docs(
     whitelist_code_counter: Counter,
     annotator_names: list[str],
     annotator_names_masked: dict[str, str],
-    dump_dictionary: Optional[dict]
+    dump_dictionary: Optional[dict],
 ):
     stacked = np.stack(
         [
@@ -426,10 +433,18 @@ def log_critical_docs(
                 if dump_dictionary is not None:
                     _populate_dump_dictionary(dump_dictionary, code_, offset_)
         else:
-            lines_.append("| Snomed CT Code | Covered Text | Offset in Document | FSN |\n")
-            lines_.append("| -------------: | -----------: | -----------------: | --: |\n")
+            lines_.append(
+                "| Snomed CT Code | Covered Text | Offset in Document | FSN |\n"
+            )
+            lines_.append(
+                "| -------------: | -----------: | -----------------: | --: |\n"
+            )
             for line in stacked:
-                code_, offset_, tag_ = line[0].decode("utf-8"), line[2], line[3].decode("utf-8")
+                code_, offset_, tag_ = (
+                    line[0].decode("utf-8"),
+                    line[2],
+                    line[3].decode("utf-8"),
+                )
                 lines_.append(f"| {code_} | {line[1]} | {line[2]} | {tag_} |\n")
                 blacklist_tag_counter.update([tag_.split("(", 1)[1].split(")")[0]])
                 if dump_dictionary is not None:
@@ -456,9 +471,7 @@ def log_final_tag_count(
     for fi in [output_file, output_file_masked]:
         fi.write("# Final Count\n")
         fi.write("## Snomed CT Codes\n")
-        fi.write(
-            f"[Zum Inhalt](#{Information.log_dump_pretext_caption.lower()})  \n\n"
-        )
+        fi.write(f"[Zum Inhalt](#{Information.log_dump_pretext_caption.lower()})  \n\n")
         if sum(whitelist_tag_counter.values()) > 0:
             fi.write("| Snomed CT Code | Count |\n")
             fi.write("| -------------: | ----: |\n")
@@ -467,9 +480,7 @@ def log_final_tag_count(
         else:
             no_count("whitelist", fi)
         fi.write("## Semantic Tags\n")
-        fi.write(
-            f"[Zum Inhalt](#{Information.log_dump_pretext_caption.lower()})  \n\n"
-        )
+        fi.write(f"[Zum Inhalt](#{Information.log_dump_pretext_caption.lower()})  \n\n")
         if sum(blacklist_tag_counter.values()) > 0:
             fi.write("| Semantic Tag | Count |\n")
             fi.write("| -----------: | ----: |\n")
@@ -520,7 +531,8 @@ def create_log_from_results(
                     blacklist_tag_counter=blacklist_tag_counter,
                     whitelist_code_counter=whitelist_code_counter,
                     progress_obj=(
-                        None if progress_obj is None
+                        None
+                        if progress_obj is None
                         else {
                             "obj": progress_obj["obj"],
                             "text_pre": f"__{group_name.capitalize()}__: ",
@@ -528,7 +540,9 @@ def create_log_from_results(
                             "current_progress": 1.0 * (i / len(ft_iter)),
                         }
                     ),
-                    dump_dictionary=dump_dict
+                    dump_dictionary=dump_dict,
                 )
-        log_final_tag_count(whitelist_code_counter, blacklist_tag_counter, log_doc, log_doc_masked)
+        log_final_tag_count(
+            whitelist_code_counter, blacklist_tag_counter, log_doc, log_doc_masked
+        )
     return err_docs

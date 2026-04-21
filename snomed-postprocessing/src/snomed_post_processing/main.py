@@ -139,7 +139,7 @@ def common_click_args(fnc):
 @click.option(
     "--omit-dump",
     is_flag=True,
-    help="Omits the creation of a dump of all concepts in the project and their respective offsets (if not omitted, it is saved alongside the log file)."
+    help="Omits the creation of a dump of all concepts in the project and their respective offsets (if not omitted, it is saved alongside the log file).",
 )
 @click.option(
     "--forbid-prompt",
@@ -223,8 +223,13 @@ def log_documents(
     erroneous_doc_count = 0
     dump_dictionary = None if omit_dump else {}
     if result := process_inception_zip(project_zip, annotator_filter=names_filter):
-        with output_path.open("w", encoding="utf-8") as log_doc, output_path_masked.open("w", encoding="utf-8") as log_doc_masked:
-            erroneous_doc_count = create_log_from_results(result, log_doc, log_doc_masked, lists_path, None, dump_dictionary)
+        with (
+            output_path.open("w", encoding="utf-8") as log_doc,
+            output_path_masked.open("w", encoding="utf-8") as log_doc_masked,
+        ):
+            erroneous_doc_count = create_log_from_results(
+                result, log_doc, log_doc_masked, lists_path, None, dump_dictionary
+            )
         with output_path.with_suffix(".json").open("w") as json_file:
             json.dump(dump_dictionary, json_file, ensure_ascii=False, indent=2)
 

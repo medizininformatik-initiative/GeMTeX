@@ -41,7 +41,7 @@ def generate_report(
     project_zip: pathlib.Path,
     lists_path: pathlib.Path,
     anno_filter: Optional[list] = None,
-    progress_obj: dict = None
+    progress_obj: dict = None,
 ) -> tuple[pathlib.Path, pathlib.Path, pathlib.Path, int]:
     json_dump_dictionary = {}
     output_md = project_zip.parent / (
@@ -55,9 +55,17 @@ def generate_report(
     if result is None:
         raise RuntimeError("Processing failed.")
 
-    with output_md.open("w", encoding="utf-8") as log_doc, output_md_masked.open("w", encoding="utf-8") as log_doc_masked:
+    with (
+        output_md.open("w", encoding="utf-8") as log_doc,
+        output_md_masked.open("w", encoding="utf-8") as log_doc_masked,
+    ):
         err_doc_count = create_log_from_results(
-            result, log_doc, log_doc_masked, lists_path, progress_obj, json_dump_dictionary
+            result,
+            log_doc,
+            log_doc_masked,
+            lists_path,
+            progress_obj,
+            json_dump_dictionary,
         )
     with output_json.open("w", encoding="utf-8") as json_fi:
         json.dump(json_dump_dictionary, json_fi, indent=2, ensure_ascii=False)
@@ -73,6 +81,7 @@ def download_json_report(json_dump, output_fi: pathlib.Path):
         file_name=output_fi.name,
         mime="text/json",
     )
+
 
 @st.fragment
 def download_md_report(md_report, output_fi: pathlib.Path, label: str):
@@ -128,7 +137,9 @@ with st.sidebar:
                     )
                     st.success(f"Found {len(st.session_state['projects'])} projects.")
                 except RuntimeError:
-                    st.error("Could not connect to INCEpTION API. Please check credentials and URL.")
+                    st.error(
+                        "Could not connect to INCEpTION API. Please check credentials and URL."
+                    )
                     st.session_state.pop("api_credentials", None)
                 except Exception as e:
                     st.error(f"Error: {e}")
@@ -208,11 +219,13 @@ if st.button("Run analysis", type="primary", disabled=not (zip_file and hdf5_fil
             else None
         )
 
-        output_path_md, output_path_md_masked, output_path_json, erroneous_doc_count = generate_report(
-            project_zip=zip_temp_path,
-            lists_path=hdf5_temp_path,
-            anno_filter=annotator_filter,
-            progress_obj={"obj": progress_bar, "text_pre": ""},
+        output_path_md, output_path_md_masked, output_path_json, erroneous_doc_count = (
+            generate_report(
+                project_zip=zip_temp_path,
+                lists_path=hdf5_temp_path,
+                anno_filter=annotator_filter,
+                progress_obj={"obj": progress_bar, "text_pre": ""},
+            )
         )
         progress_bar.empty()
 
@@ -224,8 +237,11 @@ if st.button("Run analysis", type="primary", disabled=not (zip_file and hdf5_fil
         st.metric("Critical documents found", erroneous_doc_count)
         st.write(f"Report saved to folder: `{output_path_md.parent.resolve()}`")
 
-        #ToDo: download masked report here as well
-        for triple in [(report_text, output_path_md, "markdown"), (report_text_masked, output_path_md_masked, "masked markdown")]:
+        # ToDo: download masked report here as well
+        for triple in [
+            (report_text, output_path_md, "markdown"),
+            (report_text_masked, output_path_md_masked, "masked markdown"),
+        ]:
             download_md_report(*triple)
         download_json_report(json_text, output_path_json)
 
