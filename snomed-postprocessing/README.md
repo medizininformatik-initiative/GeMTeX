@@ -10,40 +10,14 @@ The former replaces all annotator and document names with random but eligible st
 That enables sharing the log file without privacy concerns.
 
 ## Usage
-The script can be run either via the command line or via docker.
-In both cases you need a hdf5 file ([gemtex_snomedct_codes_2024-04-01.hdf5](https://confluence.imi.med.fau.de/spaces/GEM/pages/317216732/SNOMED+CT+Semantic+Tag+Dashboard?preview=/317216732/359075603/gemtex_snomedct_codes_2024-04-01.hdf5); should be around 50MB) containing the whitelist/blacklist and a zip file containing the inception dump.  
+The script can be run either via the command line (if so, the most simple way and the one used in the examples here would be an
+[uv](https://docs.astral.sh/uv/getting-started/installation/) environment) or via docker.
+In both cases you need a hdf5 file ([gemtex_snomedct_codes_2024-04-01.hdf5](https://confluence.imi.med.fau.de/spaces/GEM/pages/317216732/SNOMED+CT+Semantic+Tag+Dashboard?preview=/317216732/359075603/gemtex_snomedct_codes_2024-04-01.hdf5); should be around 50MB)
+containing the whitelist/blacklist and a zip file containing the inception dump.  
 The hdf5 file could also be created with this script itself if you ever need it for a different whitelist/blacklist. You would need a running SNOWSTORM instance though.
 See ``uv run create-concepts-dump --help`` or 
 ``docker run ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:1.1 create-concepts-dump --help`` for further information. ***[2]***  
 The simple usage for the use case in GeMTex is described in the following, however:
-
-### GUI
-* __since version 0.9.9__, the gui handles connection via credentials to an INCEpTION instance and is not restricted to local files anymore (except for the ``hdf5`` file)
-* __since version 0.9.8__, a gui can be invoked for the logging process.  
-
-#### uv
-```
-uv run streamlit run .\src\snomed_post_processing\streamlit_app.py
-```
-#### Docker
-```
-docker run --rm -p HOST_PORT:8501 ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:1.1 start-gui
-```
-* ``HOST_PORT`` needs to be set to the port you want to use for the GUI.
-
-###### Convenience Script
-There is a convenience script with `./start-gui.sh` that runs the above docker command with the given arguments:
-* _arg1_ (optional): Port to use for the GUI (default: 8501)
-* _arg2_ (optional): Version of the docker image
-
-e.g.:
-````
-# make sure to make it executable:
-# > chmod +x start-gui.sh
-
-./start-gui.sh 8080
-````
-
 
 ### CLI
 #### uv
@@ -106,6 +80,33 @@ INITIAL_CAS: Done.   13 critical document(s) found - with  19 concept(s) on 'bla
 -- Result --
 WARNING:root:  13 critical document(s) found. See '[...]/critical_documents_24-02-2026_08-46.md' for details.
 ```
+
+### GUI
+* __since version 0.9.9__, the gui handles connection via credentials to an INCEpTION instance and is not restricted to local files anymore (except for the ``hdf5`` file)
+* __since version 0.9.8__, a gui can be invoked for the logging process.  
+
+#### uv
+```
+uv run streamlit run .\src\snomed_post_processing\streamlit_app.py
+```
+#### Docker
+```
+docker run --rm -p HOST_PORT:8501 ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:1.1 start-gui
+```
+* ``HOST_PORT`` needs to be set to the port you want to use for the GUI.
+
+###### Convenience Script
+There is a convenience script with `./start-gui.sh` that runs the above docker command with the given arguments:
+* _arg1_ (optional): Port to use for the GUI (default: 8501)
+* _arg2_ (optional): Version of the docker image
+
+e.g.:
+````
+# make sure to make it executable:
+# > chmod +x start-gui.sh
+
+./start-gui.sh 8080
+````
 
 ## Additional Information / Footnotes
 * Since the script needs to compare every document and its SNOMED CT codes (three digits in most documents) against the whitelist/blacklist, it might take a while to complete.
