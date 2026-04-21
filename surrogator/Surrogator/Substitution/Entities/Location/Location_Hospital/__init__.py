@@ -35,7 +35,6 @@ abbreviations = {
     "ZNA": "Zentrale Notaufnahme",
     "KFH": "Kuratorium für Dialyse und Nierentransplantation",
     "PKV": "Privatklinik für Versicherte",
-
     # Geschäftliche Rechtsformen
     "e.V.": "Eingetragener Verein",
     "GmbH": "Gesellschaft mit beschränkter Haftung",
@@ -52,40 +51,130 @@ abbreviations = {
 # List of substrings to search for
 healthcare_keywords = [
     # Allgemeine Begriffe
-    "arzt", "ärzt", "chirurg", "gemeinschaft", "klinik", "logie", "ologe",
-    "medizin", "praxis", "sanatorium", "therapie", "ambulanz",
-
+    "arzt",
+    "ärzt",
+    "chirurg",
+    "gemeinschaft",
+    "klinik",
+    "logie",
+    "ologe",
+    "medizin",
+    "praxis",
+    "sanatorium",
+    "therapie",
+    "ambulanz",
     # Fachrichtungen und Behandlungen
-    "anästhesie", "augen", "cardio", "dental", "derm", "endokrin", "gastro", "gyn",
-    "hämo", "kardio", "neuro", "onko", "optik", "ortho", "osteo", "pathie",
-    "pädie", "pneumo", "psych", "uro", "zahn", "zähne", "internist",
-
+    "anästhesie",
+    "augen",
+    "cardio",
+    "dental",
+    "derm",
+    "endokrin",
+    "gastro",
+    "gyn",
+    "hämo",
+    "kardio",
+    "neuro",
+    "onko",
+    "optik",
+    "ortho",
+    "osteo",
+    "pathie",
+    "pädie",
+    "pneumo",
+    "psych",
+    "uro",
+    "zahn",
+    "zähne",
+    "internist",
     # Verfahren und Diagnostik
-    "blut", "ct", "diagnostik", "echo", "labor", "mrt", "radio", "rehabil", "spende",
-
+    "blut",
+    "ct",
+    "diagnostik",
+    "echo",
+    "labor",
+    "mrt",
+    "radio",
+    "rehabil",
+    "spende",
     # Pflege und Behandlungsarten
-    "betreuung", "ernährung", "geriatr", "hospiz", "intensiv", "palliativ", "pflege",
-    "physio", "rehaklinik", "therapeut",
-
+    "betreuung",
+    "ernährung",
+    "geriatr",
+    "hospiz",
+    "intensiv",
+    "palliativ",
+    "pflege",
+    "physio",
+    "rehaklinik",
+    "therapeut",
     # Alternative Medizin
-    "akupunkt", "heilpraktiker", "homöo", "naturheil",
-
+    "akupunkt",
+    "heilpraktiker",
+    "homöo",
+    "naturheil",
     # Einrichtungen und Zentren
-    "fach", "kranken", "notfall", "reha", "zentrum", "haus", "test", "spital", "sankt", "st.",
-
+    "fach",
+    "kranken",
+    "notfall",
+    "reha",
+    "zentrum",
+    "haus",
+    "test",
+    "spital",
+    "sankt",
+    "st.",
     # Pädiatrie, Frauen und Spezialversorgung
-    "diabetes", "frauen", "kinder", "lungen",
-
+    "diabetes",
+    "frauen",
+    "kinder",
+    "lungen",
     # Zusätzliche Begriffe
-    "apotheke", "behandl", "chirurgi", "gesundheitszentrum",
-    "klinisch", "untersuch",
-
+    "apotheke",
+    "behandl",
+    "chirurgi",
+    "gesundheitszentrum",
+    "klinisch",
+    "untersuch",
     # titel
-    "dr", "phil", "univ", "medic", "dres", "med", "dipl", "psych", "dent", "vet",
-
+    "dr",
+    "phil",
+    "univ",
+    "medic",
+    "dres",
+    "med",
+    "dipl",
+    "psych",
+    "dent",
+    "vet",
     # abbreviations
-    "hno", "mkg", "fa", "za", "kh", "lkh", "mvz", "zmvz", "phv", "zar", "kjpp", "uk", "bg", "reha", "kg", "khb", "spz",
-    "evk", "cvk", "drk", "vkk", "mlk", "kfo", "zpm", "zna", "kfh", "pkv"
+    "hno",
+    "mkg",
+    "fa",
+    "za",
+    "kh",
+    "lkh",
+    "mvz",
+    "zmvz",
+    "phv",
+    "zar",
+    "kjpp",
+    "uk",
+    "bg",
+    "reha",
+    "kg",
+    "khb",
+    "spz",
+    "evk",
+    "cvk",
+    "drk",
+    "vkk",
+    "mlk",
+    "kfo",
+    "zpm",
+    "zna",
+    "kfh",
+    "pkv",
 ]
 
 
@@ -106,7 +195,7 @@ def load_hospital_names(text_file):
     list of str
         A list of hospital names extracted from the file.
     """
-    with open(text_file, 'r', encoding='utf-8') as f:
+    with open(text_file, "r", encoding="utf-8") as f:
         hospital_names = [line.strip() for line in f if line.strip()]
     return hospital_names
 
@@ -134,7 +223,9 @@ def replace_abbreviation(text, abbreviations):
         The modified text with all found abbreviations replaced by their full forms.
     """
     # Precompiled regular expression pattern to match any of the abbreviations
-    pattern = re.compile(r'\b(' + '|'.join(re.escape(key) for key in abbreviations.keys()) + r')\b')
+    pattern = re.compile(
+        r"\b(" + "|".join(re.escape(key) for key in abbreviations.keys()) + r")\b"
+    )
 
     # Replace abbreviations in the text using the dictionary
     return pattern.sub(lambda x: abbreviations[x.group()], text)
@@ -158,7 +249,7 @@ def get_name(facility):
     str
         The main facility name.
     """
-    return facility.split('/')[0].strip()
+    return facility.split("/")[0].strip()
 
 
 def remove_non_alphanumeric(input_string):
@@ -183,18 +274,18 @@ def remove_non_alphanumeric(input_string):
         The cleaned and normalized hospital name string.
     """
     # 1. Normalize Unicode to NFC form to ensure consistency
-    cleaned = unicodedata.normalize('NFC', input_string)
+    cleaned = unicodedata.normalize("NFC", input_string)
 
     # 2. Remove BOM characters
     # Common BOMs: \ufeff (UTF-8), \uFEFF (UTF-16), \uFFFE (Invalid, but included for robustness)
-    cleaned = cleaned.replace('\ufeff', '').replace('\uFEFF', '').replace('\uFFFE', '')
+    cleaned = cleaned.replace("\ufeff", "").replace("\ufeff", "").replace("\ufffe", "")
 
     # 3. Replace newlines and carriage returns with a space
-    cleaned = cleaned.replace('\n', ' ').replace('\r', ' ')
+    cleaned = cleaned.replace("\n", " ").replace("\r", " ")
 
     # 4. Remove other control characters (non-printable characters)
     #    This removes characters in the range U+0000 to U+001F and U+007F
-    cleaned = re.sub(r'[\x00-\x1F\x7F]', '', cleaned)
+    cleaned = re.sub(r"[\x00-\x1F\x7F]", "", cleaned)
 
     # 5. Define allowed characters:
     #    - Letters (A-Z, a-z) including German umlauts and sharp S (ß)
@@ -204,16 +295,16 @@ def remove_non_alphanumeric(input_string):
     #    - Commas (,)
     #    - Slashes (/)
     #    - Hyphens (-)
-    allowed_chars_pattern = re.compile(r'[A-Za-zäöüßÄÖÜẞ0-9\s.,/\-]')
+    allowed_chars_pattern = re.compile(r"[A-Za-zäöüßÄÖÜẞ0-9\s.,/\-]")
 
     # 6. Keep only allowed characters
-    cleaned = ''.join(allowed_chars_pattern.findall(cleaned))
+    cleaned = "".join(allowed_chars_pattern.findall(cleaned))
 
     # 7. Convert to lowercase
     cleaned = cleaned.lower()
 
     # 8. Normalize multiple spaces to a single space and strip leading/trailing spaces
-    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
 
     return cleaned
 
@@ -243,7 +334,8 @@ def extract_sensitive_data(text, nlp, healthcare_keywords):
             words = ent.text.split()
             # Only add words that don't contain healthcare keywords
             filtered_words = [
-                word for word in words
+                word
+                for word in words
                 if not any(keyword in word.lower() for keyword in healthcare_keywords)
             ]
             unique_substrings.update(filtered_words)
@@ -252,7 +344,9 @@ def extract_sensitive_data(text, nlp, healthcare_keywords):
     for token in doc:
         if token.pos_ == "PROPN":
             # Only add if it doesn't contain healthcare keywords
-            if not any(keyword in token.text.lower() for keyword in healthcare_keywords):
+            if not any(
+                keyword in token.text.lower() for keyword in healthcare_keywords
+            ):
                 unique_substrings.add(token.text)
 
     return list(unique_substrings)
@@ -278,8 +372,10 @@ def filter_hospitals(hospitals, similarity_scores, sensitive_words) -> list[str]
     """
     # Combine the filtering conditions into a single list comprehension
     filtered_hospitals = [
-        hospital for hospital, score in zip(hospitals, similarity_scores)
-        if score != 1 and not any(
+        hospital
+        for hospital, score in zip(hospitals, similarity_scores)
+        if score != 1
+        and not any(
             sensitive_word.lower() in hospital.lower()
             for sensitive_word in sensitive_words
         )
@@ -316,7 +412,9 @@ def normalize_levenshtein_distance(str1, str2):
     return lev_distance / max_len  # Normalize by dividing by the max string length
 
 
-def calculate_average_distance(target_sensitive_data: list[str], sampled_sensitive_data: list[str]):
+def calculate_average_distance(
+    target_sensitive_data: list[str], sampled_sensitive_data: list[str]
+):
     """
     Calculate the average normalized Levenshtein distance between target terms and sampled terms.
 
@@ -343,10 +441,12 @@ def calculate_average_distance(target_sensitive_data: list[str], sampled_sensiti
 
     # For each target term, find the closest match in the sampled terms
     for target_substring in target_sensitive_data:
-        min_distance = float('inf')  # Initialize with a large value
+        min_distance = float("inf")  # Initialize with a large value
 
         for sampled_substring in sampled_sensitive_data:
-            normalized_distance = normalize_levenshtein_distance(target_substring.lower(), sampled_substring.lower())
+            normalized_distance = normalize_levenshtein_distance(
+                target_substring.lower(), sampled_substring.lower()
+            )
             if normalized_distance < min_distance:
                 min_distance = normalized_distance
 
@@ -381,7 +481,8 @@ def calculate_hospital_probabilities(ranked_hospitals, temperature=0.1):
     """
     # Split the hospitals and distances
     hospitals, distances = zip(
-        *ranked_hospitals)  # TODO ranked_hospitals could be empty, handle the exceptions --> Meulengracht_gemtex.xmi
+        *ranked_hospitals
+    )  # TODO ranked_hospitals could be empty, handle the exceptions --> Meulengracht_gemtex.xmi
     distances = np.array(distances)
 
     # Apply sigmoid function to distances
@@ -396,7 +497,9 @@ def calculate_hospital_probabilities(ranked_hospitals, temperature=0.1):
     return hospitals, probabilities
 
 
-def rank_hospitals_by_similarity(target_hospital, filtered_hospitals, healthcare_keywords):
+def rank_hospitals_by_similarity(
+    target_hospital, filtered_hospitals, healthcare_keywords
+):
     """
     Identify and rank hospitals based on the similarity of healthcare-related terms in the target hospital name.
 
@@ -417,13 +520,18 @@ def rank_hospitals_by_similarity(target_hospital, filtered_hospitals, healthcare
         with an average distance above or equal to 0.5 are included.
     """
     # Extract healthcare-related words from the target hospital name
-    healthcare_terms = [word for word in re.split(r'[ \-]', target_hospital) if
-                        any(keyword in word.lower() for keyword in healthcare_keywords)]
+    healthcare_terms = [
+        word
+        for word in re.split(r"[ \-]", target_hospital)
+        if any(keyword in word.lower() for keyword in healthcare_keywords)
+    ]
 
     ranked_hospitals = []
     # Calculate average normalized Levenshtein distance for each hospital
     for hospital in filtered_hospitals:
-        avg_distance = calculate_average_distance(healthcare_terms, re.split(r'[ \-]', hospital))
+        avg_distance = calculate_average_distance(
+            healthcare_terms, re.split(r"[ \-]", hospital)
+        )
 
         ranked_hospitals.append((hospital, avg_distance))
     # Keep only those that collectively account for the top 50% of sum
@@ -469,7 +577,9 @@ def get_top_50_percent(hospital_distance_list: list[tuple[str, int]]):
     return top_50pct
 
 
-def query_similar_hospitals(target_sentence, model, nn_model, hospital_names: list[str], top_k=5):
+def query_similar_hospitals(
+    target_sentence, model, nn_model, hospital_names: list[str], top_k=5
+):
     """
     Query the most similar hospitals based on a target sentence using a pre-trained model
     and a nearest-neighbor model for similarity search.
@@ -518,15 +628,15 @@ def query_similar_hospitals(target_sentence, model, nn_model, hospital_names: li
 
 
 def query_similar_hospitals_adaptive(
-        target_hospital,
-        model,
-        nn_model,
-        nlp,
-        hospital_names: list[str],
-        initial_k=10,
-        max_k=100,
-        step_size=10,
-        min_matches=3
+    target_hospital,
+    model,
+    nn_model,
+    nlp,
+    hospital_names: list[str],
+    initial_k=10,
+    max_k=100,
+    step_size=10,
+    min_matches=3,
 ):
     """
     Adaptively query for similar hospitals, expanding the search until enough matches are found.
@@ -568,17 +678,22 @@ def query_similar_hospitals_adaptive(
         target_hospital_extended = replace_abbreviation(target_hospital, abbreviations)
 
         # Get similar hospitals with current k
-        similar_hospitals, similarity_scores = query_similar_hospitals(target_hospital_extended, model, nn_model,
-                                                                       hospital_names, top_k=current_k)
+        similar_hospitals, similarity_scores = query_similar_hospitals(
+            target_hospital_extended, model, nn_model, hospital_names, top_k=current_k
+        )
 
         # Apply the get_name function to each similar hospital to remove the healthcare:specialty infromation
         similar_hospitals = [get_name(hospital) for hospital in similar_hospitals]
 
         # Extract sensitive words
-        sensitive_words = extract_sensitive_data(target_hospital_extended, nlp, healthcare_keywords)
+        sensitive_words = extract_sensitive_data(
+            target_hospital_extended, nlp, healthcare_keywords
+        )
 
         # Filter hospitals
-        filtered_hospitals = filter_hospitals(similar_hospitals, similarity_scores, sensitive_words)
+        filtered_hospitals = filter_hospitals(
+            similar_hospitals, similarity_scores, sensitive_words
+        )
         # If we have enough matches, break
         if len(filtered_hospitals) >= min_matches:
             return filtered_hospitals, current_k
@@ -586,8 +701,10 @@ def query_similar_hospitals_adaptive(
         # Increase k for next iteration
         current_k += step_size
 
-        logging.info(f"Insufficient matches found with k={current_k - step_size}, "
-                     f"expanding search to k={current_k}")
+        logging.info(
+            f"Insufficient matches found with k={current_k - step_size}, "
+            f"expanding search to k={current_k}"
+        )
 
     # If we get here, we couldn't find enough matches even with max_k
     logging.warning(f"Could not find {min_matches} matches even with k={max_k}")
@@ -595,8 +712,16 @@ def query_similar_hospitals_adaptive(
     return filtered_hospitals, current_k
 
 
-def get_hospital_surrogate(target_hospital, model, nn_model, nlp, hospital_names: list[str], initial_k=10, max_k=100,
-                           min_matches=3):
+def get_hospital_surrogate(
+    target_hospital,
+    model,
+    nn_model,
+    nlp,
+    hospital_names: list[str],
+    initial_k=10,
+    max_k=100,
+    min_matches=3,
+):
     """
     Main function to get a surrogate hospital with adaptive search.
 
@@ -641,10 +766,12 @@ def get_hospital_surrogate(target_hospital, model, nn_model, nlp, hospital_names
         hospital_names,
         initial_k=initial_k,
         max_k=max_k,
-        min_matches=min_matches
+        min_matches=min_matches,
     )
     # Rank hospitals
-    ranked_hospitals = rank_hospitals_by_similarity(target_hospital, similar_hospitals, healthcare_keywords)
+    ranked_hospitals = rank_hospitals_by_similarity(
+        target_hospital, similar_hospitals, healthcare_keywords
+    )
     # Calculate probabilities and sample
     hospitals, probabilities = calculate_hospital_probabilities(ranked_hospitals)
     sampled_hospital = str(np.random.choice(hospitals, p=probabilities))

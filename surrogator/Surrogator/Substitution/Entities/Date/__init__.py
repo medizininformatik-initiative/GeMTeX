@@ -29,18 +29,22 @@ def get_quarter(str_date):
         year = pd.Timestamp(str_date).year
 
         if quart == 1:
-            return '01.01.' + str(year)
+            return "01.01." + str(year)
         elif quart == 2:
-            return '01.04.' + str(year)
+            return "01.04." + str(year)
         elif quart == 3:
-            return '01.07.' + str(year)
+            return "01.07." + str(year)
         elif quart == 4:
-            return '01.10.' + str(year)
-        return 'none'
+            return "01.10." + str(year)
+        return "none"
 
     except ValueError:
-        logging.warning('Not able to convert date to quarter! ' + str_date + 'is returned as NONE value.')
-        return 'none'
+        logging.warning(
+            "Not able to convert date to quarter! "
+            + str_date
+            + "is returned as NONE value."
+        )
+        return "none"
 
 
 def surrogate_dates(dates, int_delta):
@@ -57,7 +61,6 @@ def surrogate_dates(dates, int_delta):
     dates: dict
     """
 
-
     for date in dates:
         dates[date] = sub_date(date, int_delta)
     return dates
@@ -71,50 +74,52 @@ def sub_date(str_token, int_delta):
 
     try:
         token_pars = dateutil.parser.parse(
-            re.sub(r'\.(?=\w)', '. ', str_token),
-            parserinfo=DateParserInfo(dayfirst=True, yearfirst=True)
+            re.sub(r"\.(?=\w)", ". ", str_token),
+            parserinfo=DateParserInfo(dayfirst=True, yearfirst=True),
         )
         new_token_pars = token_pars + timedelta(days=int_delta)
-        new_token = re.findall(r'\W+|\w+', str_token)
-        parts = re.findall(r'\w+', str_token)
+        new_token = re.findall(r"\W+|\w+", str_token)
+        parts = re.findall(r"\w+", str_token)
 
     except Exception as e:
         logging.warning(f"Failed to parse ({e}): {str_token}")
-        return 'DATE'
+        return "DATE"
 
-    if re.search('[a-zA-Z]+', str_token):
-
-        month = datetime.strftime(token_pars, '%B')
+    if re.search("[a-zA-Z]+", str_token):
+        month = datetime.strftime(token_pars, "%B")
 
         for form in dateFormatsAlpha:
-
             try:
                 parts_pars = datetime.strftime(token_pars, form)
 
             except Exception as e:
                 logging.warning(f"Failed tpo parse ({e}): {str_token}")
-                return 'DATE'
+                return "DATE"
 
-            idx_month = [i for i, form in enumerate(dateReplMonths[month]) if
-                         parts == re.findall(r'\w+', re.sub(month, form, parts_pars))]
+            idx_month = [
+                i
+                for i, form in enumerate(dateReplMonths[month])
+                if parts == re.findall(r"\w+", re.sub(month, form, parts_pars))
+            ]
             if idx_month:
-                new_month = datetime.strftime(new_token_pars, '%B')
+                new_month = datetime.strftime(new_token_pars, "%B")
                 if len(dateReplMonths[new_month]) > idx_month[0]:
                     new_parts_pars = re.findall(
-                        r'\w+',
+                        r"\w+",
                         re.sub(
                             new_month,
                             dateReplMonths[new_month][idx_month[0]],
-                            datetime.strftime(new_token_pars, form)
-                        )
+                            datetime.strftime(new_token_pars, form),
+                        ),
                     )
                 else:
                     new_parts_pars = re.findall(
-                        r'\w+',
+                        r"\w+",
                         re.sub(
                             new_month,
                             dateReplMonths[new_month][0],
-                            datetime.strftime(new_token_pars, form))
+                            datetime.strftime(new_token_pars, form),
+                        ),
                     )
                 c = 0
                 for i, part in enumerate(new_token):
@@ -125,23 +130,25 @@ def sub_date(str_token, int_delta):
                         except Exception:
                             new_token = new_parts_pars
                             break
-                new_token = ''.join(new_token)
+                new_token = "".join(new_token)
     else:
         for form in dateFormatsNr:
             try:
-                parts_pars = re.findall(r'\w+', datetime.strftime(token_pars, form))
+                parts_pars = re.findall(r"\w+", datetime.strftime(token_pars, form))
                 if parts_pars == parts:
-                    new_parts_pars = re.findall(r'\w+', datetime.strftime(new_token_pars, form))
-                    new_token = '.'.join(new_parts_pars)
+                    new_parts_pars = re.findall(
+                        r"\w+", datetime.strftime(new_token_pars, form)
+                    )
+                    new_token = ".".join(new_parts_pars)
             except Exception as e:
-                new_token = 'DATE'
+                new_token = "DATE"
                 logging.warning(f"Something wrong with parsing ({e})!")
 
     if not type(new_token) is str:
-        new_token = ''.join(new_token)
+        new_token = "".join(new_token)
 
-    if not new_token.endswith('.') and str_token.endswith('.'):
-        new_token += '.'
+    if not new_token.endswith(".") and str_token.endswith("."):
+        new_token += "."
 
     return new_token
 
@@ -149,25 +156,24 @@ def sub_date(str_token, int_delta):
 def check_and_clean_date_proof(str_date):
     try:
         dateutil.parser.parse(
-            re.sub(r'\.(?=\w)', '. ', str_date),
-            parserinfo=DateParserInfo(dayfirst=True, yearfirst=True)
+            re.sub(r"\.(?=\w)", ". ", str_date),
+            parserinfo=DateParserInfo(dayfirst=True, yearfirst=True),
         )
         return str_date
     except Exception:
-        logging.warning(msg='Warnung - fehlerhaftes Datum: ' + str_date)
+        logging.warning(msg="Warnung - fehlerhaftes Datum: " + str_date)
         return -1
 
 
 def check_and_clean_date(str_date):
     try:
         dateutil.parser.parse(
-            re.sub(r'\.(?=\w)', '. ', str_date),
-            parserinfo=DateParserInfo(dayfirst=True, yearfirst=True)
+            re.sub(r"\.(?=\w)", ". ", str_date),
+            parserinfo=DateParserInfo(dayfirst=True, yearfirst=True),
         )
 
         return str_date
     except Exception as e:
-
         logging.warning(f"Bad date ({e}): {str_date}")
 
         # if re.fullmatch(pattern="\d{2}(\.|\s)\d{2}(\.|\s)\d{4}", string=str_date):

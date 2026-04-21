@@ -22,9 +22,12 @@ def get_n_random_keys(n: int, used_keys: list[str]):
     gen_keys = []
 
     for i in range(n):
-
-        key = ''.join(random.choices(letters, k=2)) + str(random.randint(0, 9)) + ''.join(
-            random.choices(letters, k=2)) + str(random.randint(0, 9))
+        key = (
+            "".join(random.choices(letters, k=2))
+            + str(random.randint(0, 9))
+            + "".join(random.choices(letters, k=2))
+            + str(random.randint(0, 9))
+        )
 
         if key not in used_keys:
             if key not in gen_keys:
@@ -62,9 +65,12 @@ def get_n_random_filenames(n, used_keys):
     gen_keys = []
 
     for i in range(n):
-
-        key = ''.join(random.choices(letters, k=3)) + str(random.randint(0, 9)) + ''.join(
-            random.choices(letters, k=3)) + str(random.randint(0, 9))
+        key = (
+            "".join(random.choices(letters, k=3))
+            + str(random.randint(0, 9))
+            + "".join(random.choices(letters, k=3))
+            + str(random.randint(0, 9))
+        )
 
         if key not in used_keys:
             if key not in gen_keys:

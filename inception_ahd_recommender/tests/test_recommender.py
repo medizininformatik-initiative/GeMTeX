@@ -14,50 +14,66 @@ scenario_dict = {
         "ts": "resources/general_TypeSystem.xml",
         "mapping": "../prefab-mapping-files/general_mapping_singlelayer.json",
         "layer": "Core",
-        "feature": "kind"
+        "feature": "kind",
     },
     "snomed": {
         "xmi": "resources/Albers.snomed.xmi",
         "ts": "resources/snomed_TypeSystem.xml",
         "mapping": "../prefab-mapping-files/snomed_mapping_singlelayer.json",
         "layer": "Concept",
-        "feature": "id"
+        "feature": "id",
     },
     "deid": {
         "xmi": "resources/Albers.deid.xmi",
         "ts": "resources/deid_TypeSystem.xml",
         "mapping": "../prefab-mapping-files/deid_mapping_singlelayer.json",
         "layer": "PHI",
-        "feature": "kind"
-    }
+        "feature": "kind",
+    },
 }
 scenario_switch = "snomed"
 
+
 @pytest.fixture
 def cas_mapping_consumer():
-    return MappingConsumer(config=scenario_dict.get(scenario_switch).get("mapping"), processor=ProcessorType.CAS)
+    return MappingConsumer(
+        config=scenario_dict.get(scenario_switch).get("mapping"),
+        processor=ProcessorType.CAS,
+    )
+
 
 @pytest.fixture
 def typesystem():
-    return cassis.load_typesystem(pathlib.Path(scenario_dict.get(scenario_switch).get("ts")))
+    return cassis.load_typesystem(
+        pathlib.Path(scenario_dict.get(scenario_switch).get("ts"))
+    )
+
 
 @pytest.fixture
 def cas_server_response(typesystem):
-    return cassis.load_cas_from_xmi(pathlib.Path(scenario_dict.get(scenario_switch).get("xmi")), typesystem=typesystem)
+    return cassis.load_cas_from_xmi(
+        pathlib.Path(scenario_dict.get(scenario_switch).get("xmi")),
+        typesystem=typesystem,
+    )
+
 
 def test_mapping_consumer(cas_mapping_consumer, cas_server_response):
-    logging.info(cas_mapping_consumer.process(cas_server_response, scenario_dict.get(scenario_switch).get("layer")).features)
+    logging.info(
+        cas_mapping_consumer.process(
+            cas_server_response, scenario_dict.get(scenario_switch).get("layer")
+        ).features
+    )
+
 
 def test_add_prediction_to_cas(cas_mapping_consumer, cas_server_response, typesystem):
     add_prediction_to_cas(
         cas=cassis.Cas(
-            typesystem=typesystem,
-            sofa_string=cas_server_response.sofa_string
+            typesystem=typesystem, sofa_string=cas_server_response.sofa_string
         ),
         layer=scenario_dict.get(scenario_switch).get("layer"),
         feature=scenario_dict.get(scenario_switch).get("feature"),
         project_id="0",
         document_id="0",
         user_id="0",
-        response=cas_mapping_consumer.process(cas_server_response)
+        response=cas_mapping_consumer.process(cas_server_response),
     )

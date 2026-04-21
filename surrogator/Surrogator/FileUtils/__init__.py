@@ -18,42 +18,48 @@ def handle_config(config):
     dict config: contains the configuration of the run.
     """
 
-    timestamp_key = datetime.now().strftime('%Y%m%d-%H%M%S')
+    timestamp_key = datetime.now().strftime("%Y%m%d-%H%M%S")
 
-    if 'output' in config:
-        if 'out_directory' in config['output']:
-            out_directory = config['output']['out_directory']
+    if "output" in config:
+        if "out_directory" in config["output"]:
+            out_directory = config["output"]["out_directory"]
         else:
             out_directory = os.getcwd()
     else:
         out_directory = os.getcwd()
 
-    out_directory_private = out_directory + os.sep + 'private'
+    out_directory_private = out_directory + os.sep + "private"
     if not os.path.exists(path=out_directory_private):
         os.makedirs(name=out_directory_private)
 
-    out_directory_private = out_directory + os.sep + 'private' + os.sep + 'private-' + timestamp_key
+    out_directory_private = (
+        out_directory + os.sep + "private" + os.sep + "private-" + timestamp_key
+    )
     if not os.path.exists(path=out_directory_private):
         os.makedirs(name=out_directory_private)
-        logging.info(msg=out_directory_private + ' created.')
+        logging.info(msg=out_directory_private + " created.")
 
-    out_directory_public = out_directory + os.sep + 'public'
+    out_directory_public = out_directory + os.sep + "public"
     if not os.path.exists(path=out_directory_public):
         os.makedirs(name=out_directory_public)
-        logging.info(msg=out_directory_public + ' created.')
+        logging.info(msg=out_directory_public + " created.")
 
-    out_directory_public = out_directory + os.sep + 'public' + os.sep + 'public-' + timestamp_key
+    out_directory_public = (
+        out_directory + os.sep + "public" + os.sep + "public-" + timestamp_key
+    )
     if not os.path.exists(path=out_directory_public):
         os.makedirs(name=out_directory_public)
-        logging.info(msg=out_directory_public + ' created.')
+        logging.info(msg=out_directory_public + " created.")
 
-    if 'input' in config:
-        if 'task' in config['input']:
-            if config['input']['task'] == 'surrogate':
-                if isinstance(config['surrogate_process']['surrogate_modes'], str):
-                    surrogate_modes = re.split(r',\s+', config['surrogate_process']['surrogate_modes'])
+    if "input" in config:
+        if "task" in config["input"]:
+            if config["input"]["task"] == "surrogate":
+                if isinstance(config["surrogate_process"]["surrogate_modes"], str):
+                    surrogate_modes = re.split(
+                        r",\s+", config["surrogate_process"]["surrogate_modes"]
+                    )
                 else:
-                    surrogate_modes = config['surrogate_process']['surrogate_modes']
+                    surrogate_modes = config["surrogate_process"]["surrogate_modes"]
             else:
                 surrogate_modes = []
         else:
@@ -105,7 +111,6 @@ def read_dir(dir_path: str, selected_projects: list = None) -> list[dict]:
     projects = []
 
     if os.path.isdir(dir_path):
-
         for file_name in os.listdir(dir_path):
             if selected_projects and file_name.split(".")[0] not in selected_projects:
                 continue
@@ -116,7 +121,7 @@ def read_dir(dir_path: str, selected_projects: list = None) -> list[dict]:
                         # Read project metadata directly from ZIP without extracting
                         try:
                             project_meta_data = zip_file.read("exportedproject.json")
-                            project_meta = json.loads(project_meta_data.decode('utf-8'))
+                            project_meta = json.loads(project_meta_data.decode("utf-8"))
 
                             description = project_meta.get("description", "")
                             project_tags = (
@@ -131,10 +136,14 @@ def read_dir(dir_path: str, selected_projects: list = None) -> list[dict]:
 
                             project_documents = project_meta.get("source_documents")
                             if not project_documents:
-                                logging.warning(f"No source documents found in project {file_name}")
+                                logging.warning(
+                                    f"No source documents found in project {file_name}"
+                                )
                                 continue
                         except KeyError:
-                            logging.warning(f"No exportedproject.json found in {file_name}")
+                            logging.warning(
+                                f"No exportedproject.json found in {file_name}"
+                            )
                             continue
 
                         used_snomed_ids = set()
@@ -144,12 +153,16 @@ def read_dir(dir_path: str, selected_projects: list = None) -> list[dict]:
                         annotation_files = []
                         try:
                             for info in zip_file.infolist():
-                                if (info.filename.startswith("curation/") and
-                                        info.filename.endswith(".json") and
-                                        not info.is_dir()):
+                                if (
+                                    info.filename.startswith("curation/")
+                                    and info.filename.endswith(".json")
+                                    and not info.is_dir()
+                                ):
                                     annotation_files.append(info.filename)
                         except Exception as e:
-                            logging.warning(f"Error reading ZIP file list for {file_name}: {e}")
+                            logging.warning(
+                                f"Error reading ZIP file list for {file_name}: {e}"
+                            )
                             continue
 
                         # Group files by folder efficiently
@@ -161,23 +174,30 @@ def read_dir(dir_path: str, selected_projects: list = None) -> list[dict]:
                         # Select appropriate annotation files
                         selected_annotation_files = []
                         for folder, files in folder_files.items():
-                            if len(files) == 1 and files[0].endswith("INITIAL_CAS.json"):
+                            if len(files) == 1 and files[0].endswith(
+                                "INITIAL_CAS.json"
+                            ):
                                 selected_annotation_files.append(files[0])
                             else:
                                 selected_annotation_files.extend(
-                                    file for file in files
+                                    file
+                                    for file in files
                                     if not file.endswith("INITIAL_CAS.json")
                                 )
 
                         for annotation_file in selected_annotation_files:
                             try:
-                                subfolder_name = os.path.dirname(annotation_file).split("/")[1]
+                                subfolder_name = os.path.dirname(annotation_file).split(
+                                    "/"
+                                )[1]
                                 with zip_file.open(annotation_file) as cas_file:
                                     cas = cassis.load_cas_from_json(cas_file)
                                     annotations[subfolder_name] = cas
 
                             except Exception as e:
-                                logging.warning(f"Failed to load annotation file {annotation_file} from {file_name}: {e}")
+                                logging.warning(
+                                    f"Failed to load annotation file {annotation_file} from {file_name}: {e}"
+                                )
                                 continue
 
                         projects.append(
@@ -185,7 +205,7 @@ def read_dir(dir_path: str, selected_projects: list = None) -> list[dict]:
                                 "name": file_name,
                                 "tags": project_tags if project_tags else None,
                                 "documents": project_documents,
-                                "annotations": annotations
+                                "annotations": annotations,
                             }
                         )
 
@@ -210,15 +230,15 @@ def export_cas_to_file(cas, dir_out_text, dir_out_cas, file_name):
     ------
     0
     """
-    txt_file = dir_out_text + os.sep + file_name + '.txt'
+    txt_file = dir_out_text + os.sep + file_name + ".txt"
 
     f = open(txt_file, "w", encoding="utf-8")
     f.write(cas.sofa_string)
     f.close()
-    logging.info('New text file: ' + txt_file)
+    logging.info("New text file: " + txt_file)
 
-    json_cas_file = dir_out_cas + os.sep + file_name + '.json'
+    json_cas_file = dir_out_cas + os.sep + file_name + ".json"
     cas.to_json(json_cas_file, pretty_print=0)
-    logging.info('New cas file: ' + json_cas_file)
+    logging.info("New cas file: " + json_cas_file)
 
     return 0

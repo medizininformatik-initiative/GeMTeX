@@ -73,7 +73,10 @@ def _load_cas(input_file: pathlib.Path, typesystem: TypeSystem, to_json: bool) -
 
 
 def _check_output_file(
-    output_file: Optional[pathlib.Path], input_file: pathlib.Path, to_json: bool, name_stem: Optional[str] = None
+    output_file: Optional[pathlib.Path],
+    input_file: pathlib.Path,
+    to_json: bool,
+    name_stem: Optional[str] = None,
 ) -> pathlib.Path:
     if output_file is not None:
         output_path = pathlib.Path(output_file)
@@ -88,7 +91,11 @@ def _check_output_file(
             )
             return output_path / f"{input_file.stem}.{'json' if to_json else 'xmi'}"
         else:
-            _final_out = pathlib.Path(output_path, f"{name_stem}.{'json' if to_json else 'xmi'}") if name_stem is not None else output_path
+            _final_out = (
+                pathlib.Path(output_path, f"{name_stem}.{'json' if to_json else 'xmi'}")
+                if name_stem is not None
+                else output_path
+            )
             logging.info(f" Writing output to '{_final_out.resolve()}'.")
             if (_final_out.suffix == ".xmi" and to_json) or (
                 _final_out.suffix == ".json" and not to_json
@@ -104,18 +111,30 @@ def _check_output_file(
         return input_file.with_suffix(f".{'json' if to_json else 'xmi'}")
 
 
-def _check_present_typesystem(output_path: pathlib.Path, cas: Cas, exclude_option: TypeSystemHandling = None, message: str = None, force_merge: bool = False):
+def _check_present_typesystem(
+    output_path: pathlib.Path,
+    cas: Cas,
+    exclude_option: TypeSystemHandling = None,
+    message: str = None,
+    force_merge: bool = False,
+):
     ts_output = output_path.parent / f"TypeSystem.xml"
     _ts = cas.typesystem
     if ts_output.exists():
         _menu_entry = "menu_entry"
         if not force_merge:
-            options = [to.name for to in TypeSystemHandling if (exclude_option is None) or (exclude_option != to)]
+            options = [
+                to.name
+                for to in TypeSystemHandling
+                if (exclude_option is None) or (exclude_option != to)
+            ]
             questions = [
                 {
                     "type": "list",
                     "name": _menu_entry,
-                    "message": f"A 'TypeSystem.xml' already exists at the location {output_path.parent.resolve()}. How to proceed?" if message is None else message,
+                    "message": f"A 'TypeSystem.xml' already exists at the location {output_path.parent.resolve()}. How to proceed?"
+                    if message is None
+                    else message,
                     "choices": options,
                     "default": 0,
                 }
@@ -139,15 +158,20 @@ def _check_present_typesystem(output_path: pathlib.Path, cas: Cas, exclude_optio
             elif (
                 TypeSystemHandling[answer.get(_menu_entry)] == TypeSystemHandling.MERGE
             ):
-                logging.info(f"{'Chosen MERGE option. ' if not force_merge else ''}Trying to merge typesystems.")
+                logging.info(
+                    f"{'Chosen MERGE option. ' if not force_merge else ''}Trying to merge typesystems."
+                )
                 try:
                     _ts = merge_typesystems(cas.typesystem, load_typesystem(ts_output))
                 except Exception as e:
-                    logging.error(
-                        f" Could not merge typesystems: '{e}'."
-                    )
+                    logging.error(f" Could not merge typesystems: '{e}'.")
                     if not force_merge:
-                        _check_present_typesystem(output_path, cas, TypeSystemHandling.MERGE, "Maybe try another handling option:")
+                        _check_present_typesystem(
+                            output_path,
+                            cas,
+                            TypeSystemHandling.MERGE,
+                            "Maybe try another handling option:",
+                        )
                         sys.exit(0)
             else:
                 raise ValueError(
@@ -172,9 +196,7 @@ def _set_log_level(log_level: str):
 
 
 def _yield_matching_files(
-    project_documents: list[dict],
-    zip_file: zipfile.ZipFile,
-    file_name: str = None
+    project_documents: list[dict], zip_file: zipfile.ZipFile, file_name: str = None
 ):
     _typesystem_file = None
     _second_pass = []
@@ -196,14 +218,20 @@ def _yield_matching_files(
             info.filename
             for info in zip_file.infolist()
             if (len(folder_prefix) == 0 or info.filename.startswith(folder_prefix))
-            and (info.filename.endswith(".json") or info.filename.endswith(".zip") or info.filename.endswith(".xmi"))
+            and (
+                info.filename.endswith(".json")
+                or info.filename.endswith(".zip")
+                or info.filename.endswith(".xmi")
+            )
             and not info.is_dir()
         ]
 
         # Use INITIAL_CAS.json only if it is the *only* file
         if len(matching_files) > 1:
             matching_files = [
-                p for p in matching_files if not (p.endswith("INITIAL_CAS.json") or p.endswith("INITIAL_CAS.zip"))
+                p
+                for p in matching_files
+                if not (p.endswith("INITIAL_CAS.json") or p.endswith("INITIAL_CAS.zip"))
             ]
 
         if not matching_files:
@@ -220,16 +248,27 @@ def _read_project(zip_file: zipfile.ZipFile, file_name: str) -> Optional[list[di
     try:
         project_meta = json.loads(zip_file.read("exportedproject.json").decode("utf-8"))
     except KeyError:
-        logging.warning(f" No exportedproject.json found in {file_name}. Treating file as simple zipped json/xmi files.")
+        logging.warning(
+            f" No exportedproject.json found in {file_name}. Treating file as simple zipped json/xmi files."
+        )
         project_documents = []
         for info in zip_file.infolist():
             if info.filename.endswith(".xml"):
-                project_documents.append({"name": pathlib.Path(info.filename).name, "state": "TYPESYSTEM"})
+                project_documents.append(
+                    {"name": pathlib.Path(info.filename).name, "state": "TYPESYSTEM"}
+                )
                 continue
             if not (info.filename.endswith(".json") or info.filename.endswith(".xmi")):
-                logging.error(f" Non-processable file type (neither 'json' nor 'xmi')): {info.filename}. Skipping.")
+                logging.error(
+                    f" Non-processable file type (neither 'json' nor 'xmi')): {info.filename}. Skipping."
+                )
                 continue
-            project_documents.append({"name": pathlib.Path(info.filename).name, "state": "SIMPLE_ZIPPED_JSON_XMI"})
+            project_documents.append(
+                {
+                    "name": pathlib.Path(info.filename).name,
+                    "state": "SIMPLE_ZIPPED_JSON_XMI",
+                }
+            )
         return project_documents if len(project_documents) > 0 else None
 
     project_documents = project_meta.get("source_documents", [])
@@ -267,19 +306,25 @@ def _process_zip(
                                 _to_json = False
                             elif cas_path.endswith(".xmi"):
                                 if typesystem_file is None:
-                                    raise TypeError(
-                                        f"No typesystem file found."
-                                    )
+                                    raise TypeError(f"No typesystem file found.")
                                 else:
                                     if _typesystem is None:
-                                        _typesystem = cassis.load_typesystem(zip_file.open(typesystem_file))
+                                        _typesystem = cassis.load_typesystem(
+                                            zip_file.open(typesystem_file)
+                                        )
                                 cas = cassis.load_cas_from_xmi(cas_file, _typesystem)
                                 _to_json = True
                             elif cas_path.endswith(".zip"):
                                 with zipfile.ZipFile(cas_file, "r") as inner_zip:
-                                    inner_file = pathlib.Path(cas_path).with_suffix(".xmi").name
-                                    inner_ts = cassis.load_typesystem(inner_zip.open("TypeSystem.xml"))
-                                    cas = cassis.load_cas_from_xmi(inner_zip.open(inner_file), inner_ts)
+                                    inner_file = (
+                                        pathlib.Path(cas_path).with_suffix(".xmi").name
+                                    )
+                                    inner_ts = cassis.load_typesystem(
+                                        inner_zip.open("TypeSystem.xml")
+                                    )
+                                    cas = cassis.load_cas_from_xmi(
+                                        inner_zip.open(inner_file), inner_ts
+                                    )
                                 _to_json = True
                             else:
                                 raise ValueError(

@@ -59,13 +59,14 @@ def surrogate_identifiers(identifier_strings):
 
     id_strs = {}
     for id_str in identifier_strings:
-
         if check_iban(id_str) != 0 and check_iban(id_str) is not None:
             id_strs[id_str] = schwifty.IBAN.random(country_code="DE")
         if check_bic(id_str) != 0 and check_bic(id_str) is not None:
-            id_strs[id_str] = schwifty.BIC.from_bank_code('DE', schwifty.IBAN.random(country_code="DE").bank_code)
+            id_strs[id_str] = schwifty.BIC.from_bank_code(
+                "DE", schwifty.IBAN.random(country_code="DE").bank_code
+            )
         else:
-            random_id = ''
+            random_id = ""
             for c in id_str:
                 if c.isupper():
                     random_id = random_id + random.choice(string.ascii_uppercase)
@@ -109,7 +110,9 @@ def surrogate_email(mail_strings, names, locations, location_organizations):
         l_cities[city_string.lower()] = (locations[city_string]).lower()
 
     for loc_str in location_organizations:
-        l_location_organizations[loc_str.lower()] = (location_organizations[loc_str]).lower()
+        l_location_organizations[loc_str.lower()] = (
+            location_organizations[loc_str]
+        ).lower()
 
     names.update(l_names)
     locations.update(l_cities)
@@ -117,7 +120,7 @@ def surrogate_email(mail_strings, names, locations, location_organizations):
 
     spl_dict = {}
     for mail_string in mail_strings:
-        spl = re.split(r'\W', mail_string)
+        spl = re.split(r"\W", mail_string)
 
         for i, s in enumerate(spl):
             if i != len(spl) - 1:
@@ -127,18 +130,18 @@ def surrogate_email(mail_strings, names, locations, location_organizations):
                     spl_dict[s] = locations[s]
                 elif s in location_organizations.keys():
                     spl_dict[s] = location_organizations[s]
-                elif s in ['klinik', 'klinikum', 'krankenhaus']:
+                elif s in ["klinik", "klinikum", "krankenhaus"]:
                     spl_dict[s] = s
                 else:
                     if s is not spl_dict.keys():
-                        spl_dict[s] = ''.join(list(surrogate_identifiers([s]).values()))
+                        spl_dict[s] = "".join(list(surrogate_identifiers([s]).values()))
 
     for mail_string in mail_strings:
         mail_string_old = mail_string
         for entry in spl_dict:
             mail_string = mail_string.replace(entry, spl_dict[entry])
 
-        replaced_strings[mail_string_old] = mail_string.replace(' ', '')
+        replaced_strings[mail_string_old] = mail_string.replace(" ", "")
 
     return replaced_strings
 
@@ -172,7 +175,9 @@ def surrogate_url(url_strings, names, locations, location_organizations):
         l_cities[city_string.lower()] = (locations[city_string]).lower()
 
     for loc_str in location_organizations:
-        l_location_organizations[loc_str.lower()] = (location_organizations[loc_str]).lower()
+        l_location_organizations[loc_str.lower()] = (
+            location_organizations[loc_str]
+        ).lower()
 
     names.update(l_names)
     locations.update(l_cities)
@@ -180,28 +185,30 @@ def surrogate_url(url_strings, names, locations, location_organizations):
 
     spl_dict = {}
     for url_string in url_strings:
-        spl = re.split(r'\W', url_string)
+        spl = re.split(r"\W", url_string)
 
         for i, s in enumerate(spl):
-            if (i != len(spl) - 1):
-                if (s != 'www') and (s != 'http') and (s != 'https'):
+            if i != len(spl) - 1:
+                if (s != "www") and (s != "http") and (s != "https"):
                     if s in names.keys():
                         spl_dict[s] = names[s]
                     elif s in locations.keys():
                         spl_dict[s] = locations[s]
                     elif s in location_organizations.keys():
                         spl_dict[s] = location_organizations[s]
-                    elif s in ['klinik', 'klinikum', 'krankenhaus']:
+                    elif s in ["klinik", "klinikum", "krankenhaus"]:
                         spl_dict[s] = s
                     else:
                         if s is not spl_dict.keys():
-                            spl_dict[s] = ''.join(list(surrogate_identifiers([s]).values()))
+                            spl_dict[s] = "".join(
+                                list(surrogate_identifiers([s]).values())
+                            )
 
     for url_string in url_strings:
         url_string_old = url_string
         for entry in spl_dict:
             url_string = url_string.replace(entry, spl_dict[entry])
 
-        replaced_strings[url_string_old] = url_string.replace(' ', '')
+        replaced_strings[url_string_old] = url_string.replace(" ", "")
 
     return replaced_strings

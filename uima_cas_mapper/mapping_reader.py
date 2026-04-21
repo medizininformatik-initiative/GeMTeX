@@ -6,6 +6,7 @@ Date: February 27, 2024
 
 Description: Contains a class that interprets a mapping file and provides the mapping methods.
 """
+
 __version__ = "1.3.0"
 
 import enum
@@ -123,7 +124,12 @@ class MappingConfig:
 
     def _build_annotation_mapping(self):
         self.annotation_mapping = {}
-        for source_layer, target_layer, layer_dict, entry_name in self._layer_iterator():
+        for (
+            source_layer,
+            target_layer,
+            layer_dict,
+            entry_name,
+        ) in self._layer_iterator():
             if source_layer is not None:
                 self.annotation_mapping[source_layer] = AnnotationMapping(
                     target_layer,
@@ -142,9 +148,15 @@ class MappingConfig:
                                     val.get("feature", lambda x: True)
                                 )
                                 source_layer = val.get("layer", f".{key}")
-                                source_layer = source_layer if isinstance(source_layer, list) else [source_layer]
+                                source_layer = (
+                                    source_layer
+                                    if isinstance(source_layer, list)
+                                    else [source_layer]
+                                )
                                 for _source_layer in source_layer:
-                                    _source_layer = self.get_expression_value(_source_layer, ArchitectureEnum.SOURCE)
+                                    _source_layer = self.get_expression_value(
+                                        _source_layer, ArchitectureEnum.SOURCE
+                                    )
                                     if _source_layer not in self.annotation_mapping:
                                         self.annotation_mapping[_source_layer] = (
                                             AnnotationMapping(
@@ -152,16 +164,23 @@ class MappingConfig:
                                                 target_feature=feat,
                                                 entry_name=entry_name,
                                                 mapping_type=MappingTypeEnum.SINGLELAYER,
-                                                add_feat=self._resolve_feature_dict(val.get("add_feature", {})),
-                                                priority=val.get("prio", 0)
+                                                add_feat=self._resolve_feature_dict(
+                                                    val.get("add_feature", {})
+                                                ),
+                                                priority=val.get("prio", 0),
                                             )
                                         )
-                                    self.annotation_mapping[_source_layer][key] = check_fs
+                                    self.annotation_mapping[_source_layer][key] = (
+                                        check_fs
+                                    )
                             else:
                                 logging.warning(
-                                    f"No proper description for entry '{entry_name}_features_{feat}_{key}' (needs to be object/dict).")
+                                    f"No proper description for entry '{entry_name}_features_{feat}_{key}' (needs to be object/dict)."
+                                )
                     else:
-                        logging.warning(f"No proper description for entries feature '{entry_name}_features_{feat}' (needs to be object/dict).")
+                        logging.warning(
+                            f"No proper description for entries feature '{entry_name}_features_{feat}' (needs to be object/dict)."
+                        )
 
     def get_expression_value(
         self,
@@ -191,10 +210,13 @@ class MappingConfig:
             else:
                 return lambda x: x.get(_expr[0]) is not None
             return lambda x: (
-                x.get(_target)
-                if (x.get(_target) is not None and len(x.get(_target)) > 0)
-                else "none"
-            ).lower() in [c.lower() for c in _check.split("|")]
+                (
+                    x.get(_target)
+                    if (x.get(_target) is not None and len(x.get(_target)) > 0)
+                    else "none"
+                ).lower()
+                in [c.lower() for c in _check.split("|")]
+            )
         else:
             return check
 

@@ -301,8 +301,45 @@ def create_concept_id_dump(
     force_overwrite: bool,
     log_level: str,
 ):
-    """Creates a dump of all concept IDs (if filter-mode == 'version') or only for the ones that match the given filter criteria
-    (if a filter-list is given and filter-mode == 'semantic') for a SNOMED CT release version (--branch)."""
+    """
+    Creates a SNOMED CT concept ID dump based on specified filtering criteria and stores
+    the results in an HDF5 file. If an error occurs during HDF5 file creation, the dump will be stored as a pickle file
+    to prevent data loss after the potentially long-running process.
+
+    Parameters:
+        root_code (str): The root SNOMED CT concept ID to start the dump from.
+        ip (str): The IP address of the SNOMED CT server.
+        port (Union[int, str]): The port of the SNOMED CT server.
+        use_secure_protocol (bool): Indicates whether to use HTTPS for communicating
+            with the SNOMED CT server.
+        branch (Union[int, str]): The branch or release version of SNOMED CT to use.
+            Integer values refer to branch indices, and string values refer to branch names (use 'list_branches' to view all options).
+        dump_mode (DumpMode): Determines how the code dump is created. Options are
+            versions for whitelisting or semantic for blacklisting specific codes.
+        filter_list (Union[str, click.File]): A list of filter values or a file containing
+            one filter value per line. Used when dump_mode is semantic.
+        filter_mode (FilterMode): Specifies how the filtering is applied. 'positive'
+            includes only concepts with specified codes or tags, while 'negative' excludes
+            them.
+        not_recursive (bool): If True, only the first-level children of the root concept
+            are included in the dump without resolving them recursively.
+        force_overwrite (bool): If True, overwrites existing files when creating the dump.
+        log_level (str): The level of logging to use during the operation.
+
+    Raises:
+        SystemExit: If the specified branch or root code cannot be found on the SNOMED CT
+            server, the operation terminates.
+
+    Notes:
+        - The function dynamically determines the SNOMED branch if not specified or uses
+          the first available branch by default.
+        - Filters are applied when `dump_mode` is semantic, and the corresponding filter
+          values are validated for existence in a file or as direct inputs.
+        - String filters refer to SNOMED CT semantic tags and will be evaluated for each concept,
+          while integer filters refer to SNOMED CT codes and all their subsequent child concepts.
+        - If an error occurs during HDF5 file creation, the dump is saved in a pickle file
+          and logs the error details.
+    """
     set_log_level(log_level)
     endpoint_builder, host = build_endpoint(ip, port, use_secure_protocol)
     path_ids, path_names = get_branches(endpoint_builder, host)

@@ -1,5 +1,4 @@
 class CasManagement:
-
     def __init__(self):
         """
         Examine a given cas from a document, compute statistics and decide if document is part of the corpus.
@@ -9,7 +8,9 @@ class CasManagement:
         cas : cas object
         """
 
-    def set_shift_and_new_text(self, token, replace_element, last_token_end, shift, new_text, sofa):
+    def set_shift_and_new_text(
+        self, token, replace_element, last_token_end, shift, new_text, sofa
+    ):
         """
         Set new shift and new text from new text with replacements.
 
@@ -32,10 +33,14 @@ class CasManagement:
         token.end : string
         """
 
-        new_text = new_text + sofa.sofaString[last_token_end:token.begin] + replace_element
+        new_text = (
+            new_text + sofa.sofaString[last_token_end : token.begin] + replace_element
+        )
         new_end = len(new_text)
 
-        shift.append((token.end, len(replace_element) - len( str(token.get_covered_text()))) )
+        shift.append(
+            (token.end, len(replace_element) - len(str(token.get_covered_text())))
+        )
         last_token_end = token.end
 
         token.begin = new_end - len(replace_element)
@@ -60,8 +65,12 @@ class CasManagement:
 
         shift_add = 0
 
-        for sentence in cas.select('de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Sentence'):
-            for sen in cas.select_covered('de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Sentence', sentence):
+        for sentence in cas.select(
+            "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Sentence"
+        ):
+            for sen in cas.select_covered(
+                "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Sentence", sentence
+            ):
                 if shift:
                     new_begin = sen.begin + shift_add
                     new_end = sen.end + shift_add
@@ -77,7 +86,6 @@ class CasManagement:
         return cas
 
     def get_pattern(self, name_string):
-
         """
         get pattern from name_string
 
@@ -90,10 +98,9 @@ class CasManagement:
         string
         """
 
-        pattern_chars = ['L', 'U', 'D']
+        pattern_chars = ["L", "U", "D"]
 
         def handle_last_pattern(_c, _last_pattern, _cnt_last_pattern, _pattern):
-
             """
             handle last pattern as part of handle pattern
 
@@ -130,34 +137,32 @@ class CasManagement:
 
         last_pattern = None
         cnt_last_pattern = 0
-        pattern = ''
+        pattern = ""
 
         for c in p:
-
             if c.isupper():
                 pattern, cnt_last_pattern, last_pattern = handle_last_pattern(
-                    _c='U',
+                    _c="U",
                     _last_pattern=last_pattern,
                     _cnt_last_pattern=cnt_last_pattern,
-                    _pattern=pattern
+                    _pattern=pattern,
                 )
 
             elif c.islower():
                 pattern, cnt_last_pattern, last_pattern = handle_last_pattern(
-                    _c='L',
+                    _c="L",
                     _last_pattern=last_pattern,
                     _cnt_last_pattern=cnt_last_pattern,
-                    _pattern=pattern
+                    _pattern=pattern,
                 )
             elif c.isnumeric():
                 pattern, cnt_last_pattern, last_pattern = handle_last_pattern(
-                    _c='D',
+                    _c="D",
                     _last_pattern=last_pattern,
                     _cnt_last_pattern=cnt_last_pattern,
-                    _pattern=pattern
+                    _pattern=pattern,
                 )
             else:
-
                 if last_pattern is None:  # Configuration
                     cnt_last_pattern = 1
 
@@ -173,4 +178,4 @@ class CasManagement:
         if last_pattern in pattern_chars:
             pattern = pattern + last_pattern + str(cnt_last_pattern)
 
-        return pattern.replace(' ', '-')
+        return pattern.replace(" ", "-")

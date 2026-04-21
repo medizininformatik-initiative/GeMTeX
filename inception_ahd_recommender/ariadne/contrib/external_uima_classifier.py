@@ -35,7 +35,7 @@ config_object = namedtuple(
         "response_consumer",
         "classifier",
         "processor",
-        "docker_mode"
+        "docker_mode",
     ],
 )
 
@@ -74,7 +74,7 @@ def _as_named_tuple(dct: dict):
         )
         logging.info(
             f"Authentication with Username '{_security[0]}' &"
-            f" Password: '{_security[1][:2]}{'*'*(len(_security[1])-2)}'"
+            f" Password: '{_security[1][:2]}{'*' * (len(_security[1]) - 2)}'"
         )
 
     return config_object(
@@ -112,7 +112,7 @@ class ExternalClassifier(ABC):
             response_consumer=None,
             classifier=None,
             processor=None,
-            docker_mode=None
+            docker_mode=None,
         )
         if isinstance(config, Path):
             try:
@@ -267,7 +267,6 @@ class ExternalUIMAClassifier(AriadneClassifier, ExternalClassifier):
 
 
 class AHDClassifier(AriadneClassifier, ExternalClassifier):
-
     def __init__(self, config: Union[Path, dict], model_directory: Path = None):
         self._pipeline = None
         super().__init__(model_directory)
@@ -333,7 +332,7 @@ class AHDClassifier(AriadneClassifier, ExternalClassifier):
         try:
             return self.get_response_consumer().process(
                 self.get_pipeline().analyse_text_to_cas(source=text, language=language),
-                layer
+                layer,
             )
         except RequestException as e:
             log_str = f"AHD not accessible: '{e}'"
@@ -361,7 +360,9 @@ class AHDClassifier(AriadneClassifier, ExternalClassifier):
         document_id: str,
         user_id: str,
     ):
-        _server_response = self.process_text(cas.sofa_string, layer, cas.document_language)
+        _server_response = self.process_text(
+            cas.sofa_string, layer, cas.document_language
+        )
         add_prediction_to_cas(
             cas,
             layer,
@@ -395,7 +396,9 @@ def add_prediction_to_cas(
                 feature,
                 _begin,
                 _end,
-                response.labels[i] if feature not in response.features[i] else response.features[i][feature],
+                response.labels[i]
+                if feature not in response.features[i]
+                else response.features[i][feature],
                 response.score[i],
             )
             cas.add(prediction)

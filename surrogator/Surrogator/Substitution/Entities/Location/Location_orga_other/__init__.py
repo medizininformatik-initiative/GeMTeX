@@ -11,7 +11,9 @@ from Levenshtein import distance as levenshtein_distance
 # The core logic and structure of the original script have been preserved.
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 
 # Load location Names from a Text File
@@ -32,7 +34,7 @@ def load_location_names(text_file):
     list of str
         A list of names extracted from the file.
     """
-    with open(text_file, 'r', encoding='utf-8') as f:
+    with open(text_file, "r", encoding="utf-8") as f:
         names = [line.strip() for line in f if line.strip()]
     return names
 
@@ -55,7 +57,7 @@ def get_main_name(location_string):
     str
         The main location name.
     """
-    return location_string.split('/')[0].strip()
+    return location_string.split("/")[0].strip()
 
 
 def remove_non_alphanumeric(input_string):
@@ -81,16 +83,16 @@ def remove_non_alphanumeric(input_string):
         The cleaned and normalized location name string.
     """
     # 1. Normalize Unicode to NFC form to ensure consistency
-    cleaned = unicodedata.normalize('NFC', input_string)
+    cleaned = unicodedata.normalize("NFC", input_string)
 
     # 2. Remove BOM characters
-    cleaned = cleaned.replace('\ufeff', '').replace('\uFEFF', '').replace('\uFFFE', '')
+    cleaned = cleaned.replace("\ufeff", "").replace("\ufeff", "").replace("\ufffe", "")
 
     # 3. Replace newlines and carriage returns with a space
-    cleaned = cleaned.replace('\n', ' ').replace('\r', ' ')
+    cleaned = cleaned.replace("\n", " ").replace("\r", " ")
 
     # 4. Remove other control characters (non-printable characters)
-    cleaned = re.sub(r'[\x00-\x1F\x7F]', '', cleaned)
+    cleaned = re.sub(r"[\x00-\x1F\x7F]", "", cleaned)
 
     # 5. Define allowed characters:
     #    - Letters (A-Z, a-z) including German umlauts and sharp S (ß)
@@ -101,16 +103,16 @@ def remove_non_alphanumeric(input_string):
     #    - Slashes (/)
     #    - Hyphens (-)
     #    Adjust this regex if a different set of characters is expected for general locations.
-    allowed_chars_pattern = re.compile(r'[A-Za-zäöüßÄÖÜẞ0-9\s.,/\-]')
+    allowed_chars_pattern = re.compile(r"[A-Za-zäöüßÄÖÜẞ0-9\s.,/\-]")
 
     # 6. Keep only allowed characters
-    cleaned = ''.join(allowed_chars_pattern.findall(cleaned))
+    cleaned = "".join(allowed_chars_pattern.findall(cleaned))
 
     # 7. Convert to lowercase
     cleaned = cleaned.lower()
 
     # 8. Normalize multiple spaces to a single space and strip leading/trailing spaces
-    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
 
     return cleaned
 
@@ -240,7 +242,9 @@ def calculate_average_similarity_score(target_terms, candidate_terms):
         The average similarity score, where 1 indicates perfect similarity
         and values closer to 0 indicate dissimilarity.
     """
-    if not target_terms:  # If target has no terms to compare, similarity is undefined or 0
+    if (
+        not target_terms
+    ):  # If target has no terms to compare, similarity is undefined or 0
         return 0.0
     if not candidate_terms:  # If candidate has no terms, similarity is 0
         return 0.0
@@ -249,10 +253,12 @@ def calculate_average_similarity_score(target_terms, candidate_terms):
 
     # For each target term, find the closest match in the candidate terms
     for target_term in target_terms:
-        min_distance_for_current_target_term = float('inf')
+        min_distance_for_current_target_term = float("inf")
 
         for candidate_term in candidate_terms:
-            normalized_dist = normalize_levenshtein_distance(target_term.lower(), candidate_term.lower())
+            normalized_dist = normalize_levenshtein_distance(
+                target_term.lower(), candidate_term.lower()
+            )
             if normalized_dist < min_distance_for_current_target_term:
                 min_distance_for_current_target_term = normalized_dist
 
@@ -313,7 +319,11 @@ def calculate_location_probabilities(ranked_locations_with_scores, temperature=0
     if sum_scaled_scores == 0:  # Avoid division by zero if all scaled_scores are 0
         # Assign uniform probability if sum is zero (e.g., all scores were initially very low or zero)
         num_locations = len(locations)
-        probabilities = np.full(num_locations, 1 / num_locations) if num_locations > 0 else np.array([])
+        probabilities = (
+            np.full(num_locations, 1 / num_locations)
+            if num_locations > 0
+            else np.array([])
+        )
     else:
         probabilities = scaled_scores / sum_scaled_scores
 
@@ -342,15 +352,23 @@ def rank_locations_by_keyword_similarity(target_location_name, filtered_location
     """
     # Extract terms from the target location name (e.g., by splitting by space or hyphen)
     # Using lower() for consistency in comparison
-    target_location_terms = [word for word in re.split(r'[ \-]+', target_location_name.lower()) if word]
+    target_location_terms = [
+        word for word in re.split(r"[ \-]+", target_location_name.lower()) if word
+    ]
     logging.debug(f"Target location terms for ranking: {target_location_terms}")
 
     ranked_locations = []
     # Calculate average similarity score for each filtered location
     for loc_name in filtered_location_names:
-        candidate_terms = [word for word in re.split(r'[ \-]+', loc_name.lower()) if word]
-        avg_sim_score = calculate_average_similarity_score(target_location_terms, candidate_terms)
-        logging.debug(f"Location: {loc_name}, Terms: {candidate_terms}, Avg. Similarity Score: {avg_sim_score:.4f}")
+        candidate_terms = [
+            word for word in re.split(r"[ \-]+", loc_name.lower()) if word
+        ]
+        avg_sim_score = calculate_average_similarity_score(
+            target_location_terms, candidate_terms
+        )
+        logging.debug(
+            f"Location: {loc_name}, Terms: {candidate_terms}, Avg. Similarity Score: {avg_sim_score:.4f}"
+        )
         ranked_locations.append((loc_name, avg_sim_score))
 
     # Filter to keep only those locations whose scores are significant
@@ -382,8 +400,12 @@ def get_top_50_percent_by_score(location_score_list):
     location_score_list.sort(key=lambda x: x[1], reverse=True)
 
     # Sum all scores
-    total_score = sum(score for _, score in location_score_list if score > 0)  # Consider only positive scores
-    if total_score == 0:  # If all scores are zero or negative, return empty or handle as needed
+    total_score = sum(
+        score for _, score in location_score_list if score > 0
+    )  # Consider only positive scores
+    if (
+        total_score == 0
+    ):  # If all scores are zero or negative, return empty or handle as needed
         return []
 
     cutoff_score = total_score * 0.5
@@ -401,7 +423,9 @@ def get_top_50_percent_by_score(location_score_list):
     return top_contributors
 
 
-def query_similar_locations(target_sentence, embedding_model, nn_search_model, all_location_names, top_k=5):
+def query_similar_locations(
+    target_sentence, embedding_model, nn_search_model, all_location_names, top_k=5
+):
     """
     Query the most similar locations based on a target sentence using a pre-trained embedding model
     and a nearest-neighbor model for similarity search.
@@ -436,7 +460,9 @@ def query_similar_locations(target_sentence, embedding_model, nn_search_model, a
 
     # Perform similarity search with the specified top_k
     # nn_search_model.kneighbors returns (distances, indices)
-    distances, indices = nn_search_model.kneighbors(target_embedding, n_neighbors=min(top_k, len(all_location_names)))
+    distances, indices = nn_search_model.kneighbors(
+        target_embedding, n_neighbors=min(top_k, len(all_location_names))
+    )
 
     results = []
     similarity_scores = []
@@ -460,8 +486,17 @@ def query_similar_locations(target_sentence, embedding_model, nn_search_model, a
     return results, similarity_scores
 
 
-def query_similar_locations_adaptive(target_location_name, embedding_model, nn_search_model, nlp_processor,
-                                     all_location_names, initial_k=10, max_k=100, step_size=10, min_matches=10):
+def query_similar_locations_adaptive(
+    target_location_name,
+    embedding_model,
+    nn_search_model,
+    nlp_processor,
+    all_location_names,
+    initial_k=10,
+    max_k=100,
+    step_size=10,
+    min_matches=10,
+):
     """
     Adaptively query for similar locations, expanding the search until enough suitable matches are found.
 
@@ -500,28 +535,44 @@ def query_similar_locations_adaptive(target_location_name, embedding_model, nn_s
 
     # Extract specific terms (e.g., proper nouns) from the target location name once.
     # These terms will be used to filter out overly similar candidates.
-    extracted_terms_from_target = extract_named_entities_and_proper_nouns(target_location_name, nlp_processor)
-    logging.debug(f"Extracted terms from target '{target_location_name}' for filtering: {extracted_terms_from_target}")
+    extracted_terms_from_target = extract_named_entities_and_proper_nouns(
+        target_location_name, nlp_processor
+    )
+    logging.debug(
+        f"Extracted terms from target '{target_location_name}' for filtering: {extracted_terms_from_target}"
+    )
 
     while current_k <= max_k:
         # Get K semantically similar locations
         # The `target_location_name` itself is used for semantic query.
-        semantically_similar_locations, semantic_similarity_scores = query_similar_locations(
-            target_location_name, embedding_model, nn_search_model, all_location_names, top_k=current_k
+        semantically_similar_locations, semantic_similarity_scores = (
+            query_similar_locations(
+                target_location_name,
+                embedding_model,
+                nn_search_model,
+                all_location_names,
+                top_k=current_k,
+            )
         )
 
         # Apply get_main_name to each similar location if names have "Name / Details" format
-        processed_similar_locations = [get_main_name(loc) for loc in semantically_similar_locations]
-        logging.debug(f"Retrieved top {current_k} semantic locations (processed): {processed_similar_locations}")
+        processed_similar_locations = [
+            get_main_name(loc) for loc in semantically_similar_locations
+        ]
+        logging.debug(
+            f"Retrieved top {current_k} semantic locations (processed): {processed_similar_locations}"
+        )
 
         # Filter these locations
         # `filter_locations` removes exact semantic matches (score=1) and those containing target's specific terms
         current_filtered_locations = filter_locations(
             processed_similar_locations,
             semantic_similarity_scores,
-            extracted_terms_from_target
+            extracted_terms_from_target,
         )
-        logging.debug(f"Filtered locations at k={current_k}: {current_filtered_locations}")
+        logging.debug(
+            f"Filtered locations at k={current_k}: {current_filtered_locations}"
+        )
 
         # If we have enough matches, store them and break
         if len(current_filtered_locations) >= min_matches:
@@ -532,7 +583,9 @@ def query_similar_locations_adaptive(target_location_name, embedding_model, nn_s
         # and we still have *some* results, use them.
         if current_k + step_size > max_k and current_filtered_locations:
             final_filtered_locations = current_filtered_locations
-            logging.info(f"Max k reached. Using {len(final_filtered_locations)} found matches with k={current_k}.")
+            logging.info(
+                f"Max k reached. Using {len(final_filtered_locations)} found matches with k={current_k}."
+            )
             break
 
         # Increase k for the next iteration
@@ -541,32 +594,43 @@ def query_similar_locations_adaptive(target_location_name, embedding_model, nn_s
         if current_k <= max_k:
             logging.info(
                 f"Insufficient matches ({len(current_filtered_locations)} < {min_matches}) found with k={current_k - step_size}. "
-                f"Expanding search to k={current_k}")
+                f"Expanding search to k={current_k}"
+            )
         else:  # current_k has now exceeded max_k
             # If loop finishes, it means not enough matches were found even with max_k
             # If current_filtered_locations is not empty, it means we stored them above.
             # If it IS empty, then final_filtered_locations is also empty.
             if not final_filtered_locations:  # only log warning if truly no results
-                final_filtered_locations = current_filtered_locations  # Save what we have from last attempt
-                logging.warning(f"Could not find {min_matches} matches even with k={max_k}. "
-                                f"Proceeding with {len(final_filtered_locations)} matches.")
+                final_filtered_locations = (
+                    current_filtered_locations  # Save what we have from last attempt
+                )
+                logging.warning(
+                    f"Could not find {min_matches} matches even with k={max_k}. "
+                    f"Proceeding with {len(final_filtered_locations)} matches."
+                )
 
-    if not final_filtered_locations and current_k > max_k:  # If loop ended because max_k was passed and no matches were found
-        logging.warning(f"Could not find {min_matches} matches. Max k ({max_k}) reached. No suitable locations found.")
+    if (
+        not final_filtered_locations and current_k > max_k
+    ):  # If loop ended because max_k was passed and no matches were found
+        logging.warning(
+            f"Could not find {min_matches} matches. Max k ({max_k}) reached. No suitable locations found."
+        )
 
-    return final_filtered_locations, min(current_k, max_k)  # Return the k value that was actually used or max_k
+    return final_filtered_locations, min(
+        current_k, max_k
+    )  # Return the k value that was actually used or max_k
 
 
 def get_location_surrogate(
-        target_location_query,
-        embedding_model,
-        nn_search_model,
-        nlp_processor,
-        all_location_names,
-        initial_k=20,
-        max_k=100,
-        min_matches=20,
-        temperature_for_sampling=0.1
+    target_location_query,
+    embedding_model,
+    nn_search_model,
+    nlp_processor,
+    all_location_names,
+    initial_k=20,
+    max_k=100,
+    min_matches=20,
+    temperature_for_sampling=0.1,
 ):
     """
     Main function to find and sample a surrogate location using an adaptive search strategy.
@@ -614,22 +678,31 @@ def get_location_surrogate(
     # 2. Adaptively query for similar locations
     #    - `query_similar_locations_adaptive` handles semantic search, main name extraction, and filtering.
     filtered_similar_locations, k_used = query_similar_locations_adaptive(
-        cleaned_target_location, embedding_model, nn_search_model, nlp_processor,
-        all_location_names, initial_k=initial_k, max_k=max_k, min_matches=min_matches
+        cleaned_target_location,
+        embedding_model,
+        nn_search_model,
+        nlp_processor,
+        all_location_names,
+        initial_k=initial_k,
+        max_k=max_k,
+        min_matches=min_matches,
     )
 
-    logging.debug(f"Filtered similar locations for ranking: {filtered_similar_locations}")
+    logging.debug(
+        f"Filtered similar locations for ranking: {filtered_similar_locations}"
+    )
 
     if not filtered_similar_locations:
-        logging.warning("No suitable similar locations found after adaptive querying and filtering.")
+        logging.warning(
+            "No suitable similar locations found after adaptive querying and filtering."
+        )
         return None, np.array([]), (), k_used
 
     # 3. Rank these filtered locations by keyword similarity to the original cleaned target
     #    - `rank_locations_by_keyword_similarity` uses Levenshtein-based term similarity
     #      and then takes the top 50% contributors by score.
     ranked_locations_with_scores = rank_locations_by_keyword_similarity(
-        cleaned_target_location,
-        filtered_similar_locations
+        cleaned_target_location, filtered_similar_locations
     )
     logging.debug(f"Ranked locations with scores: {ranked_locations_with_scores}")
 
@@ -639,8 +712,7 @@ def get_location_surrogate(
 
     # 4. Calculate sampling probabilities for the ranked locations
     candidate_locations, probabilities = calculate_location_probabilities(
-        ranked_locations_with_scores,
-        temperature=temperature_for_sampling
+        ranked_locations_with_scores, temperature=temperature_for_sampling
     )
     logging.debug(f"Candidate locations for sampling: {candidate_locations}")
     logging.debug(f"Probabilities for sampling: {probabilities}")
@@ -649,22 +721,32 @@ def get_location_surrogate(
         logging.warning("No valid candidates or probabilities for sampling.")
         # Fallback: if probabilities are all zero, try uniform choice from candidates if any
         if candidate_locations:
-            logging.info("Probabilities were zero, attempting uniform choice from candidates.")
+            logging.info(
+                "Probabilities were zero, attempting uniform choice from candidates."
+            )
             sampled_location = np.random.choice(candidate_locations)
-            return sampled_location, np.full(len(candidate_locations),
-                                             1 / len(candidate_locations)), candidate_locations, k_used
+            return (
+                sampled_location,
+                np.full(len(candidate_locations), 1 / len(candidate_locations)),
+                candidate_locations,
+                k_used,
+            )
         return None, np.array([]), (), k_used
 
     # 5. Sample a surrogate location based on these probabilities
     try:
         sampled_location = np.random.choice(candidate_locations, p=probabilities)
     except ValueError as e:
-        logging.error(f"Error during sampling: {e}. Probabilities sum: {np.sum(probabilities)}")
+        logging.error(
+            f"Error during sampling: {e}. Probabilities sum: {np.sum(probabilities)}"
+        )
         # Fallback if np.random.choice fails (e.g. probabilities don't sum to 1 due to float precision)
         # Pick the one with the highest score from ranked_locations_with_scores
         if ranked_locations_with_scores:
             sampled_location = ranked_locations_with_scores[0][0]  # Top ranked
-            logging.info(f"Sampling failed, falling back to highest ranked: {sampled_location}")
+            logging.info(
+                f"Sampling failed, falling back to highest ranked: {sampled_location}"
+            )
         else:
             sampled_location = None
 

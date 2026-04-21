@@ -42,10 +42,11 @@ def safe_query(api: Overpass, query: str, *, max_retries=5, base_delay=2, verbos
         except Exception as e:  # catch *everything*
             if attempt == max_retries:  # last attempt, give up
                 raise
-            delay = base_delay * (2 ** attempt)  # 2, 4, 8, ...
+            delay = base_delay * (2**attempt)  # 2, 4, 8, ...
             if verbose:
-                print(f"[Retry {attempt + 1}/{max_retries}] {e} – "
-                      f"retrying in {delay}s …")
+                print(
+                    f"[Retry {attempt + 1}/{max_retries}] {e} – retrying in {delay}s …"
+                )
             time.sleep(delay)
 
 
@@ -106,12 +107,14 @@ def find_closest_city_area_code(input_number, tel_dict):
                 # The input has no "next digit". In this case, we find the
                 # key that is numerically closest to the input itself.
                 input_as_int = int(input_number)
-                best_match_key = min(candidates, key=lambda k: abs(int(k) - input_as_int))
+                best_match_key = min(
+                    candidates, key=lambda k: abs(int(k) - input_as_int)
+                )
                 return normalized_dict[best_match_key], best_match_key
 
             # --- Apply the "closest next digit" rule ---
             best_match_key = None
-            min_difference = float('inf')
+            min_difference = float("inf")
 
             for key in candidates:
                 # Make sure the candidate key is long enough to have a "next digit".
@@ -153,8 +156,11 @@ def mark_phone_locations(roots, phone_locations):
     for root in roots:
         for node in PreOrderIter(root):
             if node.name in phone_locations:
-                node.has_phone = (phone_locations[node.name]
-                                  if isinstance(phone_locations, dict) else True)
+                node.has_phone = (
+                    phone_locations[node.name]
+                    if isinstance(phone_locations, dict)
+                    else True
+                )
 
 
 def fetch_location_info(location_list, admin_level, overpass_api):
@@ -174,7 +180,7 @@ def fetch_location_info(location_list, admin_level, overpass_api):
         {location_name: {'admin_level': int, 'id': str}}
     """
     escaped = [re.escape(loc) for loc in location_list]
-    pattern = '|'.join(escaped)
+    pattern = "|".join(escaped)
 
     query = f"""
     [out:json];
@@ -196,13 +202,13 @@ def fetch_location_info(location_list, admin_level, overpass_api):
         is_kreisfrei = r.tags.get("admin_title:de", "").strip() == "Kreisfreie Stadt"
         new_level = 8 if is_kreisfrei else level  # treat it like a city, not a district
         # If this location is not yet in the dictionary or we found a 'better' (lower) admin_level
-        if name not in info or level < info[name]['admin_level']:
-            info[name] = {'admin_level': new_level, 'id': str(r.id)}
+        if name not in info or level < info[name]["admin_level"]:
+            info[name] = {"admin_level": new_level, "id": str(r.id)}
 
     # Ensure that every location passed in is present, even if Overpass returned no matches
     for loc in location_list:
         if loc not in info:
-            info[loc] = {'admin_level': admin_level, 'id': "00000"}
+            info[loc] = {"admin_level": admin_level, "id": "00000"}
     return info
 
 
@@ -222,15 +228,15 @@ def group_locations_by_admin_level(locations_data):
     """
     grouped = {}
     for location_name, data in locations_data.items():
-        level = data['admin_level']
-        entry = {'name': location_name, 'id': data['id']}
+        level = data["admin_level"]
+        entry = {"name": location_name, "id": data["id"]}
         if level not in grouped:
             grouped[level] = []
         grouped[level].append(entry)
 
     # Sort locations within each admin level by name
     for level in grouped:
-        grouped[level].sort(key=lambda x: x['name'])
+        grouped[level].sort(key=lambda x: x["name"])
 
     return grouped
 
@@ -266,7 +272,9 @@ def get_state(osm_id, overpass_api):
     place_relation = result_place.relations[0]
 
     # Ensure that the relation has a center point
-    if not hasattr(place_relation, 'center_lat') or not hasattr(place_relation, 'center_lon'):
+    if not hasattr(place_relation, "center_lat") or not hasattr(
+        place_relation, "center_lon"
+    ):
         logging.warning(f"Relation {osm_id} does not have a center point.")
         return None, None
 
@@ -329,7 +337,9 @@ def get_random_osm_state(overpass_api: Overpass):
         result = safe_query(overpass_api, query)
         if result.relations:
             random_state = random.choice(result.relations)
-            state_name = random_state.tags.get("name:de") or random_state.tags.get("name")
+            state_name = random_state.tags.get("name:de") or random_state.tags.get(
+                "name"
+            )
             return state_name, str(random_state.id)
     except Exception:
         pass
@@ -398,14 +408,16 @@ def build_hierarchy(locations_by_level, street_locations, overpass_api):
         if level == 2:
             return node
 
-        higher_levels = sorted([x for x in locations_by_level if x < level], reverse=True)
+        higher_levels = sorted(
+            [x for x in locations_by_level if x < level], reverse=True
+        )
         parent_found = False
 
         for hl in higher_levels:
             for p_info in locations_by_level[hl]:
-                p_id = p_info['id']
+                p_id = p_info["id"]
                 if p_id and is_child(p_id, name, overpass_api):
-                    p_node = create_or_get_node(p_info['name'], p_id, hl)
+                    p_node = create_or_get_node(p_info["name"], p_id, hl)
                     node.parent = p_node
                     parent_found = True
                     break
@@ -457,7 +469,7 @@ def build_hierarchy(locations_by_level, street_locations, overpass_api):
         name = name.strip()
 
         # Pattern to separate street name from number/details
-        pattern = re.compile(r'(\D+)\s*(\d.*)?')
+        pattern = re.compile(r"(\D+)\s*(\d.*)?")
         match = pattern.match(name)
 
         if match:
@@ -466,15 +478,15 @@ def build_hierarchy(locations_by_level, street_locations, overpass_api):
             street_name = street_name.strip()
 
             # Pattern to find 'Str.' (case insensitive)
-            str_pattern = re.compile(r'Str\.', re.IGNORECASE)
+            str_pattern = re.compile(r"Str\.", re.IGNORECASE)
 
             # Check if street name contains 'Str.'
             if str_pattern.search(street_name):
                 # Determine case of replacement based on original
                 if street_name[-4].isupper():  # Check if 'S' in 'Str.' is uppercase
-                    street_name = str_pattern.sub('Straße', street_name)
+                    street_name = str_pattern.sub("Straße", street_name)
                 else:
-                    street_name = str_pattern.sub('straße', street_name)
+                    street_name = str_pattern.sub("straße", street_name)
 
             return name, street_name, number is not None
 
@@ -497,32 +509,38 @@ def build_hierarchy(locations_by_level, street_locations, overpass_api):
     # Create all nodes
     for level in sorted(locations_by_level.keys(), reverse=True):
         for entry in locations_by_level[level]:
-            if entry['id'] != "00000":
-                create_or_get_node(entry['name'], entry['id'], level)
+            if entry["id"] != "00000":
+                create_or_get_node(entry["name"], entry["id"], level)
             else:
-                node = Node(entry['name'], admin_level=level, id=entry['id'])
+                node = Node(entry["name"], admin_level=level, id=entry["id"])
                 missing_nodes.append(node)
 
     # Check if a state-level node (admin_level=4) exists in all_nodes.
     # If not, try to fetch a random state and add it.
     state_exists_in_tree = False
     for node_obj in all_nodes.values():  # Iterate through the Node objects directly
-        if hasattr(node_obj, 'admin_level') and node_obj.admin_level == 4:
+        if hasattr(node_obj, "admin_level") and node_obj.admin_level == 4:
             state_exists_in_tree = True
             break
 
     if not state_exists_in_tree:
-        state_name, state_id_str = get_random_osm_state(overpass_api)  # state_id_str is already a string
+        state_name, state_id_str = get_random_osm_state(
+            overpass_api
+        )  # state_id_str is already a string
         if state_name and state_id_str:
             if state_id_str not in all_nodes:  # Add only if not already present
                 # Create the state node. It will be a root by default as no parent is assigned here.
                 state_node = Node(state_name, id=state_id_str, admin_level=4)
-                all_nodes[state_id_str] = state_node  # Add to the main collection of nodes
+                all_nodes[state_id_str] = (
+                    state_node  # Add to the main collection of nodes
+                )
 
     # Clean street names and store originals with standardized versions
-    remaining_streets = [(original, standardized, has_number)
-                         for name in street_locations
-                         for original, standardized, has_number in [clean_street_name(name)]]
+    remaining_streets = [
+        (original, standardized, has_number)
+        for name in street_locations
+        for original, standardized, has_number in [clean_street_name(name)]
+    ]
 
     # For each street, find exactly one leaf that contains it (the first leaf that matches), and assign it there—no
     # other leaves should get this street.
@@ -539,7 +557,9 @@ def build_hierarchy(locations_by_level, street_locations, overpass_api):
             if street_info:
                 _, way_id = street_info
                 # Attach the street to this leaf
-                Node(name, id=way_id, admin_level=11, has_number=has_number, parent=leaf)
+                Node(
+                    name, id=way_id, admin_level=11, has_number=has_number, parent=leaf
+                )
                 # Remove from the pool so it won't be used again
                 remaining_streets.pop(i)
                 # Move on to the next leaf (stop checking more streets for *this* leaf)
@@ -547,7 +567,9 @@ def build_hierarchy(locations_by_level, street_locations, overpass_api):
 
     # Any streets left at this point weren't assigned to a leaf,
     missing_nodes.extend(
-        Node(name, id="00000", has_number=has_number, admin_level=11) for (name, _, has_number) in remaining_streets)
+        Node(name, id="00000", has_number=has_number, admin_level=11)
+        for (name, _, has_number) in remaining_streets
+    )
     # for node in missing_nodes:
     #     all_nodes[random.randint(00000, 99999)] = node
     return all_nodes, missing_nodes
@@ -561,7 +583,7 @@ def add_zip(node, postal_code):
        – string  → convert to list + append
        – list    → append (deduplicating)
     """
-    if not hasattr(node, 'zip'):
+    if not hasattr(node, "zip"):
         node.zip = postal_code
     else:
         if isinstance(node.zip, list):
@@ -590,7 +612,7 @@ def update_tree_with_zip_codes(postal_codes, roots, overpass_api):
         The function modifies the nodes in place.
     """
     # Create a regex pattern to match postal codes
-    postal_code_filter = '|'.join(map(str, postal_codes))
+    postal_code_filter = "|".join(map(str, postal_codes))
 
     # Build the Overpass QL query to fetch areas with specified postal codes
     query = f"""
@@ -608,12 +630,12 @@ def update_tree_with_zip_codes(postal_codes, roots, overpass_api):
     postal_code_names = {}
 
     # Use a regular expression to separate the numerical and textual parts
-    pattern = re.compile(r'(\d+)\s*(.*)')  # d=digit s=white space .=any character
+    pattern = re.compile(r"(\d+)\s*(.*)")  # d=digit s=white space .=any character
 
     # Process each area returned by the Overpass API
     for area in result.areas:
         # Extract the 'note' tag which contains postal code information
-        note = area.tags.get('note', '')
+        note = area.tags.get("note", "")
 
         # Use regex to separate the numerical and textual parts of the note
         match = pattern.match(note)
@@ -635,7 +657,7 @@ def update_tree_with_zip_codes(postal_codes, roots, overpass_api):
                 # collect every zip that actually ended up on a node
     attached = set()
     for node in all_nodes:
-        if hasattr(node, 'zip'):
+        if hasattr(node, "zip"):
             if isinstance(node.zip, list):
                 attached.update(str(z) for z in node.zip)
             else:
@@ -647,7 +669,15 @@ def update_tree_with_zip_codes(postal_codes, roots, overpass_api):
     missing_postal_codes = [pc for pc in postal_codes if str(pc) not in attached]
 
     # Iterate through all nodes to assign the remaining postal codes
-    preferred_levels = [8, 9, 10, 7, 6, 5, 4]  # 8 first (city-level nodes), then fall-back levels
+    preferred_levels = [
+        8,
+        9,
+        10,
+        7,
+        6,
+        5,
+        4,
+    ]  # 8 first (city-level nodes), then fall-back levels
 
     for level in preferred_levels:
         if not missing_postal_codes:  # we are done
@@ -810,13 +840,19 @@ def get_postal_code(relation_id, overpass_api):
         result = safe_query(overpass_api, query_addresses)
         # Collect all addr:postcode tags from nodes, ways and relations
         all_elems = result.nodes + result.ways + result.relations
-        postcodes = [el.tags.get("addr:postcode") for el in all_elems if el.tags.get("addr:postcode")]
+        postcodes = [
+            el.tags.get("addr:postcode")
+            for el in all_elems
+            if el.tags.get("addr:postcode")
+        ]
         if postcodes:
             # Return the most frequently occurring postcode
             most_common, _ = Counter(postcodes).most_common(1)[0]
             return most_common
     except Exception as e:
-        logging.error(f"Error (addresses) retrieving postal code for {relation_id}: {e}")
+        logging.error(
+            f"Error (addresses) retrieving postal code for {relation_id}: {e}"
+        )
 
     # ------------------------------------------------------------
     # Step 3 – fallback: centre point + is_in()
@@ -870,14 +906,14 @@ def sample_child_relation(parent_id, child_admin_level, overpass_api):
     """
     # Define query templates
     queries = {
-        'street': """
+        "street": """
             [out:json];
             relation({parent_id})->.parent;
             .parent map_to_area -> .parentArea;
             way["highway"]["name"](area.parentArea);
             out center;
         """,
-        'admin': """
+        "admin": """
             [out:json];
             relation({parent_id})->.parent;
             .parent map_to_area -> .parentArea;
@@ -885,16 +921,18 @@ def sample_child_relation(parent_id, child_admin_level, overpass_api):
                    ["admin_level"="{child_level}"]
                    (area.parentArea);
             out center;
-        """
+        """,
     }
 
     while True:
         # Select appropriate query based on admin_level
         is_street = child_admin_level == 99
-        query = queries['street'] if is_street else queries['admin']
+        query = queries["street"] if is_street else queries["admin"]
 
         # Format query with parameters
-        formatted_query = query.format(parent_id=parent_id, child_level=child_admin_level)
+        formatted_query = query.format(
+            parent_id=parent_id, child_level=child_admin_level
+        )
         try:
             # Execute query
             result = safe_query(overpass_api, formatted_query)
@@ -902,10 +940,10 @@ def sample_child_relation(parent_id, child_admin_level, overpass_api):
             # Process results based on type
             if is_street and result.ways:
                 sample = random.choice(result.ways)
-                return sample.tags.get('name'), sample.id
+                return sample.tags.get("name"), sample.id
             elif not is_street and result.relations:
                 sample = random.choice(result.relations)
-                return sample.tags.get('name'), sample.id
+                return sample.tags.get("name"), sample.id
 
             # If no results, increment admin level and try again
             child_admin_level += 1
@@ -935,7 +973,7 @@ def regex_phone_number(phone_number):
         return None
 
     # Pattern matches: + followed by digits, space, then captures digits until next space
-    pattern = r'^\+\d+\s+(\d+)\s'
+    pattern = r"^\+\d+\s+(\d+)\s"
     match = re.match(pattern, phone_number)
     return match.group(1) if match else None
 
@@ -978,7 +1016,9 @@ def get_area_code(relation_id, api):
 
         element = elements[0]
         # Return its phone number (try both phone tags)
-        return regex_phone_number(element.tags.get("phone") or element.tags.get("contact:phone"))
+        return regex_phone_number(
+            element.tags.get("phone") or element.tags.get("contact:phone")
+        )
 
     except Exception as e:
         logging.error(f"Error querying phone numbers: {e}")
@@ -1012,32 +1052,38 @@ def rebuild_tree(root_node, overpass_api):
                 original_node.name,
                 parent=new_parent,
                 admin_level=original_node.admin_level,
-                id=original_node.id
+                id=original_node.id,
             )
             # If the original node had a zip attribute, fetch a postal code for the new_node
-            if hasattr(original_node, 'zip'):
+            if hasattr(original_node, "zip"):
                 postal_code = get_postal_code(new_node.id, overpass_api)
                 if postal_code:
                     new_node.zip = postal_code
             # If the original node had a phone attribute, fetch a area code for the new_node
-            if hasattr(original_node, 'has_phone'):
+            if hasattr(original_node, "has_phone"):
                 area_code = get_area_code(new_node.id, overpass_api)
                 if area_code:
                     new_node.has_phone = area_code
             new_nodes.append(new_node)
         else:
             # For non-root nodes, sample new ones
-            sampled_name, sampled_id = sample_child_relation(new_parent.id, original_node.admin_level, overpass_api)
+            sampled_name, sampled_id = sample_child_relation(
+                new_parent.id, original_node.admin_level, overpass_api
+            )
             if sampled_name and sampled_id:
                 new_node = Node(
                     sampled_name,
                     parent=new_parent,
                     admin_level=original_node.admin_level,
-                    id=sampled_id
+                    id=sampled_id,
                 )
                 # If the original node had a zip attribute, fetch a postal code for the new_node
-                if hasattr(original_node, 'zip'):
-                    orig_zips = original_node.zip if isinstance(original_node.zip, list) else [original_node.zip]
+                if hasattr(original_node, "zip"):
+                    orig_zips = (
+                        original_node.zip
+                        if isinstance(original_node.zip, list)
+                        else [original_node.zip]
+                    )
                     for _ in orig_zips:  # one fresh sample per original ZIP
                         pc = get_postal_code(new_node.id, overpass_api)
                         if pc:
@@ -1045,12 +1091,12 @@ def rebuild_tree(root_node, overpass_api):
                         else:
                             print(f"No postal code found for {new_node.name}")
                 # If the original node had a house number, fetch a house number for the new_node
-                if hasattr(original_node, 'has_number'):
+                if hasattr(original_node, "has_number"):
                     if original_node.has_number is True:
                         house_number = random.randint(1, 99)
                         new_node.name = f"{new_node.name} {house_number}"
                 # If the original node had a phone attribute, fetch a area code for the new_node
-                if hasattr(original_node, 'has_phone'):
+                if hasattr(original_node, "has_phone"):
                     area_code = get_area_code(new_node.id, overpass_api)
                     if area_code:
                         new_node.has_phone = area_code
@@ -1092,7 +1138,7 @@ def map_trees(old_roots, new_roots):
         for node1, node2 in zip(iter1, iter2):
             mapping[node1.name] = node2.name
 
-            if hasattr(node1, 'zip') and hasattr(node2, 'zip'):
+            if hasattr(node1, "zip") and hasattr(node2, "zip"):
                 zips1 = node1.zip if isinstance(node1.zip, list) else [node1.zip]
                 zips2 = node2.zip if isinstance(node2.zip, list) else [node2.zip]
 
@@ -1103,35 +1149,49 @@ def map_trees(old_roots, new_roots):
                     mapping[z1] = z2
 
             # Map phone attributes
-            if hasattr(node1, 'has_phone') and hasattr(node2, 'has_phone'):
+            if hasattr(node1, "has_phone") and hasattr(node2, "has_phone"):
                 mapping[node1.has_phone] = node2.has_phone
 
     return mapping
 
 
-def get_address_location_surrogate(overpass_api, location_state, location_city, street_locations, postal_codes,
-                                   phone_area_code, tel_dict):
+def get_address_location_surrogate(
+    overpass_api,
+    location_state,
+    location_city,
+    street_locations,
+    postal_codes,
+    phone_area_code,
+    tel_dict,
+):
     # map the given phone area codes to a city name
-    phone_locations = {city: area_code
-                       for num in phone_area_code
-                       for city, area_code in [find_closest_city_area_code(num, tel_dict)]
-                       if city}
+    phone_locations = {
+        city: area_code
+        for num in phone_area_code
+        for city, area_code in [find_closest_city_area_code(num, tel_dict)]
+        if city
+    }
 
     # Define the location lists along with their corresponding default admin levels
     location_groups = [
         # (location_country, 2),
         (location_state, 6),
         (phone_locations, 8),
-        (location_city, 8), ]
+        (location_city, 8),
+    ]
 
     locations_data = {}
     # Process each group and merge the results
     for loc_list, admin_level in location_groups:
-        data = fetch_location_info(loc_list, admin_level=admin_level, overpass_api=overpass_api)
+        data = fetch_location_info(
+            loc_list, admin_level=admin_level, overpass_api=overpass_api
+        )
         locations_data.update(data)
 
     locations_by_level = group_locations_by_admin_level(locations_data)
-    all_nodes, loose_nodes = build_hierarchy(locations_by_level, street_locations, overpass_api)
+    all_nodes, loose_nodes = build_hierarchy(
+        locations_by_level, street_locations, overpass_api
+    )
     old_roots = [n for n in all_nodes.values() if n.is_root]
     # Insert loose nodes into the hierarchy
     found_by_level = gather_nodes_by_admin_level(old_roots)
@@ -1141,7 +1201,11 @@ def get_address_location_surrogate(overpass_api, location_state, location_city, 
     mark_phone_locations(old_roots, phone_locations)
 
     # Rebuild and print the tree for each root node
-    new_roots = [tree_root for root in old_roots for tree_root in rebuild_tree(root, overpass_api)]
+    new_roots = [
+        tree_root
+        for root in old_roots
+        for tree_root in rebuild_tree(root, overpass_api)
+    ]
     # map between the two trees
     mapping = map_trees(old_roots, new_roots)
 

@@ -15,7 +15,11 @@ OUTPUT_DIR = "processed_data/"  # Directory to save processed CAS files
 
 def get_subdirectories(directory):
     """Retrieve all subdirectories in the given directory."""
-    return [d for d in glob.glob(os.path.join(directory, "**/"), recursive=False) if os.path.isdir(d)]
+    return [
+        d
+        for d in glob.glob(os.path.join(directory, "**/"), recursive=False)
+        if os.path.isdir(d)
+    ]
 
 
 def get_text_files(directory):
@@ -34,17 +38,26 @@ def process_batch(batch_name, batch_files):
     document_collection = project.create_document_collection(batch_name)
     for file in batch_files:
         with open(file, "r", encoding="utf-8") as f:
-            document_collection.import_documents(f.read(), filename=os.path.relpath(file, INPUT_DIR).replace("/", "_"))
+            document_collection.import_documents(
+                f.read(), filename=os.path.relpath(file, INPUT_DIR).replace("/", "_")
+            )
 
     # Process documents
-    process = document_collection.create_and_run_process(process_name=f"{batch_name}-{pipeline.name}", pipeline=pipeline)
-    print(f"Processing {len(batch_files)} documents with {pipeline.name} pipeline ... ", end="")
+    process = document_collection.create_and_run_process(
+        process_name=f"{batch_name}-{pipeline.name}", pipeline=pipeline
+    )
+    print(
+        f"Processing {len(batch_files)} documents with {pipeline.name} pipeline ... ",
+        end="",
+    )
     wait_until_process_finished(process)
     print("done.")
 
     # Export results
     for file in batch_files:
-        cas = process.export_text_analysis_to_cas(os.path.relpath(file, INPUT_DIR).replace("/", "_"))
+        cas = process.export_text_analysis_to_cas(
+            os.path.relpath(file, INPUT_DIR).replace("/", "_")
+        )
         output_file = os.path.join(OUTPUT_DIR, os.path.relpath(file, INPUT_DIR))
         os.makedirs(os.path.dirname(output_file), exist_ok=True)
         cas.to_xmi(output_file.replace(".txt", ".xmi"), pretty_print=True)
@@ -56,7 +69,10 @@ def process_batch(batch_name, batch_files):
 def wait_until_process_finished(process):
     """Helper function to wait until the processing is finished."""
     state = process.get_process_state()
-    while state.number_of_successful_documents + state.number_of_unsuccessful_documents < state.number_of_total_documents:
+    while (
+        state.number_of_successful_documents + state.number_of_unsuccessful_documents
+        < state.number_of_total_documents
+    ):
         time.sleep(1)
         state = process.get_process_state()
 

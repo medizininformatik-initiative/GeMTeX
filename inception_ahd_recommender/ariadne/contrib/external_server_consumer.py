@@ -128,12 +128,11 @@ class ResponseConsumer(ABC):
         self.features = []
 
     @abstractmethod
-    def process(self, response, layer = None) -> "response_consumer_return_value":
+    def process(self, response, layer=None) -> "response_consumer_return_value":
         raise NotImplementedError
 
 
 class MappingConsumer(ResponseConsumer):
-
     def __init__(
         self, config: str, processor: ProcessorType = ProcessorType.CAS, **kwargs
     ):
@@ -171,13 +170,16 @@ class MappingConsumer(ResponseConsumer):
             )
             sys.exit(-1)
 
-    def process(self, response, layer = None) -> "response_consumer_return_value":
+    def process(self, response, layer=None) -> "response_consumer_return_value":
         _processor = self.processor.init(response, self)
 
         for source_layer, check_dict in self.mapper.annotation_mapping.items():
             # Multilayer is not allowed for Recommender since a single Recommender is configured for an INCEpTION layer
             # except for when the given layer equals the layer in the mapping config
-            if check_dict.mapping_type == MappingTypeEnum.MULTILAYER and check_dict.target_layer != layer:
+            if (
+                check_dict.mapping_type == MappingTypeEnum.MULTILAYER
+                and check_dict.target_layer != layer
+            ):
                 logging.warning(
                     f"An INCEpTION Recommender is only configured for a single layer."
                     f" It appears your configuration file has an entry for Multilayer processing."
@@ -198,16 +200,27 @@ class MappingConsumer(ResponseConsumer):
                     if callable(_check_call) and _check_call(anno):
                         _final_label = _label
                         _final_features = {check_dict.target_feature: _label}
-                        _dupl = check_dict.additional_feats.pop(check_dict.target_feature, None)
+                        _dupl = check_dict.additional_feats.pop(
+                            check_dict.target_feature, None
+                        )
                         if _dupl is not None:
                             logging.warning(
-                                f"Removed {_dupl} from 'add_feature' for entry '{check_dict.entry_name}_{_label}'.")
-                        for target_feature, mapping_tuple in check_dict.additional_feats.items():  # Provide the "add_feature" values
-                            _feat_val = mapping_tuple[0](anno,mapping_tuple[1])
+                                f"Removed {_dupl} from 'add_feature' for entry '{check_dict.entry_name}_{_label}'."
+                            )
+                        for (
+                            target_feature,
+                            mapping_tuple,
+                        ) in (
+                            check_dict.additional_feats.items()
+                        ):  # Provide the "add_feature" values
+                            _feat_val = mapping_tuple[0](anno, mapping_tuple[1])
                             if _feat_val is not None:
                                 _final_features[target_feature] = _feat_val
                         break  # Stacking layers is not allowed
-                    elif isinstance(_check_call, tuple) and _check_call[0](anno, _check_call[1]) is not None:
+                    elif (
+                        isinstance(_check_call, tuple)
+                        and _check_call[0](anno, _check_call[1]) is not None
+                    ):
                         _final_label = _check_call[0](anno, _check_call[1])
                         _final_features = {_label: _check_call[0](anno, _check_call[1])}
                         if not _warned:
