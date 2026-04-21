@@ -5,12 +5,16 @@ Critical are documents when they contain SNOMED CT codes that are either on the 
 Whitelist and blacklist are both defined in a ``hdf5`` file, that must be provided.  
 The resulting log file (a markdown document) also contains intra-document links for better traversal. So you should view it with an appropriate markdown viewer. 
 
+* __since version 1.1.0__, a masked md file is created alongside the original one (in case of GUI usage, a separate download button is available).
+The former replaces all annotator and document names with random but eligible strings.
+That enables sharing the log file without privacy concerns.
+
 ## Usage
 The script can be run either via the command line or via docker.
 In both cases you need a hdf5 file ([gemtex_snomedct_codes_2024-04-01.hdf5](https://confluence.imi.med.fau.de/spaces/GEM/pages/317216732/SNOMED+CT+Semantic+Tag+Dashboard?preview=/317216732/359075603/gemtex_snomedct_codes_2024-04-01.hdf5); should be around 50MB) containing the whitelist/blacklist and a zip file containing the inception dump.  
 The hdf5 file could also be created with this script itself if you ever need it for a different whitelist/blacklist. You would need a running SNOWSTORM instance though.
 See ``uv run create-concepts-dump --help`` or 
-``docker run ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:1.0 create-concepts-dump --help`` for further information. ***[2]***  
+``docker run ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:1.1 create-concepts-dump --help`` for further information. ***[2]***  
 The simple usage for the use case in GeMTex is described in the following, however:
 
 ### GUI
@@ -23,7 +27,7 @@ uv run streamlit run .\src\snomed_post_processing\streamlit_app.py
 ```
 #### Docker
 ```
-docker run --rm -p HOST_PORT:8501 ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:1.0 start-gui
+docker run --rm -p HOST_PORT:8501 ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:1.1 start-gui
 ```
 * ``HOST_PORT`` needs to be set to the port you want to use for the GUI.
 
@@ -34,6 +38,9 @@ There is a convenience script with `./start-gui.sh` that runs the above docker c
 
 e.g.:
 ````
+# make sure to make it executable:
+# > chmod +x start-gui.sh
+
 ./start-gui.sh 8080
 ````
 
@@ -65,11 +72,11 @@ There is also a docker image available:
 docker run
  --volume ./data:/app/data
  --rm
- ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:1.0
+ ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:1.1
  log-critical-documents /app/data/inception-json-dump.zip
 ```
 - log file will be in the `./data` folder (the script will show the final path as well).
-- `inception-json-dump.zip` has to be in `./data`. ***[3]***
+- `inception-json-dump.zip` (_can be generated from INCEpTION (Settings > Export > *UIMA CAS JSON 0.4.0* )_) has to be located in `./data`. ***[3]***
 - [gemtex_snomedct_codes_2024-04-01.hdf5](https://confluence.imi.med.fau.de/spaces/GEM/pages/317216732/SNOMED+CT+Semantic+Tag+Dashboard?preview=/317216732/359075603/gemtex_snomedct_codes_2024-04-01.hdf5) has to be in `./data`, too.
 
 If you use ``docker``, however, you won't be able to select specific annotators to log.
@@ -80,8 +87,11 @@ There is a convenience script with `./log-inception-docs.sh` that runs the above
 * _arg1_ (mandatory): name of the inception dump zip (in the ``data`` folder)
 * _arg2_ (optional): version of the docker image 
 
-e.g.:
+e.g.:  
 ````
+# make sure to make it executable:
+# > chmod +x log-inception-docs.sh
+
 ./log-inception-docs.sh data/inception-dump.zip
 ````
 
