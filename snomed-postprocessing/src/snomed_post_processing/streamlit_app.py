@@ -42,11 +42,12 @@ def generate_report(
     lists_path: pathlib.Path,
     anno_filter: Optional[list] = None,
     progress_obj: dict = None
-) -> tuple[pathlib.Path, pathlib.Path, int]:
+) -> tuple[pathlib.Path, pathlib.Path, pathlib.Path, int]:
     json_dump_dictionary = {}
     output_md = project_zip.parent / (
         f"critical_documents_{datetime.datetime.now().strftime('%d-%m-%Y_%H-%M')}.md"
     )
+    output_md_masked = output_md.with_suffix(".masked.md")
     output_json = output_md.with_suffix(".json")
 
     err_doc_count = 0
@@ -54,14 +55,14 @@ def generate_report(
     if result is None:
         raise RuntimeError("Processing failed.")
 
-    with output_md.open("w", encoding="utf-8") as log_doc:
+    with output_md.open("w", encoding="utf-8") as log_doc, output_md_masked.open("w", encoding="utf-8") as log_doc_masked:
         err_doc_count = create_log_from_results(
-            result, log_doc, lists_path, progress_obj, json_dump_dictionary
+            result, log_doc, log_doc_masked, lists_path, progress_obj, json_dump_dictionary
         )
     with output_json.open("w", encoding="utf-8") as json_fi:
         json.dump(json_dump_dictionary, json_fi, indent=2, ensure_ascii=False)
 
-    return output_md, output_json, err_doc_count
+    return output_md, output_md_masked, output_json, err_doc_count
 
 
 @st.fragment
@@ -74,9 +75,9 @@ def download_json_report(json_dump, output_fi: pathlib.Path):
     )
 
 @st.fragment
-def download_md_report(md_report, output_fi: pathlib.Path):
+def download_md_report(md_report, output_fi: pathlib.Path, label: str):
     st.download_button(
-        label="Download markdown report",
+        label=f"Download {label} report",
         data=md_report,
         file_name=output_fi.name,
         mime="text/markdown",
@@ -207,7 +208,7 @@ if st.button("Run analysis", type="primary", disabled=not (zip_file and hdf5_fil
             else None
         )
 
-        output_path_md, output_path_json, erroneous_doc_count = generate_report(
+        output_path_md, output_path_md_masked, output_path_json, erroneous_doc_count = generate_report(
             project_zip=zip_temp_path,
             lists_path=hdf5_temp_path,
             anno_filter=annotator_filter,
@@ -216,13 +217,16 @@ if st.button("Run analysis", type="primary", disabled=not (zip_file and hdf5_fil
         progress_bar.empty()
 
         report_text = output_path_md.read_text(encoding="utf-8")
+        report_text_masked = output_path_md_masked.read_text(encoding="utf-8")
         json_text = output_path_json.read_text(encoding="utf-8")
 
         st.success("Analysis finished.")
         st.metric("Critical documents found", erroneous_doc_count)
-        st.write(f"Report saved to: `{output_path_md}`")
+        st.write(f"Report saved to folder: `{output_path_md.parent.resolve()}`")
 
-        download_md_report(report_text, output_path_md)
+        #ToDo: download masked report here as well
+        for triple in [(report_text, output_path_md, "markdown"), (report_text_masked, output_path_md_masked, "masked markdown")]:
+            download_md_report(*triple)
         download_json_report(json_text, output_path_json)
 
         with st.expander("Preview report"):
