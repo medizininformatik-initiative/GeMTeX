@@ -24,13 +24,13 @@ The simple usage for the use case in GeMTex is described in the following, howev
 You can run the logging script from within an [uv](https://docs.astral.sh/uv/getting-started/installation/) environment.
 (__since version 0.9.7__ it allows you to select specific annotators to log via prompts.)
 
-For a local dump of an INCEpTION project:
+For a local dump of an INCEpTION project (you need to specify the paths to the hdf5-file and the inception-json-dump, respectively):
 ```
 uv run log-critical-documents \
   --lists-path /path/to/hdf5-file \
   /path/to/inception-json-dump.zip
 ```
-or for a remote connection to the INCEpTION instance:
+or for a remote connection to the INCEpTION instance (you need to specify the respective INCEPTION_IP, INCEPTION_PORT, INCEPTION_USERNAME, INCEPTION_PASSWORD, INCEPTION_PROJECT_URL_SLUG, as well as a path to where INCEpTION can perform a temporary export and the path to the hdf5-file):
 ```
 uv run log-critical-documents \
   --lists-path /path/to/hdf5-file --ip INCEPTION_IP --port INCEPTION_PORT \
