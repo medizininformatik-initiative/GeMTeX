@@ -104,6 +104,7 @@ def get_project_zip(
     user_name: Optional[str] = None,
     password: Optional[str] = None,
     project_name: Optional[str] = None,
+    verify_ssl: Union[bool, str] = True,
 ) -> Union[pathlib.Path, list[str]]:
     inception_client = None
     project_zip = None
@@ -116,6 +117,13 @@ def get_project_zip(
         )
         try:
             inception_client = Pycaprio(host, (user_name, password))
+            if not verify_ssl:
+                import urllib3
+                urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+                inception_client.api.client.session.verify = False
+            elif isinstance(verify_ssl, str):
+                inception_client.api.client.session.verify = verify_ssl
+
             projects = {
                 p.project_name: p.project_id for p in inception_client.api.projects()
             }

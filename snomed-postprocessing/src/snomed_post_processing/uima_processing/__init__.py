@@ -84,14 +84,23 @@ def _yield_matching_files(
             info.filename
             for info in zip_file.infolist()
             if info.filename.startswith(folder_prefix)
-            and info.filename.endswith(".json")
+            and (
+                info.filename.endswith(".json")
+                or info.filename.endswith(".xmi")
+                or info.filename.endswith(".zip")
+            )
             and not info.is_dir()
         ]
 
-        # Use INITIAL_CAS.json only if it is the *only* file
+        # Use INITIAL_CAS files only if they are the *only* files
         if len(matching_files) > 1:
             matching_files = [
-                p for p in matching_files if not p.endswith("INITIAL_CAS.json")
+                p
+                for p in matching_files
+                if not any(
+                    p.endswith(ext)
+                    for ext in ["INITIAL_CAS.json", "INITIAL_CAS.xmi", "INITIAL_CAS.zip"]
+                )
             ]
 
         if not matching_files:
@@ -149,17 +158,18 @@ def get_annotations_from_document(
 
 
 def get_annotator_names(project_path: pathlib.Path) -> set[str]:
-    annotator_names = None
+    annotator_names = set()
     with zipfile.ZipFile(project_path, "r") as zip_file:
         file_name = project_path.name
         project_documents = _read_project(zip_file, file_name)
-        annotator_names = set(
-            [
-                str(pathlib.Path(cp).stem)
-                for _, fi in _yield_matching_files(project_documents, zip_file)
-                for cp in fi
-            ]
-        )
+        if project_documents is not None:
+            annotator_names = set(
+                [
+                    str(pathlib.Path(cp).stem)
+                    for _, fi in _yield_matching_files(project_documents, zip_file)
+                    for cp in fi
+                ]
+            )
     return annotator_names
 
 
@@ -174,9 +184,13 @@ def process_inception_zip(
 
     # ---- Prepare containers ----
     annotations = TemporaryCorpus(annotators={})
+    if isinstance(file_path, pathlib.Path):
+        file_name = file_path.name
+    else:
+        file_name = pathlib.Path(file_path).name
+    
     try:
         with zipfile.ZipFile(file_path, "r") as zip_file:
-            file_name = file_path.name
             # ---- Read project metadata ----
             project_documents = _read_project(zip_file, file_name)
 

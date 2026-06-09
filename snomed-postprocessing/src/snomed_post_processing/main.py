@@ -180,6 +180,7 @@ def log_documents(
             inception_username,
             inception_password,
             inception_project,
+            False
         )
     except Exception as e:
         logging.error(f"Error while getting project zip: '{e}'. Exiting.")

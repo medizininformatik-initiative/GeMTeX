@@ -133,7 +133,7 @@ with st.sidebar:
                 try:
                     _project_tmp = tempfile.mkdtemp("snomed_gui_dir")
                     st.session_state["projects"] = get_project_zip(
-                        _project_tmp, url, username, password
+                        _project_tmp, url, username, password, None, False
                     )
                     st.success(f"Found {len(st.session_state['projects'])} projects.")
                 except RuntimeError:
@@ -161,6 +161,7 @@ with st.sidebar:
                             creds["username"],
                             creds["password"],
                             project,
+                            False
                         )
                         if isinstance(_zip, pathlib.Path):
                             st.session_state["zip_file"] = _zip
