@@ -210,10 +210,24 @@ def log_documents(
 
     names_filter = None
     if not forbid_prompt:
-        annotator_names = get_annotator_names(project_zip)
+        annotator_names, only_ser = get_annotator_names(project_zip)
+        if only_ser:
+            logging.error(
+                "The project only contains UIMA Java Serialized CAS (.ser) files, which are not supported. Please export as JSON CAS or XMI instead."
+            )
+            sys.exit(-1)
+
         _res = prompt_for_names(annotator_names)
         if _res and len(_res) > 0:
             names_filter = [n.lower() for n in _res]
+    else:
+        # If forbid_prompt is set, we still check if the project is processable
+        _, only_ser = get_annotator_names(project_zip)
+        if only_ser:
+            logging.error(
+                "The project only contains UIMA Java Serialized CAS (.ser) files, which are not supported. Please export as JSON CAS or XMI instead."
+            )
+            sys.exit(-1)
 
     output_path = (
         project_zip.parent

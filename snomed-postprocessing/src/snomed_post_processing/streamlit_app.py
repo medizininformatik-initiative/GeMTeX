@@ -187,8 +187,15 @@ if zip_file := st.session_state.get("zip_file"):
 
     if load_annotators:
         try:
-            annotators = sorted(get_annotator_names(zip_temp_path))
-            if annotators:
+            annotators, only_ser = get_annotator_names(zip_temp_path)
+            annotators = sorted(annotators)
+            if only_ser:
+                st.error(
+                    "The project only contains UIMA Java Serialized CAS (.ser) files, which are not supported. Please export as JSON CAS or XMI instead."
+                )
+                st.session_state["zip_file"] = None
+                st.rerun()
+            elif annotators:
                 annotator_selection = st.multiselect(
                     "Select annotators to include",
                     options=annotators,

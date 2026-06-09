@@ -78,16 +78,25 @@ def _yield_matching_files(
             if state == "CURATION_FINISHED"
             else f"annotation/{doc_name}/"
         )
+        folder_prefix_ser = (
+            f"curation_ser/{doc_name}/"
+            if state == "CURATION_FINISHED"
+            else f"annotation_ser/{doc_name}/"
+        )
 
         # Collect CAS JSON files
         matching_files = [
             info.filename
             for info in zip_file.infolist()
-            if info.filename.startswith(folder_prefix)
+            if (
+                info.filename.startswith(folder_prefix)
+                or info.filename.startswith(folder_prefix_ser)
+            )
             and (
                 info.filename.endswith(".json")
                 or info.filename.endswith(".xmi")
                 or info.filename.endswith(".zip")
+                or info.filename.endswith(".ser")
             )
             and not info.is_dir()
         ]
@@ -99,13 +108,18 @@ def _yield_matching_files(
                 for p in matching_files
                 if not any(
                     p.endswith(ext)
-                    for ext in ["INITIAL_CAS.json", "INITIAL_CAS.xmi", "INITIAL_CAS.zip"]
+                    for ext in [
+                        "INITIAL_CAS.json",
+                        "INITIAL_CAS.xmi",
+                        "INITIAL_CAS.zip",
+                        "INITIAL_CAS.ser",
+                    ]
                 )
             ]
 
         if not matching_files:
             logging.warning(
-                f"No CAS found for {doc_name} in {file_name} ({folder_prefix})"
+                f"No CAS found for {doc_name} in {file_name} ({folder_prefix}, {folder_prefix_ser})"
             )
             continue
         yield doc_name, matching_files
@@ -157,20 +171,21 @@ def get_annotations_from_document(
     )
 
 
-def get_annotator_names(project_path: pathlib.Path) -> set[str]:
+def get_annotator_names(project_path: pathlib.Path) -> tuple[set[str], bool]:
     annotator_names = set()
+    only_ser = True
+    found_any = False
     with zipfile.ZipFile(project_path, "r") as zip_file:
         file_name = project_path.name
         project_documents = _read_project(zip_file, file_name)
         if project_documents is not None:
-            annotator_names = set(
-                [
-                    str(pathlib.Path(cp).stem)
-                    for _, fi in _yield_matching_files(project_documents, zip_file)
-                    for cp in fi
-                ]
-            )
-    return annotator_names
+            for _, fi in _yield_matching_files(project_documents, zip_file):
+                for cp in fi:
+                    found_any = True
+                    annotator_names.add(str(pathlib.Path(cp).stem))
+                    if not cp.endswith(".ser"):
+                        only_ser = False
+    return annotator_names, (only_ser if found_any else False)
 
 
 def process_inception_zip(
@@ -212,6 +227,12 @@ def process_inception_zip(
                     ):
                         continue
                     try:
+                        if cas_path.endswith(".ser"):
+                            logging.warning(
+                                f"Skipping {cas_path} from {file_name}: UIMA Java Serialized CAS (.ser) is not supported by 'cassis'. Please export as JSON CAS or XMI instead."
+                            )
+                            continue
+
                         with zip_file.open(cas_path) as cas_file:
                             cas = cassis.load_cas_from_json(cas_file)
                         doc_anno = get_annotations_from_document(
@@ -330,7 +351,8 @@ def analyze_documents(
                             annotations.snomed_codes[erroneous_codes_array],
                         )
                         for _idx in idx:
-                            _map_dict[filter_array[_idx]] = mapping_array[_idx]
+                            key = filter_array[_idx]
+                            _map_dict[bytes(key)] = mapping_array[_idx]
                     log_critical_docs(
                         annotator_name,
                         doc_name,
