@@ -39,6 +39,8 @@ Eine Demo bzw. Machbarkeitsnachweis wie CDA Dokumente Level One über XSLT Style
 Python-Skripte um die [Averbis Health Discovery](https://averbis.com/health-discovery/) per API anzusprechen.
 * [`uima_cas_converter`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/scripts/uima_cas_converter)
 Ein einfaches Skript um UIMA CAS-Dateien von `json` in `xmi` umzuschreiben oder umgekehrt.
+* [`zip-renaming`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/scripts/zip-renaming)
+Ein einfaches Skript um automatisch INCEpTION-exportierte finale ZIP Dateien umzubenennen, damit sie die Dokument-ID beinhalten. 
 
 ### [`snomed-postprocessing`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/snomed-postprocessing)  
 Programm um Dokumente zu identifizieren, die SNOMED CT Codes enthalten, die nicht mit einer Version kompatibel sind.
