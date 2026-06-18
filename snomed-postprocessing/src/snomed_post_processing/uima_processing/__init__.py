@@ -153,7 +153,12 @@ def get_annotations_from_document(
     for type_ in annotation_types:
         for annotation in document.select(type_):
             try:
-                codes.append(annotation.get("id").removeprefix(id_prefix))
+                if annotation.get("id") is not None:
+                    _id = annotation.get("id")
+                    codes.append(_id.removeprefix(id_prefix))
+                else:
+                    codes.append(np.nan)
+
                 offsets.append(
                     (
                         annotation.begin,
@@ -282,6 +287,7 @@ def analyze_documents(
     whitelist_code_counter: Counter,
     progress_obj: Optional[dict] = None,
     dump_dictionary: Optional[dict] = None,
+    filter_nan_values: bool = True,
 ) -> Optional[int]:
     as_whitelist = filter_type == ListDumpType.WHITELIST
     erroneous_doc_count = 0
@@ -331,13 +337,14 @@ def analyze_documents(
                         progress_obj["text_pre"] + _text,
                     )
                 spinner.text = _text
+                nan_filter = (annotations.snomed_codes != b"nan") if filter_nan_values else np.ones(annotations.length, dtype=bool)
                 if as_whitelist:
                     erroneous_codes_array = ~np.isin(
-                        annotations.snomed_codes, filter_array
+                        annotations.snomed_codes[nan_filter], filter_array
                     )
                 else:
                     erroneous_codes_array = np.isin(
-                        annotations.snomed_codes, filter_array
+                        annotations.snomed_codes[nan_filter], filter_array
                     )
 
                 if not np.all(~erroneous_codes_array):
