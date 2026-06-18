@@ -16,7 +16,7 @@ In both cases you need a hdf5 file ([gemtex_snomedct_codes_2024-04-01.hdf5](http
 containing the whitelist/blacklist and a zip file containing the inception dump.  
 The hdf5 file could also be created with this script itself if you ever need it for a different whitelist/blacklist. You would need a running SNOWSTORM instance though.
 See ``uv run create-concepts-dump --help`` or 
-``docker run ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:1.2.5 create-concepts-dump --help`` for further information. ***[2]***  
+``docker run ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:1.2.1 create-concepts-dump --help`` for further information. ***[2]***  
 The simple usage for the use case in GeMTex is described in the following, however:
 
 ### CLI
@@ -39,46 +39,6 @@ uv run log-critical-documents \
   --inception-project INCEPTION_PROJECT_URL_SLUG
   /path/to/temp/export
 ```
-__since version 1.2.5__ `target` and `ignore` layers can be provided.  
-By default, faulty-code checks run on the `gemtex.Concept` layer. This can be configured from the CLI:
-
-```
-uv run log-critical-documents \
-  --lists-path /path/to/hdf5-file \
-  --annotation-type gemtex.Concept \
-  --annotation-type another.Layer \
-  /path/to/inception-json-dump.zip
-```
-
-Faulty concepts can be ignored when they overlap configured layers. By default, the layer `webanno.custom.No_Human` is used as an ignore-overlap layer. Ignored faulty concepts are excluded from the critical document count but still reported in a separate markdown section:
-
-```
-uv run log-critical-documents \
-  --lists-path /path/to/hdf5-file \
-  --ignore-overlap-type webanno.custom.No_Human \
-  --ignore-overlap-type gemtex.FalsePositive \
-  --ignore-overlap-mode overlap \
-  /path/to/inception-json-dump.zip
-```
-
-Available overlap modes are `overlap`, `covered-by`, `contains`, and `exact`:
-
-| Mode | Meaning |
-| --- | --- |
-| `overlap` | Ignore the target annotation if its span has any intersection with an ignore-layer annotation. This is the default and most permissive mode. |
-| `covered-by` | Ignore the target annotation only if the target span is fully contained inside an ignore-layer span. |
-| `contains` | Ignore the target annotation only if the target span fully contains an ignore-layer span. |
-| `exact` | Ignore the target annotation only if target and ignore-layer spans have identical begin and end offsets. |
-
-Example for target span `[10, 20]`:
-
-| Ignore span | `overlap` | `covered-by` | `contains` | `exact` |
-| --- | --- | --- | --- | --- |
-| `[15, 25]` | yes | no | no | no |
-| `[5, 25]` | yes | yes | no | no |
-| `[12, 18]` | yes | no | yes | no |
-| `[10, 20]` | yes | yes | yes | yes |
-
 
 #### Docker
 There is also a docker image available:
@@ -86,7 +46,7 @@ There is also a docker image available:
 docker run
  --volume ./data:/app/data
  --rm
- ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:1.2.5
+ ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:1.2.1
  log-critical-documents /app/data/inception-json-dump.zip
 ```
 - log file will be in the `./data` folder (the script will show the final path as well).
@@ -131,7 +91,7 @@ uv run streamlit run .\src\snomed_post_processing\streamlit_app.py
 ```
 #### Docker
 ```
-docker run --rm -p HOST_PORT:8501 ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:1.2.5 start-gui
+docker run --rm -p HOST_PORT:8501 ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:1.2.1 start-gui
 ```
 * ``HOST_PORT`` needs to be set to the port you want to use for the GUI.
 
