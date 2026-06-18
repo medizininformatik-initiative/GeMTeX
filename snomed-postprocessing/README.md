@@ -16,7 +16,7 @@ In both cases you need a hdf5 file ([gemtex_snomedct_codes_2024-04-01.hdf5](http
 containing the whitelist/blacklist and a zip file containing the inception dump.  
 The hdf5 file could also be created with this script itself if you ever need it for a different whitelist/blacklist. You would need a running SNOWSTORM instance though.
 See ``uv run create-concepts-dump --help`` or 
-``docker run ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:1.1 create-concepts-dump --help`` for further information. ***[2]***  
+``docker run ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:1.2.1 create-concepts-dump --help`` for further information. ***[2]***  
 The simple usage for the use case in GeMTex is described in the following, however:
 
 ### CLI
@@ -46,7 +46,7 @@ There is also a docker image available:
 docker run
  --volume ./data:/app/data
  --rm
- ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:1.1
+ ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:1.2.1
  log-critical-documents /app/data/inception-json-dump.zip
 ```
 - log file will be in the `./data` folder (the script will show the final path as well).
@@ -91,7 +91,7 @@ uv run streamlit run .\src\snomed_post_processing\streamlit_app.py
 ```
 #### Docker
 ```
-docker run --rm -p HOST_PORT:8501 ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:1.1 start-gui
+docker run --rm -p HOST_PORT:8501 ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:1.2.1 start-gui
 ```
 * ``HOST_PORT`` needs to be set to the port you want to use for the GUI.
 
