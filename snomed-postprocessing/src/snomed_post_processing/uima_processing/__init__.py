@@ -347,10 +347,12 @@ def analyze_documents(
                 spinner.text = _text
                 nan_filter = (annotations.snomed_codes != b"nan") if filter_nan_values else np.ones(annotations.length, dtype=bool)
                 if as_whitelist:
+                    erroneous_codes_array = np.zeros(annotations.length, dtype=bool)
                     erroneous_codes_array = ~np.isin(
                         annotations.snomed_codes[nan_filter], filter_array
                     )
                 else:
+                    erroneous_codes_array = np.zeros(annotations.length, dtype=bool)
                     erroneous_codes_array = np.isin(
                         annotations.snomed_codes[nan_filter], filter_array
                     )
@@ -361,13 +363,11 @@ def analyze_documents(
                     _map_dict = None
                     if not as_whitelist:
                         _map_dict = {}
-                        idx = np.searchsorted(
-                            filter_array,
-                            annotations.snomed_codes[erroneous_codes_array],
-                        )
-                        for _idx in idx:
-                            key = filter_array[_idx]
-                            _map_dict[bytes(key)] = mapping_array[_idx]
+                        erroneous_codes = annotations.snomed_codes[erroneous_codes_array]
+                        idx = np.searchsorted(filter_array, erroneous_codes)
+                        for code, _idx in zip(erroneous_codes, idx):
+                            if _idx < len(filter_array) and filter_array[_idx] == code:
+                                _map_dict[bytes(code)] = mapping_array[_idx]
                     log_critical_docs(
                         annotator_name,
                         doc_name,
