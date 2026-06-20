@@ -232,6 +232,13 @@ def pprint_json(json_data):
     print(json.dumps(json_data, indent=2))
 
 
+def is_numeric(text: str) -> bool:
+    """Check if the provided text is numeric (integer or decimal)."""
+    import re
+
+    return bool(re.fullmatch(r"(\d+([.,]\d+)?)", text.strip()))
+
+
 def return_codes(data: Union[dict, SnowstormResponse]) -> list[SnomedConcept]:
     return_list = []
     for concept in (

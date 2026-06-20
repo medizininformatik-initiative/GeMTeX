@@ -10,47 +10,25 @@ from typing import Union, Optional
 import click
 import yaspin
 
-if __name__ == "__main__":
-    sys.path.append(".")
-    from snowstorm_funcs import (
-        build_endpoint,
-        get_branches,
-        dump_concept_ids,
-        get_root_code,
-    )
-    from utils import (
-        DumpMode,
-        FilterMode,
-        dump_codes_to_hdf5,
-        ListDumpType,
-        prompt_for_names,
-        get_project_zip,
-    )
-    from uima_processing import (
-        process_inception_zip,
-        get_annotator_names,
-        create_log_from_results,
-    )
-else:
-    from .snowstorm_funcs import (
-        build_endpoint,
-        get_branches,
-        dump_concept_ids,
-        get_root_code,
-    )
-    from .utils import (
-        DumpMode,
-        FilterMode,
-        dump_codes_to_hdf5,
-        ListDumpType,
-        prompt_for_names,
-        get_project_zip,
-    )
-    from .uima_processing import (
-        process_inception_zip,
-        get_annotator_names,
-        create_log_from_results,
-    )
+from .snowstorm_funcs import (
+    build_endpoint,
+    get_branches,
+    dump_concept_ids,
+    get_root_code,
+)
+from .utils import (
+    DumpMode,
+    FilterMode,
+    dump_codes_to_hdf5,
+    ListDumpType,
+    prompt_for_names,
+    get_project_zip,
+)
+from .uima_processing import (
+    process_inception_zip,
+    get_annotator_names,
+    create_log_from_results,
+)
 
 
 class ClickUnion(click.ParamType):
@@ -186,10 +164,8 @@ def log_documents(
         logging.error(f"Error while getting project zip: '{e}'. Exiting.")
         sys.exit(-1)
 
-    default_lists_path = pathlib.Path(
-        pathlib.Path(__file__).parent.parent.parent,
-        "data",
-        "gemtex_snomedct_codes_2024-04-01.hdf5",
+    default_lists_path = (
+        pathlib.Path(__file__).parent.parent.parent / "data" / "gemtex_snomedct_codes_2024-04-01.hdf5"
     ).resolve()
     if lists_path is not None:
         lists_path_tmp = pathlib.Path(lists_path).resolve()

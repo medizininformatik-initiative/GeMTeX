@@ -8,21 +8,12 @@ from typing import Optional
 
 import streamlit as st
 
-if __name__ == "__main__":
-    sys.path.append(".")
-    from uima_processing import (
-        get_annotator_names,
-        process_inception_zip,
-        create_log_from_results,
-    )
-    from utils import get_project_zip
-else:
-    from .uima_processing import (
-        get_annotator_names,
-        process_inception_zip,
-        create_log_from_results,
-    )
-    from .utils import get_project_zip
+from .uima_processing import (
+    get_annotator_names,
+    process_inception_zip,
+    create_log_from_results,
+)
+from .utils import get_project_zip
 
 
 st.set_page_config(page_title="GeMTeX SNOMED CT Postprocessing", layout="wide")
@@ -245,7 +236,6 @@ if st.button("Run analysis", type="primary", disabled=not (zip_file and hdf5_fil
         st.metric("Critical documents found", erroneous_doc_count)
         st.write(f"Report saved to folder: `{output_path_md.parent.resolve()}`")
 
-        # ToDo: download masked report here as well
         for triple in [
             (report_text, output_path_md, "markdown"),
             (report_text_masked, output_path_md_masked, "masked markdown"),

@@ -10,3 +10,5 @@ __pycache__/
 /.venv/*
 .vscode/*
 debug.sh
+/scripts/uima_cas_converter/test/
+/llm-ade-extraction/test/

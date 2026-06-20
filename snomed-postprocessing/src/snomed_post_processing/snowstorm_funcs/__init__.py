@@ -7,24 +7,14 @@ from scttsrapy.api import EndpointBuilder
 import scttsrapy.concepts as concepts
 import scttsrapy.branching as branching
 
-if __name__.find(".snowstorm_funcs") != -1:
-    from ..utils import (
-        filter_by_semantic_tag,
-        DumpMode,
-        return_codes,
-        FilterMode,
-        FilterLists,
-        SnomedConcept,
-    )
-else:
-    from utils import (
-        filter_by_semantic_tag,
-        DumpMode,
-        return_codes,
-        FilterMode,
-        FilterLists,
-        SnomedConcept,
-    )
+from ..utils import (
+    filter_by_semantic_tag,
+    DumpMode,
+    return_codes,
+    FilterMode,
+    FilterLists,
+    SnomedConcept,
+)
 
 
 def build_endpoint(ip: str, port: Union[int, str], use_secure_protocol: bool):
@@ -151,7 +141,7 @@ def dump_concept_ids(
     )
 
     # If dump_mode is "semantic", only add concept to list when on the filter list
-    if dump_mode == dump_mode.SEMANTIC and filter_list is not None:
+    if dump_mode == DumpMode.SEMANTIC and filter_list is not None:
         if (root_concept.conceptId in filter_list.codes) or dump_whole_subtree:
             # When a code and not a tag is on the filter list, the whole subtree should be regarded
             id_hash_set.add(root_concept.conceptId)
