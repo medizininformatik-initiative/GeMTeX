@@ -16,11 +16,7 @@ import yaspin
 import randomname
 
 
-if __name__.find(".uima_processing") != -1:
-    from ..utils import ListDumpType, Information
-else:
-    sys.path.append(".")
-    from utils import ListDumpType, Information
+from ..utils import ListDumpType, Information, is_numeric
 
 
 @dataclasses.dataclass
@@ -356,6 +352,29 @@ def analyze_documents(
                     )
 
                 if not np.all(~erroneous_codes_array):
+                    # Filter out numerical spans without a code in whitelist mode
+                    if as_whitelist:
+                        actual_indices = np.where(nan_filter)[0][erroneous_codes_array]
+                        final_erroneous_indices_mask = np.ones(
+                            len(actual_indices), dtype=bool
+                        )
+                        for idx_in_err, idx_in_doc in enumerate(actual_indices):
+                            code = annotations.snomed_codes[idx_in_doc]
+                            text = str(annotations.text[idx_in_doc])
+                            if code == b"nan" and is_numeric(text):
+                                final_erroneous_indices_mask[idx_in_err] = False
+
+                        if not np.any(final_erroneous_indices_mask):
+                            # All erroneous codes were numerical spans without a code
+                            continue
+
+                        # Update erroneous_codes_array to exclude numerical spans
+                        erroneous_codes_array[
+                            np.where(erroneous_codes_array)[0][
+                                ~final_erroneous_indices_mask
+                            ]
+                        ] = False
+
                     doc_error_count += 1
                     concept_error_count += np.count_nonzero(erroneous_codes_array)
                     _map_dict = None
