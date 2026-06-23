@@ -147,11 +147,11 @@ def get_annotations_from_document(
     for type_ in annotation_types:
         for annotation in document.select(type_):
             try:
-                if annotation.get("id") is not None:
-                    _id = annotation.get("id")
-                    codes.append(_id.removeprefix(id_prefix))
-                else:
+                _id = annotation.get("id")
+                if _id is None or str(_id).strip().lower() in {"", "null", "none", "nan"}:
                     codes.append(np.nan)
+                else:
+                    codes.append(str(_id).removeprefix(id_prefix))
 
                 offsets.append(
                     (
@@ -344,18 +344,18 @@ def analyze_documents(
                 nan_filter = (annotations.snomed_codes != b"nan") if filter_nan_values else np.ones(annotations.length, dtype=bool)
                 erroneous_codes_array = np.zeros(annotations.length, dtype=bool)
                 if as_whitelist:
-                    erroneous_codes_array = ~np.isin(
+                    erroneous_codes_array[nan_filter] = ~np.isin(
                         annotations.snomed_codes[nan_filter], filter_array
                     )
                 else:
-                    erroneous_codes_array = np.isin(
+                    erroneous_codes_array[nan_filter] = np.isin(
                         annotations.snomed_codes[nan_filter], filter_array
                     )
 
                 if not np.all(~erroneous_codes_array):
                     # Filter out numerical spans without a code in whitelist mode
                     if as_whitelist:
-                        actual_indices = np.where(nan_filter)[0][erroneous_codes_array]
+                        actual_indices = np.where(erroneous_codes_array)[0]
                         final_erroneous_indices_mask = np.ones(
                             len(actual_indices), dtype=bool
                         )
@@ -371,9 +371,7 @@ def analyze_documents(
 
                         # Update erroneous_codes_array to exclude numerical spans
                         erroneous_codes_array[
-                            np.where(erroneous_codes_array)[0][
-                                ~final_erroneous_indices_mask
-                            ]
+                            actual_indices[~final_erroneous_indices_mask]
                         ] = False
 
                     doc_error_count += 1
