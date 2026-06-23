@@ -8,12 +8,12 @@ from typing import Optional
 
 import streamlit as st
 
-from .uima_processing import (
+from snomed_post_processing.uima_processing import (
     get_annotator_names,
     process_inception_zip,
     create_log_from_results,
 )
-from .utils import get_project_zip
+from snomed_post_processing.utils import get_project_zip
 
 
 st.set_page_config(page_title="GeMTeX SNOMED CT Postprocessing", layout="wide")
