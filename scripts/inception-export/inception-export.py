@@ -225,7 +225,7 @@ def safe_filename(value: str) -> str:
     return value or "unnamed"
 
 
-def find_typesystem(zip_file: zipfile.ZipFile) -> str:
+def find_typesystem(zip_file: zipfile.ZipFile) -> Optional[str]:
     candidates = [
         info.filename
         for info in zip_file.infolist()
@@ -236,7 +236,7 @@ def find_typesystem(zip_file: zipfile.ZipFile) -> str:
         return exact[0]
     if candidates:
         return candidates[0]
-    raise ValueError("Export does not contain TypeSystem.xml")
+    return None
 
 
 def _warn(message: str) -> None:
@@ -478,6 +478,14 @@ def _zip_info(name: str) -> zipfile.ZipInfo:
     return info
 
 
+def _open_nested_annotation_zip(source_zip: zipfile.ZipFile, entry: AnnotationEntry) -> zipfile.ZipFile:
+    payload = source_zip.read(entry.zip_path)
+    try:
+        return zipfile.ZipFile(io.BytesIO(payload), "r")
+    except zipfile.BadZipFile as exc:
+        raise ValueError(f"Annotation payload is not a valid ZIP: {entry.zip_path}") from exc
+
+
 def read_annotation_xmi_bytes(source_zip: zipfile.ZipFile, entry: AnnotationEntry) -> bytes:
     payload = source_zip.read(entry.zip_path)
     if entry.zip_path.replace("\\", "/").endswith(".xmi"):
@@ -486,26 +494,45 @@ def read_annotation_xmi_bytes(source_zip: zipfile.ZipFile, entry: AnnotationEntr
     # INCEpTION may put each annotator CAS below annotation/<doc>/ as a ZIP.
     # Extract the XMI from that nested ZIP so our generated ZIP still contains
     # only TypeSystem.xml and one .xmi file.
-    try:
-        with zipfile.ZipFile(io.BytesIO(payload), "r") as nested_zip:
-            xmi_candidates = [
-                info.filename
-                for info in nested_zip.infolist()
-                if not info.is_dir()
-                and info.filename.replace("\\", "/").endswith(".xmi")
-                and not info.filename.replace("\\", "/").endswith("/INITIAL_CAS.xmi")
-            ]
-            if not xmi_candidates:
-                raise ValueError(f"No XMI found inside annotation ZIP: {entry.zip_path}")
-            preferred = [p for p in xmi_candidates if Path(p.replace("\\", "/")).stem == entry.annotator_name]
-            return nested_zip.read(preferred[0] if preferred else xmi_candidates[0])
-    except zipfile.BadZipFile as exc:
-        raise ValueError(f"Annotation payload is not a valid ZIP: {entry.zip_path}") from exc
+    with _open_nested_annotation_zip(source_zip, entry) as nested_zip:
+        xmi_candidates = [
+            info.filename
+            for info in nested_zip.infolist()
+            if not info.is_dir()
+            and info.filename.replace("\\", "/").endswith(".xmi")
+            and not info.filename.replace("\\", "/").endswith("/INITIAL_CAS.xmi")
+        ]
+        if not xmi_candidates:
+            raise ValueError(f"No XMI found inside annotation ZIP: {entry.zip_path}")
+        preferred = [p for p in xmi_candidates if Path(p.replace("\\", "/")).stem == entry.annotator_name]
+        return nested_zip.read(preferred[0] if preferred else xmi_candidates[0])
+
+
+def read_typesystem_bytes(source_zip: zipfile.ZipFile, typesystem_path: Optional[str], entry: AnnotationEntry) -> bytes:
+    if typesystem_path is not None:
+        return source_zip.read(typesystem_path)
+
+    # Some INCEpTION exports do not place TypeSystem.xml at the project ZIP
+    # root; instead, it is included in each annotation ZIP payload.
+    if not entry.zip_path.replace("\\", "/").endswith(".zip"):
+        raise ValueError("Export does not contain TypeSystem.xml and annotation payload is not a ZIP")
+
+    with _open_nested_annotation_zip(source_zip, entry) as nested_zip:
+        candidates = [
+            info.filename
+            for info in nested_zip.infolist()
+            if not info.is_dir() and info.filename.replace("\\", "/").endswith("TypeSystem.xml")
+        ]
+        exact = [c for c in candidates if c.replace("\\", "/") == "TypeSystem.xml"]
+        selected = exact[0] if exact else (candidates[0] if candidates else None)
+        if selected is None:
+            raise ValueError("Neither project export nor annotation ZIP contains TypeSystem.xml")
+        return nested_zip.read(selected)
 
 
 def write_individual_zip(
     source_zip: zipfile.ZipFile,
-    typesystem_path: str,
+    typesystem_path: Optional[str],
     entry: AnnotationEntry,
     output_dir: Path,
     anonymize: bool,
@@ -519,7 +546,7 @@ def write_individual_zip(
     if output_zip_path.exists() and not overwrite:
         raise FileExistsError(f"Output exists: {output_zip_path}")
 
-    typesystem_bytes = source_zip.read(typesystem_path)
+    typesystem_bytes = read_typesystem_bytes(source_zip, typesystem_path, entry)
     xmi_bytes = read_annotation_xmi_bytes(source_zip, entry)
     xmi_entry_name = f"{safe_filename(output_annotator)}.xmi"
     if anonymize:
