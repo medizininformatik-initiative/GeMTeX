@@ -9,6 +9,8 @@ one annotation XMI from annotation/.
 import argparse
 import csv
 import getpass
+import io
+import json
 import os
 import re
 import sys
@@ -237,40 +239,102 @@ def find_typesystem(zip_file: zipfile.ZipFile) -> str:
     raise ValueError("Export does not contain TypeSystem.xml")
 
 
-def iter_annotation_xmis(zip_file: zipfile.ZipFile) -> Iterable[AnnotationEntry]:
-    """Yield XMI files from the export's annotation/ tree.
+def _warn(message: str) -> None:
+    print(f"Warning: {message}", file=sys.stderr)
 
-    INCEpTION exports are commonly rooted directly at `annotation/...`, but
-    some ZIPs contain an additional top-level folder before `annotation/`.  The
-    SNOMED post-processing code uses project metadata plus `annotation/<doc>/`
-    prefixes; here we keep the same effective behavior while allowing such a
-    leading export prefix.
-    """
+
+def _find_exportedproject_path(zip_file: zipfile.ZipFile) -> Optional[str]:
+    candidates = [
+        info.filename
+        for info in zip_file.infolist()
+        if not info.is_dir() and info.filename.replace("\\", "/").endswith("exportedproject.json")
+    ]
+    exact = [c for c in candidates if c.replace("\\", "/") == "exportedproject.json"]
+    if exact:
+        return exact[0]
+    return candidates[0] if candidates else None
+
+
+def _read_source_documents(zip_file: zipfile.ZipFile) -> Tuple[Optional[List[str]], str]:
+    exportedproject_path = _find_exportedproject_path(zip_file)
+    if exportedproject_path is None:
+        _warn("No exportedproject.json found; falling back to scanning annotation/ entries")
+        return None, ""
+
+    normalized = exportedproject_path.replace("\\", "/")
+    root_prefix = normalized[: -len("exportedproject.json")]
+    try:
+        metadata = json.loads(zip_file.read(exportedproject_path).decode("utf-8"))
+    except Exception as exc:
+        _warn(f"Could not parse exportedproject.json ({exc}); falling back to scanning annotation/ entries")
+        return None, root_prefix
+
+    documents = [
+        str(doc.get("name"))
+        for doc in metadata.get("source_documents", [])
+        if doc.get("name")
+    ]
+    if not documents:
+        _warn("No source_documents found in exportedproject.json; falling back to scanning annotation/ entries")
+        return None, root_prefix
+    return documents, root_prefix
+
+
+def _is_annotation_payload(path: str) -> bool:
+    if path.endswith("/INITIAL_CAS.xmi") or path.endswith("/INITIAL_CAS.zip"):
+        return False
+    return path.endswith(".xmi") or path.endswith(".zip")
+
+
+def _iter_annotation_payloads_by_scan(zip_file: zipfile.ZipFile) -> Iterable[AnnotationEntry]:
     for info in zip_file.infolist():
         path = info.filename.replace("\\", "/")
-        if info.is_dir() or not path.endswith(".xmi"):
+        if info.is_dir() or not _is_annotation_payload(path):
             continue
-
         parts = [part for part in path.split("/") if part]
         if "annotation" not in parts:
             continue
         annotation_idx = parts.index("annotation")
-
-        # Expected, optionally with leading ZIP folder prefix:
-        #   annotation/<document>/<annotator>.xmi
-        #   <prefix>/annotation/<document>/<annotator>.xmi
         if len(parts) < annotation_idx + 3:
             continue
-
-        basename = parts[-1]
-        if basename == "INITIAL_CAS.xmi":
-            continue
-
         document_name = "/".join(parts[annotation_idx + 1 : -1])
-        annotator_name = Path(basename).stem
-        if not document_name or not annotator_name:
+        annotator_name = Path(parts[-1]).stem
+        if document_name and annotator_name:
+            yield AnnotationEntry(info.filename, document_name, annotator_name)
+
+
+def iter_annotation_xmis(zip_file: zipfile.ZipFile) -> Iterable[AnnotationEntry]:
+    """Yield annotation payloads using exportedproject.json source_documents.
+
+    This mirrors the SNOMED post-processing approach: read `source_documents`
+    from `exportedproject.json`, infer `annotation/<DOCUMENT_NAME>/`, then use
+    files below that folder as annotator payloads.  INCEpTION may store the
+    payloads as `.zip` even for XMI exports, so both `.zip` and `.xmi` are
+    accepted.  Missing document folders are ignored with a warning.
+    """
+    source_documents, root_prefix = _read_source_documents(zip_file)
+    if source_documents is None:
+        yield from _iter_annotation_payloads_by_scan(zip_file)
+        return
+
+    infos = zip_file.infolist()
+    for document_name in source_documents:
+        prefix = f"{root_prefix}annotation/{document_name}/"
+        matching_files = [
+            info.filename
+            for info in infos
+            if not info.is_dir()
+            and info.filename.replace("\\", "/").startswith(prefix)
+            and _is_annotation_payload(info.filename.replace("\\", "/"))
+        ]
+        if not matching_files:
+            _warn(f"No annotation payloads found for document '{document_name}' below '{prefix}'")
             continue
-        yield AnnotationEntry(info.filename, document_name, annotator_name)
+
+        for zip_path in sorted(matching_files):
+            annotator_name = Path(zip_path.replace("\\", "/")).stem
+            if annotator_name:
+                yield AnnotationEntry(zip_path, document_name, annotator_name)
 
 
 def discover_annotators(project_zip_path: Path) -> Set[str]:
@@ -414,6 +478,31 @@ def _zip_info(name: str) -> zipfile.ZipInfo:
     return info
 
 
+def read_annotation_xmi_bytes(source_zip: zipfile.ZipFile, entry: AnnotationEntry) -> bytes:
+    payload = source_zip.read(entry.zip_path)
+    if entry.zip_path.replace("\\", "/").endswith(".xmi"):
+        return payload
+
+    # INCEpTION may put each annotator CAS below annotation/<doc>/ as a ZIP.
+    # Extract the XMI from that nested ZIP so our generated ZIP still contains
+    # only TypeSystem.xml and one .xmi file.
+    try:
+        with zipfile.ZipFile(io.BytesIO(payload), "r") as nested_zip:
+            xmi_candidates = [
+                info.filename
+                for info in nested_zip.infolist()
+                if not info.is_dir()
+                and info.filename.replace("\\", "/").endswith(".xmi")
+                and not info.filename.replace("\\", "/").endswith("/INITIAL_CAS.xmi")
+            ]
+            if not xmi_candidates:
+                raise ValueError(f"No XMI found inside annotation ZIP: {entry.zip_path}")
+            preferred = [p for p in xmi_candidates if Path(p.replace("\\", "/")).stem == entry.annotator_name]
+            return nested_zip.read(preferred[0] if preferred else xmi_candidates[0])
+    except zipfile.BadZipFile as exc:
+        raise ValueError(f"Annotation payload is not a valid ZIP: {entry.zip_path}") from exc
+
+
 def write_individual_zip(
     source_zip: zipfile.ZipFile,
     typesystem_path: str,
@@ -431,7 +520,7 @@ def write_individual_zip(
         raise FileExistsError(f"Output exists: {output_zip_path}")
 
     typesystem_bytes = source_zip.read(typesystem_path)
-    xmi_bytes = source_zip.read(entry.zip_path)
+    xmi_bytes = read_annotation_xmi_bytes(source_zip, entry)
     xmi_entry_name = f"{safe_filename(output_annotator)}.xmi"
     if anonymize:
         xmi_bytes = sanitize_xmi_bytes(xmi_bytes, entry.annotator_name, output_annotator)
@@ -466,7 +555,7 @@ def process_project_export(
         typesystem_path = find_typesystem(source_zip)
         entries = list(iter_annotation_xmis(source_zip))
         if not entries:
-            raise ValueError("No annotation XMI files found in export")
+            raise ValueError("No annotation XMI/ZIP payloads found in export")
 
         for entry in entries:
             if annotator_filter is not None and entry.annotator_name.lower() not in annotator_filter:
@@ -489,7 +578,7 @@ def process_project_export(
             )
 
     if not written:
-        raise ValueError("Annotator selection matched no annotation XMI files")
+        raise ValueError("Annotator selection matched no annotation XMI/ZIP payloads")
 
     if anonymize and mapping_file is not None:
         write_mapping(mapping_file, mapping, overwrite=True)
