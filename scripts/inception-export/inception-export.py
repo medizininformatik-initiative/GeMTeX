@@ -345,7 +345,7 @@ def prompt_for_annotators(annotators: Set[str]) -> Optional[List[str]]:
             {
                 "type": "confirm",
                 "name": return_all_name,
-                "message": "There are multiple annotators in the project. Export all of them?",
+                "message": "There are multiple annotators in the project. Export all of them? (If 'no', you can select which ones.)",
                 "default": True,
             }
         ]

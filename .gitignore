@@ -12,3 +12,4 @@ __pycache__/
 debug.sh
 /scripts/uima_cas_converter/test/
 /llm-ade-extraction/test/
+/scripts/inception-export/out/
