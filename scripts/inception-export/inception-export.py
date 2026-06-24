@@ -43,7 +43,11 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument("--project", help="Project id or exact/case-insensitive project name")
     parser.add_argument("--list-projects", action="store_true", help="List projects and exit")
-    parser.add_argument("--output-dir", type=Path, help="Directory for generated ZIP files")
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        help="Base output directory. Defaults to ./out. Files are written below <output-dir>/<PROJECT_NAME>/.",
+    )
     parser.add_argument("--anonymize", action="store_true", help="Use anonymous annotator names in outputs")
     parser.add_argument("--mapping-file", type=Path, help="CSV mapping file for anonymization")
     parser.add_argument(
@@ -78,8 +82,6 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     args = parser.parse_args(argv)
     if args.include_annotator and args.exclude_annotator:
         parser.error("--include-annotator and --exclude-annotator are mutually exclusive")
-    if not args.list_projects and not args.output_dir:
-        parser.error("--output-dir is required unless --list-projects is used")
     return args
 
 
@@ -634,10 +636,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return 0
 
         project = resolve_project(projects, args.project) if args.project else prompt_for_project(projects)
+        base_output_dir = args.output_dir or Path("out")
+        project_output_dir = base_output_dir / safe_filename(project.project_name)
+
         print(f"Exporting project {project.project_name} ({project.project_id}) as xmi...")
         export_bytes = export_project_xmi(client, project.project_id)
         tmpdir, project_zip_path = write_project_export(
-            export_bytes, project.project_name, args.output_dir, args.keep_project_export
+            export_bytes, project.project_name, project_output_dir, args.keep_project_export
         )
         try:
             annotators = discover_annotators(project_zip_path)
@@ -659,15 +664,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             )
             count = process_project_export(
                 project_zip_path,
-                args.output_dir,
+                project_output_dir,
                 anonymize=args.anonymize,
-                mapping_file=args.mapping_file or (args.output_dir / "annotator-mapping.csv" if args.anonymize else None),
+                mapping_file=args.mapping_file or (project_output_dir / "annotator-mapping.csv" if args.anonymize else None),
                 overwrite=args.overwrite,
                 annotator_filter=annotator_filter,
             )
-            print(f"Wrote {count} ZIP file(s) to {args.output_dir}")
+            print(f"Wrote {count} ZIP file(s) to {project_output_dir}")
             if args.anonymize:
-                print(f"Anonymization mapping written to {args.mapping_file or args.output_dir / 'annotator-mapping.csv'}")
+                print(f"Anonymization mapping written to {args.mapping_file or project_output_dir / 'annotator-mapping.csv'}")
             if args.keep_project_export:
                 print(f"Kept full project export at {project_zip_path}")
             return 0
