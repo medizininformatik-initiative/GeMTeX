@@ -238,17 +238,36 @@ def find_typesystem(zip_file: zipfile.ZipFile) -> str:
 
 
 def iter_annotation_xmis(zip_file: zipfile.ZipFile) -> Iterable[AnnotationEntry]:
+    """Yield XMI files from the export's annotation/ tree.
+
+    INCEpTION exports are commonly rooted directly at `annotation/...`, but
+    some ZIPs contain an additional top-level folder before `annotation/`.  The
+    SNOMED post-processing code uses project metadata plus `annotation/<doc>/`
+    prefixes; here we keep the same effective behavior while allowing such a
+    leading export prefix.
+    """
     for info in zip_file.infolist():
         path = info.filename.replace("\\", "/")
-        if info.is_dir() or not path.startswith("annotation/") or not path.endswith(".xmi"):
+        if info.is_dir() or not path.endswith(".xmi"):
             continue
-        if path.endswith("/INITIAL_CAS.xmi"):
+
+        parts = [part for part in path.split("/") if part]
+        if "annotation" not in parts:
             continue
-        parts = path.split("/")
-        if len(parts) < 3:
+        annotation_idx = parts.index("annotation")
+
+        # Expected, optionally with leading ZIP folder prefix:
+        #   annotation/<document>/<annotator>.xmi
+        #   <prefix>/annotation/<document>/<annotator>.xmi
+        if len(parts) < annotation_idx + 3:
             continue
-        document_name = "/".join(parts[1:-1])
-        annotator_name = Path(parts[-1]).stem
+
+        basename = parts[-1]
+        if basename == "INITIAL_CAS.xmi":
+            continue
+
+        document_name = "/".join(parts[annotation_idx + 1 : -1])
+        annotator_name = Path(basename).stem
         if not document_name or not annotator_name:
             continue
         yield AnnotationEntry(info.filename, document_name, annotator_name)
@@ -478,14 +497,19 @@ def process_project_export(
 
 
 def write_project_export(data: bytes, project_label: str, output_dir: Optional[Path], keep: bool) -> Tuple[Optional[tempfile.TemporaryDirectory], Path]:
+    if output_dir is None:
+        raise ValueError("--output-dir is required to write the project export")
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     if keep:
-        if output_dir is None:
-            raise ValueError("--output-dir is required with --keep-project-export")
-        output_dir.mkdir(parents=True, exist_ok=True)
         path = output_dir / f"{safe_filename(project_label)}-full-export.zip"
         path.write_bytes(data)
         return None, path
-    tmpdir = tempfile.TemporaryDirectory()
+
+    # Keep the transient full export below --output-dir as well, so relative
+    # output paths behave consistently on Windows. The directory is removed at
+    # the end of the run unless --keep-project-export is used.
+    tmpdir = tempfile.TemporaryDirectory(prefix=".tmp-inception-export-", dir=str(output_dir))
     path = Path(tmpdir.name) / f"{safe_filename(project_label)}.zip"
     path.write_bytes(data)
     return tmpdir, path
