@@ -43,11 +43,6 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument("--project", help="Project id or exact/case-insensitive project name")
     parser.add_argument("--list-projects", action="store_true", help="List projects and exit")
-    parser.add_argument(
-        "--select-project",
-        action="store_true",
-        help="Prompt for a project when --project is omitted",
-    )
     parser.add_argument("--output-dir", type=Path, help="Directory for generated ZIP files")
     parser.add_argument("--anonymize", action="store_true", help="Use anonymous annotator names in outputs")
     parser.add_argument("--mapping-file", type=Path, help="CSV mapping file for anonymization")
@@ -79,17 +74,10 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         action="store_true",
         help="Export/read selected project enough to list annotators, then exit",
     )
-    parser.add_argument(
-        "--select-annotators",
-        action="store_true",
-        help="Prompt for annotators after project export",
-    )
 
     args = parser.parse_args(argv)
     if args.include_annotator and args.exclude_annotator:
         parser.error("--include-annotator and --exclude-annotator are mutually exclusive")
-    if not args.list_projects and not args.project and not args.select_project:
-        parser.error("provide --project, --select-project, or --list-projects")
     if not args.list_projects and not args.output_dir:
         parser.error("--output-dir is required unless --list-projects is used")
     return args
@@ -661,7 +649,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     print(annotator)
                 return 0
 
-            selected = prompt_for_annotators(annotators) if args.select_annotators else None
+            should_prompt_annotators = not args.include_annotator and not args.exclude_annotator
+            selected = prompt_for_annotators(annotators) if should_prompt_annotators else None
             annotator_filter = build_annotator_filter(
                 annotators,
                 include=args.include_annotator,
