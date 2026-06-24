@@ -135,11 +135,22 @@ def print_projects(projects: Sequence[ProjectInfo]) -> None:
 
 
 def _pyinquirer_prompt(questions):
+    # PyInquirer depends on prompt-toolkit 1.x, which imports collection ABCs
+    # from `collections`. Python 3.10+ moved these to `collections.abc`.
+    # Apply the small compatibility shim before importing PyInquirer.
     try:
+        import collections
+        import collections.abc
+
+        for name in ("Mapping", "MutableMapping", "Sequence"):
+            if not hasattr(collections, name):
+                setattr(collections, name, getattr(collections.abc, name))
+
         from PyInquirer import prompt
     except ImportError as exc:
         raise RuntimeError(
-            "PyInquirer is required for interactive selection. Install dependencies with `uv sync`."
+            "PyInquirer could not be imported. Run `uv sync` and ensure PyInquirer is compatible with this Python version. "
+            f"Original import error: {exc}"
         ) from exc
     return prompt(questions)
 
