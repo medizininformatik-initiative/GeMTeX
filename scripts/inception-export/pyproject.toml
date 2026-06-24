@@ -1,6 +1,6 @@
 [project]
 name = "inception-export"
-version = "0.1.0"
+version = "0.5.0"
 description = "Export INCEpTION annotations into per-document/annotator XMI ZIPs"
 requires-python = "~=3.9.0"
 dependencies = [
