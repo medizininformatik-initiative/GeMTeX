@@ -125,5 +125,5 @@ or to a custom path via:
 ```bash
 --overwrite              # allow replacing existing output ZIPs
 --keep-project-export    # keep the full downloaded project export ZIP
---verify-ssl false       # disable SSL verification
+--verify-ssl true       # enables SSL verification
 ```

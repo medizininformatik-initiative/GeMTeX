@@ -11,6 +11,7 @@ import csv
 import getpass
 import io
 import json
+import logging
 import os
 import re
 import sys
@@ -57,8 +58,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--verify-ssl",
-        default="true",
-        help="SSL verification: true, false, or path to a CA bundle (default: true)",
+        default="false",
+        help="SSL verification: true, false, or path to a CA bundle (default: false)",
     )
     parser.add_argument("--overwrite", action="store_true", help="Overwrite existing output files")
     parser.add_argument(
@@ -94,24 +95,27 @@ def parse_verify_ssl(value: str) -> Union[bool, str]:
     return value
 
 
-def make_client(host: str, username: str, password: str, verify_ssl: Union[bool, str]):
+def make_client(host: str, username: str, password: str, verify_ssl: Union[bool, str] = False):
     try:
         from pycaprio import Pycaprio
     except ImportError as exc:
         raise RuntimeError("pycaprio is required: install it before using this CLI") from exc
 
-    client = Pycaprio(host, (username, password))
-    if verify_ssl is False:
-        try:
+    try:
+        inception_client = Pycaprio(host, (username, password))
+        if not verify_ssl:
             import urllib3
-
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-        except ImportError:
-            pass
-        client.api.client.session.verify = False
-    elif isinstance(verify_ssl, str):
-        client.api.client.session.verify = verify_ssl
-    return client
+            inception_client.api.client.session.verify = False
+        elif isinstance(verify_ssl, str):
+            inception_client.api.client.session.verify = verify_ssl
+
+    except Exception as e:
+        logging.error(
+            f"Something went wrong while trying to connect to INCEpTION instance: '{e}'."
+        )
+        raise RuntimeError(f"Could not connect to INCEpTION instance: {e}")
+    return inception_client
 
 
 def list_projects(client) -> List[ProjectInfo]:
