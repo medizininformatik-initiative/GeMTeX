@@ -47,7 +47,7 @@ wheels = [
 
 [[package]]
 name = "inception-export"
-version = "0.5.0"
+version = "0.5.2"
 source = { virtual = "." }
 dependencies = [
     { name = "pycaprio" },

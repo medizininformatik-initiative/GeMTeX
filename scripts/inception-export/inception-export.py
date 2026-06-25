@@ -57,6 +57,11 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         help="Keep the full project export ZIP in --output-dir for debugging",
     )
     parser.add_argument(
+        "--zip-like-xmi-name",
+        action="store_true",
+        help="The name of the resulting xmi file is the same as the zip file (default: it is just the document name)",
+    )
+    parser.add_argument(
         "--verify-ssl",
         default="false",
         help="SSL verification: true, false, or path to a CA bundle (default: false)",
@@ -532,6 +537,7 @@ def write_individual_zip(
     anonymize: bool,
     mapping: Dict[str, str],
     overwrite: bool,
+    zip_like_name: bool = False,
 ) -> Path:
     output_annotator = get_anon_name(entry.annotator_name, mapping) if anonymize else entry.annotator_name
     zip_name = f"{safe_filename(entry.document_name)}-{safe_filename(output_annotator)}.zip"
@@ -542,7 +548,9 @@ def write_individual_zip(
 
     typesystem_bytes = read_typesystem_bytes(source_zip, typesystem_path, entry)
     xmi_bytes = read_annotation_xmi_bytes(source_zip, entry)
-    xmi_entry_name = f"{safe_filename(output_annotator)}.xmi"
+    xmi_entry_name = f"{safe_filename(entry.document_name)}.xmi"
+    if zip_like_name:
+        xmi_entry_name = f"{safe_filename(entry.document_name)}-{safe_filename(output_annotator)}.xmi"
     if anonymize:
         xmi_bytes = sanitize_xmi_bytes(xmi_bytes, entry.annotator_name, output_annotator)
         real_bytes = entry.annotator_name.encode("utf-8")
@@ -562,6 +570,7 @@ def process_project_export(
     mapping_file: Optional[Path] = None,
     overwrite: bool = False,
     annotator_filter: Optional[Set[str]] = None,
+    zip_like_name: bool = False,
 ) -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
     if anonymize:
@@ -595,6 +604,7 @@ def process_project_export(
                     anonymize,
                     mapping,
                     overwrite,
+                    zip_like_name,
                 )
             )
 
@@ -673,6 +683,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 mapping_file=args.mapping_file or (project_output_dir / "annotator-mapping.csv" if args.anonymize else None),
                 overwrite=args.overwrite,
                 annotator_filter=annotator_filter,
+                zip_like_name=args.zip_like_xmi_name,
             )
             print(f"Wrote {count} ZIP file(s) to {project_output_dir}")
             if args.anonymize:
