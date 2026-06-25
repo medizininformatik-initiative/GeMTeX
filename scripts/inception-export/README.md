@@ -123,7 +123,8 @@ or to a custom path via:
 ## Other useful flags
 
 ```bash
---overwrite              # allow replacing existing output ZIPs
---keep-project-export    # keep the full downloaded project export ZIP
+--overwrite             # allow replacing existing output ZIPs
+--keep-project-export   # keep the full downloaded project export ZIP
 --verify-ssl true       # enables SSL verification
+--zip-like-xmi-name     # use the same name for the XMI file as the ZIP (else only document name)
 ```
