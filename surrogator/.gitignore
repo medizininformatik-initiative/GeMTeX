@@ -6,6 +6,7 @@ log/*
 /data2/
 /data3/
 /log/
+/test_data/
 /test_data_out
 /test_data/surrogate/
 /test_data/zip_export/

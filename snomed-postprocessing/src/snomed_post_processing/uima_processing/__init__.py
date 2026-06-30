@@ -16,11 +16,7 @@ import yaspin
 import randomname
 
 
-if __name__.find(".uima_processing") != -1:
-    from ..utils import ListDumpType, Information
-else:
-    sys.path.append(".")
-    from utils import ListDumpType, Information
+from ..utils import ListDumpType, Information, is_numeric
 
 
 @dataclasses.dataclass
@@ -66,37 +62,31 @@ def _read_project(zip_file: zipfile.ZipFile, file_name: str) -> Optional[list[di
 
 
 def _yield_matching_files(
-    project_documents: list[dict], zip_file: zipfile.ZipFile, file_name: str = None
+    project_documents: list[dict],
+    zip_file: zipfile.ZipFile,
+    file_name: str = None,
+    allowed_extensions: Optional[list[str]] = None,
 ):
     for doc in project_documents:
         doc_name = doc["name"]
         state = doc.get("state", "")
 
-        # Determine path (curation or annotation)
-        folder_prefix = (
-            f"curation/{doc_name}/"
-            if state == "CURATION_FINISHED"
-            else f"annotation/{doc_name}/"
-        )
-        folder_prefix_ser = (
-            f"curation_ser/{doc_name}/"
-            if state == "CURATION_FINISHED"
-            else f"annotation_ser/{doc_name}/"
-        )
+        # Determine paths (curation and annotation)
+        prefixes = [
+            f"curation/{doc_name}/",
+            f"annotation/{doc_name}/",
+            f"curation_ser/{doc_name}/",
+            f"annotation_ser/{doc_name}/",
+        ]
 
-        # Collect CAS JSON files
+        # Collect CAS files
         matching_files = [
             info.filename
             for info in zip_file.infolist()
-            if (
-                info.filename.startswith(folder_prefix)
-                or info.filename.startswith(folder_prefix_ser)
-            )
+            if any(info.filename.startswith(p) for p in prefixes)
             and (
-                info.filename.endswith(".json")
-                or info.filename.endswith(".xmi")
-                or info.filename.endswith(".zip")
-                or info.filename.endswith(".ser")
+                allowed_extensions is None
+                or any(info.filename.endswith(ext) for ext in allowed_extensions)
             )
             and not info.is_dir()
         ]
@@ -108,18 +98,22 @@ def _yield_matching_files(
                 for p in matching_files
                 if not any(
                     p.endswith(ext)
-                    for ext in [
-                        "INITIAL_CAS.json",
-                        "INITIAL_CAS.xmi",
-                        "INITIAL_CAS.zip",
-                        "INITIAL_CAS.ser",
-                    ]
+                    for ext in (
+                        [f"INITIAL_CAS{ext}" for ext in allowed_extensions]
+                        if allowed_extensions is not None
+                        else [
+                            "INITIAL_CAS.json",
+                            "INITIAL_CAS.xmi",
+                            "INITIAL_CAS.zip",
+                            "INITIAL_CAS.ser",
+                        ]
+                    )
                 )
             ]
 
         if not matching_files:
             logging.warning(
-                f"No CAS found for {doc_name} in {file_name} ({folder_prefix}, {folder_prefix_ser})"
+                f"No CAS found for {doc_name} in {file_name} searched in {prefixes}"
             )
             continue
         yield doc_name, matching_files
@@ -153,7 +147,12 @@ def get_annotations_from_document(
     for type_ in annotation_types:
         for annotation in document.select(type_):
             try:
-                codes.append(annotation.get("id").removeprefix(id_prefix))
+                _id = annotation.get("id")
+                if _id is None or str(_id).strip().lower() in {"", "null", "none", "nan"}:
+                    codes.append(np.nan)
+                else:
+                    codes.append(str(_id).removeprefix(id_prefix))
+
                 offsets.append(
                     (
                         annotation.begin,
@@ -171,7 +170,9 @@ def get_annotations_from_document(
     )
 
 
-def get_annotator_names(project_path: pathlib.Path) -> tuple[set[str], bool]:
+def get_annotator_names(
+    project_path: pathlib.Path, allowed_extensions: Optional[list[str]] = None
+) -> tuple[set[str], bool]:
     annotator_names = set()
     only_ser = True
     found_any = False
@@ -179,7 +180,11 @@ def get_annotator_names(project_path: pathlib.Path) -> tuple[set[str], bool]:
         file_name = project_path.name
         project_documents = _read_project(zip_file, file_name)
         if project_documents is not None:
-            for _, fi in _yield_matching_files(project_documents, zip_file):
+            for _, fi in _yield_matching_files(
+                project_documents,
+                zip_file,
+                allowed_extensions=allowed_extensions,
+            ):
                 for cp in fi:
                     found_any = True
                     annotator_names.add(str(pathlib.Path(cp).stem))
@@ -193,6 +198,7 @@ def process_inception_zip(
     annotator_filter=None,
     annotation_types: list[str] = None,
     id_prefix: str = "http://snomed.info/id/",
+    allowed_extensions: Optional[list[str]] = None,
 ) -> TemporaryCorpus:
     if not annotation_types:
         annotation_types = ["gemtex.Concept"]
@@ -216,7 +222,10 @@ def process_inception_zip(
                     f" Processing only following annotators: {annotator_filter}"
                 )
             for doc_name, matching_files in _yield_matching_files(
-                project_documents, zip_file, file_name
+                project_documents,
+                zip_file,
+                file_name,
+                allowed_extensions=allowed_extensions,
             ):
                 # ---- Load each CAS, compute stats, discard CAS ----
                 for cas_path in matching_files:
@@ -282,6 +291,7 @@ def analyze_documents(
     whitelist_code_counter: Counter,
     progress_obj: Optional[dict] = None,
     dump_dictionary: Optional[dict] = None,
+    filter_nan_values: bool = True,
 ) -> Optional[int]:
     as_whitelist = filter_type == ListDumpType.WHITELIST
     erroneous_doc_count = 0
@@ -331,28 +341,49 @@ def analyze_documents(
                         progress_obj["text_pre"] + _text,
                     )
                 spinner.text = _text
+                nan_filter = (annotations.snomed_codes != b"nan") if filter_nan_values else np.ones(annotations.length, dtype=bool)
+                erroneous_codes_array = np.zeros(annotations.length, dtype=bool)
                 if as_whitelist:
-                    erroneous_codes_array = ~np.isin(
-                        annotations.snomed_codes, filter_array
+                    erroneous_codes_array[nan_filter] = ~np.isin(
+                        annotations.snomed_codes[nan_filter], filter_array
                     )
                 else:
-                    erroneous_codes_array = np.isin(
-                        annotations.snomed_codes, filter_array
+                    erroneous_codes_array[nan_filter] = np.isin(
+                        annotations.snomed_codes[nan_filter], filter_array
                     )
 
                 if not np.all(~erroneous_codes_array):
+                    # Filter out numerical spans without a code in whitelist mode
+                    if as_whitelist:
+                        actual_indices = np.where(erroneous_codes_array)[0]
+                        final_erroneous_indices_mask = np.ones(
+                            len(actual_indices), dtype=bool
+                        )
+                        for idx_in_err, idx_in_doc in enumerate(actual_indices):
+                            code = annotations.snomed_codes[idx_in_doc]
+                            text = str(annotations.text[idx_in_doc])
+                            if code == b"nan" and is_numeric(text):
+                                final_erroneous_indices_mask[idx_in_err] = False
+
+                        if not np.any(final_erroneous_indices_mask):
+                            # All erroneous codes were numerical spans without a code
+                            continue
+
+                        # Update erroneous_codes_array to exclude numerical spans
+                        erroneous_codes_array[
+                            actual_indices[~final_erroneous_indices_mask]
+                        ] = False
+
                     doc_error_count += 1
                     concept_error_count += np.count_nonzero(erroneous_codes_array)
                     _map_dict = None
                     if not as_whitelist:
                         _map_dict = {}
-                        idx = np.searchsorted(
-                            filter_array,
-                            annotations.snomed_codes[erroneous_codes_array],
-                        )
-                        for _idx in idx:
-                            key = filter_array[_idx]
-                            _map_dict[bytes(key)] = mapping_array[_idx]
+                        erroneous_codes = annotations.snomed_codes[erroneous_codes_array]
+                        idx = np.searchsorted(filter_array, erroneous_codes)
+                        for code, _idx in zip(erroneous_codes, idx):
+                            if _idx < len(filter_array) and filter_array[_idx] == code:
+                                _map_dict[bytes(code)] = mapping_array[_idx]
                     log_critical_docs(
                         annotator_name,
                         doc_name,

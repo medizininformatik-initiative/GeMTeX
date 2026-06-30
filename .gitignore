@@ -10,3 +10,7 @@ __pycache__/
 /.venv/*
 .vscode/*
 debug.sh
+/scripts/uima_cas_converter/test/
+/llm-ade-extraction/test/
+llm-ade-extraction/pipeline_out/Albers_\[0].json
+/scripts/inception-export/out/

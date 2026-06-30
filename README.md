@@ -37,9 +37,11 @@ Ordner für verschiedene Skripte/Demos.
 Eine Demo bzw. Machbarkeitsnachweis wie CDA Dokumente Level One über XSLT Stylesheets in HTML oder Plain-Text gewandelt werden können.
 * [`health-discovery-scripts`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/scripts/health-discovery-scripts)  
 Python-Skripte um die [Averbis Health Discovery](https://averbis.com/health-discovery/) per API anzusprechen.
-* [`uima_cas_converter`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/scripts/uima_cas_converter)
+* [`inception-export`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/scripts/inception-export)  
+Pyhon CLI/Streamlit GUI to export INCEpTION Projects in a KDS compliant form   
+* [`uima_cas_converter`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/scripts/uima_cas_converter)  
 Ein einfaches Skript um UIMA CAS-Dateien von `json` in `xmi` umzuschreiben oder umgekehrt.
-* [`zip-renaming`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/scripts/zip-renaming)
+* [`zip-renaming`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/scripts/zip-renaming)  
 Ein einfaches Skript um automatisch INCEpTION-exportierte finale ZIP Dateien umzubenennen, damit sie die Dokument-ID beinhalten. 
 
 ### [`snomed-postprocessing`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/snomed-postprocessing)  
