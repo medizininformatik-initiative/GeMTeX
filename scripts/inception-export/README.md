@@ -1,5 +1,9 @@
 # INCEpTION Export
-
+### Warning
+````text
+Please verify with some files that the output is correct (anonymized etc.),
+since the script is not yet fully tested.
+````
 Export an INCEpTION project into one ZIP per document/annotator pair.
 
 Each output ZIP contains only:
