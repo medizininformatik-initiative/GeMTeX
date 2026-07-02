@@ -1,0 +1,36 @@
+{
+  "description": "Reusable SNOMED-like DAG fixture for HDF5 concept hierarchy tests. It is intentionally at least 5 levels deep and contains multiple concepts with multiple parents.",
+  "codes": {
+    "100000": "SNOMED CT Concept (metadata)",
+    "200000": "Clinical finding (finding)",
+    "300000": "Disease (disorder)",
+    "400000": "Respiratory system disorder (disorder)",
+    "500000": "Lung disease (disorder)",
+    "600000": "Pneumonia (disorder)",
+    "610000": "Bacterial pneumonia (disorder)",
+    "700000": "Infectious disease (disorder)",
+    "800000": "Bacterial infectious disease (disorder)",
+    "900000": "Procedure (procedure)",
+    "910000": "Procedure on lung (procedure)",
+    "920000": "Complex respiratory intervention (procedure)",
+    "999999": "Disconnected local concept (finding)"
+  },
+  "parents": {
+    "200000": ["100000"],
+    "300000": ["200000"],
+    "400000": ["300000"],
+    "500000": ["400000", "700000"],
+    "600000": ["500000"],
+    "610000": ["600000", "800000"],
+    "700000": ["300000"],
+    "800000": ["700000"],
+    "900000": ["100000"],
+    "910000": ["900000", "500000"],
+    "920000": ["910000", "610000"]
+  },
+  "notes": {
+    "depth_example": "610000 -> 600000 -> 500000 -> 400000 -> 300000 -> 200000 -> 100000",
+    "multiple_parent_concepts": ["500000", "610000", "910000", "920000"],
+    "disconnected_concepts": ["999999"]
+  }
+}
