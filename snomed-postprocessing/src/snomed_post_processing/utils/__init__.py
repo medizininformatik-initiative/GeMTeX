@@ -303,66 +303,8 @@ def snowstorm_response_to_pydantic(json_data: dict):
     return SnowstormResponse.model_validate_json(json_dump)
 
 
-def hdf5_has_concepts_extension(fi_path: pathlib.Path) -> bool:
-    if not fi_path.exists() or not fi_path.is_file():
-        return False
-    with h5py.File(str(fi_path.resolve()), "r") as h5_file:
-        return "concepts" in h5_file
-
-
-def _compute_ancestors_bfs(
-    code: str, parent_map: dict[str, set[str]]
-) -> dict[str, int]:
-    distances = {}
-    queue = deque((parent, 1) for parent in sorted(parent_map.get(code, set())))
-    while queue:
-        ancestor, distance = queue.popleft()
-        if ancestor in distances and distances[ancestor] <= distance:
-            continue
-        distances[ancestor] = distance
-        queue.extend(
-            (parent, distance + 1)
-            for parent in sorted(parent_map.get(ancestor, set()))
-        )
-    return distances
-
-
-def _compute_ancestors_memoized(
-    code: str,
-    parent_map: dict[str, set[str]],
-    memo: dict[str, dict[str, int]],
-    visiting: Optional[set[str]] = None,
-) -> dict[str, int]:
-    if code in memo:
-        return memo[code]
-    if visiting is None:
-        visiting = set()
-    if code in visiting:
-        return {}
-
-    visiting.add(code)
-    distances = {}
-    for parent in sorted(parent_map.get(code, set())):
-        if parent not in distances or distances[parent] > 1:
-            distances[parent] = 1
-        for ancestor, distance in _compute_ancestors_memoized(
-            parent, parent_map, memo, visiting
-        ).items():
-            candidate_distance = distance + 1
-            if (
-                ancestor not in distances
-                or distances[ancestor] > candidate_distance
-            ):
-                distances[ancestor] = candidate_distance
-    visiting.remove(code)
-    memo[code] = distances
-    return distances
-
-
 def _compute_compact_ancestor_arrays(
-    id_to_fsn_dict: dict[str, str],
-    parent_map: dict[str, set[str]],
-    use_memoization: bool = False,
+    id_to_fsn_dict: dict[str, str], parent_map: dict[str, set[str]]
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     all_codes = sorted(
         set(id_to_fsn_dict.keys())
@@ -373,14 +315,19 @@ def _compute_compact_ancestor_arrays(
     ancestor_distances_flat = []
     ancestor_index = []
 
-    memo = {} if use_memoization else None
     for code in all_codes:
         start = len(ancestor_codes_flat)
-        distances = (
-            _compute_ancestors_memoized(code, parent_map, memo)
-            if use_memoization
-            else _compute_ancestors_bfs(code, parent_map)
-        )
+        distances = {}
+        queue = deque((parent, 1) for parent in sorted(parent_map.get(code, set())))
+        while queue:
+            ancestor, distance = queue.popleft()
+            if ancestor in distances and distances[ancestor] <= distance:
+                continue
+            distances[ancestor] = distance
+            queue.extend(
+                (parent, distance + 1)
+                for parent in sorted(parent_map.get(ancestor, set()))
+            )
 
         for ancestor, distance in sorted(distances.items(), key=lambda x: (x[1], x[0])):
             ancestor_codes_flat.append(ancestor)
@@ -400,21 +347,18 @@ def _write_concepts_extension(
     id_to_fsn_dict: dict[str, str],
     parent_map: dict[str, set[str]],
     force_overwrite: bool = False,
-    use_memoization: bool = False,
 ):
     if "concepts" in fi:
         if force_overwrite:
             del fi["concepts"]
         else:
             logging.warning(
-                "HDF5 concepts extension already exists and 'force_overwrite_concepts' is FALSE. Skipping."
+                "HDF5 concepts extension already exists and 'force_overwrite' is FALSE. Skipping."
             )
             return
 
     codes, ancestor_index, ancestor_codes, ancestor_distances = (
-        _compute_compact_ancestor_arrays(
-            id_to_fsn_dict, parent_map, use_memoization=use_memoization
-        )
+        _compute_compact_ancestor_arrays(id_to_fsn_dict, parent_map)
     )
     concept_group = fi.create_group("concepts")
     fsn = np.asarray(
@@ -442,8 +386,6 @@ def dump_codes_to_hdf5(
     revision: bool = True,
     force_overwrite: bool = False,
     parent_map: Optional[dict[str, set[str]]] = None,
-    use_memoization: bool = False,
-    force_overwrite_concepts: bool = False,
 ):
     def _create_dataset(
         fi: h5py.File, name: str, content: Union[set, list, np.ndarray], mappings: dict
@@ -510,9 +452,5 @@ def dump_codes_to_hdf5(
 
         if parent_map is not None:
             _write_concepts_extension(
-                f,
-                id_to_fsn_dict,
-                parent_map,
-                force_overwrite=force_overwrite_concepts,
-                use_memoization=use_memoization,
+                f, id_to_fsn_dict, parent_map, force_overwrite=force_overwrite
             )
