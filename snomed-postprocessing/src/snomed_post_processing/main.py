@@ -294,7 +294,12 @@ def log_documents(
 @click.option(
     "--force-overwrite",
     is_flag=True,
-    help="If this flag is set, the codes will not be resolved recursively and only the first level children will be returned.",
+    help="If this flag is set, existing matching HDF5 groups will be overwritten.",
+)
+@click.option(
+    "--memoize-ancestors",
+    is_flag=True,
+    help="Use memoization when computing the compact ancestor/distance HDF5 extension. Disabled by default.",
 )
 @click_log_level
 def create_concept_id_dump(
@@ -308,6 +313,7 @@ def create_concept_id_dump(
     filter_mode: FilterMode,
     not_recursive: bool,
     force_overwrite: bool,
+    memoize_ancestors: bool,
     log_level: str,
 ):
     """
@@ -424,6 +430,7 @@ def create_concept_id_dump(
             revision=not force_overwrite,
             force_overwrite=force_overwrite,
             parent_map=parent_map,
+            use_memoization=memoize_ancestors,
         )
     except Exception as e:
         logging.error(f"Error while creating hdf5 dump: '{e}'. Exiting.")
