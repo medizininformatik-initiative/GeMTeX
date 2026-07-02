@@ -68,7 +68,6 @@ def dump_concept_ids(
     dump_whole_subtree: bool = False,
     visited_nodes: set = None,
     parent_map: dict[str, set[str]] = None,
-    collect_parent_map: bool = True,
 ) -> Tuple[set[str], dict[str, str], dict[str, set[str]]]:
     """
     Dumps concept IDs and their fully specified names (FSNs) with configurable filtering and recursion.
@@ -101,7 +100,6 @@ def dump_concept_ids(
         dump_whole_subtree (bool): ...
         visited_nodes (set): ...
         parent_map (dict): Mapping from child concept IDs to directly observed parent IDs.
-        collect_parent_map (bool): Whether direct parent relationships should be collected for the HDF5 concepts extension.
 
     Returns:
         Tuple[set[str], dict[str, str], dict[str, set[str]]]: A tuple containing:
@@ -166,8 +164,7 @@ def dump_concept_ids(
 
     iteration += 1
     for code in return_codes(concept_children):
-        if collect_parent_map:
-            parent_map.setdefault(code.conceptId, set()).add(root_concept.conceptId)
+        parent_map.setdefault(code.conceptId, set()).add(root_concept.conceptId)
         if code.conceptId not in id_to_fsn_dict:
             id_to_fsn_dict[code.conceptId] = code.fsn.term
         _id_hash_set, _id_to_fsn_dict, _parent_map = dump_concept_ids(
@@ -184,7 +181,6 @@ def dump_concept_ids(
             dump_whole_subtree,
             visited_nodes,
             parent_map,
-            collect_parent_map,
         )
         id_hash_set.update(_id_hash_set)
         parent_map.update(_parent_map)

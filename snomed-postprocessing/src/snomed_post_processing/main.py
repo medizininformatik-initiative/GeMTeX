@@ -46,6 +46,24 @@ class ClickUnion(click.ParamType):
         self.fail("Didn't match any of the accepted types.")
 
 
+class ClickEnumChoice(click.ParamType):
+    def __init__(self, enum_type):
+        self.enum_type = enum_type
+        self.choices = [e.name.lower() for e in enum_type]
+        self.name = "[" + "|".join(self.choices) + "]"
+
+    def convert(self, value, param, ctx):
+        if isinstance(value, self.enum_type):
+            return value
+        value_normalized = str(value).lower()
+        for enum_value in self.enum_type:
+            if enum_value.name.lower() == value_normalized:
+                return enum_value
+        self.fail(
+            f"'{value}' is not one of {'/'.join(self.choices)}.", param, ctx
+        )
+
+
 def click_server_options(fnc):
     fnc = click.option(
         "--use-secure_protocol", is_flag=True, help="Whether to use 'https'."
@@ -251,7 +269,7 @@ def log_documents(
 @click.option(
     "--dump-mode",
     default=DumpMode.VERSION,
-    type=click.Choice(DumpMode, case_sensitive=False),
+    type=ClickEnumChoice(DumpMode),
     help="Whether to whitelist ('version') or blacklist ('semantic') a code dump.",
 )
 @click.option(
@@ -265,7 +283,7 @@ def log_documents(
 @click.option(
     "--filter-mode",
     default=FilterMode.POSITIVE,
-    type=click.Choice(FilterMode, case_sensitive=False),
+    type=ClickEnumChoice(FilterMode),
     help="'positive': only concepts with specified codes/tags will be returned; 'negative': vice versa concepts with specified codes/tags will not be returned",
 )
 @click.option(
@@ -378,7 +396,7 @@ def create_concept_id_dump(
 
     with yaspin.yaspin(text="Processing..."):
         if root := get_root_code(root_code, endpoint_builder):
-            id_hash_set, id_to_fsn_dict = dump_concept_ids(
+            id_hash_set, id_to_fsn_dict, parent_map = dump_concept_ids(
                 root_concept=root,
                 endpoint_builder=endpoint_builder,
                 filter_list=code_filter,
@@ -405,6 +423,7 @@ def create_concept_id_dump(
             else ListDumpType.WHITELIST,
             revision=not force_overwrite,
             force_overwrite=force_overwrite,
+            parent_map=parent_map,
         )
     except Exception as e:
         logging.error(f"Error while creating hdf5 dump: '{e}'. Exiting.")
