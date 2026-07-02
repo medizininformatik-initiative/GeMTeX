@@ -383,3 +383,5 @@ source relationships + target policy = dynamic sanitization mapping
 No precomputed crosswalk should be stored because source and target HDF5 files must remain independent.
 
 The best HDF5 extension is a compact ancestor/distance representation that lets any dump act as a source for hierarchy lookup while still supporting the current whitelist/blacklist reporting workflow.
+
+Implementation note: dump generation supports an optional `--memoize-ancestors` flag for computing this extension. It is disabled by default to keep the initial behavior simple, but can be enabled for large hierarchies where repeated ancestor traversal becomes expensive.
