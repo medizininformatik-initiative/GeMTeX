@@ -67,7 +67,8 @@ def dump_concept_ids(
     id_to_fsn_dict: dict = None,
     dump_whole_subtree: bool = False,
     visited_nodes: set = None,
-) -> Tuple[set[str], dict[str, str]]:
+    parent_map: dict[str, set[str]] = None,
+) -> Tuple[set[str], dict[str, str], dict[str, set[str]]]:
     """
     Dumps concept IDs and their fully specified names (FSNs) with configurable filtering and recursion.
 
@@ -98,11 +99,13 @@ def dump_concept_ids(
             Defaults to an empty dictionary if None is provided.
         dump_whole_subtree (bool): ...
         visited_nodes (set): ...
+        parent_map (dict): Mapping from child concept IDs to directly observed parent IDs.
 
     Returns:
-        Tuple[set[str], dict[str, str]]: A tuple containing:
+        Tuple[set[str], dict[str, str], dict[str, set[str]]]: A tuple containing:
             - A set of unique concept IDs encountered during traversal.
             - A dictionary mapping concept IDs to their corresponding FSNs.
+            - A parent map for deriving compact ancestor/distance data.
 
     Raises:
         NotImplementedError: If filtering by concept codes (as opposed to semantic tags)
@@ -114,21 +117,20 @@ def dump_concept_ids(
         id_hash_set = set()
     if id_to_fsn_dict is None:
         id_to_fsn_dict = {}
-    if (
-        root_concept is None
-        or root_concept.conceptId is None
-        or root_concept.conceptId in id_hash_set
-        or root_concept.conceptId in visited_nodes
-    ):
-        return id_hash_set, id_to_fsn_dict
+    if parent_map is None:
+        parent_map = {}
+    if root_concept is None or root_concept.conceptId is None:
+        return id_hash_set, id_to_fsn_dict, parent_map
     if root_concept.conceptId not in id_to_fsn_dict:
         id_to_fsn_dict[root_concept.conceptId] = root_concept.fsn.term
+    if root_concept.conceptId in visited_nodes:
+        return id_hash_set, id_to_fsn_dict, parent_map
     if (is_not_recursive and iteration >= 2) or (
         not is_not_recursive
         and up_to_including != -1
         and iteration >= (up_to_including + 1)
     ):
-        return id_hash_set, id_to_fsn_dict
+        return id_hash_set, id_to_fsn_dict, parent_map
     if iteration == 0:
         if filter_list is not None:
             c = [f.strip() for f in filter_list if f.isdigit()]
@@ -162,7 +164,10 @@ def dump_concept_ids(
 
     iteration += 1
     for code in return_codes(concept_children):
-        _id_hash_set, _id_to_fsn_dict = dump_concept_ids(
+        parent_map.setdefault(code.conceptId, set()).add(root_concept.conceptId)
+        if code.conceptId not in id_to_fsn_dict:
+            id_to_fsn_dict[code.conceptId] = code.fsn.term
+        _id_hash_set, _id_to_fsn_dict, _parent_map = dump_concept_ids(
             code,
             endpoint_builder,
             filter_list,
@@ -175,7 +180,9 @@ def dump_concept_ids(
             id_to_fsn_dict,
             dump_whole_subtree,
             visited_nodes,
+            parent_map,
         )
         id_hash_set.update(_id_hash_set)
+        parent_map.update(_parent_map)
 
-    return set(id_hash_set), id_to_fsn_dict
+    return set(id_hash_set), id_to_fsn_dict, parent_map
