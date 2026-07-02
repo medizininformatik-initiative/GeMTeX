@@ -398,7 +398,8 @@ def create_concept_id_dump(
                     code_filter = filter_list
                     if len(filter_list) == 0:
                         code_filter = None
-    logging.info(f"Using filter list: '{[c for c in code_filter]}'.")
+    if code_filter is not None:
+        logging.info(f"Using filter list: '{[c for c in code_filter]}'.")
 
     with yaspin.yaspin(text="Processing..."):
         if root := get_root_code(root_code, endpoint_builder):
