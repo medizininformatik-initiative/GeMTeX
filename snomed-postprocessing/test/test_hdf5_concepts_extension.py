@@ -189,34 +189,7 @@ class CompactAncestorExtensionTest(unittest.TestCase):
             with h5py.File(path, "r") as h5_file:
                 self.assertEqual(h5_file["concepts"].attrs["sentinel"], "keep-me")
 
-    def test_force_overwrite_list_does_not_overwrite_existing_concepts_extension(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            path = pathlib.Path(tmp) / "concepts.hdf5"
-            dump_codes_to_hdf5(
-                path,
-                codes={"200000"},
-                id_to_fsn_dict=self.id_to_fsn,
-                list_type=ListDumpType.WHITELIST,
-                parent_map=self.parent_map,
-            )
-
-            with h5py.File(path, "r+") as h5_file:
-                h5_file["concepts"].attrs["sentinel"] = "keep-me"
-
-            dump_codes_to_hdf5(
-                path,
-                codes={"300000"},
-                id_to_fsn_dict=self.id_to_fsn,
-                list_type=ListDumpType.BLACKLIST,
-                parent_map=self.parent_map,
-                force_overwrite=True,
-            )
-
-            with h5py.File(path, "r") as h5_file:
-                self.assertEqual(h5_file["concepts"].attrs["sentinel"], "keep-me")
-                self.assertIn("blacklist", h5_file)
-
-    def test_existing_concepts_extension_is_overwritten_with_force_concepts(self):
+    def test_existing_concepts_extension_is_overwritten_with_force(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = pathlib.Path(tmp) / "concepts.hdf5"
             dump_codes_to_hdf5(
@@ -236,7 +209,7 @@ class CompactAncestorExtensionTest(unittest.TestCase):
                 id_to_fsn_dict=self.id_to_fsn,
                 list_type=ListDumpType.BLACKLIST,
                 parent_map=self.parent_map,
-                force_overwrite_concepts=True,
+                force_overwrite=True,
             )
 
             with h5py.File(path, "r") as h5_file:
