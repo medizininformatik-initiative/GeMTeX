@@ -140,6 +140,7 @@ def get_annotations_from_document(
     if not annotation_types:
         annotation_types = ["gemtex.Concept"]
     id_prefix = id_prefix + "/" if not id_prefix.endswith("/") else id_prefix
+    id_prefix = id_prefix.lower()
 
     if not isinstance(document, cassis.Cas):
         document = _load_document(document)
@@ -148,10 +149,14 @@ def get_annotations_from_document(
         for annotation in document.select(type_):
             try:
                 _id = annotation.get("id")
-                if _id is None or str(_id).strip().lower() in {"", "null", "none", "nan"}:
+                if _id is None:
                     codes.append(np.nan)
                 else:
-                    codes.append(str(_id).removeprefix(id_prefix))
+                    _id = str(_id).strip().lower().removeprefix(id_prefix).strip()
+                    if _id in {"", "null", "none", "nan"}:
+                        codes.append(np.nan)
+                    else:
+                        codes.append(_id)
 
                 offsets.append(
                     (
