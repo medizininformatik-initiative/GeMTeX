@@ -387,3 +387,208 @@ The best HDF5 extension is a compact ancestor/distance representation that lets 
 Implementation note: dump generation supports an optional `--memoize-ancestors` flag for computing this extension. It is disabled by default to keep the initial behavior simple, but can be enabled for large hierarchies where repeated ancestor traversal becomes expensive.
 
 When adding a second list type to an HDF5 file that already has `/concepts`, dump generation skips parent-map collection during Snowstorm traversal unless `--force-overwrite` is used. This avoids unnecessary memory/CPU overhead for rebuilding the extension, though the Snowstorm traversal is still needed until an optional local `--reuse-concepts` mode exists.
+
+## 17. Future Local List Generation: `--reuse-concepts`
+
+A useful follow-up improvement is an optional local-only mode for `create-concepts-dump`:
+
+```bash
+uv run create-concepts-dump \
+  --dump-mode semantic \
+  --filter-list config/blacklist_filter_tags.txt \
+  --reuse-concepts \
+  --branch MAIN/2024-04-01
+```
+
+The intended workflow is:
+
+```bash
+# First run: expensive Snowstorm traversal, writes whitelist and /concepts.
+uv run create-concepts-dump \
+  --dump-mode version \
+  --branch MAIN/2024-04-01
+
+# Second run: local-only blacklist derivation from existing /concepts.
+uv run create-concepts-dump \
+  --dump-mode semantic \
+  --filter-list config/blacklist_filter_tags.txt \
+  --reuse-concepts \
+  --branch MAIN/2024-04-01
+```
+
+### Goal
+
+`--reuse-concepts` should derive the requested whitelist/blacklist list from the existing HDF5 `/concepts` extension without querying Snowstorm again.
+
+This is especially useful when creating one HDF5 file containing both:
+
+```text
+/whitelist/0/...
+/blacklist/0/...
+/concepts/...
+```
+
+### Strict behavior
+
+`--reuse-concepts` should be explicit and local-only.
+
+If reuse is impossible, the command should fail with a clear error instead of silently falling back to Snowstorm traversal.
+
+It should fail if:
+
+- the HDF5 file does not exist;
+- `/concepts` is missing;
+- required `/concepts` datasets are missing;
+- an explicit numeric filter code is not present in `/concepts/codes`;
+- the requested local operation cannot be represented from the available data.
+
+### Required `/concepts` datasets
+
+The local mode needs:
+
+```text
+/concepts/codes
+/concepts/fsn
+/concepts/ancestors_index
+/concepts/ancestors_codes
+/concepts/ancestors_distance
+```
+
+For semantic-tag-only filtering, only `codes` and `fsn` are strictly required.
+
+For explicit numeric root-code filters, ancestor arrays are required.
+
+### Local semantic-tag filtering
+
+Semantic tags can be derived from FSNs in `/concepts/fsn`.
+
+Example:
+
+```text
+Pneumonia (disorder)
+```
+
+matches semantic tag:
+
+```text
+disorder
+```
+
+The local implementation should reuse the same flexible semantic-tag matching behavior as the Snowstorm-backed path, including case-insensitive matching and flexible whitespace.
+
+For positive filtering:
+
+```text
+selected = concepts whose FSN semantic tag matches one of the filter tags
+```
+
+For negative filtering:
+
+```text
+selected = all concepts - matching concepts
+```
+
+### Local explicit-root-code filtering
+
+The current semantic dump mode also allows numeric concept IDs in the filter list. A numeric filter means:
+
+```text
+include this concept and its descendants
+```
+
+Because `/concepts` stores ancestors, descendants can be derived locally by scanning ancestor arrays.
+
+For root code `R`, concept `C` is a descendant of `R` when:
+
+```text
+R in ancestors(C)
+```
+
+The descendant set is therefore:
+
+```text
+{R} ∪ {C | R appears in ancestors(C)}
+```
+
+This is local and avoids Snowstorm traversal, but it is still an O(number of concepts × average ancestor count) scan. That should be acceptable as a first implementation and can later be optimized with a reverse index if needed.
+
+### Combining filters
+
+The existing filter parsing should be preserved:
+
+```text
+numeric entries     -> explicit root concept filters
+non-numeric entries -> semantic tag filters
+```
+
+For `FilterMode.POSITIVE`:
+
+```text
+selected = semantic_tag_matches ∪ descendants_of_numeric_roots
+```
+
+For `FilterMode.NEGATIVE`:
+
+```text
+selected = all_concepts - semantic_tag_matches - descendants_of_numeric_roots
+```
+
+### Writing output
+
+After deriving selected codes locally, the command can reuse the existing HDF5 writer:
+
+```python
+dump_codes_to_hdf5(
+    fi_path=hdf5_path,
+    codes=selected_codes,
+    id_to_fsn_dict=local_code_to_fsn,
+    list_type=ListDumpType.BLACKLIST or ListDumpType.WHITELIST,
+    parent_map=None,
+)
+```
+
+In `--reuse-concepts` mode, `parent_map` should not be passed. The existing `/concepts` extension should be treated as authoritative and left untouched.
+
+### Interaction with `--force-overwrite`
+
+In local reuse mode, `--force-overwrite` should only affect the requested list group, e.g. `/blacklist` or `/whitelist`.
+
+It should not rebuild or delete `/concepts`.
+
+### Applicability by dump mode
+
+#### `--dump-mode semantic`
+
+Primary target.
+
+This can derive blacklists locally from:
+
+- semantic tags in FSNs;
+- explicit numeric root concept IDs using ancestor arrays.
+
+#### `--dump-mode version`
+
+Possible but less important.
+
+A local version dump could derive a whitelist from all `/concepts/codes`, but this depends on trusting that `/concepts` was generated from the intended root and branch. If `/concepts` was created from a narrow or non-recursive traversal, the resulting whitelist would be partial.
+
+Therefore, local version reuse should either be documented as "use all existing concepts" or deferred until there is a clearer use case.
+
+### Important caveat
+
+`--reuse-concepts` can only derive from the concepts already present in `/concepts`.
+
+If `/concepts` was generated with:
+
+```bash
+--not-recursive
+```
+
+or from a narrow root code, the local result will be correspondingly incomplete.
+
+### Suggested implementation phases
+
+1. Implement local semantic-tag filtering.
+2. Implement local numeric root-code descendant filtering by scanning ancestor arrays.
+3. Optionally support local `--dump-mode version` by using all `/concepts/codes`.
+4. Optionally optimize descendant lookups with a reverse ancestor-to-descendant index if local scans become too slow.
