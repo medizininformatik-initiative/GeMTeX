@@ -361,6 +361,7 @@ Behavior:
   - HDF5 reading/writing;
   - masked report generation.
 - Add CLI option for annotation type instead of hard-coded `gemtex.Concept`.
+- Add CLI option for feature id_prefix instead if hard-coded `http://snomed.info/id/`
 - Add safer handling for missing HDF5 groups/datasets.
 - Consider masking covered text for stronger privacy guarantees.
 - Normalize and document offset serialization in JSON.
