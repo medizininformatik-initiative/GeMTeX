@@ -20,6 +20,7 @@ from .utils import (
     DumpMode,
     FilterMode,
     dump_codes_to_hdf5,
+    hdf5_has_concepts_extension,
     ListDumpType,
     prompt_for_names,
     get_project_zip,
@@ -399,7 +400,18 @@ def create_concept_id_dump(
                     if len(filter_list) == 0:
                         code_filter = None
     if code_filter is not None:
-        logging.info(f"Using filter list: '{[c for c in code_filter]}'.")
+        logging.info(f"Using filter list: '{[c for c in (code_filter or [])]}'.")
+
+    hdf5_path = pathlib.Path(
+        __file__,
+        f"../../../data/gemtex_snomedct_codes_{endpoint_builder.branch.split('/')[-1]}.hdf5",
+    ).resolve()
+    concepts_extension_exists = hdf5_has_concepts_extension(hdf5_path)
+    collect_parent_map = force_overwrite or not concepts_extension_exists
+    if not collect_parent_map:
+        logging.info(
+            f"HDF5 concepts extension already exists in '{hdf5_path}'. Skipping parent-map collection during traversal."
+        )
 
     with yaspin.yaspin(text="Processing..."):
         if root := get_root_code(root_code, endpoint_builder):
@@ -410,15 +422,12 @@ def create_concept_id_dump(
                 filter_mode=filter_mode,
                 dump_mode=dump_mode,
                 is_not_recursive=not_recursive,
+                collect_parent_map=collect_parent_map,
             )
             codes = set(id_hash_set)
         else:
             logging.error(f"Could not find root code '{root_code}'. Exiting.")
             sys.exit(-1)
-    hdf5_path = pathlib.Path(
-        __file__,
-        f"../../../data/gemtex_snomedct_codes_{endpoint_builder.branch.split('/')[-1]}.hdf5",
-    ).resolve()
     hdf5_path.parent.mkdir(exist_ok=True, parents=True)
     try:
         dump_codes_to_hdf5(
@@ -430,7 +439,7 @@ def create_concept_id_dump(
             else ListDumpType.WHITELIST,
             revision=not force_overwrite,
             force_overwrite=force_overwrite,
-            parent_map=parent_map,
+            parent_map=parent_map if collect_parent_map else None,
             use_memoization=memoize_ancestors,
         )
     except Exception as e:

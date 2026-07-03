@@ -303,6 +303,13 @@ def snowstorm_response_to_pydantic(json_data: dict):
     return SnowstormResponse.model_validate_json(json_dump)
 
 
+def hdf5_has_concepts_extension(fi_path: pathlib.Path) -> bool:
+    if not fi_path.exists() or not fi_path.is_file():
+        return False
+    with h5py.File(str(fi_path.resolve()), "r") as h5_file:
+        return "concepts" in h5_file
+
+
 def _compute_ancestors_bfs(
     code: str, parent_map: dict[str, set[str]]
 ) -> dict[str, int]:

@@ -385,3 +385,5 @@ No precomputed crosswalk should be stored because source and target HDF5 files m
 The best HDF5 extension is a compact ancestor/distance representation that lets any dump act as a source for hierarchy lookup while still supporting the current whitelist/blacklist reporting workflow.
 
 Implementation note: dump generation supports an optional `--memoize-ancestors` flag for computing this extension. It is disabled by default to keep the initial behavior simple, but can be enabled for large hierarchies where repeated ancestor traversal becomes expensive.
+
+When adding a second list type to an HDF5 file that already has `/concepts`, dump generation skips parent-map collection during Snowstorm traversal unless `--force-overwrite` is used. This avoids unnecessary memory/CPU overhead for rebuilding the extension, though the Snowstorm traversal is still needed until an optional local `--reuse-concepts` mode exists.
