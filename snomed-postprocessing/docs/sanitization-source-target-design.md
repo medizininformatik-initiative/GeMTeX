@@ -338,7 +338,38 @@ Therefore, each dump should contain:
 
 No dump should assume knowledge of another dump.
 
-## 14. CLI Shape Idea
+## 14. Intentional Redundancy Between Lists and `/concepts`
+
+In a full version dump, the following datasets may contain the same codes and FSNs:
+
+```text
+/whitelist/0/codes
+/whitelist/0/fsn
+/concepts/codes
+/concepts/fsn
+```
+
+This redundancy is intentional for now.
+
+The groups represent different layers:
+
+```text
+/whitelist, /blacklist = policy/list layer
+/concepts             = reusable SNOMED reference/hierarchy layer
+```
+
+The current check/report workflow reads whitelist and blacklist groups as policy lists. Future sanitization and local reuse workflows read `/concepts` as a self-contained concept universe with hierarchy information.
+
+Keeping both layers separate has advantages:
+
+- existing check/report behavior remains backward compatible;
+- `/concepts` can be used independently of a particular policy list;
+- future files can contain a full `/concepts` universe with smaller whitelist/blacklist subsets;
+- source and target HDF5 files remain independently usable.
+
+More compact alternatives are possible, for example storing whitelist/blacklist as indices into `/concepts/codes`, but that would complicate readers and schema compatibility. Unless file size becomes a serious issue, the duplicated code/FSN storage is acceptable.
+
+## 15. CLI Shape Idea
 
 Possible future command:
 
@@ -592,3 +623,264 @@ or from a narrow root code, the local result will be correspondingly incomplete.
 2. Implement local numeric root-code descendant filtering by scanning ancestor arrays.
 3. Optionally support local `--dump-mode version` by using all `/concepts/codes`.
 4. Optionally optimize descendant lookups with a reverse ancestor-to-descendant index if local scans become too slow.
+
+## 18. BM25-Based Sanitization Without a Target Hierarchy
+
+A BM25-based approach can be useful when no usable target hierarchy/version is available, but it should be treated as a lexical fallback, not as SNOMED-safe relationship mapping.
+
+BM25 can answer:
+
+```text
+Which allowed concept label looks lexically similar to this source concept/text?
+```
+
+It cannot answer:
+
+```text
+Is this candidate an ancestor, replacement, sibling, or clinically safe generalization?
+```
+
+Therefore BM25 mode should initially produce suggestions, not silent automatic replacements.
+
+### Candidate corpus
+
+The candidate corpus should be restricted to safe replacement candidates, for example:
+
+```text
+/whitelist/0/codes + /whitelist/0/fsn
+```
+
+or a curated safe replacement catalog.
+
+Blacklist concepts must be excluded from candidates.
+
+### Query text
+
+For each critical annotation, the query can be built from available fields:
+
+- source FSN, if known;
+- preferred term, if available in future resources;
+- synonyms, if available in future resources;
+- covered text from the annotation;
+- semantic tag as metadata/filter, not necessarily as free text.
+
+FSNs should usually be split into:
+
+```text
+main term:    Pneumonia
+semantic tag: disorder
+```
+
+The main term should be indexed/searched lexically. The semantic tag should usually be used as a filter or compatibility check.
+
+### Ranking safeguards
+
+A BM25 suggestion should only be accepted automatically, if ever, when strict safeguards pass:
+
+```text
+candidate is whitelisted
+candidate is not blacklisted
+candidate semantic tag is identical or explicitly compatible
+BM25 score >= configured threshold
+top candidate is clearly better than second candidate
+```
+
+Useful ambiguity checks:
+
+```text
+top_score - second_score >= margin
+```
+
+or:
+
+```text
+top_score / second_score >= ratio
+```
+
+If the top candidates are too close, the status should be ambiguous.
+
+### Specificity caveat
+
+BM25 tends to prefer lexical similarity, not safe generalization.
+
+Example:
+
+```text
+query: Bacterial pneumonia
+```
+
+BM25 may rank both of these highly:
+
+```text
+Pneumonia
+Viral pneumonia
+```
+
+Only `Pneumonia` is a plausible generalization. `Viral pneumonia` is a sibling-like or related concept and may be clinically wrong.
+
+Without hierarchy, a possible heuristic is to prefer broader-looking terms by penalizing extra qualifiers, but this remains heuristic and should be used carefully.
+
+Possible status values:
+
+| Status | Meaning |
+|---|---|
+| `bm25_suggested` | Candidate found and safeguards passed. |
+| `bm25_ambiguous` | Multiple candidates are too close. |
+| `bm25_no_candidate` | No candidate was found. |
+| `bm25_score_too_low` | Best candidate did not meet threshold. |
+| `bm25_semantic_tag_mismatch` | Best lexical candidate failed semantic compatibility. |
+
+## 19. BM25 Handling for Non-Whitelisted Codes
+
+For codes that are not on the whitelist, BM25 can be a fallback after hierarchy-based sanitization fails or when no target hierarchy exists.
+
+Recommended order:
+
+```text
+if code is target-whitelisted and not target-blacklisted:
+    keep original code
+elif source/target hierarchy mapping is available:
+    try nearest target-whitelisted ancestor
+elif BM25 fallback is enabled:
+    search safe whitelist candidates lexically
+else:
+    mark as unsanitizable
+```
+
+For this case, BM25 is somewhat defensible because absence from the whitelist may mean:
+
+- the code is too specific;
+- the source and target versions differ;
+- the code is missing from the target resources;
+- a broader allowed replacement may exist.
+
+Even then, the first implementation should report BM25 results as suggestions unless the safeguards are deliberately configured for automatic replacement.
+
+Suggested report columns:
+
+| Original Code | Covered Text | Status | Suggested Code | Suggested FSN | BM25 Score | Reason |
+|---|---|---|---|---|---:|---|
+| `123` | example | `bm25_suggested` | `456` | `Broader concept (finding)` | `12.4` | `top candidate passed threshold and margin` |
+
+## 20. BM25 Handling for Blacklisted Codes
+
+Blacklisted codes should be handled more conservatively than merely non-whitelisted codes.
+
+A non-whitelisted code may be absent for technical or versioning reasons. A blacklisted code is explicitly disallowed by policy.
+
+Therefore the default policy should be:
+
+```text
+if code is blacklisted:
+    do not auto-replace by BM25
+```
+
+Instead, one of the following should happen:
+
+- remove the annotation/code;
+- require manual review;
+- apply an explicit configured replacement;
+- optionally provide BM25 suggestions for review only.
+
+### Why BM25 is risky for blacklisted codes
+
+Example:
+
+```text
+blacklisted: Viral pneumonia
+```
+
+BM25 might suggest:
+
+```text
+Bacterial pneumonia
+Pneumonia
+Respiratory infection
+```
+
+Depending on the blacklist intent, some or all of these may still be unsafe.
+
+Another example:
+
+```text
+blacklisted: Occupation
+```
+
+BM25 might suggest:
+
+```text
+Employment status
+Occupational history
+```
+
+These are lexically close but may preserve the same privacy-sensitive information.
+
+### Preferred blacklist policy
+
+Blacklisted concepts should be governed by explicit policy:
+
+```text
+remove
+replace_with_configured_code
+manual_review
+suggest_only
+```
+
+Possible configuration shape:
+
+```json
+{
+  "blacklist_replacements": {
+    "224930009": {
+      "action": "remove"
+    },
+    "123456789": {
+      "action": "replace",
+      "replacement": "404684003"
+    }
+  },
+  "blacklist_tag_policy": {
+    "occupation": "remove",
+    "geographic location": "remove",
+    "situation": "manual_review"
+  }
+}
+```
+
+### BM25 as review assistance only
+
+If BM25 is enabled for blacklisted codes, it should produce review suggestions with stricter safeguards:
+
+```text
+candidate must be whitelisted
+candidate must not be blacklisted
+candidate must not belong to the same forbidden semantic category
+candidate must pass a higher score threshold
+candidate must have a clear margin over the next candidate
+```
+
+Suggested statuses:
+
+| Status | Meaning |
+|---|---|
+| `blacklisted_remove` | Policy says to remove. |
+| `blacklisted_manual_review` | Human decision required. |
+| `blacklisted_explicit_replacement` | Policy gives a replacement. |
+| `blacklisted_bm25_suggestion` | BM25 candidate is shown for review only. |
+| `blacklisted_no_safe_replacement` | No acceptable replacement found. |
+
+Recommended decision flow:
+
+```text
+if code is blacklisted:
+    if explicit replacement configured:
+        replace
+    elif explicit remove configured:
+        remove
+    elif BM25 review suggestions enabled:
+        show top-k safe candidates
+    else:
+        manual_review
+```
+
+This keeps blacklist handling policy-driven and avoids treating lexical similarity as evidence of safe sanitization.
