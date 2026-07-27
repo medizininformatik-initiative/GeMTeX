@@ -12,3 +12,5 @@ __pycache__/
 debug.sh
 /scripts/uima_cas_converter/test/
 /llm-ade-extraction/test/
+snomed-postprocessing/legacy/bm25_matching.py
+snomed-postprocessing/legacy/lexical_matching_baseline.py
