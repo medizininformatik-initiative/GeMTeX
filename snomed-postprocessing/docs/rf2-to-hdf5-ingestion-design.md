@@ -1,0 +1,431 @@
+# RF2 Release ZIP to HDF5 Ingestion Design
+
+## 1. Goal
+
+SNOMED CT RF2 release ZIPs are large. HDF5 dumps for this project should therefore be generated without fully extracting the ZIP and without loading complete RF2 files into memory.
+
+The goal is a streaming/chunked ingestion pipeline:
+
+```text
+SNOMED RF2 release ZIP
+    ↓ stream selected RF2 TSV files directly from ZIP
+    ↓ reconstruct target release state if using Full files
+    ↓ filter to data needed by this project
+    ↓ write compact HDF5 datasets
+```
+
+Runtime analysis should use the generated HDF5 files, not raw RF2 ZIPs.
+
+## 2. General Approach
+
+Use Python's `zipfile` module to read RF2 `.txt` members directly from the ZIP archive:
+
+```python
+import csv
+import zipfile
+from io import TextIOWrapper
+
+with zipfile.ZipFile("SnomedCT_Full.zip") as zf:
+    with zf.open(".../Full/Terminology/sct2_Concept_Full_INT_20250131.txt") as raw:
+        text = TextIOWrapper(raw, encoding="utf-8")
+        reader = csv.DictReader(text, delimiter="\t")
+        for row in reader:
+            ...
+```
+
+This avoids extracting multi-GB contents to disk.
+
+## 3. Relevant RF2 Files
+
+The ingestion code should discover relevant files by filename/path patterns.
+
+### Basic concept policy/list generation
+
+Usually requires:
+
+```text
+*/Snapshot/Terminology/sct2_Concept_Snapshot_*.txt
+*/Snapshot/Terminology/sct2_Description_Snapshot-*.txt
+```
+
+or their `Full` equivalents if reconstructing a specific release date:
+
+```text
+*/Full/Terminology/sct2_Concept_Full_*.txt
+*/Full/Terminology/sct2_Description_Full-*.txt
+```
+
+### Hierarchy / ancestor support
+
+Requires relationship data:
+
+```text
+*/Snapshot/Terminology/sct2_Relationship_Snapshot_*.txt
+*/Full/Terminology/sct2_Relationship_Full_*.txt
+```
+
+For inferred hierarchy, use the regular relationship file and filter to active `is-a` relationships:
+
+```text
+typeId = 116680003
+```
+
+### Historical replacement support
+
+Requires historical association reference sets, usually under `Refset/Content` or similar RF2 refset folders:
+
+```text
+*/Snapshot/Refset/Content/*AssociationSnapshot*.txt
+*/Full/Refset/Content/*AssociationFull*.txt
+```
+
+Exact filenames vary by edition/release, so matching should be pattern-based and validated by columns.
+
+## 4. Snapshot vs Full
+
+### Snapshot input
+
+Snapshot files already represent the state at one release date.
+
+Ingestion can process them directly:
+
+```text
+read row
+    ↓
+if active and relevant
+    ↓
+write/collect for HDF5
+```
+
+### Full input
+
+Full files contain historical rows. To reconstruct release state at target date `T`:
+
+```text
+for each component id:
+    keep latest row where effectiveTime <= T
+```
+
+This applies to:
+
+- concepts;
+- descriptions;
+- relationships;
+- historical association refset rows.
+
+The algorithm should stream rows and keep only the latest relevant row per component.
+
+Pseudo-code:
+
+```python
+latest = {}
+
+for row in rf2_rows:
+    component_id = row["id"]
+    effective_time = row["effectiveTime"]
+
+    if effective_time > target_release_date:
+        continue
+
+    previous = latest.get(component_id)
+    if previous is None or effective_time > previous["effectiveTime"]:
+        latest[component_id] = compact_row(row)
+```
+
+After streaming, `latest.values()` is the reconstructed snapshot for that RF2 component type.
+
+## 5. Memory Strategy
+
+Do not store full RF2 rows if not needed. Store compact structures with only project-relevant fields.
+
+### Concepts
+
+Minimal state:
+
+```python
+concepts = {
+    concept_id: {
+        "effectiveTime": "20250131",
+        "active": "1",
+        "moduleId": "...",
+        "definitionStatusId": "...",
+    }
+}
+```
+
+For many tasks, only this is needed:
+
+```text
+concept_id -> active
+```
+
+### Descriptions
+
+Filter early where possible:
+
+- language code, e.g. `de` or `en`;
+- active descriptions only;
+- FSNs only if only FSNs are needed;
+- synonyms only if search/indexing requires them.
+
+Useful fields:
+
+```text
+id
+effectiveTime
+active
+conceptId
+languageCode
+typeId
+term
+```
+
+Known description type IDs:
+
+```text
+900000000000003001 = fully specified name
+900000000000013009 = synonym
+900000000000550004 = definition
+```
+
+### Relationships
+
+For parent hierarchy, filter aggressively:
+
+```text
+active == 1
+typeId == 116680003  # is-a
+```
+
+Compact parent map:
+
+```python
+parents[sourceId].add(destinationId)
+```
+
+Only active reconstructed relationships should contribute to the target-release hierarchy.
+
+### Historical associations
+
+Historical association rows are typically much smaller than relationship data.
+
+Store compact rows such as:
+
+```text
+source_code = referencedComponentId
+target_code = targetComponentId
+association_type = decoded refsetId
+effective_time = effectiveTime
+active = active
+```
+
+## 6. Historical Association Type Mapping
+
+Historical association refsets encode relationship type via `refsetId`.
+
+Common association types include:
+
+```text
+SAME_AS
+REPLACED_BY
+POSSIBLY_EQUIVALENT_TO
+WAS_A
+MOVED_TO
+MOVED_FROM
+ALTERNATIVE
+```
+
+The ingestion code should map known SNOMED refset IDs to stable internal labels.
+
+Example conceptual mapping:
+
+```python
+ASSOCIATION_REFSET_IDS = {
+    "900000000000527005": "SAME_AS",
+    "900000000000526001": "REPLACED_BY",
+    "900000000000523009": "POSSIBLY_EQUIVALENT_TO",
+    "900000000000528000": "WAS_A",
+    "900000000000525002": "MOVED_TO",
+    "900000000000524003": "MOVED_FROM",
+    "900000000000530003": "ALTERNATIVE",
+}
+```
+
+Exact IDs should be verified against the SNOMED edition being processed.
+
+## 7. HDF5 Output Structure
+
+The generated HDF5 should preserve existing project list structure:
+
+```text
+/whitelist/0/codes
+/whitelist/0/fsn
+/blacklist/0/codes
+/blacklist/0/fsn
+```
+
+Additional concept metadata:
+
+```text
+/concepts/codes
+/concepts/fsn
+/concepts/semantic_tag
+/concepts/active
+```
+
+Historical associations:
+
+```text
+/historical_associations/source_code
+/historical_associations/target_code
+/historical_associations/association_type
+/historical_associations/effective_time
+/historical_associations/active
+```
+
+Optional hierarchy/ancestor support:
+
+```text
+/concepts/ancestors_index
+/concepts/ancestors_codes
+/concepts/ancestors_distance
+```
+
+## 8. Ancestor Computation
+
+Ancestor computation can be expensive for large SNOMED hierarchies.
+
+It should be optional and disabled by default unless a workflow explicitly requires ancestor-based fallback.
+
+Recommended default for revised sanitization:
+
+```text
+include historical associations
+skip full ancestor closure
+```
+
+If enabled, compute ancestor closure from the active `is-a` parent map:
+
+```text
+concept -> parent -> grandparent -> ...
+```
+
+Store compact flat arrays:
+
+```text
+/concepts/ancestors_index      # per concept: [start, length]
+/concepts/ancestors_codes      # flat ancestor code array
+/concepts/ancestors_distance   # flat distance array
+```
+
+This supports nearest-whitelisted-ancestor fallback without one HDF5 group per concept.
+
+## 9. Proposed Implementation Modules
+
+Suggested package structure:
+
+```text
+src/snomed_post_processing/rf2/
+    __init__.py
+    zip_reader.py          # discover and stream RF2 files from ZIP
+    snapshot_builder.py    # reconstruct target release state from Full files
+    associations.py        # decode historical associations
+    hdf5_writer.py         # write compact HDF5 datasets
+```
+
+Responsibilities:
+
+### `zip_reader.py`
+
+- open RF2 ZIPs;
+- find matching Concept/Description/Relationship/Association files;
+- stream rows as dictionaries;
+- validate required columns.
+
+### `snapshot_builder.py`
+
+- handle Snapshot vs Full semantics;
+- reconstruct latest row per component at release date;
+- apply early filtering.
+
+### `associations.py`
+
+- map association `refsetId` values to stable labels;
+- filter active historical associations;
+- expose source-to-target candidate lookup structures.
+
+### `hdf5_writer.py`
+
+- write existing whitelist/blacklist datasets;
+- write concept metadata;
+- write historical associations;
+- optionally write ancestor arrays.
+
+## 10. CLI Shape
+
+Possible future command:
+
+```bash
+uv run create-concepts-dump \
+  --from-rf2 path/to/SnomedCT_Full.zip \
+  --release-date 20250131 \
+  --include-history \
+  --output data/lists/target-20250131.hdf5
+```
+
+Optional flags:
+
+```bash
+--rf2-view snapshot|full
+--language de
+--include-history
+--include-ancestors
+--fsn-only
+```
+
+For revised sanitization, the important first feature is:
+
+```text
+--include-history
+```
+
+Ancestor closure can be added later:
+
+```text
+--include-ancestors
+```
+
+## 11. Error Handling and Validation
+
+The ingestion should fail clearly if required files or columns cannot be found.
+
+Examples:
+
+- no Concept RF2 file found;
+- no Description RF2 file found;
+- multiple ambiguous matching files found;
+- required columns missing;
+- `--release-date` missing for Full reconstruction;
+- historical associations requested but no association file found.
+
+For large files, progress logging should report:
+
+- rows read;
+- rows skipped by date;
+- rows skipped by inactive status;
+- rows kept;
+- number of concepts/descriptions/associations written.
+
+## 12. Summary
+
+SNOMED release ingestion should be streaming and selective:
+
+```text
+read directly from ZIP
+filter early
+keep only compact latest rows
+write HDF5 arrays
+make expensive ancestor closure optional
+```
+
+For the revised sanitization design, RF2 Full releases are used upstream to create enriched target-release HDF5 files containing historical associations. Runtime checking and sanitization should operate on those HDF5 files, not on raw RF2 release ZIPs.
