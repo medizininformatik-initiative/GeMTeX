@@ -25,6 +25,49 @@ class TestIgnoreOverlapReporting(unittest.TestCase):
         self.assertTrue(spans_match((12, 18), (10, 20), "covered-by"))
         self.assertTrue(spans_match((10, 20), (12, 18), "contains"))
 
+    def test_blacklist_logging_handles_actionable_and_ignored_split(self):
+        corpus = TemporaryCorpus(
+            annotators={
+                "annotator-a": TemporaryContainer(
+                    max_length=2,
+                    documents={
+                        "doc.txt": DocumentAnnotations(
+                            snomed_codes=np.asarray([b"222", b"333"], dtype="bytes"),
+                            offsets=np.asarray([(10, 20), (30, 40)], dtype="i,i"),
+                            text=np.asarray(["ignored", "actionable"], dtype=np.dtypes.StringDType),
+                            layers=np.asarray(["gemtex.Concept", "gemtex.Concept"], dtype=np.dtypes.StringDType),
+                            length=2,
+                            ignore_mask=np.asarray([True, False], dtype=bool),
+                            ignore_overlaps=[
+                                [IgnoreOverlap(layer="webanno.custom.No_Human", offset=(10, 20), text="ignored")],
+                                [],
+                            ],
+                        )
+                    },
+                )
+            }
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            hdf5_path = pathlib.Path(tmp) / "lists.hdf5"
+            with h5py.File(hdf5_path, "w") as h5_file:
+                blacklist = h5_file.create_group("blacklist").create_group("0")
+                blacklist.create_dataset("codes", data=np.asarray([b"222", b"333"]))
+                blacklist.create_dataset("fsn", data=np.asarray([b"Ignored concept (finding)", b"Actionable concept (finding)"]))
+
+            log_doc = io.StringIO()
+            log_doc_masked = io.StringIO()
+            err_docs = create_log_from_results(corpus, log_doc, log_doc_masked, hdf5_path)
+
+        report = log_doc.getvalue()
+        self.assertEqual(err_docs, 1)
+        self.assertIn("# Blacklist\n", report)
+        self.assertIn("333", report)
+        self.assertIn("Actionable concept (finding)", report)
+        self.assertIn("Ignored faulty concepts (blacklist)", report)
+        self.assertIn("222", report)
+        self.assertIn("Ignored concept (finding)", report)
+
     def test_ignored_whitelist_fault_is_reported_but_not_counted_critical(self):
         corpus = TemporaryCorpus(
             annotators={

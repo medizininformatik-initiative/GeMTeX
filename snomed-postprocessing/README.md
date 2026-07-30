@@ -39,7 +39,7 @@ uv run log-critical-documents \
   --inception-project INCEPTION_PROJECT_URL_SLUG
   /path/to/temp/export
 ```
-
+__since version 1.2.5__ `target` and `ignore` layers can be provided.  
 By default, faulty-code checks run on the `gemtex.Concept` layer. This can be configured from the CLI:
 
 ```
