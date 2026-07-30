@@ -40,6 +40,46 @@ uv run log-critical-documents \
   /path/to/temp/export
 ```
 
+By default, faulty-code checks run on the `gemtex.Concept` layer. This can be configured from the CLI:
+
+```
+uv run log-critical-documents \
+  --lists-path /path/to/hdf5-file \
+  --annotation-type gemtex.Concept \
+  --annotation-type another.Layer \
+  /path/to/inception-json-dump.zip
+```
+
+Faulty concepts can optionally be ignored when they overlap configured layers. Ignored faulty concepts are excluded from the critical document count but still reported in a separate markdown section:
+
+```
+uv run log-critical-documents \
+  --lists-path /path/to/hdf5-file \
+  --ignore-overlap-type gemtex.DoNotCheck \
+  --ignore-overlap-type gemtex.FalsePositive \
+  --ignore-overlap-mode overlap \
+  /path/to/inception-json-dump.zip
+```
+
+Available overlap modes are `overlap`, `covered-by`, `contains`, and `exact`:
+
+| Mode | Meaning |
+| --- | --- |
+| `overlap` | Ignore the target annotation if its span has any intersection with an ignore-layer annotation. This is the default and most permissive mode. |
+| `covered-by` | Ignore the target annotation only if the target span is fully contained inside an ignore-layer span. |
+| `contains` | Ignore the target annotation only if the target span fully contains an ignore-layer span. |
+| `exact` | Ignore the target annotation only if target and ignore-layer spans have identical begin and end offsets. |
+
+Example for target span `[10, 20]`:
+
+| Ignore span | `overlap` | `covered-by` | `contains` | `exact` |
+| --- | --- | --- | --- | --- |
+| `[15, 25]` | yes | no | no | no |
+| `[5, 25]` | yes | yes | no | no |
+| `[12, 18]` | yes | no | yes | no |
+| `[10, 20]` | yes | yes | yes | yes |
+
+
 #### Docker
 There is also a docker image available:
 ```
