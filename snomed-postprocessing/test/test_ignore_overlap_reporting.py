@@ -64,9 +64,11 @@ class TestIgnoreOverlapReporting(unittest.TestCase):
         self.assertIn("# Blacklist\n", report)
         self.assertIn("333", report)
         self.assertIn("Actionable concept (finding)", report)
-        self.assertIn("Ignored faulty concepts (blacklist)", report)
+        self.assertIn("# Ignored faulty concepts", report)
+        self.assertIn("## Blacklist", report)
         self.assertIn("222", report)
         self.assertIn("Ignored concept (finding)", report)
+        self.assertNotIn("Overlap Details", report)
 
     def test_document_analysis_error_skips_only_bad_document(self):
         corpus = TemporaryCorpus(
@@ -157,10 +159,12 @@ class TestIgnoreOverlapReporting(unittest.TestCase):
 
         report = log_doc.getvalue()
         self.assertEqual(err_docs, 0)
-        self.assertIn("Ignored faulty concepts (whitelist)", report)
+        self.assertIn("# Ignored faulty concepts", report)
+        self.assertIn("## Whitelist", report)
         self.assertIn("gemtex.DoNotCheck", report)
         self.assertIn("222", report)
-        self.assertNotIn("# Whitelist\n", report)
+        self.assertNotIn("Overlap Details", report)
+        self.assertNotRegex(report, r"(?m)^# Whitelist$")
 
 
 if __name__ == "__main__":
