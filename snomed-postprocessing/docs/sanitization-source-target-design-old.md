@@ -417,7 +417,16 @@ The best HDF5 extension is a compact ancestor/distance representation that lets 
 
 Implementation note: dump generation supports an optional `--memoize-ancestors` flag for computing this extension. It is disabled by default to keep the initial behavior simple, but can be enabled for large hierarchies where repeated ancestor traversal becomes expensive.
 
-When adding a second list type to an HDF5 file that already has `/concepts`, dump generation skips parent-map collection during Snowstorm traversal unless `--force-overwrite` is used. This avoids unnecessary memory/CPU overhead for rebuilding the extension, though the Snowstorm traversal is still needed until an optional local `--reuse-concepts` mode exists.
+When adding a second list type to an HDF5 file that already has `/concepts`, dump generation skips parent-map collection during Snowstorm traversal unless `--force-overwrite-concepts` is used. This avoids unnecessary memory/CPU overhead for rebuilding the extension, though the Snowstorm traversal is still needed until an optional local `--reuse-concepts` mode exists.
+
+Overwrite semantics are intentionally separated:
+
+```text
+--force-overwrite          overwrites only the selected /whitelist or /blacklist group
+--force-overwrite-concepts rebuilds the /concepts hierarchy extension
+```
+
+This makes it safe to repair/recreate an invalid `/blacklist` without deleting the existing `/whitelist` or rebuilding `/concepts`.
 
 ## 17. Future Local List Generation: `--reuse-concepts`
 
@@ -584,7 +593,7 @@ In `--reuse-concepts` mode, `parent_map` should not be passed. The existing `/co
 
 In local reuse mode, `--force-overwrite` should only affect the requested list group, e.g. `/blacklist` or `/whitelist`.
 
-It should not rebuild or delete `/concepts`.
+It should not rebuild or delete `/concepts`. Rebuilding `/concepts` should require the separate `--force-overwrite-concepts` flag.
 
 ### Applicability by dump mode
 

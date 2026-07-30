@@ -407,7 +407,7 @@ def _write_concepts_extension(
             del fi["concepts"]
         else:
             logging.warning(
-                "HDF5 concepts extension already exists and 'force_overwrite' is FALSE. Skipping."
+                "HDF5 concepts extension already exists and 'force_overwrite_concepts' is FALSE. Skipping."
             )
             return
 
@@ -443,6 +443,7 @@ def dump_codes_to_hdf5(
     force_overwrite: bool = False,
     parent_map: Optional[dict[str, set[str]]] = None,
     use_memoization: bool = False,
+    force_overwrite_concepts: bool = False,
 ):
     def _create_dataset(
         fi: h5py.File, name: str, content: Union[set, list, np.ndarray], mappings: dict
@@ -512,6 +513,6 @@ def dump_codes_to_hdf5(
                 f,
                 id_to_fsn_dict,
                 parent_map,
-                force_overwrite=force_overwrite,
+                force_overwrite=force_overwrite_concepts,
                 use_memoization=use_memoization,
             )

@@ -295,7 +295,12 @@ def log_documents(
 @click.option(
     "--force-overwrite",
     is_flag=True,
-    help="If this flag is set, existing matching HDF5 groups will be overwritten.",
+    help="If this flag is set, the selected whitelist/blacklist HDF5 group will be overwritten.",
+)
+@click.option(
+    "--force-overwrite-concepts",
+    is_flag=True,
+    help="If this flag is set, an existing /concepts HDF5 extension will be rebuilt. Independent from --force-overwrite.",
 )
 @click.option(
     "--memoize-ancestors",
@@ -314,6 +319,7 @@ def create_concept_id_dump(
     filter_mode: FilterMode,
     not_recursive: bool,
     force_overwrite: bool,
+    force_overwrite_concepts: bool,
     memoize_ancestors: bool,
     log_level: str,
 ):
@@ -339,7 +345,8 @@ def create_concept_id_dump(
             them.
         not_recursive (bool): If True, only the first-level children of the root concept
             are included in the dump without resolving them recursively.
-        force_overwrite (bool): If True, overwrites existing files when creating the dump.
+        force_overwrite (bool): If True, overwrites the selected whitelist/blacklist group when creating the dump.
+        force_overwrite_concepts (bool): If True, rebuilds the /concepts HDF5 extension.
         log_level (str): The level of logging to use during the operation.
 
     Raises:
@@ -385,29 +392,42 @@ def create_concept_id_dump(
     endpoint_builder.set_branch(path)
 
     code_filter = None
-    if dump_mode == dump_mode.SEMANTIC:
+    if dump_mode == DumpMode.SEMANTIC:
         if len(filter_list) < 1:
-            code_filter = None
+            logging.error(
+                "Semantic dump mode requires at least one '--filter-list' entry or a valid filter-list file. Exiting to avoid creating a full blacklist."
+            )
+            sys.exit(-1)
+
+        fi = pathlib.Path(filter_list[0])
+        if fi.is_file():
+            code_filter = [
+                line.strip()
+                for line in fi.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
         else:
-            fi = pathlib.Path(filter_list[0])
-            if fi.is_file():
-                code_filter = fi.read_text(encoding="utf-8").splitlines()
-            else:
-                if os.sep in str(fi):
-                    code_filter = None
-                else:
-                    code_filter = filter_list
-                    if len(filter_list) == 0:
-                        code_filter = None
-    if code_filter is not None:
-        logging.info(f"Using filter list: '{[c for c in (code_filter or [])]}'.")
+            if os.sep in str(fi):
+                logging.error(
+                    f"Filter-list path does not exist or is not a file: '{fi}'. Exiting to avoid creating a full blacklist."
+                )
+                sys.exit(-1)
+            code_filter = [str(item).strip() for item in filter_list if str(item).strip()]
+
+        if len(code_filter) == 0:
+            logging.error(
+                "Semantic dump mode got an empty filter list. Exiting to avoid creating a full blacklist."
+            )
+            sys.exit(-1)
+
+        logging.info(f"Using filter list: '{[c for c in code_filter]}'.")
 
     hdf5_path = pathlib.Path(
         __file__,
         f"../../../data/gemtex_snomedct_codes_{endpoint_builder.branch.split('/')[-1]}.hdf5",
     ).resolve()
     concepts_extension_exists = hdf5_has_concepts_extension(hdf5_path)
-    collect_parent_map = force_overwrite or not concepts_extension_exists
+    collect_parent_map = force_overwrite_concepts or not concepts_extension_exists
     if not collect_parent_map:
         logging.info(
             f"HDF5 concepts extension already exists in '{hdf5_path}'. Skipping parent-map collection during traversal."
@@ -441,6 +461,7 @@ def create_concept_id_dump(
             force_overwrite=force_overwrite,
             parent_map=parent_map if collect_parent_map else None,
             use_memoization=memoize_ancestors,
+            force_overwrite_concepts=force_overwrite_concepts,
         )
     except Exception as e:
         logging.error(f"Error while creating hdf5 dump: '{e}'. Exiting.")
