@@ -383,6 +383,7 @@ def analyze_documents(
             new_annotator = True
             doc_error_count = 0
             concept_error_count = 0
+            skipped_doc_count = 0
             for i, (doc_name, annotations) in enumerate(documents.documents.items()):
                 _text = f"Processing ({annotator_name} [{i + 1:>3}/{len(documents.documents)}]: '{doc_name}') ..."
                 if doc_name not in documents_masked:
@@ -413,97 +414,151 @@ def analyze_documents(
                         progress_obj["text_pre"] + _text,
                     )
                 spinner.text = _text
-                nan_filter = (annotations.snomed_codes != b"nan") if filter_nan_values else np.ones(annotations.length, dtype=bool)
-                erroneous_codes_array = np.zeros(annotations.length, dtype=bool)
-                if as_whitelist:
-                    erroneous_codes_array[nan_filter] = ~np.isin(
-                        annotations.snomed_codes[nan_filter], filter_array
-                    )
-                else:
-                    erroneous_codes_array[nan_filter] = np.isin(
-                        annotations.snomed_codes[nan_filter], filter_array
-                    )
-
-                if not np.all(~erroneous_codes_array):
-                    # Filter out numerical spans without a code in whitelist mode
+                try:
+                    nan_filter = (annotations.snomed_codes != b"nan") if filter_nan_values else np.ones(annotations.length, dtype=bool)
+                    erroneous_codes_array = np.zeros(annotations.length, dtype=bool)
                     if as_whitelist:
-                        actual_indices = np.where(erroneous_codes_array)[0]
-                        final_erroneous_indices_mask = np.ones(
-                            len(actual_indices), dtype=bool
+                        erroneous_codes_array[nan_filter] = ~np.isin(
+                            annotations.snomed_codes[nan_filter], filter_array
                         )
-                        for idx_in_err, idx_in_doc in enumerate(actual_indices):
-                            code = annotations.snomed_codes[idx_in_doc]
-                            text = str(annotations.text[idx_in_doc])
-                            if code == b"nan" and is_numeric(text):
-                                final_erroneous_indices_mask[idx_in_err] = False
-
-                        if not np.any(final_erroneous_indices_mask):
-                            # All erroneous codes were numerical spans without a code
-                            continue
-
-                        # Update erroneous_codes_array to exclude numerical spans
-                        erroneous_codes_array[
-                            actual_indices[~final_erroneous_indices_mask]
-                        ] = False
-
-                    ignored_codes_array = erroneous_codes_array & annotations.ignore_mask
-                    actionable_codes_array = erroneous_codes_array & ~annotations.ignore_mask
-
-                    _map_dict = None
-                    if not as_whitelist:
-                        _map_dict = {}
-                        erroneous_codes = annotations.snomed_codes[erroneous_codes_array]
-                        idx = np.searchsorted(filter_array, erroneous_codes)
-                        for code, _idx in zip(erroneous_codes, idx):
-                            if _idx < len(filter_array) and filter_array[_idx] == code:
-                                _map_dict[bytes(code)] = mapping_array[_idx]
-
-                    if np.any(actionable_codes_array):
-                        doc_error_count += 1
-                        concept_error_count += np.count_nonzero(actionable_codes_array)
-                        log_critical_docs(
-                            annotator_name,
-                            doc_name,
-                            document_name_masked,
-                            annotations,
-                            actionable_codes_array,
-                            log_doc,
-                            log_doc_masked,
-                            new_annotator,
-                            as_whitelist,
-                            _map_dict,
-                            filter_type,
-                            new_section,
-                            section_count,
-                            blacklist_tag_counter,
-                            whitelist_code_counter,
-                            annotator_names,
-                            annotator_names_masked,
-                            dump_dictionary,
+                    else:
+                        erroneous_codes_array[nan_filter] = np.isin(
+                            annotations.snomed_codes[nan_filter], filter_array
                         )
-                        new_section = False
-                        new_annotator = False
-
-                    if np.any(ignored_codes_array):
-                        log_ignored_faulty_docs(
-                            annotator_name,
-                            doc_name,
-                            document_name_masked,
-                            annotations,
-                            ignored_codes_array,
-                            log_doc,
-                            log_doc_masked,
-                            as_whitelist,
-                            _map_dict,
-                            filter_type,
-                            annotator_names_masked,
-                        )
+    
+                    if not np.all(~erroneous_codes_array):
+                        # Filter out numerical spans without a code in whitelist mode
+                        if as_whitelist:
+                            actual_indices = np.where(erroneous_codes_array)[0]
+                            final_erroneous_indices_mask = np.ones(
+                                len(actual_indices), dtype=bool
+                            )
+                            for idx_in_err, idx_in_doc in enumerate(actual_indices):
+                                code = annotations.snomed_codes[idx_in_doc]
+                                text = str(annotations.text[idx_in_doc])
+                                if code == b"nan" and is_numeric(text):
+                                    final_erroneous_indices_mask[idx_in_err] = False
+    
+                            if not np.any(final_erroneous_indices_mask):
+                                # All erroneous codes were numerical spans without a code
+                                continue
+    
+                            # Update erroneous_codes_array to exclude numerical spans
+                            erroneous_codes_array[
+                                actual_indices[~final_erroneous_indices_mask]
+                            ] = False
+    
+                        ignored_codes_array = erroneous_codes_array & annotations.ignore_mask
+                        actionable_codes_array = erroneous_codes_array & ~annotations.ignore_mask
+    
+                        _map_dict = None
+                        if not as_whitelist:
+                            _map_dict = {}
+                            erroneous_codes = annotations.snomed_codes[erroneous_codes_array]
+                            idx = np.searchsorted(filter_array, erroneous_codes)
+                            for code, _idx in zip(erroneous_codes, idx):
+                                if _idx < len(filter_array) and filter_array[_idx] == code:
+                                    _map_dict[bytes(code)] = mapping_array[_idx]
+    
+                        if np.any(actionable_codes_array):
+                            doc_error_count += 1
+                            concept_error_count += np.count_nonzero(actionable_codes_array)
+                            log_critical_docs(
+                                annotator_name,
+                                doc_name,
+                                document_name_masked,
+                                annotations,
+                                actionable_codes_array,
+                                log_doc,
+                                log_doc_masked,
+                                new_annotator,
+                                as_whitelist,
+                                _map_dict,
+                                filter_type,
+                                new_section,
+                                section_count,
+                                blacklist_tag_counter,
+                                whitelist_code_counter,
+                                annotator_names,
+                                annotator_names_masked,
+                                dump_dictionary,
+                            )
+                            new_section = False
+                            new_annotator = False
+    
+                        if np.any(ignored_codes_array):
+                            log_ignored_faulty_docs(
+                                annotator_name,
+                                doc_name,
+                                document_name_masked,
+                                annotations,
+                                ignored_codes_array,
+                                log_doc,
+                                log_doc_masked,
+                                as_whitelist,
+                                _map_dict,
+                                filter_type,
+                                annotator_names_masked,
+                            )
+                except Exception as e:
+                    skipped_doc_count += 1
+                    logging.exception(
+                        f"Skipping document due to an analysis/logging error ({filter_type.name.lower()}): annotator={annotator_name!r}, document={doc_name!r}: {e}"
+                    )
+                    log_skipped_document(
+                        annotator_name=annotator_name,
+                        document_name=doc_name,
+                        document_name_masked=document_name_masked,
+                        output_file=log_doc,
+                        output_file_masked=log_doc_masked,
+                        filter_type=filter_type,
+                        annotator_names_masked=annotator_names_masked,
+                        error=e,
+                    )
+                    continue
             concept_error_text = f"- with {concept_error_count:>3} concept(s) {'not ' if as_whitelist else ''}on '{filter_type.name.lower()}'."
+            skipped_text = (
+                f" {skipped_doc_count:>3} document(s) skipped due to errors."
+                if skipped_doc_count > 0
+                else ""
+            )
             spinner.write(
-                f"{annotator_name}:{' ' * (annotator_names_max - len(annotator_name) + 1)}Done. {doc_error_count:>3} critical document(s) found {concept_error_text if doc_error_count > 0 else ''}"
+                f"{annotator_name}:{' ' * (annotator_names_max - len(annotator_name) + 1)}Done. {doc_error_count:>3} critical document(s) found {concept_error_text if doc_error_count > 0 else ''}{skipped_text}"
             )
             erroneous_doc_count += doc_error_count
     return erroneous_doc_count
+
+
+def log_skipped_document(
+    annotator_name: str,
+    document_name: str,
+    document_name_masked: str,
+    output_file: TextIOWrapper,
+    output_file_masked: TextIOWrapper,
+    filter_type: ListDumpType,
+    annotator_names_masked: dict[str, str],
+    error: Exception,
+):
+    section = f"Skipped documents ({filter_type.name.lower()})"
+    lines = [
+        f"# {section}\n",
+        f"[Zum Inhalt](#{Information.log_dump_pretext_caption.lower()})  \n\n",
+        "These documents were skipped because an error occurred while analyzing or writing their findings. The rest of the run continued.\n\n",
+        "| Annotator | Document | Check | Error |\n",
+        "| --: | --: | --: | --: |\n",
+        f"| {annotator_name} | {document_name} | {filter_type.name.lower()} | {type(error).__name__}: {error} |\n",
+    ]
+    lines_masked = [
+        f"# {section}\n",
+        f"[Zum Inhalt](#{Information.log_dump_pretext_caption.lower()})  \n\n",
+        "These documents were skipped because an error occurred while analyzing or writing their findings. The rest of the run continued.\n\n",
+        "| Annotator | Document | Check | Error |\n",
+        "| --: | --: | --: | --: |\n",
+        f"| {annotator_names_masked.get(annotator_name)} | {document_name_masked} | {filter_type.name.lower()} | {type(error).__name__}: {error} |\n",
+    ]
+    for tuple_ in [(output_file, lines), (output_file_masked, lines_masked)]:
+        tuple_[0].writelines(tuple_[1])
+        tuple_[0].write("\n\n")
 
 
 def log_critical_docs(
