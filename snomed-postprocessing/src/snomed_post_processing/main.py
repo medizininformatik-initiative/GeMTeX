@@ -20,6 +20,7 @@ from .utils import (
     DumpMode,
     FilterMode,
     dump_codes_to_hdf5,
+    hdf5_has_concepts_extension,
     ListDumpType,
     prompt_for_names,
     get_project_zip,
@@ -44,6 +45,24 @@ class ClickUnion(click.ParamType):
                 continue
 
         self.fail("Didn't match any of the accepted types.")
+
+
+class ClickEnumChoice(click.ParamType):
+    def __init__(self, enum_type):
+        self.enum_type = enum_type
+        self.choices = [e.name.lower() for e in enum_type]
+        self.name = "[" + "|".join(self.choices) + "]"
+
+    def convert(self, value, param, ctx):
+        if isinstance(value, self.enum_type):
+            return value
+        value_normalized = str(value).lower()
+        for enum_value in self.enum_type:
+            if enum_value.name.lower() == value_normalized:
+                return enum_value
+        self.fail(
+            f"'{value}' is not one of {'/'.join(self.choices)}.", param, ctx
+        )
 
 
 def click_server_options(fnc):
@@ -124,6 +143,27 @@ def common_click_args(fnc):
     is_flag=True,
     help="Forbids prompting the user to select the annotators to log manually (instead of all). Use this flag for e.g. 'docker', when you don't want to mess with providing prompt answers.",
 )
+@click.option(
+    "--annotation-type",
+    multiple=True,
+    default=("gemtex.Concept",),
+    show_default=True,
+    help="Target annotation layer/type to check for SNOMED CT codes. Can be provided multiple times.",
+)
+@click.option(
+    "--ignore-overlap-type",
+    multiple=True,
+    default=("webanno.custom.No_Human",),
+    show_default=True,
+    help="Annotation layer/type whose overlapping spans suppress faulty-code findings on target annotations. Can be provided multiple times.",
+)
+@click.option(
+    "--ignore-overlap-mode",
+    default="overlap",
+    show_default=True,
+    type=click.Choice(["overlap", "covered-by", "contains", "exact"], case_sensitive=False),
+    help="How target annotations must match ignore-overlap annotations to be ignored.",
+)
 def log_documents(
     process_path: str,
     lists_path: Optional[str],
@@ -137,6 +177,9 @@ def log_documents(
     keep_export: bool,
     omit_dump: bool,
     forbid_prompt: bool,
+    annotation_type: tuple[str, ...],
+    ignore_overlap_type: tuple[str, ...],
+    ignore_overlap_mode: str,
 ):
     """
     Analyzes an INCEpTION project zip file (if PROCESS_PATH points to a local zip file) or a particular project in an INCEpTION instance
@@ -213,7 +256,13 @@ def log_documents(
 
     erroneous_doc_count = 0
     dump_dictionary = None if omit_dump else {}
-    if result := process_inception_zip(project_zip, annotator_filter=names_filter):
+    if result := process_inception_zip(
+        project_zip,
+        annotator_filter=names_filter,
+        annotation_types=list(annotation_type),
+        ignore_overlap_types=list(ignore_overlap_type),
+        ignore_overlap_mode=ignore_overlap_mode,
+    ):
         with (
             output_path.open("w", encoding="utf-8") as log_doc,
             output_path_masked.open("w", encoding="utf-8") as log_doc_masked,
@@ -251,7 +300,7 @@ def log_documents(
 @click.option(
     "--dump-mode",
     default=DumpMode.VERSION,
-    type=click.Choice(DumpMode, case_sensitive=False),
+    type=ClickEnumChoice(DumpMode),
     help="Whether to whitelist ('version') or blacklist ('semantic') a code dump.",
 )
 @click.option(
@@ -265,7 +314,7 @@ def log_documents(
 @click.option(
     "--filter-mode",
     default=FilterMode.POSITIVE,
-    type=click.Choice(FilterMode, case_sensitive=False),
+    type=ClickEnumChoice(FilterMode),
     help="'positive': only concepts with specified codes/tags will be returned; 'negative': vice versa concepts with specified codes/tags will not be returned",
 )
 @click.option(
@@ -276,7 +325,17 @@ def log_documents(
 @click.option(
     "--force-overwrite",
     is_flag=True,
-    help="If this flag is set, the codes will not be resolved recursively and only the first level children will be returned.",
+    help="If this flag is set, the selected whitelist/blacklist HDF5 group will be overwritten.",
+)
+@click.option(
+    "--force-overwrite-concepts",
+    is_flag=True,
+    help="If this flag is set, an existing /concepts HDF5 extension will be rebuilt. Independent from --force-overwrite.",
+)
+@click.option(
+    "--memoize-ancestors",
+    is_flag=True,
+    help="Use memoization when computing the compact ancestor/distance HDF5 extension. Disabled by default.",
 )
 @click_log_level
 def create_concept_id_dump(
@@ -290,6 +349,8 @@ def create_concept_id_dump(
     filter_mode: FilterMode,
     not_recursive: bool,
     force_overwrite: bool,
+    force_overwrite_concepts: bool,
+    memoize_ancestors: bool,
     log_level: str,
 ):
     """
@@ -314,7 +375,8 @@ def create_concept_id_dump(
             them.
         not_recursive (bool): If True, only the first-level children of the root concept
             are included in the dump without resolving them recursively.
-        force_overwrite (bool): If True, overwrites existing files when creating the dump.
+        force_overwrite (bool): If True, overwrites the selected whitelist/blacklist group when creating the dump.
+        force_overwrite_concepts (bool): If True, rebuilds the /concepts HDF5 extension.
         log_level (str): The level of logging to use during the operation.
 
     Raises:
@@ -360,40 +422,62 @@ def create_concept_id_dump(
     endpoint_builder.set_branch(path)
 
     code_filter = None
-    if dump_mode == dump_mode.SEMANTIC:
+    if dump_mode == DumpMode.SEMANTIC:
         if len(filter_list) < 1:
-            code_filter = None
+            logging.error(
+                "Semantic dump mode requires at least one '--filter-list' entry or a valid filter-list file. Exiting to avoid creating a full blacklist."
+            )
+            sys.exit(-1)
+
+        fi = pathlib.Path(filter_list[0])
+        if fi.is_file():
+            code_filter = [
+                line.strip()
+                for line in fi.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
         else:
-            fi = pathlib.Path(filter_list[0])
-            if fi.is_file():
-                code_filter = fi.read_text(encoding="utf-8").splitlines()
-            else:
-                if os.sep in str(fi):
-                    code_filter = None
-                else:
-                    code_filter = filter_list
-                    if len(filter_list) == 0:
-                        code_filter = None
-    logging.info(f"Using filter list: '{[c for c in code_filter]}'.")
+            if os.sep in str(fi):
+                logging.error(
+                    f"Filter-list path does not exist or is not a file: '{fi}'. Exiting to avoid creating a full blacklist."
+                )
+                sys.exit(-1)
+            code_filter = [str(item).strip() for item in filter_list if str(item).strip()]
+
+        if len(code_filter) == 0:
+            logging.error(
+                "Semantic dump mode got an empty filter list. Exiting to avoid creating a full blacklist."
+            )
+            sys.exit(-1)
+
+        logging.info(f"Using filter list: '{[c for c in code_filter]}'.")
+
+    hdf5_path = pathlib.Path(
+        __file__,
+        f"../../../data/gemtex_snomedct_codes_{endpoint_builder.branch.split('/')[-1]}.hdf5",
+    ).resolve()
+    concepts_extension_exists = hdf5_has_concepts_extension(hdf5_path)
+    collect_parent_map = force_overwrite_concepts or not concepts_extension_exists
+    if not collect_parent_map:
+        logging.info(
+            f"HDF5 concepts extension already exists in '{hdf5_path}'. Skipping parent-map collection during traversal."
+        )
 
     with yaspin.yaspin(text="Processing..."):
         if root := get_root_code(root_code, endpoint_builder):
-            id_hash_set, id_to_fsn_dict = dump_concept_ids(
+            id_hash_set, id_to_fsn_dict, parent_map = dump_concept_ids(
                 root_concept=root,
                 endpoint_builder=endpoint_builder,
                 filter_list=code_filter,
                 filter_mode=filter_mode,
                 dump_mode=dump_mode,
                 is_not_recursive=not_recursive,
+                collect_parent_map=collect_parent_map,
             )
             codes = set(id_hash_set)
         else:
             logging.error(f"Could not find root code '{root_code}'. Exiting.")
             sys.exit(-1)
-    hdf5_path = pathlib.Path(
-        __file__,
-        f"../../../data/gemtex_snomedct_codes_{endpoint_builder.branch.split('/')[-1]}.hdf5",
-    ).resolve()
     hdf5_path.parent.mkdir(exist_ok=True, parents=True)
     try:
         dump_codes_to_hdf5(
@@ -405,6 +489,9 @@ def create_concept_id_dump(
             else ListDumpType.WHITELIST,
             revision=not force_overwrite,
             force_overwrite=force_overwrite,
+            parent_map=parent_map if collect_parent_map else None,
+            use_memoization=memoize_ancestors,
+            force_overwrite_concepts=force_overwrite_concepts,
         )
     except Exception as e:
         logging.error(f"Error while creating hdf5 dump: '{e}'. Exiting.")
