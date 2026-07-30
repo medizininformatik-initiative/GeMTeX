@@ -526,18 +526,13 @@ def log_critical_docs(
     annotator_names_masked: dict[str, str],
     dump_dictionary: Optional[dict],
 ):
+    selected_codes = document_dump.snomed_codes[bool_index_array]
     stacked = np.stack(
         [
-            document_dump.snomed_codes[bool_index_array],
+            selected_codes,
             document_dump.text[bool_index_array],
             document_dump.offsets[bool_index_array],
-            np.asarray(
-                [
-                    mapping_dict.get(x)
-                    for x in document_dump.snomed_codes
-                    if x in mapping_dict
-                ]
-            )
+            np.asarray([mapping_dict.get(bytes(x), b"") for x in selected_codes])
             if not is_whitelist
             else np.zeros(sum(bool_index_array)),
         ],
