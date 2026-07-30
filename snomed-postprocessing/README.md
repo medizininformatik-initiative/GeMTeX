@@ -50,12 +50,12 @@ uv run log-critical-documents \
   /path/to/inception-json-dump.zip
 ```
 
-Faulty concepts can optionally be ignored when they overlap configured layers. Ignored faulty concepts are excluded from the critical document count but still reported in a separate markdown section:
+Faulty concepts can be ignored when they overlap configured layers. By default, the layer `webanno.custom.No_Human` is used as an ignore-overlap layer. Ignored faulty concepts are excluded from the critical document count but still reported in a separate markdown section:
 
 ```
 uv run log-critical-documents \
   --lists-path /path/to/hdf5-file \
-  --ignore-overlap-type gemtex.DoNotCheck \
+  --ignore-overlap-type webanno.custom.No_Human \
   --ignore-overlap-type gemtex.FalsePositive \
   --ignore-overlap-mode overlap \
   /path/to/inception-json-dump.zip

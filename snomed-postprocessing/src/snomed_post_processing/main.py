@@ -153,7 +153,8 @@ def common_click_args(fnc):
 @click.option(
     "--ignore-overlap-type",
     multiple=True,
-    default=(),
+    default=("webanno.custom.No_Human",),
+    show_default=True,
     help="Annotation layer/type whose overlapping spans suppress faulty-code findings on target annotations. Can be provided multiple times.",
 )
 @click.option(

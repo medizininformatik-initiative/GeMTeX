@@ -182,8 +182,8 @@ with st.sidebar:
     )
     ignore_overlap_types_text = st.text_area(
         "Ignore faulty target annotations overlapping these types",
-        value="",
-        help="Optional. One UIMA layer/type per line. Faulty target annotations overlapping these layers are reported separately and excluded from the critical count.",
+        value="webanno.custom.No_Human",
+        help="One UIMA layer/type per line. Faulty target annotations overlapping these layers are reported separately and excluded from the critical count. Default: webanno.custom.No_Human.",
     )
     ignore_overlap_mode = st.selectbox(
         "Ignore overlap mode",
