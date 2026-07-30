@@ -143,6 +143,26 @@ def common_click_args(fnc):
     is_flag=True,
     help="Forbids prompting the user to select the annotators to log manually (instead of all). Use this flag for e.g. 'docker', when you don't want to mess with providing prompt answers.",
 )
+@click.option(
+    "--annotation-type",
+    multiple=True,
+    default=("gemtex.Concept",),
+    show_default=True,
+    help="Target annotation layer/type to check for SNOMED CT codes. Can be provided multiple times.",
+)
+@click.option(
+    "--ignore-overlap-type",
+    multiple=True,
+    default=(),
+    help="Annotation layer/type whose overlapping spans suppress faulty-code findings on target annotations. Can be provided multiple times.",
+)
+@click.option(
+    "--ignore-overlap-mode",
+    default="overlap",
+    show_default=True,
+    type=click.Choice(["overlap", "covered-by", "contains", "exact"], case_sensitive=False),
+    help="How target annotations must match ignore-overlap annotations to be ignored.",
+)
 def log_documents(
     process_path: str,
     lists_path: Optional[str],
@@ -156,6 +176,9 @@ def log_documents(
     keep_export: bool,
     omit_dump: bool,
     forbid_prompt: bool,
+    annotation_type: tuple[str, ...],
+    ignore_overlap_type: tuple[str, ...],
+    ignore_overlap_mode: str,
 ):
     """
     Analyzes an INCEpTION project zip file (if PROCESS_PATH points to a local zip file) or a particular project in an INCEpTION instance
@@ -232,7 +255,13 @@ def log_documents(
 
     erroneous_doc_count = 0
     dump_dictionary = None if omit_dump else {}
-    if result := process_inception_zip(project_zip, annotator_filter=names_filter):
+    if result := process_inception_zip(
+        project_zip,
+        annotator_filter=names_filter,
+        annotation_types=list(annotation_type),
+        ignore_overlap_types=list(ignore_overlap_type),
+        ignore_overlap_mode=ignore_overlap_mode,
+    ):
         with (
             output_path.open("w", encoding="utf-8") as log_doc,
             output_path_masked.open("w", encoding="utf-8") as log_doc_masked,
