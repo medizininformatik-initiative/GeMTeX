@@ -6,7 +6,7 @@ import sys
 import zipfile
 import gc
 from collections import Counter
-from io import TextIOWrapper
+from io import StringIO, TextIOWrapper
 from typing import Union, Optional
 
 import cassis
@@ -364,6 +364,8 @@ def analyze_documents(
     progress_obj: Optional[dict] = None,
     dump_dictionary: Optional[dict] = None,
     filter_nan_values: bool = True,
+    ignored_log_doc: Optional[TextIOWrapper] = None,
+    ignored_log_doc_masked: Optional[TextIOWrapper] = None,
 ) -> Optional[int]:
     as_whitelist = filter_type == ListDumpType.WHITELIST
     erroneous_doc_count = 0
@@ -384,6 +386,8 @@ def analyze_documents(
             doc_error_count = 0
             concept_error_count = 0
             skipped_doc_count = 0
+            ignored_new_annotator = True
+            ignored_new_section = True
             for i, (doc_name, annotations) in enumerate(documents.documents.items()):
                 _text = f"Processing ({annotator_name} [{i + 1:>3}/{len(documents.documents)}]: '{doc_name}') ..."
                 if doc_name not in documents_masked:
@@ -493,13 +497,17 @@ def analyze_documents(
                                 document_name_masked,
                                 annotations,
                                 ignored_codes_array,
-                                log_doc,
-                                log_doc_masked,
+                                ignored_log_doc or log_doc,
+                                ignored_log_doc_masked or log_doc_masked,
+                                ignored_new_annotator,
                                 as_whitelist,
                                 _map_dict,
                                 filter_type,
+                                ignored_new_section,
                                 annotator_names_masked,
                             )
+                            ignored_new_section = False
+                            ignored_new_annotator = False
                 except Exception as e:
                     skipped_doc_count += 1
                     logging.exception(
@@ -670,14 +678,6 @@ def _format_overlap_layers(overlaps: list[IgnoreOverlap]) -> str:
     return ", ".join(sorted({overlap.layer for overlap in overlaps}))
 
 
-def _format_overlap_details(overlaps: list[IgnoreOverlap]) -> str:
-    if not overlaps:
-        return ""
-    return "<br>".join(
-        f"{overlap.layer} {overlap.offset}: {overlap.text}" for overlap in overlaps
-    )
-
-
 def log_ignored_faulty_docs(
     annotator_name: str,
     document_name: str,
@@ -686,27 +686,29 @@ def log_ignored_faulty_docs(
     bool_index_array: np.ndarray,
     output_file: TextIOWrapper,
     output_file_masked: TextIOWrapper,
+    is_new_annotator: bool,
     is_whitelist: bool,
     mapping_dict: Optional[dict],
     filter_type: ListDumpType,
+    new_section: bool,
     annotator_names_masked: dict[str, str],
 ):
     reason = "not_in_whitelist" if is_whitelist else "blacklisted"
-    section = f"Ignored faulty concepts ({filter_type.name.lower()})"
-    lines = [
-        f"# {section}\n",
-        f"[Zum Inhalt](#{Information.log_dump_pretext_caption.lower()})  \n\n",
-        "These concepts would have been reported as faulty, but were ignored because they overlap with configured ignore layer(s).\n\n",
-        f"## {annotator_name}\n",
-        f"#### {document_name}\n",
-    ]
-    lines_masked = [
-        f"# {section}\n",
-        f"[Zum Inhalt](#{Information.log_dump_pretext_caption.lower()})  \n\n",
-        "These concepts would have been reported as faulty, but were ignored because they overlap with configured ignore layer(s).\n\n",
-        f"## {annotator_names_masked.get(annotator_name)}\n",
-        f"#### {document_name_masked}\n",
-    ]
+    lines = []
+    lines_masked = []
+    if new_section:
+        lines.extend(
+            [
+                f"## {filter_type.name.capitalize()}\n",
+                f"[Zum Inhalt](#{Information.log_dump_pretext_caption.lower()})  \n\n",
+            ]
+        )
+        lines_masked.extend(lines)
+    if is_new_annotator:
+        lines.append(f"### {annotator_name}\n")
+        lines_masked.append(f"### {annotator_names_masked.get(annotator_name)}\n")
+    lines.append(f"#### {document_name}\n")
+    lines_masked.append(f"#### {document_name_masked}\n")
 
     columns = [
         "Target Layer",
@@ -715,7 +717,6 @@ def log_ignored_faulty_docs(
         "Offset in Document",
         "Reason",
         "Overlapping Ignore Layer(s)",
-        "Overlap Details",
     ]
     if not is_whitelist:
         columns.append("FSN")
@@ -733,14 +734,13 @@ def log_ignored_faulty_docs(
         offset = document_dump.offsets[idx]
         overlaps = document_dump.ignore_overlaps[idx]
         overlap_layers = _format_overlap_layers(overlaps)
-        overlap_details = _format_overlap_details(overlaps)
         fsn = ""
         if not is_whitelist and mapping_dict is not None:
             fsn_value = mapping_dict.get(bytes(document_dump.snomed_codes[idx]))
             if fsn_value is not None:
                 fsn = fsn_value.decode("utf-8")
 
-        row = f"| {target_layer} | {code} | {text} | {offset} | {reason} | {overlap_layers} | {overlap_details}"
+        row = f"| {target_layer} | {code} | {text} | {offset} | {reason} | {overlap_layers}"
         if not is_whitelist:
             row += f" | {fsn}"
         row += " |\n"
@@ -809,6 +809,7 @@ def create_log_from_results(
                 sum([len(x.documents) for x in result.annotators.values()]) * 2, 1
             )
 
+        ignored_sections: list[tuple[str, str]] = []
         ft_iter = [ListDumpType.WHITELIST, ListDumpType.BLACKLIST]
         for i, ft in enumerate(ft_iter):
             print(f"-- {ft.name.capitalize()} --")
@@ -816,6 +817,8 @@ def create_log_from_results(
             if group_name in h5_file.keys():
                 filter_list = h5_file.get(group_name).get("0").get("codes")
                 fsn_list = h5_file.get(group_name).get("0").get("fsn")
+                ignored_log_doc = StringIO()
+                ignored_log_doc_masked = StringIO()
                 err_docs += analyze_documents(
                     project=result,
                     filter_array=filter_list[:],
@@ -838,7 +841,23 @@ def create_log_from_results(
                         }
                     ),
                     dump_dictionary=dump_dict,
+                    ignored_log_doc=ignored_log_doc,
+                    ignored_log_doc_masked=ignored_log_doc_masked,
                 )
+                if ignored_log_doc.getvalue():
+                    ignored_sections.append(
+                        (ignored_log_doc.getvalue(), ignored_log_doc_masked.getvalue())
+                    )
+        if ignored_sections:
+            for fi in (log_doc, log_doc_masked):
+                fi.write("# Ignored faulty concepts\n")
+                fi.write(f"[Zum Inhalt](#{Information.log_dump_pretext_caption.lower()})  \n\n")
+                fi.write(
+                    "These concepts would have been reported as faulty, but were ignored because they overlap with configured ignore layer(s).\n\n"
+                )
+            for ignored_text, ignored_text_masked in ignored_sections:
+                log_doc.write(ignored_text)
+                log_doc_masked.write(ignored_text_masked)
         log_final_tag_count(
             whitelist_code_counter, blacklist_tag_counter, log_doc, log_doc_masked
         )
