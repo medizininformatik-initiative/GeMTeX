@@ -20,11 +20,21 @@ from ..utils import ListDumpType, Information, is_numeric
 
 
 @dataclasses.dataclass
+class IgnoreOverlap:
+    layer: str
+    offset: tuple[int, int]
+    text: str
+
+
+@dataclasses.dataclass
 class DocumentAnnotations:
     snomed_codes: np.ndarray
     offsets: np.ndarray
     text: np.ndarray
+    layers: np.ndarray
     length: int
+    ignore_mask: np.ndarray = dataclasses.field(default_factory=lambda: np.asarray([], dtype=bool))
+    ignore_overlaps: list[list[IgnoreOverlap]] = dataclasses.field(default_factory=list)
 
 
 @dataclasses.dataclass
@@ -132,21 +142,63 @@ def _populate_dump_dictionary(
         dictionary[code]["offset"].append(offset)
 
 
+def spans_match(
+    target: tuple[int, int], ignore: tuple[int, int], mode: str = "overlap"
+) -> bool:
+    target_begin, target_end = target
+    ignore_begin, ignore_end = ignore
+    if mode == "exact":
+        return target_begin == ignore_begin and target_end == ignore_end
+    if mode == "covered-by":
+        return target_begin >= ignore_begin and target_end <= ignore_end
+    if mode == "contains":
+        return target_begin <= ignore_begin and target_end >= ignore_end
+    if mode == "overlap":
+        return target_begin < ignore_end and ignore_begin < target_end
+    raise ValueError(f"Unknown overlap mode: '{mode}'.")
+
+
+def _safe_select(document: cassis.Cas, type_: str):
+    try:
+        yield from document.select(type_)
+    except Exception as e:
+        logging.debug(f"Could not select annotations of type '{type_}': {e}")
+
+
 def get_annotations_from_document(
     document: Union[cassis.Cas, str, pathlib.Path],
     annotation_types: list[str] = None,
     id_prefix: str = "http://snomed.info/id/",
+    ignore_overlap_types: Optional[list[str]] = None,
+    ignore_overlap_mode: str = "overlap",
 ) -> DocumentAnnotations:
     if not annotation_types:
         annotation_types = ["gemtex.Concept"]
+    if ignore_overlap_types is None:
+        ignore_overlap_types = []
     id_prefix = id_prefix + "/" if not id_prefix.endswith("/") else id_prefix
     id_prefix = id_prefix.lower()
 
     if not isinstance(document, cassis.Cas):
         document = _load_document(document)
-    codes, offsets, text = [], [], []
+
+    ignore_spans: list[IgnoreOverlap] = []
+    for type_ in ignore_overlap_types:
+        for annotation in _safe_select(document, type_):
+            try:
+                ignore_spans.append(
+                    IgnoreOverlap(
+                        layer=type_,
+                        offset=(annotation.begin, annotation.end),
+                        text=annotation.get_covered_text(),
+                    )
+                )
+            except Exception:
+                pass
+
+    codes, offsets, text, layers, ignore_mask, ignore_overlaps = [], [], [], [], [], []
     for type_ in annotation_types:
-        for annotation in document.select(type_):
+        for annotation in _safe_select(document, type_):
             try:
                 _id = annotation.get("id")
                 if _id is None:
@@ -158,20 +210,27 @@ def get_annotations_from_document(
                     else:
                         codes.append(_id)
 
-                offsets.append(
-                    (
-                        annotation.begin,
-                        annotation.end,
-                    )
-                )
+                offset = (annotation.begin, annotation.end)
+                overlaps = [
+                    ignore
+                    for ignore in ignore_spans
+                    if spans_match(offset, ignore.offset, ignore_overlap_mode)
+                ]
+                offsets.append(offset)
                 text.append(annotation.get_covered_text())
+                layers.append(type_)
+                ignore_mask.append(len(overlaps) > 0)
+                ignore_overlaps.append(overlaps)
             except Exception:
                 pass
     return DocumentAnnotations(
         snomed_codes=np.asarray(codes, dtype="bytes"),
         offsets=np.asarray(offsets, dtype="i,i"),
         text=np.asarray(text, dtype=np.dtypes.StringDType),
+        layers=np.asarray(layers, dtype=np.dtypes.StringDType),
         length=len(codes),
+        ignore_mask=np.asarray(ignore_mask, dtype=bool),
+        ignore_overlaps=ignore_overlaps,
     )
 
 
@@ -204,9 +263,13 @@ def process_inception_zip(
     annotation_types: list[str] = None,
     id_prefix: str = "http://snomed.info/id/",
     allowed_extensions: Optional[list[str]] = None,
+    ignore_overlap_types: Optional[list[str]] = None,
+    ignore_overlap_mode: str = "overlap",
 ) -> TemporaryCorpus:
     if not annotation_types:
         annotation_types = ["gemtex.Concept"]
+    if ignore_overlap_types is None:
+        ignore_overlap_types = []
 
     # ---- Prepare containers ----
     annotations = TemporaryCorpus(annotators={})
@@ -250,7 +313,11 @@ def process_inception_zip(
                         with zip_file.open(cas_path) as cas_file:
                             cas = cassis.load_cas_from_json(cas_file)
                         doc_anno = get_annotations_from_document(
-                            cas, annotation_types, id_prefix
+                            cas,
+                            annotation_types,
+                            id_prefix,
+                            ignore_overlap_types=ignore_overlap_types,
+                            ignore_overlap_mode=ignore_overlap_mode,
                         )
                         if annotator_name not in annotations.annotators:
                             annotations.annotators[annotator_name] = TemporaryContainer(
@@ -379,8 +446,9 @@ def analyze_documents(
                             actual_indices[~final_erroneous_indices_mask]
                         ] = False
 
-                    doc_error_count += 1
-                    concept_error_count += np.count_nonzero(erroneous_codes_array)
+                    ignored_codes_array = erroneous_codes_array & annotations.ignore_mask
+                    actionable_codes_array = erroneous_codes_array & ~annotations.ignore_mask
+
                     _map_dict = None
                     if not as_whitelist:
                         _map_dict = {}
@@ -389,28 +457,47 @@ def analyze_documents(
                         for code, _idx in zip(erroneous_codes, idx):
                             if _idx < len(filter_array) and filter_array[_idx] == code:
                                 _map_dict[bytes(code)] = mapping_array[_idx]
-                    log_critical_docs(
-                        annotator_name,
-                        doc_name,
-                        document_name_masked,
-                        annotations,
-                        erroneous_codes_array,
-                        log_doc,
-                        log_doc_masked,
-                        new_annotator,
-                        as_whitelist,
-                        _map_dict,
-                        filter_type,
-                        new_section,
-                        section_count,
-                        blacklist_tag_counter,
-                        whitelist_code_counter,
-                        annotator_names,
-                        annotator_names_masked,
-                        dump_dictionary,
-                    )
-                    new_section = False
-                    new_annotator = False
+
+                    if np.any(actionable_codes_array):
+                        doc_error_count += 1
+                        concept_error_count += np.count_nonzero(actionable_codes_array)
+                        log_critical_docs(
+                            annotator_name,
+                            doc_name,
+                            document_name_masked,
+                            annotations,
+                            actionable_codes_array,
+                            log_doc,
+                            log_doc_masked,
+                            new_annotator,
+                            as_whitelist,
+                            _map_dict,
+                            filter_type,
+                            new_section,
+                            section_count,
+                            blacklist_tag_counter,
+                            whitelist_code_counter,
+                            annotator_names,
+                            annotator_names_masked,
+                            dump_dictionary,
+                        )
+                        new_section = False
+                        new_annotator = False
+
+                    if np.any(ignored_codes_array):
+                        log_ignored_faulty_docs(
+                            annotator_name,
+                            doc_name,
+                            document_name_masked,
+                            annotations,
+                            ignored_codes_array,
+                            log_doc,
+                            log_doc_masked,
+                            as_whitelist,
+                            _map_dict,
+                            filter_type,
+                            annotator_names_masked,
+                        )
             concept_error_text = f"- with {concept_error_count:>3} concept(s) {'not ' if as_whitelist else ''}on '{filter_type.name.lower()}'."
             spinner.write(
                 f"{annotator_name}:{' ' * (annotator_names_max - len(annotator_name) + 1)}Done. {doc_error_count:>3} critical document(s) found {concept_error_text if doc_error_count > 0 else ''}"
@@ -527,6 +614,94 @@ def log_critical_docs(
         tuple_[0].write("\n\n")
 
 
+def _format_overlap_layers(overlaps: list[IgnoreOverlap]) -> str:
+    if not overlaps:
+        return ""
+    return ", ".join(sorted({overlap.layer for overlap in overlaps}))
+
+
+def _format_overlap_details(overlaps: list[IgnoreOverlap]) -> str:
+    if not overlaps:
+        return ""
+    return "<br>".join(
+        f"{overlap.layer} {overlap.offset}: {overlap.text}" for overlap in overlaps
+    )
+
+
+def log_ignored_faulty_docs(
+    annotator_name: str,
+    document_name: str,
+    document_name_masked: str,
+    document_dump: DocumentAnnotations,
+    bool_index_array: np.ndarray,
+    output_file: TextIOWrapper,
+    output_file_masked: TextIOWrapper,
+    is_whitelist: bool,
+    mapping_dict: Optional[dict],
+    filter_type: ListDumpType,
+    annotator_names_masked: dict[str, str],
+):
+    reason = "not_in_whitelist" if is_whitelist else "blacklisted"
+    section = f"Ignored faulty concepts ({filter_type.name.lower()})"
+    lines = [
+        f"# {section}\n",
+        f"[Zum Inhalt](#{Information.log_dump_pretext_caption.lower()})  \n\n",
+        "These concepts would have been reported as faulty, but were ignored because they overlap with configured ignore layer(s).\n\n",
+        f"## {annotator_name}\n",
+        f"#### {document_name}\n",
+    ]
+    lines_masked = [
+        f"# {section}\n",
+        f"[Zum Inhalt](#{Information.log_dump_pretext_caption.lower()})  \n\n",
+        "These concepts would have been reported as faulty, but were ignored because they overlap with configured ignore layer(s).\n\n",
+        f"## {annotator_names_masked.get(annotator_name)}\n",
+        f"#### {document_name_masked}\n",
+    ]
+
+    columns = [
+        "Target Layer",
+        "Snomed CT Code",
+        "Covered Text",
+        "Offset in Document",
+        "Reason",
+        "Overlapping Ignore Layer(s)",
+        "Overlap Details",
+    ]
+    if not is_whitelist:
+        columns.append("FSN")
+    header = "| " + " | ".join(columns) + " |\n"
+    separator = "| " + " | ".join(["--:"] * len(columns)) + " |\n"
+
+    for lines_ in (lines, lines_masked):
+        lines_.append(header)
+        lines_.append(separator)
+
+    for idx in np.where(bool_index_array)[0]:
+        code = document_dump.snomed_codes[idx].decode("utf-8")
+        target_layer = str(document_dump.layers[idx])
+        text = str(document_dump.text[idx])
+        offset = document_dump.offsets[idx]
+        overlaps = document_dump.ignore_overlaps[idx]
+        overlap_layers = _format_overlap_layers(overlaps)
+        overlap_details = _format_overlap_details(overlaps)
+        fsn = ""
+        if not is_whitelist and mapping_dict is not None:
+            fsn_value = mapping_dict.get(bytes(document_dump.snomed_codes[idx]))
+            if fsn_value is not None:
+                fsn = fsn_value.decode("utf-8")
+
+        row = f"| {target_layer} | {code} | {text} | {offset} | {reason} | {overlap_layers} | {overlap_details}"
+        if not is_whitelist:
+            row += f" | {fsn}"
+        row += " |\n"
+        lines.append(row)
+        lines_masked.append(row)
+
+    for tuple_ in [(output_file, lines), (output_file_masked, lines_masked)]:
+        tuple_[0].writelines(tuple_[1])
+        tuple_[0].write("\n\n")
+
+
 def log_final_tag_count(
     whitelist_tag_counter: Counter,
     blacklist_tag_counter: Counter,
@@ -574,7 +749,7 @@ def create_log_from_results(
     log_doc.write(Information.log_dump_pretext)
     log_doc_masked.write(Information.log_dump_pretext)
 
-    with h5py.File(lists.open("rb"), "r") as h5_file:
+    with h5py.File(lists, "r") as h5_file:
         blacklist_tag_counter = Counter()
         whitelist_code_counter = Counter()
         section_count = {}

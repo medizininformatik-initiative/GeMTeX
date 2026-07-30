@@ -33,6 +33,9 @@ def generate_report(
     lists_path: pathlib.Path,
     anno_filter: Optional[list] = None,
     progress_obj: dict = None,
+    annotation_types: Optional[list[str]] = None,
+    ignore_overlap_types: Optional[list[str]] = None,
+    ignore_overlap_mode: str = "overlap",
 ) -> tuple[pathlib.Path, pathlib.Path, pathlib.Path, int]:
     json_dump_dictionary = {}
     output_md = project_zip.parent / (
@@ -42,7 +45,13 @@ def generate_report(
     output_json = output_md.with_suffix(".json")
 
     err_doc_count = 0
-    result = process_inception_zip(project_zip, annotator_filter=anno_filter)
+    result = process_inception_zip(
+        project_zip,
+        annotator_filter=anno_filter,
+        annotation_types=annotation_types,
+        ignore_overlap_types=ignore_overlap_types,
+        ignore_overlap_mode=ignore_overlap_mode,
+    )
     if result is None:
         raise RuntimeError("Processing failed.")
 
@@ -165,6 +174,23 @@ with st.sidebar:
             "INCEpTION project ZIP", type=["zip"]
         )
     hdf5_file = st.file_uploader("Whitelist/Blacklist HDF5", type=["hdf5"])
+    st.header("Annotation layers")
+    annotation_types_text = st.text_area(
+        "Target annotation types to check",
+        value="gemtex.Concept",
+        help="One UIMA layer/type per line. Faulty SNOMED code checks run on these annotations.",
+    )
+    ignore_overlap_types_text = st.text_area(
+        "Ignore faulty target annotations overlapping these types",
+        value="",
+        help="Optional. One UIMA layer/type per line. Faulty target annotations overlapping these layers are reported separately and excluded from the critical count.",
+    )
+    ignore_overlap_mode = st.selectbox(
+        "Ignore overlap mode",
+        options=["overlap", "covered-by", "contains", "exact"],
+        index=0,
+        help="Controls how target annotations must match ignore annotations to be ignored.",
+    )
 
 
 annotator_selection = None
@@ -218,12 +244,26 @@ if st.button("Run analysis", type="primary", disabled=not (zip_file and hdf5_fil
             else None
         )
 
+        annotation_types = [
+            line.strip()
+            for line in annotation_types_text.splitlines()
+            if line.strip()
+        ] or ["gemtex.Concept"]
+        ignore_overlap_types = [
+            line.strip()
+            for line in ignore_overlap_types_text.splitlines()
+            if line.strip()
+        ]
+
         output_path_md, output_path_md_masked, output_path_json, erroneous_doc_count = (
             generate_report(
                 project_zip=zip_temp_path,
                 lists_path=hdf5_temp_path,
                 anno_filter=annotator_filter,
                 progress_obj={"obj": progress_bar, "text_pre": ""},
+                annotation_types=annotation_types,
+                ignore_overlap_types=ignore_overlap_types,
+                ignore_overlap_mode=ignore_overlap_mode,
             )
         )
         progress_bar.empty()
