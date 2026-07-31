@@ -51,6 +51,8 @@ class Rf2IngestionSummary:
     fsn_count: int
     association_count: int
     relationship_parent_count: int
+    whitelist_count: int
+    blacklist_count: int
     files: Rf2SnapshotMembers
 
 
@@ -133,20 +135,19 @@ def _semantic_tag_from_fsn(fsn: str) -> str:
     return match.group(1) if match else ""
 
 
-def _read_active_concepts(zf: zipfile.ZipFile, member: str) -> set[str]:
-    concepts: set[str] = set()
+def _read_concept_active_state(zf: zipfile.ZipFile, member: str) -> dict[str, bool]:
+    concept_active: dict[str, bool] = {}
     for row in _iter_rf2_rows(
         zf, member, {"id", "effectiveTime", "active", "moduleId", "definitionStatusId"}
     ):
-        if row["active"] == "1":
-            concepts.add(row["id"])
-    return concepts
+        concept_active[row["id"]] = row["active"] == "1"
+    return concept_active
 
 
-def _read_active_fsns(
+def _read_fsns(
     zf: zipfile.ZipFile,
     member: str,
-    active_concepts: set[str],
+    known_concepts: set[str],
 ) -> dict[str, str]:
     fsns: dict[str, str] = {}
     for row in _iter_rf2_rows(
@@ -167,7 +168,7 @@ def _read_active_fsns(
         if (
             row["active"] == "1"
             and row["typeId"] == FSN_TYPE_ID
-            and row["conceptId"] in active_concepts
+            and row["conceptId"] in known_concepts
         ):
             fsns[row["conceptId"]] = row["term"]
     return fsns
@@ -244,6 +245,66 @@ def _write_string_dataset(group: h5py.Group, name: str, values: Iterable[str]):
     dataset[:] = data
 
 
+def _write_int_dataset(group: h5py.Group, name: str, values: Iterable[int]):
+    data = np.asarray(list(values), dtype=np.int64)
+    group.create_dataset(name, data=data)
+
+
+def _descendants_or_self(root_codes: Iterable[str], parent_map: dict[str, set[str]]) -> set[str]:
+    children_by_parent: dict[str, set[str]] = {}
+    for child, parents in parent_map.items():
+        for parent in parents:
+            children_by_parent.setdefault(parent, set()).add(child)
+
+    result: set[str] = set()
+    stack = list(root_codes)
+    while stack:
+        code = stack.pop()
+        if code in result:
+            continue
+        result.add(code)
+        stack.extend(sorted(children_by_parent.get(code, set())))
+    return result
+
+
+def _categorical_ids(values: list[str]) -> tuple[list[str], list[int]]:
+    categories = sorted(set(values))
+    category_to_id = {value: idx for idx, value in enumerate(categories)}
+    return categories, [category_to_id[value] for value in values]
+
+
+def _write_legacy_policy_group(
+    h5_file: h5py.File,
+    group_name: str,
+    policy_codes: list[str],
+    fsn_by_code: dict[str, str],
+    force_overwrite: bool,
+):
+    group = _replace_group(h5_file, group_name, force_overwrite)
+    version_group = group.create_group("0")
+    _write_string_dataset(version_group, "codes", policy_codes)
+    _write_string_dataset(
+        version_group, "fsn", (fsn_by_code.get(code, "") for code in policy_codes)
+    )
+
+
+def _write_policy_view(
+    policy_views_group: h5py.Group,
+    policy_name: str,
+    concept_indices: list[int],
+    *,
+    root_codes: Optional[Iterable[str]] = None,
+    filter_tags: Optional[Iterable[str]] = None,
+    filter_mode: str = "positive",
+):
+    group = policy_views_group.create_group(policy_name).create_group("0")
+    _write_int_dataset(group, "concept_index", concept_indices)
+    _write_string_dataset(group, "root_codes", root_codes or [])
+    _write_string_dataset(group, "filter_tags", filter_tags or [])
+    group.attrs["filter_mode"] = filter_mode
+    group.attrs["storage"] = "concept_index"
+
+
 def _replace_group(h5_file: h5py.File, name: str, force_overwrite: bool) -> h5py.Group:
     if name in h5_file:
         if not force_overwrite:
@@ -261,6 +322,9 @@ def write_snapshot_hdf5_from_rf2_zip(
     language: str = "en",
     include_associations: bool = True,
     include_ancestors: bool = False,
+    whitelist_root_codes: Optional[Iterable[str]] = None,
+    blacklist_filter_tags: Optional[Iterable[str]] = None,
+    write_legacy_policy_groups: bool = False,
     force_overwrite: bool = False,
     use_memoization: bool = False,
 ) -> Rf2IngestionSummary:
@@ -271,14 +335,18 @@ def write_snapshot_hdf5_from_rf2_zip(
     ```text
     /concepts/codes
     /concepts/fsn
-    /concepts/semantic_tag
+    /concepts/semantic_tag_id
+    /concepts/semantic_tags
     /concepts/active
-    /historical_associations/source_code
-    /historical_associations/target_code
-    /historical_associations/association_type
+    /historical_associations/source_index
+    /historical_associations/target_index
+    /historical_associations/association_type_id
+    /historical_associations/association_types
     /historical_associations/effective_time
     /historical_associations/active
     /historical_associations/refset_id
+    /policy_views/whitelist/0/concept_index
+    /policy_views/blacklist/0/concept_index
     ```
 
     If ``include_ancestors`` is true, compact ancestor arrays compatible with
@@ -287,13 +355,13 @@ def write_snapshot_hdf5_from_rf2_zip(
     zip_path = pathlib.Path(zip_path)
     output_path = pathlib.Path(output_path)
     members = discover_snapshot_members(zip_path, language=language)
+    whitelist_root_codes = list(whitelist_root_codes or [])
+    blacklist_filter_tags = list(blacklist_filter_tags or [])
 
     with zipfile.ZipFile(zip_path) as zf:
-        logging.info("Reading active RF2 Snapshot concepts from %s", members.concept)
-        active_concepts = _read_active_concepts(zf, members.concept)
-
-        logging.info("Reading active RF2 Snapshot FSNs from %s", members.description)
-        fsn_by_code = _read_active_fsns(zf, members.description, active_concepts)
+        logging.info("Reading RF2 Snapshot concept active state from %s", members.concept)
+        concept_active = _read_concept_active_state(zf, members.concept)
+        active_concepts = {code for code, active in concept_active.items() if active}
 
         associations = []
         if include_associations:
@@ -301,29 +369,35 @@ def write_snapshot_hdf5_from_rf2_zip(
             associations = _read_active_associations(zf, members.association)
 
         parent_map: dict[str, set[str]] = {}
-        if include_ancestors:
+        need_relationships = include_ancestors or bool(whitelist_root_codes)
+        if need_relationships:
             logging.info("Reading active RF2 Snapshot is-a relationships from %s", members.relationship)
             parent_map = _read_active_parent_map(zf, members.relationship, active_concepts)
+
+        all_concept_codes = active_concepts | {a[0] for a in associations} | {a[1] for a in associations}
+        logging.info("Reading RF2 Snapshot FSNs from %s", members.description)
+        fsn_by_code = _read_fsns(zf, members.description, all_concept_codes)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with h5py.File(output_path, "a") as h5_file:
         concept_group = _replace_group(h5_file, "concepts", force_overwrite)
-        codes = sorted(active_concepts)
+        codes = sorted(all_concept_codes)
+        code_to_index = {code: idx for idx, code in enumerate(codes)}
+        fsn_values = [fsn_by_code.get(code, "") for code in codes]
+        semantic_tag_values = [_semantic_tag_from_fsn(fsn) for fsn in fsn_values]
+        semantic_tags, semantic_tag_ids = _categorical_ids(semantic_tag_values)
         _write_string_dataset(concept_group, "codes", codes)
-        _write_string_dataset(concept_group, "fsn", (fsn_by_code.get(code, "") for code in codes))
-        _write_string_dataset(
-            concept_group,
-            "semantic_tag",
-            (_semantic_tag_from_fsn(fsn_by_code.get(code, "")) for code in codes),
-        )
+        _write_string_dataset(concept_group, "fsn", fsn_values)
+        _write_int_dataset(concept_group, "semantic_tag_id", semantic_tag_ids)
+        _write_string_dataset(concept_group, "semantic_tags", semantic_tags)
         concept_group.create_dataset(
-            "active", data=np.ones((len(codes),), dtype=bool)
+            "active", data=np.asarray([concept_active.get(code, False) for code in codes], dtype=bool)
         )
 
         if include_ancestors:
             ancestor_codes_base, ancestor_index, ancestor_codes, ancestor_distances = (
                 _compute_compact_ancestor_arrays(
-                    fsn_by_code | {code: "" for code in active_concepts if code not in fsn_by_code},
+                    {code: fsn_by_code.get(code, "") for code in all_concept_codes},
                     parent_map,
                     use_memoization=use_memoization,
                 )
@@ -343,20 +417,61 @@ def write_snapshot_hdf5_from_rf2_zip(
             assoc_group = _replace_group(
                 h5_file, "historical_associations", force_overwrite
             )
-            _write_string_dataset(assoc_group, "source_code", (a[0] for a in associations))
-            _write_string_dataset(assoc_group, "target_code", (a[1] for a in associations))
-            _write_string_dataset(assoc_group, "association_type", (a[2] for a in associations))
+            association_types, association_type_ids = _categorical_ids([a[2] for a in associations])
+            _write_int_dataset(assoc_group, "source_index", (code_to_index[a[0]] for a in associations))
+            _write_int_dataset(assoc_group, "target_index", (code_to_index[a[1]] for a in associations))
+            _write_int_dataset(assoc_group, "association_type_id", association_type_ids)
+            _write_string_dataset(assoc_group, "association_types", association_types)
             _write_string_dataset(assoc_group, "effective_time", (a[3] for a in associations))
             assoc_group.create_dataset(
                 "active", data=np.ones((len(associations),), dtype=bool)
             )
             _write_string_dataset(assoc_group, "refset_id", (a[4] for a in associations))
 
+        whitelist_codes: list[str] = []
+        blacklist_codes: list[str] = []
+        if whitelist_root_codes or blacklist_filter_tags:
+            policy_views_group = _replace_group(h5_file, "policy_views", force_overwrite)
+            if whitelist_root_codes:
+                whitelist_code_set = _descendants_or_self(whitelist_root_codes, parent_map) & active_concepts
+                whitelist_codes = sorted(whitelist_code_set)
+                _write_policy_view(
+                    policy_views_group,
+                    "whitelist",
+                    [code_to_index[code] for code in whitelist_codes],
+                    root_codes=whitelist_root_codes,
+                    filter_mode="descendants_or_self",
+                )
+                if write_legacy_policy_groups:
+                    _write_legacy_policy_group(
+                        h5_file, "whitelist", whitelist_codes, fsn_by_code, force_overwrite
+                    )
+            if blacklist_filter_tags:
+                blacklist_filter_tags_set = set(blacklist_filter_tags)
+                blacklist_codes = [
+                    code
+                    for code, tag in zip(codes, semantic_tag_values)
+                    if concept_active.get(code, False) and tag in blacklist_filter_tags_set
+                ]
+                _write_policy_view(
+                    policy_views_group,
+                    "blacklist",
+                    [code_to_index[code] for code in blacklist_codes],
+                    filter_tags=sorted(blacklist_filter_tags_set),
+                    filter_mode="semantic_tag_positive",
+                )
+                if write_legacy_policy_groups:
+                    _write_legacy_policy_group(
+                        h5_file, "blacklist", blacklist_codes, fsn_by_code, force_overwrite
+                    )
+
     return Rf2IngestionSummary(
         output_path=output_path,
-        concept_count=len(active_concepts),
+        concept_count=len(codes),
         fsn_count=len(fsn_by_code),
         association_count=len(associations),
         relationship_parent_count=sum(len(v) for v in parent_map.values()),
+        whitelist_count=len(whitelist_codes),
+        blacklist_count=len(blacklist_codes),
         files=members,
     )

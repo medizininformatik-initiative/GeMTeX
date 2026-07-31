@@ -271,32 +271,50 @@ Exact IDs should be verified against the SNOMED edition being processed.
 
 ## 7. HDF5 Output Structure
 
-The generated HDF5 should preserve existing project list structure:
+The compact RF2-derived HDF5 layout stores canonical concept metadata once and represents policies as integer views into `/concepts`.
+
+Canonical concept metadata:
+
+```text
+/concepts/codes
+/concepts/fsn
+/concepts/semantic_tag_id
+/concepts/semantic_tags
+/concepts/active
+```
+
+Historical associations are also index-based:
+
+```text
+/historical_associations/source_index
+/historical_associations/target_index
+/historical_associations/association_type_id
+/historical_associations/association_types
+/historical_associations/effective_time
+/historical_associations/active
+/historical_associations/refset_id
+```
+
+Policy views:
+
+```text
+/policy_views/whitelist/0/concept_index
+/policy_views/whitelist/0/root_codes
+/policy_views/whitelist/0/filter_tags
+/policy_views/blacklist/0/concept_index
+/policy_views/blacklist/0/root_codes
+/policy_views/blacklist/0/filter_tags
+```
+
+This avoids duplicating large string datasets under whitelist/blacklist groups. `log-critical-documents` can read these compact policy views directly by resolving `concept_index` through `/concepts/codes` and `/concepts/fsn`.
+
+The existing legacy structure can still be written optionally for backward compatibility with older code:
 
 ```text
 /whitelist/0/codes
 /whitelist/0/fsn
 /blacklist/0/codes
 /blacklist/0/fsn
-```
-
-Additional concept metadata:
-
-```text
-/concepts/codes
-/concepts/fsn
-/concepts/semantic_tag
-/concepts/active
-```
-
-Historical associations:
-
-```text
-/historical_associations/source_code
-/historical_associations/target_code
-/historical_associations/association_type
-/historical_associations/effective_time
-/historical_associations/active
 ```
 
 Optional hierarchy/ancestor support:
@@ -349,6 +367,7 @@ It currently supports Snapshot-based ingestion from RF2 ZIP files and writes enr
 ```text
 /concepts
 /historical_associations
+/policy_views
 ```
 
 The module exposes:
@@ -361,6 +380,9 @@ write_snapshot_hdf5_from_rf2_zip(
     language="en",
     include_associations=True,
     include_ancestors=False,
+    whitelist_root_codes=None,
+    blacklist_filter_tags=None,
+    write_legacy_policy_groups=False,
     force_overwrite=False,
 )
 ```
@@ -432,6 +454,14 @@ For revised sanitization, the important first feature is:
 
 ```text
 --include-history
+```
+
+For compact policy-list generation, add explicit policy inputs such as whitelist root codes and blacklist semantic tags. Legacy list groups should be optional because `/policy_views` is more compact:
+
+```text
+--whitelist-root-code 138875005
+--blacklist-filter-tag attribute
+--write-legacy-policy-groups
 ```
 
 Ancestor closure can be added later:

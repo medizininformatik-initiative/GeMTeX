@@ -70,6 +70,47 @@ class TestIgnoreOverlapReporting(unittest.TestCase):
         self.assertIn("Ignored concept (finding)", report)
         self.assertNotIn("Overlap Details", report)
 
+    def test_compact_policy_views_are_supported_without_legacy_groups(self):
+        corpus = TemporaryCorpus(
+            annotators={
+                "annotator-a": TemporaryContainer(
+                    max_length=1,
+                    documents={
+                        "doc.txt": DocumentAnnotations(
+                            snomed_codes=np.asarray([b"333"], dtype="bytes"),
+                            offsets=np.asarray([(30, 40)], dtype="i,i"),
+                            text=np.asarray(["actionable"], dtype=np.dtypes.StringDType),
+                            layers=np.asarray(["gemtex.Concept"], dtype=np.dtypes.StringDType),
+                            length=1,
+                            ignore_mask=np.asarray([False], dtype=bool),
+                            ignore_overlaps=[[]],
+                        )
+                    },
+                )
+            }
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            hdf5_path = pathlib.Path(tmp) / "compact-lists.hdf5"
+            with h5py.File(hdf5_path, "w") as h5_file:
+                concepts = h5_file.create_group("concepts")
+                concepts.create_dataset("codes", data=np.asarray([b"111", b"333"]))
+                concepts.create_dataset("fsn", data=np.asarray([b"Allowed concept (finding)", b"Blacklisted concept (finding)"]))
+                policy_views = h5_file.create_group("policy_views")
+                blacklist = policy_views.create_group("blacklist").create_group("0")
+                blacklist.create_dataset("concept_index", data=np.asarray([1], dtype=np.int64))
+
+            log_doc = io.StringIO()
+            log_doc_masked = io.StringIO()
+            err_docs = create_log_from_results(corpus, log_doc, log_doc_masked, hdf5_path)
+
+        report = log_doc.getvalue()
+        self.assertEqual(err_docs, 1)
+        self.assertIn("# Blacklist\n", report)
+        self.assertIn("333", report)
+        self.assertIn("Blacklisted concept (finding)", report)
+        self.assertNotIn("# Whitelist\n", report)
+
     def test_document_analysis_error_skips_only_bad_document(self):
         corpus = TemporaryCorpus(
             annotators={

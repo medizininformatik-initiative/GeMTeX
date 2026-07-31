@@ -815,39 +815,49 @@ def create_log_from_results(
             print(f"-- {ft.name.capitalize()} --")
             group_name = ft.name.lower()
             if group_name in h5_file.keys():
-                filter_list = h5_file.get(group_name).get("0").get("codes")
-                fsn_list = h5_file.get(group_name).get("0").get("fsn")
-                ignored_log_doc = StringIO()
-                ignored_log_doc_masked = StringIO()
-                err_docs += analyze_documents(
-                    project=result,
-                    filter_array=filter_list[:],
-                    mapping_array=fsn_list[:],
-                    filter_type=ft,
-                    log_doc=log_doc,
-                    log_doc_masked=log_doc_masked,
-                    new_section=True,
-                    section_count=section_count,
-                    blacklist_tag_counter=blacklist_tag_counter,
-                    whitelist_code_counter=whitelist_code_counter,
-                    progress_obj=(
-                        None
-                        if progress_obj is None
-                        else {
-                            "obj": progress_obj["obj"],
-                            "text_pre": f"__{group_name.capitalize()}__: ",
-                            "progress_increment": progress_increment,
-                            "current_progress": 1.0 * (i / len(ft_iter)),
-                        }
-                    ),
-                    dump_dictionary=dump_dict,
-                    ignored_log_doc=ignored_log_doc,
-                    ignored_log_doc_masked=ignored_log_doc_masked,
+                filter_list = h5_file.get(group_name).get("0").get("codes")[:]
+                fsn_list = h5_file.get(group_name).get("0").get("fsn")[:]
+            elif (
+                "policy_views" in h5_file
+                and group_name in h5_file["policy_views"]
+                and "concepts" in h5_file
+            ):
+                concept_indices = h5_file["policy_views"][group_name]["0"]["concept_index"][:]
+                filter_list = h5_file["concepts"]["codes"][:][concept_indices]
+                fsn_list = h5_file["concepts"]["fsn"][:][concept_indices]
+            else:
+                continue
+            ignored_log_doc = StringIO()
+            ignored_log_doc_masked = StringIO()
+            err_docs += analyze_documents(
+                project=result,
+                filter_array=filter_list,
+                mapping_array=fsn_list,
+                filter_type=ft,
+                log_doc=log_doc,
+                log_doc_masked=log_doc_masked,
+                new_section=True,
+                section_count=section_count,
+                blacklist_tag_counter=blacklist_tag_counter,
+                whitelist_code_counter=whitelist_code_counter,
+                progress_obj=(
+                    None
+                    if progress_obj is None
+                    else {
+                        "obj": progress_obj["obj"],
+                        "text_pre": f"__{group_name.capitalize()}__: ",
+                        "progress_increment": progress_increment,
+                        "current_progress": 1.0 * (i / len(ft_iter)),
+                    }
+                ),
+                dump_dictionary=dump_dict,
+                ignored_log_doc=ignored_log_doc,
+                ignored_log_doc_masked=ignored_log_doc_masked,
+            )
+            if ignored_log_doc.getvalue():
+                ignored_sections.append(
+                    (ignored_log_doc.getvalue(), ignored_log_doc_masked.getvalue())
                 )
-                if ignored_log_doc.getvalue():
-                    ignored_sections.append(
-                        (ignored_log_doc.getvalue(), ignored_log_doc_masked.getvalue())
-                    )
         if ignored_sections:
             for fi in (log_doc, log_doc_masked):
                 fi.write("# Ignored faulty concepts\n")

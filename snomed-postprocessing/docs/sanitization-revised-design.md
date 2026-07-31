@@ -126,7 +126,19 @@ sanitation suggestions
 
 ## 5. Enriched HDF5 Structure
 
-The HDF5 file should keep the existing policy structure:
+The preferred compact HDF5 layout stores canonical concept metadata once and represents policies as views into that concept table:
+
+```text
+/concepts/codes
+/concepts/fsn
+/concepts/semantic_tag_id
+/concepts/semantic_tags
+/concepts/active
+/policy_views/whitelist/0/concept_index
+/policy_views/blacklist/0/concept_index
+```
+
+This minimizes repeated string datasets. The existing runtime-compatible policy structure can still be exported optionally during a transition period:
 
 ```text
 /whitelist/0/codes
@@ -135,29 +147,22 @@ The HDF5 file should keep the existing policy structure:
 /blacklist/0/fsn
 ```
 
-Additional concept metadata may be stored as:
-
-```text
-/concepts/codes
-/concepts/fsn
-/concepts/semantic_tag
-/concepts/active
-```
-
 Historical associations should be represented compactly. In RF2 these rows come from association refset files with columns like:
 
 ```text
 id effectiveTime active moduleId refsetId referencedComponentId targetComponentId
 ```
 
-The HDF5 representation can be:
+The preferred compact HDF5 representation references `/concepts` by integer index:
 
 ```text
-/historical_associations/source_code
-/historical_associations/target_code
-/historical_associations/association_type
+/historical_associations/source_index
+/historical_associations/target_index
+/historical_associations/association_type_id
+/historical_associations/association_types
 /historical_associations/effective_time
 /historical_associations/active
+/historical_associations/refset_id
 ```
 
 Where:
