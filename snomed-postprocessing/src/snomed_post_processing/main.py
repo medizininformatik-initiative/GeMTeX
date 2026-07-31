@@ -318,6 +318,11 @@ def log_documents(
     help="In RF2 ZIP mode, compute compact ancestor arrays under /concepts. Historical associations are included by default.",
 )
 @click.option(
+    "--policy-date",
+    default=None,
+    help="Policy date as YYYYMMDD for RF2 ZIP mode. Snapshot mode currently requires this to equal the Snapshot release date.",
+)
+@click.option(
     "--write-legacy-policy-groups",
     is_flag=True,
     help="In RF2 ZIP mode, additionally write legacy /whitelist or /blacklist groups for older code.",
@@ -389,6 +394,7 @@ def create_concept_id_dump(
     output: Optional[pathlib.Path],
     language: str,
     include_ancestors: bool,
+    policy_date: Optional[str],
     write_legacy_policy_groups: bool,
     use_secure_protocol: bool,
     port: Optional[int],
@@ -516,6 +522,7 @@ def create_concept_id_dump(
                 whitelist_root_codes=whitelist_root_codes,
                 blacklist_filter_tags=blacklist_filter_tags,
                 blacklist_root_codes=blacklist_root_codes,
+                policy_date=policy_date,
                 write_legacy_policy_groups=write_legacy_policy_groups,
                 force_overwrite=force_overwrite,
                 force_overwrite_concepts=force_overwrite_concepts,

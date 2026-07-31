@@ -455,6 +455,16 @@ In RF2 ZIP mode with `--dump-mode version`, `ROOT_CODE` creates the whitelist po
 
 When adding a blacklist to an HDF5 file that already contains `/concepts`, the existing concept table is reused. `--force-overwrite` applies to the selected policy view (`/policy_views/whitelist` or `/policy_views/blacklist`) and optional legacy policy group only. Rebuilding `/concepts` requires `--force-overwrite-concepts`.
 
+Policy views store date metadata:
+
+```text
+/policy_views/<whitelist|blacklist>/0.attrs["policy_date"]
+/policy_views/<whitelist|blacklist>/0.attrs["release_date"]
+/policy_views/<whitelist|blacklist>/0.attrs["rf2_view"]
+```
+
+In current RF2 Snapshot mode, `policy_date` must equal the Snapshot `release_date`, because Snapshot files only represent one release state. To use a recent RF2 package to generate policy views for an earlier date, the ingestion must use RF2 Full reconstruction: latest row per component/member at or before the requested policy date, then active filtering. Snapshot mode rejects mismatching earlier policy dates rather than silently creating a misleading policy view.
+
 Snowstorm mode still uses explicit server settings:
 
 ```bash

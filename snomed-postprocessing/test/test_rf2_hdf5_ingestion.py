@@ -79,13 +79,33 @@ class TestRf2Hdf5Ingestion(unittest.TestCase):
             with h5py.File(output_path, "r") as h5_file:
                 self.assertIn("whitelist", h5_file["policy_views"])
                 self.assertIn("blacklist", h5_file["policy_views"])
-                whitelist_indices = h5_file["policy_views/whitelist/0/concept_index"][:].tolist()
-                blacklist_indices = h5_file["policy_views/blacklist/0/concept_index"][:].tolist()
+                whitelist_group = h5_file["policy_views/whitelist/0"]
+                blacklist_group = h5_file["policy_views/blacklist/0"]
+                whitelist_indices = whitelist_group["concept_index"][:].tolist()
+                blacklist_indices = blacklist_group["concept_index"][:].tolist()
+                whitelist_policy_date = whitelist_group.attrs["policy_date"]
+                blacklist_policy_date = blacklist_group.attrs["policy_date"]
 
         self.assertEqual(first_summary.whitelist_count, 3)
         self.assertEqual(second_summary.blacklist_count, 2)
         self.assertEqual(whitelist_indices, [0, 1, 2])
         self.assertEqual(blacklist_indices, [0, 1])
+        self.assertEqual(whitelist_policy_date, "20260401")
+        self.assertEqual(blacklist_policy_date, "20260401")
+
+    def test_snapshot_policy_date_must_match_release_date(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            zip_path = pathlib.Path(tmp) / "rf2.zip"
+            output_path = pathlib.Path(tmp) / "rf2.hdf5"
+            _write_rf2_zip(zip_path)
+
+            with self.assertRaisesRegex(ValueError, "Snapshot release date"):
+                write_snapshot_hdf5_from_rf2_zip(
+                    zip_path,
+                    output_path,
+                    whitelist_root_codes=["200"],
+                    policy_date="20240401",
+                )
 
     def test_rf2_parser_allows_large_fields(self):
         long_term = "A" * 140000 + " (finding)"
@@ -146,6 +166,8 @@ class TestRf2Hdf5Ingestion(unittest.TestCase):
                 blacklist_indices = h5_file["policy_views/blacklist/0/concept_index"][:].tolist()
                 legacy_whitelist_codes = [x.decode() for x in h5_file["whitelist/0/codes"][:]]
                 legacy_blacklist_codes = [x.decode() for x in h5_file["blacklist/0/codes"][:]]
+                whitelist_policy_date = h5_file["policy_views/whitelist/0"].attrs["policy_date"]
+                blacklist_release_date = h5_file["policy_views/blacklist/0"].attrs["release_date"]
                 self.assertIn("ancestors_index", h5_file["concepts"])
                 self.assertNotIn("source_code", h5_file["historical_associations"])
 
@@ -167,6 +189,8 @@ class TestRf2Hdf5Ingestion(unittest.TestCase):
         self.assertEqual(blacklist_indices, [0, 1, 2])
         self.assertEqual(legacy_whitelist_codes, ["100", "200", "250"])
         self.assertEqual(legacy_blacklist_codes, ["100", "200", "250"])
+        self.assertEqual(whitelist_policy_date, "20260401")
+        self.assertEqual(blacklist_release_date, "20260401")
 
 
 if __name__ == "__main__":

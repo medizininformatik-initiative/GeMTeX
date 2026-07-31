@@ -44,6 +44,7 @@ class Rf2SnapshotMembers:
     description: str
     association: Optional[str]
     relationship: Optional[str]
+    release_date: str
 
 
 @dataclass(frozen=True)
@@ -97,11 +98,15 @@ def discover_snapshot_members(zip_path: Union[pathlib.Path, str], language: str 
     with zipfile.ZipFile(zip_path) as zf:
         names = [name for name in zf.namelist() if _is_rf2_text_member(name)]
 
+    concept = _find_unique_member(
+        names,
+        r"(?:^|/)Snapshot/Terminology/sct2_Concept_Snapshot_[^/]+_\d{8}\.txt$",
+    )
+    release_match = re.search(r"_(\d{8})\.txt$", concept)
+    if release_match is None:
+        raise ValueError(f"Could not infer RF2 release date from concept member: {concept}")
     return Rf2SnapshotMembers(
-        concept=_find_unique_member(
-            names,
-            r"(?:^|/)Snapshot/Terminology/sct2_Concept_Snapshot_[^/]+_\d{8}\.txt$",
-        ),
+        concept=concept,
         description=_find_unique_member(
             names,
             rf"(?:^|/)Snapshot/Terminology/sct2_Description_Snapshot-{lang}_[^/]+_\d{{8}}\.txt$",
@@ -116,6 +121,7 @@ def discover_snapshot_members(zip_path: Union[pathlib.Path, str], language: str 
             r"(?:^|/)Snapshot/Terminology/sct2_Relationship_Snapshot_[^/]+_\d{8}\.txt$",
             required=False,
         ),
+        release_date=release_match.group(1),
     )
 
 
@@ -298,6 +304,9 @@ def _write_policy_view(
     root_codes: Optional[Iterable[str]] = None,
     filter_tags: Optional[Iterable[str]] = None,
     filter_mode: str = "positive",
+    policy_date: Optional[str] = None,
+    release_date: Optional[str] = None,
+    rf2_view: str = "snapshot",
     force_overwrite: bool = False,
 ):
     if policy_name in policy_views_group:
@@ -312,6 +321,11 @@ def _write_policy_view(
     _write_string_dataset(group, "filter_tags", filter_tags or [])
     group.attrs["filter_mode"] = filter_mode
     group.attrs["storage"] = "concept_index"
+    group.attrs["rf2_view"] = rf2_view
+    if policy_date is not None:
+        group.attrs["policy_date"] = policy_date
+    if release_date is not None:
+        group.attrs["release_date"] = release_date
 
 
 def _replace_group(h5_file: h5py.File, name: str, force_overwrite: bool) -> h5py.Group:
@@ -334,6 +348,7 @@ def write_snapshot_hdf5_from_rf2_zip(
     whitelist_root_codes: Optional[Iterable[str]] = None,
     blacklist_filter_tags: Optional[Iterable[str]] = None,
     blacklist_root_codes: Optional[Iterable[str]] = None,
+    policy_date: Optional[str] = None,
     write_legacy_policy_groups: bool = False,
     force_overwrite: bool = False,
     force_overwrite_concepts: bool = False,
@@ -366,6 +381,13 @@ def write_snapshot_hdf5_from_rf2_zip(
     zip_path = pathlib.Path(zip_path)
     output_path = pathlib.Path(output_path)
     members = discover_snapshot_members(zip_path, language=language)
+    if policy_date is not None and policy_date != members.release_date:
+        raise ValueError(
+            "RF2 Snapshot mode can only create policy views for the Snapshot release date "
+            f"{members.release_date}; got policy_date={policy_date}. Use a matching Snapshot "
+            "or implement/use RF2 Full reconstruction for earlier policy dates."
+        )
+    policy_date = policy_date or members.release_date
     whitelist_root_codes = list(whitelist_root_codes or [])
     blacklist_filter_tags = list(blacklist_filter_tags or [])
     blacklist_root_codes = list(blacklist_root_codes or [])
@@ -472,6 +494,9 @@ def write_snapshot_hdf5_from_rf2_zip(
                     [code_to_index[code] for code in whitelist_codes],
                     root_codes=whitelist_root_codes,
                     filter_mode="descendants_or_self",
+                    policy_date=policy_date,
+                    release_date=members.release_date,
+                    rf2_view="snapshot",
                     force_overwrite=force_overwrite,
                 )
                 if write_legacy_policy_groups:
@@ -496,6 +521,9 @@ def write_snapshot_hdf5_from_rf2_zip(
                     root_codes=blacklist_root_codes,
                     filter_tags=sorted(blacklist_filter_tags_set),
                     filter_mode="semantic_tag_or_descendants_positive",
+                    policy_date=policy_date,
+                    release_date=members.release_date,
+                    rf2_view="snapshot",
                     force_overwrite=force_overwrite,
                 )
                 if write_legacy_policy_groups:
