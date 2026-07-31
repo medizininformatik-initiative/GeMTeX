@@ -85,7 +85,7 @@ Exact filenames vary by edition/release, so matching should be pattern-based and
 
 ### Snapshot input
 
-Snapshot files already represent the state at one release date.
+Snapshot files already represent the component/member state at one release date. They can still contain inactive rows, so active-only outputs must explicitly filter `active == 1`.
 
 Ingestion can process them directly:
 
@@ -102,7 +102,7 @@ write/collect for HDF5
 Full files contain historical rows. To reconstruct release state at target date `T`:
 
 ```text
-for each component id:
+for each component/member id:
     keep latest row where effectiveTime <= T
 ```
 
@@ -112,6 +112,8 @@ This applies to:
 - descriptions;
 - relationships;
 - historical association refset rows.
+
+Important: for `Full` files, do not filter out inactive rows before reconstructing the latest row per id. An inactive row may be the latest state and may supersede an older active row. Date filtering can happen while streaming; active filtering should happen after latest-row reconstruction.
 
 The algorithm should stream rows and keep only the latest relevant row per component.
 
@@ -161,12 +163,13 @@ concept_id -> active
 
 ### Descriptions
 
-Filter early where possible:
+Filter early where safe:
 
-- language code, e.g. `de` or `en`;
-- active descriptions only;
+- language code, e.g. `en` in the International Edition; other languages such as German require an appropriate extension/package;
 - FSNs only if only FSNs are needed;
 - synonyms only if search/indexing requires them.
+
+For `Snapshot` files, active descriptions can be filtered directly with `active == 1`. For `Full` files, reconstruct the latest row per description id first, then filter to active rows. Do not discard inactive `Full` rows before reconstruction.
 
 Useful fields:
 
@@ -190,12 +193,14 @@ Known description type IDs:
 
 ### Relationships
 
-For parent hierarchy, filter aggressively:
+For parent hierarchy, filter aggressively after choosing the correct release state:
 
 ```text
 active == 1
 typeId == 116680003  # is-a
 ```
+
+For `Snapshot`, this can be applied directly. For `Full`, first reconstruct the latest row per relationship id at the target date, then filter to active `is-a` relationships.
 
 Compact parent map:
 
@@ -207,7 +212,18 @@ Only active reconstructed relationships should contribute to the target-release 
 
 ### Historical associations
 
-Historical association rows are typically much smaller than relationship data.
+Historical association rows are typically much smaller than relationship data. In the inspected International Edition package they are present as:
+
+```text
+Refset/Content/der2_cRefset_AssociationFull_INT_<date>.txt
+Refset/Content/der2_cRefset_AssociationSnapshot_INT_<date>.txt
+```
+
+with columns:
+
+```text
+id effectiveTime active moduleId refsetId referencedComponentId targetComponentId
+```
 
 Store compact rows such as:
 
@@ -377,11 +393,13 @@ Optional flags:
 
 ```bash
 --rf2-view snapshot|full
---language de
+--language en
 --include-history
 --include-ancestors
 --fsn-only
 ```
+
+The International Edition package inspected here contains English (`-en`) terminology and language refsets. German (`de`) input would require a German extension/package.
 
 For revised sanitization, the important first feature is:
 

@@ -93,10 +93,12 @@ SNOMED RF2 Full releases are upstream preprocessing inputs, not the preferred ru
 
 They are used during HDF5 dump generation to derive target-release data such as:
 
-- concept active/inactive state at the target release date;
-- descriptions/FSNs at the target release date;
-- historical associations for inactive concepts;
-- optionally hierarchy/ancestor data.
+- concept active/inactive state at the target release date from `sct2_Concept_*`;
+- descriptions/FSNs at the target release date from `sct2_Description_*`;
+- historical associations for inactive concepts from `der2_cRefset_Association*`;
+- optionally hierarchy/ancestor data from active `is-a` rows in `sct2_Relationship_*`.
+
+In the inspected International Edition package (`data/international.zip`, effective time `20260401`) these required files are present in both `Full` and `Snapshot` views. The package contains English (`-en`) descriptions/language refsets; other languages require matching extension packages.
 
 At runtime, the application should usually read the enriched HDF5 file, not raw RF2 ZIPs.
 
@@ -104,10 +106,13 @@ Conceptual preprocessing:
 
 ```text
 SNOMED RF2 Full release ZIP
-    ↓ reconstruct target release state
+    ↓ reconstruct target release state by latest row per component/member id at or before target date
+    ↓ filter active rows after reconstruction
     ↓ extract historical associations
     ↓ create enriched target-release HDF5
 ```
+
+For a Snapshot view, reconstruction is not needed, but inactive rows may still be present and should be filtered when active-only data is required.
 
 Runtime:
 
@@ -139,7 +144,13 @@ Additional concept metadata may be stored as:
 /concepts/active
 ```
 
-Historical associations should be represented compactly, for example:
+Historical associations should be represented compactly. In RF2 these rows come from association refset files with columns like:
+
+```text
+id effectiveTime active moduleId refsetId referencedComponentId targetComponentId
+```
+
+The HDF5 representation can be:
 
 ```text
 /historical_associations/source_code
