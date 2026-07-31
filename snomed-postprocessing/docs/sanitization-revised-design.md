@@ -417,7 +417,7 @@ This better matches the desired workflow: only codes already flagged by the curr
 
 ### Phase 1: Structured findings
 
-Refactor or extend the current reporting path so whitelist/blacklist errors can be represented as structured `CriticalFinding` records before Markdown rendering.
+Implemented. The analysis path now materializes whitelist/blacklist findings as structured `CriticalFinding` records first, and Markdown/JSON reporting is rendered from those records at the end of the run. This makes `CriticalFinding` the default bridge between policy checking and future sanitization.
 
 ### Phase 2: Historical association storage
 

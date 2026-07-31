@@ -38,6 +38,21 @@ class DocumentAnnotations:
     ignore_overlaps: list[list[IgnoreOverlap]] = dataclasses.field(default_factory=list)
 
 
+@dataclasses.dataclass(frozen=True)
+class CriticalFinding:
+    annotator: str
+    document: str
+    code: Optional[str]
+    covered_text: str
+    offset: tuple[int, int]
+    list_type: str
+    reason: str
+    layer: Optional[str] = None
+    fsn: Optional[str] = None
+    ignored: bool = False
+    ignore_overlaps: tuple[IgnoreOverlap, ...] = ()
+
+
 @dataclasses.dataclass
 class TemporaryContainer:
     max_length: int
@@ -358,15 +373,9 @@ def analyze_documents(
     filter_type: ListDumpType,
     log_doc: TextIOWrapper,
     log_doc_masked: TextIOWrapper,
-    new_section: bool,
-    section_count: dict[str, int],
-    blacklist_tag_counter: Counter,
-    whitelist_code_counter: Counter,
     progress_obj: Optional[dict] = None,
-    dump_dictionary: Optional[dict] = None,
     filter_nan_values: bool = True,
-    ignored_log_doc: Optional[TextIOWrapper] = None,
-    ignored_log_doc_masked: Optional[TextIOWrapper] = None,
+    critical_findings: Optional[list[CriticalFinding]] = None,
 ) -> Optional[int]:
     as_whitelist = filter_type == ListDumpType.WHITELIST
     erroneous_doc_count = 0
@@ -383,12 +392,9 @@ def analyze_documents(
             return erroneous_doc_count
         annotator_names_max = len(max(annotator_names, key=len))
         for annotator_name, documents in project.annotators.items():
-            new_annotator = True
             doc_error_count = 0
             concept_error_count = 0
             skipped_doc_count = 0
-            ignored_new_annotator = True
-            ignored_new_section = True
             for i, (doc_name, annotations) in enumerate(documents.documents.items()):
                 _text = f"Processing ({annotator_name} [{i + 1:>3}/{len(documents.documents)}]: '{doc_name}') ..."
                 if doc_name not in documents_masked:
@@ -468,47 +474,32 @@ def analyze_documents(
                         if np.any(actionable_codes_array):
                             doc_error_count += 1
                             concept_error_count += np.count_nonzero(actionable_codes_array)
-                            log_critical_docs(
-                                annotator_name,
-                                doc_name,
-                                document_name_masked,
-                                annotations,
-                                actionable_codes_array,
-                                log_doc,
-                                log_doc_masked,
-                                new_annotator,
-                                as_whitelist,
-                                _map_dict,
-                                filter_type,
-                                new_section,
-                                section_count,
-                                blacklist_tag_counter,
-                                whitelist_code_counter,
-                                annotator_names,
-                                annotator_names_masked,
-                                dump_dictionary,
-                            )
-                            new_section = False
-                            new_annotator = False
-    
+                            if critical_findings is not None:
+                                critical_findings.extend(
+                                    collect_critical_findings(
+                                        annotator_name,
+                                        doc_name,
+                                        annotations,
+                                        actionable_codes_array,
+                                        filter_type,
+                                        _map_dict,
+                                        ignored=False,
+                                    )
+                                )
+
                         if np.any(ignored_codes_array):
-                            log_ignored_faulty_docs(
-                                annotator_name,
-                                doc_name,
-                                document_name_masked,
-                                annotations,
-                                ignored_codes_array,
-                                ignored_log_doc or log_doc,
-                                ignored_log_doc_masked or log_doc_masked,
-                                ignored_new_annotator,
-                                as_whitelist,
-                                _map_dict,
-                                filter_type,
-                                ignored_new_section,
-                                annotator_names_masked,
-                            )
-                            ignored_new_section = False
-                            ignored_new_annotator = False
+                            if critical_findings is not None:
+                                critical_findings.extend(
+                                    collect_critical_findings(
+                                        annotator_name,
+                                        doc_name,
+                                        annotations,
+                                        ignored_codes_array,
+                                        filter_type,
+                                        _map_dict,
+                                        ignored=True,
+                                    )
+                                )
                 except Exception as e:
                     skipped_doc_count += 1
                     logging.exception(
@@ -536,6 +527,66 @@ def analyze_documents(
             )
             erroneous_doc_count += doc_error_count
     return erroneous_doc_count
+
+
+def _decode_optional_code(value) -> Optional[str]:
+    if isinstance(value, (bytes, bytearray)):
+        decoded = value.decode("utf-8")
+    else:
+        decoded = str(value)
+    return None if decoded.lower() in {"", "nan", "none", "null"} else decoded
+
+
+def _offset_tuple(value) -> tuple[int, int]:
+    if hasattr(value, "tolist"):
+        value = value.tolist()
+    return (int(value[0]), int(value[1]))
+
+
+def collect_critical_findings(
+    annotator_name: str,
+    document_name: str,
+    document_dump: DocumentAnnotations,
+    bool_index_array: np.ndarray,
+    filter_type: ListDumpType,
+    mapping_dict: Optional[dict] = None,
+    ignored: bool = False,
+) -> list[CriticalFinding]:
+    """Materialize structured critical findings for a document/mask.
+
+    This is intentionally side-effect free. The current Markdown/JSON writers
+    still render from ``DocumentAnnotations`` directly, but this model is the
+    bridge for the upcoming sanitization resolver.
+    """
+    mapping_dict = mapping_dict or {}
+    findings: list[CriticalFinding] = []
+    reason = "not_in_whitelist" if filter_type == ListDumpType.WHITELIST else "blacklisted"
+    for idx in np.where(bool_index_array)[0]:
+        raw_code = document_dump.snomed_codes[idx]
+        code = _decode_optional_code(raw_code)
+        fsn_value = None
+        if filter_type == ListDumpType.BLACKLIST:
+            raw_fsn = mapping_dict.get(bytes(raw_code), b"")
+            fsn_value = raw_fsn.decode("utf-8") if isinstance(raw_fsn, (bytes, bytearray)) else str(raw_fsn)
+            fsn_value = fsn_value or None
+        layer = document_dump.layers[idx]
+        text = document_dump.text[idx]
+        findings.append(
+            CriticalFinding(
+                annotator=annotator_name,
+                document=document_name,
+                code=code,
+                covered_text=text.decode("utf-8") if isinstance(text, (bytes, bytearray)) else str(text),
+                offset=_offset_tuple(document_dump.offsets[idx]),
+                list_type=filter_type.name.lower(),
+                reason=reason,
+                layer=layer.decode("utf-8") if isinstance(layer, (bytes, bytearray)) else str(layer),
+                fsn=fsn_value,
+                ignored=ignored,
+                ignore_overlaps=tuple(document_dump.ignore_overlaps[idx]) if idx < len(document_dump.ignore_overlaps) else (),
+            )
+        )
+    return findings
 
 
 def log_skipped_document(
@@ -570,193 +621,148 @@ def log_skipped_document(
         tuple_[0].write("\n\n")
 
 
-def log_critical_docs(
-    annotator_name: str,
-    document_name: str,
-    document_name_masked: str,
-    document_dump: DocumentAnnotations,
-    bool_index_array: np.ndarray,
-    output_file: TextIOWrapper,
-    output_file_masked: TextIOWrapper,
-    is_new_annotator: bool,
-    is_whitelist: bool,
-    mapping_dict: dict,
-    filter_type: ListDumpType,
-    new_section: bool,
-    section_count: dict[str, int],
-    blacklist_tag_counter: Counter,
-    whitelist_code_counter: Counter,
-    annotator_names: list[str],
-    annotator_names_masked: dict[str, str],
-    dump_dictionary: Optional[dict],
-):
-    selected_codes = document_dump.snomed_codes[bool_index_array]
-    stacked = np.stack(
-        [
-            selected_codes,
-            document_dump.text[bool_index_array],
-            document_dump.offsets[bool_index_array],
-            np.asarray([mapping_dict.get(bytes(x), b"") for x in selected_codes])
-            if not is_whitelist
-            else np.zeros(sum(bool_index_array)),
-        ],
-        axis=-1,
-        dtype=object,
-    )
-    lines = []
-    lines_masked = []
-
-    if annotator_name not in section_count:
-        section_count[annotator_name] = 0
-    else:
-        section_count[annotator_name] += 1
-    if new_section:
-        lines = [
-            f"# {filter_type.name.capitalize()}\n",
-            f"[Zum Inhalt](#{Information.log_dump_pretext_caption.lower()})  \n",
-            "Zu den Annotator*innen: ",
-        ]
-        lines_masked = lines.copy()
-        for n in annotator_names:
-            lines.append(
-                f"[{n}](#{n.lower()}{('-' + str(section_count.get(annotator_name))) if section_count.get(annotator_name) > 0 else ''}), "
-            )
-            lines_masked.append(
-                f"[{annotator_names_masked.get(n)}](#{annotator_names_masked.get(n).lower()}{('-' + str(section_count.get(annotator_name))) if section_count.get(annotator_name) > 0 else ''}), "
-            )
-        for _lines in [lines, lines_masked]:
-            if len(_lines) > 0:
-                ll = _lines.pop(-1)
-                _lines.append(ll[:-2])
-            _lines.append("\n")
-    if is_new_annotator:
-        lines.append(
-            f"## {annotator_name}\n([Zum Sektionsanfang](#{filter_type.name.lower()}))\n"
-        )
-        lines_masked.append(
-            f"## {annotator_names_masked.get(annotator_name)}\n([Zum Sektionsanfang](#{filter_type.name.lower()}))\n"
-        )
-
-    lines.append(f"#### {document_name}\n")
-    lines_masked.append(f"#### {document_name_masked}\n")
-
-    if is_whitelist:
-        for lines_ in [lines, lines_masked]:
-            lines_.append("| Snomed CT Code | Covered Text | Offset in Document |\n")
-            lines_.append("| -------------: | -----------: | -----------------: |\n")
-            for line in stacked:
-                code_, offset_ = line[0].decode("utf-8"), line[2]
-                lines_.append(f"| {code_} | {line[1]} | {offset_} |\n")
-        for line in stacked:
-            code_, offset_ = line[0].decode("utf-8"), line[2]
-            whitelist_code_counter.update([code_])
-            if dump_dictionary is not None:
-                _populate_dump_dictionary(dump_dictionary, code_, offset_)
-    else:
-        for lines_ in [lines, lines_masked]:
-            lines_.append(
-                "| Snomed CT Code | Covered Text | Offset in Document | FSN |\n"
-            )
-            lines_.append(
-                "| -------------: | -----------: | -----------------: | --: |\n"
-            )
-            for line in stacked:
-                code_, tag_ = line[0].decode("utf-8"), line[3].decode("utf-8")
-                lines_.append(f"| {code_} | {line[1]} | {line[2]} | {tag_} |\n")
-        for line in stacked:
-            code_, offset_, tag_ = (
-                line[0].decode("utf-8"),
-                line[2],
-                line[3].decode("utf-8"),
-            )
-            match = re.search(r"\(([^()]*)\)\s*$", tag_)
-            blacklist_tag_counter.update([match.group(1) if match else ""])
-            if dump_dictionary is not None:
-                _populate_dump_dictionary(dump_dictionary, code_, offset_, tag_)
-
-    for tuple_ in [(output_file, lines), (output_file_masked, lines_masked)]:
-        tuple_[0].writelines(tuple_[1])
-        tuple_[0].write("\n\n")
-
-
 def _format_overlap_layers(overlaps: list[IgnoreOverlap]) -> str:
     if not overlaps:
         return ""
     return ", ".join(sorted({overlap.layer for overlap in overlaps}))
 
 
-def log_ignored_faulty_docs(
-    annotator_name: str,
-    document_name: str,
-    document_name_masked: str,
-    document_dump: DocumentAnnotations,
-    bool_index_array: np.ndarray,
+def _finding_tag(finding: CriticalFinding) -> str:
+    if not finding.fsn:
+        return ""
+    match = re.search(r"\(([^()]*)\)\s*$", finding.fsn)
+    return match.group(1) if match else ""
+
+
+def _format_finding_offset(finding: CriticalFinding) -> str:
+    return f"({finding.offset[0]}, {finding.offset[1]})"
+
+
+def _render_finding_sections(
+    findings: list[CriticalFinding],
     output_file: TextIOWrapper,
     output_file_masked: TextIOWrapper,
-    is_new_annotator: bool,
-    is_whitelist: bool,
-    mapping_dict: Optional[dict],
-    filter_type: ListDumpType,
-    new_section: bool,
-    annotator_names_masked: dict[str, str],
+    dump_dictionary: Optional[dict] = None,
 ):
-    reason = "not_in_whitelist" if is_whitelist else "blacklisted"
-    lines = []
-    lines_masked = []
-    if new_section:
-        lines.extend(
-            [
-                f"## {filter_type.name.capitalize()}\n",
-                f"[Zum Inhalt](#{Information.log_dump_pretext_caption.lower()})  \n\n",
-            ]
-        )
-        lines_masked.extend(lines)
-    if is_new_annotator:
-        lines.append(f"### {annotator_name}\n")
-        lines_masked.append(f"### {annotator_names_masked.get(annotator_name)}\n")
-    lines.append(f"#### {document_name}\n")
-    lines_masked.append(f"#### {document_name_masked}\n")
+    annotators = sorted({finding.annotator for finding in findings})
+    annotator_names_masked = {
+        name: f"annotator-{randomname.get_name(adj=('age', 'character', 'emotions', 'appearance'))}"
+        for name in annotators
+    }
+    documents_masked: dict[str, str] = {}
 
-    columns = [
-        "Target Layer",
-        "Snomed CT Code",
-        "Covered Text",
-        "Offset in Document",
-        "Reason",
-        "Overlapping Ignore Layer(s)",
-    ]
-    if not is_whitelist:
-        columns.append("FSN")
-    header = "| " + " | ".join(columns) + " |\n"
-    separator = "| " + " | ".join(["--:"] * len(columns)) + " |\n"
+    def masked_doc(name: str) -> str:
+        if name not in documents_masked:
+            documents_masked[name] = f"document-{randomname.get_name(adj=('linguistics', 'construction', 'materials', 'geometry', 'algorithms', 'size', 'complexity', 'colors'))}"
+        return documents_masked[name]
 
-    for lines_ in (lines, lines_masked):
-        lines_.append(header)
-        lines_.append(separator)
+    def write_policy_section(section_findings: list[CriticalFinding], list_type: str):
+        if not section_findings:
+            return
+        for fi, masked in ((output_file, False), (output_file_masked, True)):
+            fi.write(f"# {list_type.capitalize()}\n")
+            fi.write(f"[Zum Inhalt](#{Information.log_dump_pretext_caption.lower()})  \n")
+            fi.write("Zu den Annotator*innen: ")
+            links = []
+            for annotator in annotators:
+                display = annotator_names_masked[annotator] if masked else annotator
+                links.append(f"[{display}](#{display.lower()})")
+            fi.write(", ".join(links) + "\n")
 
-    for idx in np.where(bool_index_array)[0]:
-        code = document_dump.snomed_codes[idx].decode("utf-8")
-        target_layer = str(document_dump.layers[idx])
-        text = str(document_dump.text[idx])
-        offset = document_dump.offsets[idx]
-        overlaps = document_dump.ignore_overlaps[idx]
-        overlap_layers = _format_overlap_layers(overlaps)
-        fsn = ""
-        if not is_whitelist and mapping_dict is not None:
-            fsn_value = mapping_dict.get(bytes(document_dump.snomed_codes[idx]))
-            if fsn_value is not None:
-                fsn = fsn_value.decode("utf-8")
+            current_annotator = None
+            current_document = None
+            for finding in section_findings:
+                annotator = annotator_names_masked[finding.annotator] if masked else finding.annotator
+                document = masked_doc(finding.document) if masked else finding.document
+                if annotator != current_annotator:
+                    fi.write(f"## {annotator}\n([Zum Sektionsanfang](#{list_type}))\n")
+                    current_annotator = annotator
+                    current_document = None
+                if document != current_document:
+                    fi.write(f"#### {document}\n")
+                    if list_type == "whitelist":
+                        fi.write("| Snomed CT Code | Covered Text | Offset in Document |\n")
+                        fi.write("| -------------: | -----------: | -----------------: |\n")
+                    else:
+                        fi.write("| Snomed CT Code | Covered Text | Offset in Document | FSN |\n")
+                        fi.write("| -------------: | -----------: | -----------------: | --: |\n")
+                    current_document = document
+                code = finding.code or "nan"
+                if list_type == "whitelist":
+                    fi.write(f"| {code} | {finding.covered_text} | {_format_finding_offset(finding)} |\n")
+                else:
+                    fi.write(f"| {code} | {finding.covered_text} | {_format_finding_offset(finding)} | {finding.fsn or ''} |\n")
+            fi.write("\n\n")
 
-        row = f"| {target_layer} | {code} | {text} | {offset} | {reason} | {overlap_layers}"
-        if not is_whitelist:
-            row += f" | {fsn}"
-        row += " |\n"
-        lines.append(row)
-        lines_masked.append(row)
+    def write_ignored_section(ignored_findings: list[CriticalFinding]):
+        if not ignored_findings:
+            return
+        for fi, masked in ((output_file, False), (output_file_masked, True)):
+            fi.write("# Ignored faulty concepts\n")
+            fi.write(f"[Zum Inhalt](#{Information.log_dump_pretext_caption.lower()})  \n\n")
+            fi.write(
+                "These concepts would have been reported as faulty, but were ignored because they overlap with configured ignore layer(s).\n\n"
+            )
+            for list_type in ("whitelist", "blacklist"):
+                section_findings = [f for f in ignored_findings if f.list_type == list_type]
+                if not section_findings:
+                    continue
+                fi.write(f"## {list_type.capitalize()}\n")
+                current_annotator = None
+                current_document = None
+                for finding in section_findings:
+                    annotator = annotator_names_masked[finding.annotator] if masked else finding.annotator
+                    document = masked_doc(finding.document) if masked else finding.document
+                    if annotator != current_annotator:
+                        fi.write(f"### {annotator}\n")
+                        current_annotator = annotator
+                        current_document = None
+                    if document != current_document:
+                        fi.write(f"#### {document}\n")
+                        columns = [
+                            "Target Layer",
+                            "Snomed CT Code",
+                            "Covered Text",
+                            "Offset in Document",
+                            "Reason",
+                            "Overlapping Ignore Layer(s)",
+                        ]
+                        if list_type == "blacklist":
+                            columns.append("FSN")
+                        fi.write("| " + " | ".join(columns) + " |\n")
+                        fi.write("| " + " | ".join(["--:"] * len(columns)) + " |\n")
+                        current_document = document
+                    overlap_layers = _format_overlap_layers(list(finding.ignore_overlaps))
+                    row = f"| {finding.layer or ''} | {finding.code or 'nan'} | {finding.covered_text} | {_format_finding_offset(finding)} | {finding.reason} | {overlap_layers}"
+                    if list_type == "blacklist":
+                        row += f" | {finding.fsn or ''}"
+                    fi.write(row + " |\n")
+            fi.write("\n\n")
 
-    for tuple_ in [(output_file, lines), (output_file_masked, lines_masked)]:
-        tuple_[0].writelines(tuple_[1])
-        tuple_[0].write("\n\n")
+    actionable = [finding for finding in findings if not finding.ignored]
+    ignored = [finding for finding in findings if finding.ignored]
+    write_policy_section([f for f in actionable if f.list_type == "whitelist"], "whitelist")
+    write_policy_section([f for f in actionable if f.list_type == "blacklist"], "blacklist")
+    write_ignored_section(ignored)
+
+    if dump_dictionary is not None:
+        for finding in actionable:
+            if finding.code is None:
+                continue
+            if finding.list_type == "blacklist":
+                _populate_dump_dictionary(dump_dictionary, finding.code, finding.offset, finding.fsn or "")
+            else:
+                _populate_dump_dictionary(dump_dictionary, finding.code, finding.offset)
+
+
+def _finding_counters(findings: list[CriticalFinding]) -> tuple[Counter, Counter]:
+    whitelist_code_counter = Counter(
+        finding.code for finding in findings if not finding.ignored and finding.list_type == "whitelist" and finding.code
+    )
+    blacklist_tag_counter = Counter(
+        _finding_tag(finding) for finding in findings if not finding.ignored and finding.list_type == "blacklist"
+    )
+    return whitelist_code_counter, blacklist_tag_counter
 
 
 def log_final_tag_count(
@@ -801,22 +807,20 @@ def create_log_from_results(
     lists: pathlib.Path,
     progress_obj: Optional[dict] = None,
     dump_dict: Optional[dict] = None,
+    critical_findings: Optional[list[CriticalFinding]] = None,
 ) -> int:
     err_docs = 0
     log_doc.write(Information.log_dump_pretext)
     log_doc_masked.write(Information.log_dump_pretext)
 
-    with h5py.File(lists, "r") as h5_file:
-        blacklist_tag_counter = Counter()
-        whitelist_code_counter = Counter()
-        section_count = {}
+    collected_findings = critical_findings if critical_findings is not None else []
 
+    with h5py.File(lists, "r") as h5_file:
         if progress_obj is not None:
             progress_increment = 1 / max(
                 sum([len(x.documents) for x in result.annotators.values()]) * 2, 1
             )
 
-        ignored_sections: list[tuple[str, str]] = []
         ft_iter = [ListDumpType.WHITELIST, ListDumpType.BLACKLIST]
         for i, ft in enumerate(ft_iter):
             print(f"-- {ft.name.capitalize()} --")
@@ -834,8 +838,6 @@ def create_log_from_results(
                 fsn_list = h5_file["concepts"]["fsn"][:][concept_indices]
             else:
                 continue
-            ignored_log_doc = StringIO()
-            ignored_log_doc_masked = StringIO()
             err_docs += analyze_documents(
                 project=result,
                 filter_array=filter_list,
@@ -843,10 +845,6 @@ def create_log_from_results(
                 filter_type=ft,
                 log_doc=log_doc,
                 log_doc_masked=log_doc_masked,
-                new_section=True,
-                section_count=section_count,
-                blacklist_tag_counter=blacklist_tag_counter,
-                whitelist_code_counter=whitelist_code_counter,
                 progress_obj=(
                     None
                     if progress_obj is None
@@ -857,24 +855,10 @@ def create_log_from_results(
                         "current_progress": 1.0 * (i / len(ft_iter)),
                     }
                 ),
-                dump_dictionary=dump_dict,
-                ignored_log_doc=ignored_log_doc,
-                ignored_log_doc_masked=ignored_log_doc_masked,
+                critical_findings=collected_findings,
             )
-            if ignored_log_doc.getvalue():
-                ignored_sections.append(
-                    (ignored_log_doc.getvalue(), ignored_log_doc_masked.getvalue())
-                )
-        if ignored_sections:
-            for fi in (log_doc, log_doc_masked):
-                fi.write("# Ignored faulty concepts\n")
-                fi.write(f"[Zum Inhalt](#{Information.log_dump_pretext_caption.lower()})  \n\n")
-                fi.write(
-                    "These concepts would have been reported as faulty, but were ignored because they overlap with configured ignore layer(s).\n\n"
-                )
-            for ignored_text, ignored_text_masked in ignored_sections:
-                log_doc.write(ignored_text)
-                log_doc_masked.write(ignored_text_masked)
+        _render_finding_sections(collected_findings, log_doc, log_doc_masked, dump_dict)
+        whitelist_code_counter, blacklist_tag_counter = _finding_counters(collected_findings)
         log_final_tag_count(
             whitelist_code_counter, blacklist_tag_counter, log_doc, log_doc_masked
         )

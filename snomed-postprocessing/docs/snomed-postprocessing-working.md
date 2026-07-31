@@ -189,6 +189,8 @@ TemporaryCorpus
 
 Source: `create_log_from_results()` and `analyze_documents()`.
 
+Policy checking now produces structured `CriticalFinding` records first. Markdown, masked Markdown, final count tables, and the JSON dump are rendered from those findings at the end of the report generation step. This keeps reporting behavior intact while providing a stable input object for future sanitization.
+
 ### HDF5 layout expected
 
 The processing expects groups like:
@@ -204,11 +206,17 @@ Only revision group `0` is currently read during report generation.
 
 ### Filter order
 
-Reports are generated in this order:
+Policy findings are collected in this order:
 
 1. Whitelist pass.
 2. Blacklist pass.
-3. Final count tables.
+
+Reports are then rendered from the collected `CriticalFinding` records:
+
+1. Whitelist findings.
+2. Blacklist findings.
+3. Ignored faulty concepts.
+4. Final count tables.
 
 ### Whitelist logic
 

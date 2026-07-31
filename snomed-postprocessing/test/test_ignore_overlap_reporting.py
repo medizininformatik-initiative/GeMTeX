@@ -6,11 +6,14 @@ import unittest
 import h5py
 import numpy as np
 
+from snomed_post_processing.utils import ListDumpType
 from snomed_post_processing.uima_processing import (
+    CriticalFinding,
     DocumentAnnotations,
     IgnoreOverlap,
     TemporaryContainer,
     TemporaryCorpus,
+    collect_critical_findings,
     create_log_from_results,
     spans_match,
 )
@@ -24,6 +27,44 @@ class TestIgnoreOverlapReporting(unittest.TestCase):
         self.assertFalse(spans_match((10, 20), (10, 21), "exact"))
         self.assertTrue(spans_match((12, 18), (10, 20), "covered-by"))
         self.assertTrue(spans_match((10, 20), (12, 18), "contains"))
+
+    def test_collect_critical_findings_materializes_structured_blacklist_findings(self):
+        annotations = DocumentAnnotations(
+            snomed_codes=np.asarray([b"222", b"nan"], dtype="bytes"),
+            offsets=np.asarray([(10, 20), (30, 40)], dtype="i,i"),
+            text=np.asarray(["covered", "missing"], dtype=np.dtypes.StringDType),
+            layers=np.asarray(["gemtex.Concept", "gemtex.Other"], dtype=np.dtypes.StringDType),
+            length=2,
+            ignore_mask=np.asarray([True, False], dtype=bool),
+            ignore_overlaps=[
+                [IgnoreOverlap(layer="webanno.custom.No_Human", offset=(10, 20), text="covered")],
+                [],
+            ],
+        )
+
+        findings = collect_critical_findings(
+            "annotator-a",
+            "doc.txt",
+            annotations,
+            np.asarray([True, False], dtype=bool),
+            filter_type=ListDumpType.BLACKLIST,
+            mapping_dict={b"222": b"Example concept (finding)"},
+            ignored=True,
+        )
+
+        self.assertEqual(len(findings), 1)
+        self.assertIsInstance(findings[0], CriticalFinding)
+        self.assertEqual(findings[0].annotator, "annotator-a")
+        self.assertEqual(findings[0].document, "doc.txt")
+        self.assertEqual(findings[0].code, "222")
+        self.assertEqual(findings[0].covered_text, "covered")
+        self.assertEqual(findings[0].offset, (10, 20))
+        self.assertEqual(findings[0].list_type, "blacklist")
+        self.assertEqual(findings[0].reason, "blacklisted")
+        self.assertEqual(findings[0].layer, "gemtex.Concept")
+        self.assertEqual(findings[0].fsn, "Example concept (finding)")
+        self.assertTrue(findings[0].ignored)
+        self.assertEqual(findings[0].ignore_overlaps[0].layer, "webanno.custom.No_Human")
 
     def test_blacklist_logging_handles_actionable_and_ignored_split(self):
         corpus = TemporaryCorpus(
