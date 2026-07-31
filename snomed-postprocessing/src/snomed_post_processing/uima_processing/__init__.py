@@ -5,6 +5,7 @@ import dataclasses
 import sys
 import zipfile
 import gc
+import re
 from collections import Counter
 from io import StringIO, TextIOWrapper
 from typing import Union, Optional
@@ -639,17 +640,20 @@ def log_critical_docs(
     lines.append(f"#### {document_name}\n")
     lines_masked.append(f"#### {document_name_masked}\n")
 
-    for lines_ in [lines, lines_masked]:
-        if is_whitelist:
+    if is_whitelist:
+        for lines_ in [lines, lines_masked]:
             lines_.append("| Snomed CT Code | Covered Text | Offset in Document |\n")
             lines_.append("| -------------: | -----------: | -----------------: |\n")
             for line in stacked:
                 code_, offset_ = line[0].decode("utf-8"), line[2]
                 lines_.append(f"| {code_} | {line[1]} | {offset_} |\n")
-                whitelist_code_counter.update([code_])
-                if dump_dictionary is not None:
-                    _populate_dump_dictionary(dump_dictionary, code_, offset_)
-        else:
+        for line in stacked:
+            code_, offset_ = line[0].decode("utf-8"), line[2]
+            whitelist_code_counter.update([code_])
+            if dump_dictionary is not None:
+                _populate_dump_dictionary(dump_dictionary, code_, offset_)
+    else:
+        for lines_ in [lines, lines_masked]:
             lines_.append(
                 "| Snomed CT Code | Covered Text | Offset in Document | FSN |\n"
             )
@@ -657,15 +661,18 @@ def log_critical_docs(
                 "| -------------: | -----------: | -----------------: | --: |\n"
             )
             for line in stacked:
-                code_, offset_, tag_ = (
-                    line[0].decode("utf-8"),
-                    line[2],
-                    line[3].decode("utf-8"),
-                )
+                code_, tag_ = line[0].decode("utf-8"), line[3].decode("utf-8")
                 lines_.append(f"| {code_} | {line[1]} | {line[2]} | {tag_} |\n")
-                blacklist_tag_counter.update([tag_.split("(", 1)[1].split(")")[0]])
-                if dump_dictionary is not None:
-                    _populate_dump_dictionary(dump_dictionary, code_, offset_, tag_)
+        for line in stacked:
+            code_, offset_, tag_ = (
+                line[0].decode("utf-8"),
+                line[2],
+                line[3].decode("utf-8"),
+            )
+            match = re.search(r"\(([^()]*)\)\s*$", tag_)
+            blacklist_tag_counter.update([match.group(1) if match else ""])
+            if dump_dictionary is not None:
+                _populate_dump_dictionary(dump_dictionary, code_, offset_, tag_)
 
     for tuple_ in [(output_file, lines), (output_file_masked, lines_masked)]:
         tuple_[0].writelines(tuple_[1])
