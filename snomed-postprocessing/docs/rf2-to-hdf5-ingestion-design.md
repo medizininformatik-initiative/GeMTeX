@@ -428,14 +428,34 @@ Responsibilities:
 
 ## 10. CLI Shape
 
-Possible future command:
+The existing `create-concepts-dump` command now has two mutually exclusive input modes:
+
+```text
+Snowstorm mode: provide both --ip and --port
+RF2 ZIP mode:   provide --zip
+```
+
+RF2 ZIP example creating both compact whitelist and blacklist policy views in one HDF5:
 
 ```bash
 uv run create-concepts-dump \
-  --from-rf2 path/to/SnomedCT_Full.zip \
-  --release-date 20250131 \
-  --include-history \
-  --output data/lists/target-20250131.hdf5
+  --zip data/international.zip \
+  --output data/gemtex_snomedct_codes_20260401.hdf5 \
+  --dump-mode version \
+  --filter-list config/blacklist_filter_tags.txt \
+  138875005
+```
+
+In RF2 ZIP mode with `--dump-mode version`, `ROOT_CODE` creates the whitelist policy view and an optional `--filter-list` creates the blacklist policy view from semantic tags. `--dump-mode semantic` can still be used when only a blacklist policy view should be generated.
+
+Snowstorm mode still uses explicit server settings:
+
+```bash
+uv run create-concepts-dump \
+  --ip localhost \
+  --port 8080 \
+  --branch MAIN/2024-04-01 \
+  138875005
 ```
 
 Optional flags:

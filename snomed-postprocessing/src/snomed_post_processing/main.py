@@ -5,6 +5,8 @@ import pickle
 import logging
 import pathlib
 import sys
+import re
+import zipfile
 from typing import Union, Optional
 
 import click
@@ -16,6 +18,7 @@ from .snowstorm_funcs import (
     dump_concept_ids,
     get_root_code,
 )
+from .rf2 import write_snapshot_hdf5_from_rf2_zip
 from .utils import (
     DumpMode,
     FilterMode,
@@ -290,7 +293,49 @@ def log_documents(
 
 @click.command()
 @common_click_args
-@click_server_options
+@click.option(
+    "--zip",
+    "rf2_zip",
+    default=None,
+    type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
+    help="Path to a SNOMED CT RF2 release ZIP. If provided, HDF5 is generated from the release ZIP instead of Snowstorm.",
+)
+@click.option(
+    "--output",
+    default=None,
+    type=click.Path(dir_okay=False, path_type=pathlib.Path),
+    help="Output HDF5 path for RF2 ZIP mode. Defaults to data/gemtex_snomedct_codes_<release-date>.hdf5 when the date can be inferred.",
+)
+@click.option(
+    "--language",
+    default="en",
+    show_default=True,
+    help="RF2 description language used in ZIP mode, e.g. 'en'.",
+)
+@click.option(
+    "--include-ancestors",
+    is_flag=True,
+    help="In RF2 ZIP mode, compute compact ancestor arrays under /concepts. Historical associations are included by default.",
+)
+@click.option(
+    "--write-legacy-policy-groups",
+    is_flag=True,
+    help="In RF2 ZIP mode, additionally write legacy /whitelist or /blacklist groups for older code.",
+)
+@click.option(
+    "--use-secure_protocol", is_flag=True, help="Whether to use 'https' for Snowstorm mode."
+)
+@click.option(
+    "--port",
+    default=None,
+    type=click.INT,
+    help="Snowstorm port. Required together with --ip when --zip is not used.",
+)
+@click.option(
+    "--ip",
+    default=None,
+    help="Snowstorm IP/host. Required together with --port when --zip is not used.",
+)
 @click.option(
     "--branch",
     default=0,
@@ -340,9 +385,14 @@ def log_documents(
 @click_log_level
 def create_concept_id_dump(
     root_code: str,
-    ip: str,
-    port: Union[int, str],
+    rf2_zip: Optional[pathlib.Path],
+    output: Optional[pathlib.Path],
+    language: str,
+    include_ancestors: bool,
+    write_legacy_policy_groups: bool,
     use_secure_protocol: bool,
+    port: Optional[int],
+    ip: Optional[str],
     branch: Union[int, str],
     dump_mode: DumpMode,
     filter_list: Union[str, click.File],
@@ -394,6 +444,87 @@ def create_concept_id_dump(
           and logs the error details.
     """
     set_log_level(log_level)
+
+    use_rf2_zip = rf2_zip is not None
+    use_snowstorm = ip is not None or port is not None
+    if use_rf2_zip and use_snowstorm:
+        logging.error("Use either --zip for RF2 ZIP mode or --ip/--port for Snowstorm mode, not both.")
+        sys.exit(-1)
+    if not use_rf2_zip and (ip is None or port is None):
+        logging.error("Please provide either --zip for RF2 ZIP mode or both --ip and --port for Snowstorm mode.")
+        sys.exit(-1)
+
+    if use_rf2_zip:
+        code_filter = None
+        if len(filter_list) > 0:
+            fi = pathlib.Path(filter_list[0])
+            if fi.is_file():
+                code_filter = [
+                    line.strip()
+                    for line in fi.read_text(encoding="utf-8").splitlines()
+                    if line.strip()
+                ]
+            else:
+                if os.sep in str(fi):
+                    logging.error(f"Filter-list path does not exist or is not a file: '{fi}'.")
+                    sys.exit(-1)
+                code_filter = [str(item).strip() for item in filter_list if str(item).strip()]
+            if not code_filter:
+                logging.error("RF2 ZIP mode got an empty filter list.")
+                sys.exit(-1)
+
+        if dump_mode == DumpMode.SEMANTIC:
+            if not code_filter:
+                logging.error(
+                    "RF2 semantic blacklist mode requires at least one '--filter-list' entry or a valid filter-list file."
+                )
+                sys.exit(-1)
+            whitelist_root_codes = None
+            blacklist_filter_tags = code_filter
+        else:
+            whitelist_root_codes = [root_code]
+            blacklist_filter_tags = code_filter
+
+        if output is None:
+            release_date = None
+            with zipfile.ZipFile(rf2_zip) as zf:
+                for member_name in zf.namelist():
+                    release_match = re.search(r"_(\d{8})\.txt$", member_name)
+                    if release_match:
+                        release_date = release_match.group(1)
+                        break
+            if release_date is None:
+                release_match = re.search(r"(\d{8})(?:T\d{6}Z)?", rf2_zip.name)
+                release_date = release_match.group(1) if release_match else datetime.datetime.today().strftime("%Y%m%d")
+            output = (
+                pathlib.Path(__file__).parent.parent.parent
+                / "data"
+                / f"gemtex_snomedct_codes_{release_date}.hdf5"
+            ).resolve()
+
+        try:
+            summary = write_snapshot_hdf5_from_rf2_zip(
+                zip_path=rf2_zip,
+                output_path=output,
+                language=language,
+                include_associations=True,
+                include_ancestors=include_ancestors,
+                whitelist_root_codes=whitelist_root_codes,
+                blacklist_filter_tags=blacklist_filter_tags,
+                write_legacy_policy_groups=write_legacy_policy_groups,
+                force_overwrite=force_overwrite,
+                use_memoization=memoize_ancestors,
+            )
+        except Exception as e:
+            logging.error(f"Error while creating RF2 HDF5 dump: '{e}'. Exiting.")
+            sys.exit(-1)
+        logging.info(
+            f"Created RF2 HDF5 dump at '{summary.output_path}' with {summary.concept_count} concept row(s), "
+            f"{summary.association_count} historical association(s), {summary.whitelist_count} whitelist policy concept(s), "
+            f"and {summary.blacklist_count} blacklist policy concept(s)."
+        )
+        return
+
     endpoint_builder, host = build_endpoint(ip, port, use_secure_protocol)
     path_ids, path_names = get_branches(endpoint_builder, host)
 
