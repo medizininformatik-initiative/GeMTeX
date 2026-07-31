@@ -473,6 +473,12 @@ def create_concept_id_dump(
                 logging.error("RF2 ZIP mode got an empty filter list.")
                 sys.exit(-1)
 
+        blacklist_root_codes = []
+        blacklist_filter_tags = []
+        if code_filter:
+            blacklist_root_codes = [item for item in code_filter if item.isdigit()]
+            blacklist_filter_tags = [item for item in code_filter if not item.isdigit()]
+
         if dump_mode == DumpMode.SEMANTIC:
             if not code_filter:
                 logging.error(
@@ -480,10 +486,8 @@ def create_concept_id_dump(
                 )
                 sys.exit(-1)
             whitelist_root_codes = None
-            blacklist_filter_tags = code_filter
         else:
             whitelist_root_codes = [root_code]
-            blacklist_filter_tags = code_filter
 
         if output is None:
             release_date = None
@@ -511,8 +515,10 @@ def create_concept_id_dump(
                 include_ancestors=include_ancestors,
                 whitelist_root_codes=whitelist_root_codes,
                 blacklist_filter_tags=blacklist_filter_tags,
+                blacklist_root_codes=blacklist_root_codes,
                 write_legacy_policy_groups=write_legacy_policy_groups,
                 force_overwrite=force_overwrite,
+                force_overwrite_concepts=force_overwrite_concepts,
                 use_memoization=memoize_ancestors,
             )
         except Exception as e:

@@ -446,7 +446,14 @@ uv run create-concepts-dump \
   138875005
 ```
 
-In RF2 ZIP mode with `--dump-mode version`, `ROOT_CODE` creates the whitelist policy view and an optional `--filter-list` creates the blacklist policy view from semantic tags. `--dump-mode semantic` can still be used when only a blacklist policy view should be generated.
+In RF2 ZIP mode with `--dump-mode version`, `ROOT_CODE` creates the whitelist policy view and an optional `--filter-list` creates the blacklist policy view. The filter list follows the Snowstorm-style split:
+
+- numeric entries are treated as root concept codes and expand to the active root concept plus all active descendants via RF2 `is-a` relationships;
+- non-numeric entries are treated as semantic tags extracted from FSNs.
+
+`--dump-mode semantic` can still be used when only a blacklist policy view should be generated.
+
+When adding a blacklist to an HDF5 file that already contains `/concepts`, the existing concept table is reused. `--force-overwrite` applies to the selected policy view (`/policy_views/whitelist` or `/policy_views/blacklist`) and optional legacy policy group only. Rebuilding `/concepts` requires `--force-overwrite-concepts`.
 
 Snowstorm mode still uses explicit server settings:
 
@@ -481,6 +488,7 @@ For compact policy-list generation, add explicit policy inputs such as whitelist
 ```text
 --whitelist-root-code 138875005
 --blacklist-filter-tag attribute
+--blacklist-root-code 123456789
 --write-legacy-policy-groups
 ```
 
