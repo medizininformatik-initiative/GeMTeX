@@ -39,12 +39,17 @@ ASSOCIATION_REFSET_IDS = {
 
 
 @dataclass(frozen=True)
-class Rf2SnapshotMembers:
+class Rf2ReleaseMembers:
     concept: str
     description: str
     association: Optional[str]
     relationship: Optional[str]
     release_date: str
+    view: str
+
+
+# Backwards-compatible alias for existing callers/tests.
+Rf2SnapshotMembers = Rf2ReleaseMembers
 
 
 @dataclass(frozen=True)
@@ -56,7 +61,7 @@ class Rf2IngestionSummary:
     relationship_parent_count: int
     whitelist_count: int
     blacklist_count: int
-    files: Rf2SnapshotMembers
+    files: Rf2ReleaseMembers
 
 
 def _is_rf2_text_member(name: str) -> bool:
@@ -87,7 +92,9 @@ def _find_unique_member(
     return matches[0]
 
 
-def discover_snapshot_members(zip_path: Union[pathlib.Path, str], language: str = "en") -> Rf2SnapshotMembers:
+def discover_release_members(
+    zip_path: Union[pathlib.Path, str], language: str = "en", view: str = "Snapshot"
+) -> Rf2ReleaseMembers:
     """Find the RF2 Snapshot members needed for HDF5 ingestion.
 
     The function intentionally ignores macOS metadata entries commonly found in
@@ -95,34 +102,48 @@ def discover_snapshot_members(zip_path: Union[pathlib.Path, str], language: str 
     """
     zip_path = pathlib.Path(zip_path)
     lang = re.escape(language)
+    view_normalized = view.capitalize()
+    if view_normalized not in {"Snapshot", "Full"}:
+        raise ValueError("RF2 view must be either 'Snapshot' or 'Full'.")
     with zipfile.ZipFile(zip_path) as zf:
         names = [name for name in zf.namelist() if _is_rf2_text_member(name)]
 
     concept = _find_unique_member(
         names,
-        r"(?:^|/)Snapshot/Terminology/sct2_Concept_Snapshot_[^/]+_\d{8}\.txt$",
+        rf"(?:^|/){view_normalized}/Terminology/sct2_Concept_{view_normalized}_[^/]+_\d{{8}}\.txt$",
     )
     release_match = re.search(r"_(\d{8})\.txt$", concept)
     if release_match is None:
         raise ValueError(f"Could not infer RF2 release date from concept member: {concept}")
-    return Rf2SnapshotMembers(
+    return Rf2ReleaseMembers(
         concept=concept,
         description=_find_unique_member(
             names,
-            rf"(?:^|/)Snapshot/Terminology/sct2_Description_Snapshot-{lang}_[^/]+_\d{{8}}\.txt$",
+            rf"(?:^|/){view_normalized}/Terminology/sct2_Description_{view_normalized}-{lang}_[^/]+_\d{{8}}\.txt$",
         ),
         association=_find_unique_member(
             names,
-            r"(?:^|/)Snapshot/Refset/Content/der2_cRefset_AssociationSnapshot_[^/]+_\d{8}\.txt$",
+            rf"(?:^|/){view_normalized}/Refset/Content/der2_cRefset_Association{view_normalized}_[^/]+_\d{{8}}\.txt$",
             required=False,
         ),
         relationship=_find_unique_member(
             names,
-            r"(?:^|/)Snapshot/Terminology/sct2_Relationship_Snapshot_[^/]+_\d{8}\.txt$",
+            rf"(?:^|/){view_normalized}/Terminology/sct2_Relationship_{view_normalized}_[^/]+_\d{{8}}\.txt$",
             required=False,
         ),
         release_date=release_match.group(1),
+        view=view_normalized.lower(),
     )
+
+
+def discover_snapshot_members(zip_path: Union[pathlib.Path, str], language: str = "en") -> Rf2ReleaseMembers:
+    """Find the RF2 Snapshot members needed for HDF5 ingestion."""
+    return discover_release_members(zip_path, language=language, view="Snapshot")
+
+
+def discover_full_members(zip_path: Union[pathlib.Path, str], language: str = "en") -> Rf2ReleaseMembers:
+    """Find the RF2 Full members needed for HDF5 ingestion."""
+    return discover_release_members(zip_path, language=language, view="Full")
 
 
 def _iter_rf2_rows(zf: zipfile.ZipFile, member: str, required_columns: set[str]):
@@ -143,12 +164,32 @@ def _semantic_tag_from_fsn(fsn: str) -> str:
     return match.group(1) if match else ""
 
 
-def _read_concept_active_state(zf: zipfile.ZipFile, member: str) -> dict[str, bool]:
+def _at_or_before(row: dict[str, str], policy_date: Optional[str]) -> bool:
+    return policy_date is None or row.get("effectiveTime", "") <= policy_date
+
+
+def _read_concept_active_state(
+    zf: zipfile.ZipFile,
+    member: str,
+    *,
+    policy_date: Optional[str] = None,
+    reconstruct_latest: bool = False,
+) -> dict[str, bool]:
+    concept_rows: dict[str, tuple[str, bool]] = {}
     concept_active: dict[str, bool] = {}
     for row in _iter_rf2_rows(
         zf, member, {"id", "effectiveTime", "active", "moduleId", "definitionStatusId"}
     ):
-        concept_active[row["id"]] = row["active"] == "1"
+        if not _at_or_before(row, policy_date):
+            continue
+        if reconstruct_latest:
+            previous = concept_rows.get(row["id"])
+            if previous is None or row["effectiveTime"] >= previous[0]:
+                concept_rows[row["id"]] = (row["effectiveTime"], row["active"] == "1")
+        else:
+            concept_active[row["id"]] = row["active"] == "1"
+    if reconstruct_latest:
+        return {concept_id: active for concept_id, (_, active) in concept_rows.items()}
     return concept_active
 
 
@@ -156,8 +197,12 @@ def _read_fsns(
     zf: zipfile.ZipFile,
     member: str,
     known_concepts: set[str],
+    *,
+    policy_date: Optional[str] = None,
+    reconstruct_latest: bool = False,
 ) -> dict[str, str]:
     fsns: dict[str, str] = {}
+    fsn_rows: dict[str, tuple[str, bool, str, str]] = {}
     for row in _iter_rf2_rows(
         zf,
         member,
@@ -173,22 +218,40 @@ def _read_fsns(
             "caseSignificanceId",
         },
     ):
-        if (
-            row["active"] == "1"
-            and row["typeId"] == FSN_TYPE_ID
-            and row["conceptId"] in known_concepts
-        ):
+        if row["typeId"] != FSN_TYPE_ID or row["conceptId"] not in known_concepts:
+            continue
+        if not _at_or_before(row, policy_date):
+            continue
+        if reconstruct_latest:
+            previous = fsn_rows.get(row["id"])
+            if previous is None or row["effectiveTime"] >= previous[0]:
+                fsn_rows[row["id"]] = (
+                    row["effectiveTime"],
+                    row["active"] == "1",
+                    row["conceptId"],
+                    row["term"],
+                )
+        elif row["active"] == "1":
             fsns[row["conceptId"]] = row["term"]
+    if reconstruct_latest:
+        active_fsn_rows = [value for value in fsn_rows.values() if value[1]]
+        active_fsn_rows.sort(key=lambda value: (value[2], value[0], value[3]))
+        for _effective_time, _active, concept_id, term in active_fsn_rows:
+            fsns[concept_id] = term
     return fsns
 
 
 def _read_active_associations(
     zf: zipfile.ZipFile,
     member: Optional[str],
+    *,
+    policy_date: Optional[str] = None,
+    reconstruct_latest: bool = False,
 ) -> list[tuple[str, str, str, str, str]]:
     if member is None:
         return []
     associations = []
+    association_rows: dict[str, dict[str, str]] = {}
     for row in _iter_rf2_rows(
         zf,
         member,
@@ -202,17 +265,35 @@ def _read_active_associations(
             "targetComponentId",
         },
     ):
-        if row["active"] != "1":
+        if not _at_or_before(row, policy_date):
             continue
-        associations.append(
-            (
-                row["referencedComponentId"],
-                row["targetComponentId"],
-                ASSOCIATION_REFSET_IDS.get(row["refsetId"], row["refsetId"]),
-                row["effectiveTime"],
-                row["refsetId"],
+        if reconstruct_latest:
+            previous = association_rows.get(row["id"])
+            if previous is None or row["effectiveTime"] >= previous["effectiveTime"]:
+                association_rows[row["id"]] = row
+        elif row["active"] == "1":
+            associations.append(
+                (
+                    row["referencedComponentId"],
+                    row["targetComponentId"],
+                    ASSOCIATION_REFSET_IDS.get(row["refsetId"], row["refsetId"]),
+                    row["effectiveTime"],
+                    row["refsetId"],
+                )
             )
-        )
+    if reconstruct_latest:
+        for row in association_rows.values():
+            if row["active"] != "1":
+                continue
+            associations.append(
+                (
+                    row["referencedComponentId"],
+                    row["targetComponentId"],
+                    ASSOCIATION_REFSET_IDS.get(row["refsetId"], row["refsetId"]),
+                    row["effectiveTime"],
+                    row["refsetId"],
+                )
+            )
     return associations
 
 
@@ -220,10 +301,14 @@ def _read_active_parent_map(
     zf: zipfile.ZipFile,
     member: Optional[str],
     active_concepts: set[str],
+    *,
+    policy_date: Optional[str] = None,
+    reconstruct_latest: bool = False,
 ) -> dict[str, set[str]]:
     if member is None:
         return {}
     parent_map: dict[str, set[str]] = {}
+    relationship_rows: dict[str, dict[str, str]] = {}
     for row in _iter_rf2_rows(
         zf,
         member,
@@ -240,10 +325,21 @@ def _read_active_parent_map(
             "modifierId",
         },
     ):
-        if row["active"] != "1" or row["typeId"] != IS_A_TYPE_ID:
+        if not _at_or_before(row, policy_date):
             continue
-        if row["sourceId"] in active_concepts and row["destinationId"] in active_concepts:
-            parent_map.setdefault(row["sourceId"], set()).add(row["destinationId"])
+        if reconstruct_latest:
+            previous = relationship_rows.get(row["id"])
+            if previous is None or row["effectiveTime"] >= previous["effectiveTime"]:
+                relationship_rows[row["id"]] = row
+        elif row["active"] == "1" and row["typeId"] == IS_A_TYPE_ID:
+            if row["sourceId"] in active_concepts and row["destinationId"] in active_concepts:
+                parent_map.setdefault(row["sourceId"], set()).add(row["destinationId"])
+    if reconstruct_latest:
+        for row in relationship_rows.values():
+            if row["active"] != "1" or row["typeId"] != IS_A_TYPE_ID:
+                continue
+            if row["sourceId"] in active_concepts and row["destinationId"] in active_concepts:
+                parent_map.setdefault(row["sourceId"], set()).add(row["destinationId"])
     return parent_map
 
 
@@ -343,6 +439,7 @@ def write_snapshot_hdf5_from_rf2_zip(
     output_path: Union[pathlib.Path, str],
     *,
     language: str = "en",
+    rf2_view: str = "snapshot",
     include_associations: bool = True,
     include_ancestors: bool = False,
     whitelist_root_codes: Optional[Iterable[str]] = None,
@@ -380,42 +477,87 @@ def write_snapshot_hdf5_from_rf2_zip(
     """
     zip_path = pathlib.Path(zip_path)
     output_path = pathlib.Path(output_path)
-    members = discover_snapshot_members(zip_path, language=language)
-    if policy_date is not None and policy_date != members.release_date:
+    rf2_view = rf2_view.lower()
+    if rf2_view not in {"snapshot", "full"}:
+        raise ValueError("rf2_view must be either 'snapshot' or 'full'.")
+    members = discover_release_members(zip_path, language=language, view=rf2_view)
+    if rf2_view == "snapshot" and policy_date is not None and policy_date != members.release_date:
         raise ValueError(
             "RF2 Snapshot mode can only create policy views for the Snapshot release date "
             f"{members.release_date}; got policy_date={policy_date}. Use a matching Snapshot "
-            "or implement/use RF2 Full reconstruction for earlier policy dates."
+            "or RF2 Full reconstruction for earlier policy dates."
+        )
+    if rf2_view == "full" and policy_date is not None and policy_date > members.release_date:
+        raise ValueError(
+            f"RF2 Full mode cannot reconstruct future policy_date={policy_date} from release_date={members.release_date}."
         )
     policy_date = policy_date or members.release_date
+    reconstruct_latest = rf2_view == "full"
     whitelist_root_codes = list(whitelist_root_codes or [])
     blacklist_filter_tags = list(blacklist_filter_tags or [])
     blacklist_root_codes = list(blacklist_root_codes or [])
 
     with zipfile.ZipFile(zip_path) as zf:
-        logging.info("Reading RF2 Snapshot concept active state from %s", members.concept)
-        concept_active = _read_concept_active_state(zf, members.concept)
+        logging.info("Reading RF2 %s concept active state from %s", members.view, members.concept)
+        concept_active = _read_concept_active_state(
+            zf,
+            members.concept,
+            policy_date=policy_date,
+            reconstruct_latest=reconstruct_latest,
+        )
         active_concepts = {code for code, active in concept_active.items() if active}
 
         associations = []
         if include_associations:
-            logging.info("Reading active RF2 Snapshot associations from %s", members.association)
-            associations = _read_active_associations(zf, members.association)
+            logging.info("Reading active RF2 %s associations from %s", members.view, members.association)
+            associations = _read_active_associations(
+                zf,
+                members.association,
+                policy_date=policy_date,
+                reconstruct_latest=reconstruct_latest,
+            )
 
         parent_map: dict[str, set[str]] = {}
         need_relationships = include_ancestors or bool(whitelist_root_codes) or bool(blacklist_root_codes)
         if need_relationships:
-            logging.info("Reading active RF2 Snapshot is-a relationships from %s", members.relationship)
-            parent_map = _read_active_parent_map(zf, members.relationship, active_concepts)
+            logging.info("Reading active RF2 %s is-a relationships from %s", members.view, members.relationship)
+            parent_map = _read_active_parent_map(
+                zf,
+                members.relationship,
+                active_concepts,
+                policy_date=policy_date,
+                reconstruct_latest=reconstruct_latest,
+            )
 
         all_concept_codes = active_concepts | {a[0] for a in associations} | {a[1] for a in associations}
-        logging.info("Reading RF2 Snapshot FSNs from %s", members.description)
-        fsn_by_code = _read_fsns(zf, members.description, all_concept_codes)
+        logging.info("Reading RF2 %s FSNs from %s", members.view, members.description)
+        fsn_by_code = _read_fsns(
+            zf,
+            members.description,
+            all_concept_codes,
+            policy_date=policy_date,
+            reconstruct_latest=reconstruct_latest,
+        )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with h5py.File(output_path, "a") as h5_file:
         if "concepts" in h5_file and not force_overwrite_concepts:
             concept_group = h5_file["concepts"]
+            existing_policy_date = concept_group.attrs.get("policy_date")
+            existing_release_date = concept_group.attrs.get("release_date")
+            existing_rf2_view = concept_group.attrs.get("rf2_view")
+            if existing_policy_date is not None and existing_policy_date != policy_date:
+                raise ValueError(
+                    f"Existing /concepts policy_date={existing_policy_date!r} does not match requested policy_date={policy_date!r}. Use --force-overwrite-concepts to rebuild it."
+                )
+            if existing_release_date is not None and existing_release_date != members.release_date:
+                raise ValueError(
+                    f"Existing /concepts release_date={existing_release_date!r} does not match RF2 release_date={members.release_date!r}. Use --force-overwrite-concepts to rebuild it."
+                )
+            if existing_rf2_view is not None and existing_rf2_view != rf2_view:
+                raise ValueError(
+                    f"Existing /concepts rf2_view={existing_rf2_view!r} does not match requested rf2_view={rf2_view!r}. Use --force-overwrite-concepts to rebuild it."
+                )
             codes = [code.decode("utf-8") if isinstance(code, bytes) else str(code) for code in concept_group["codes"][:]]
             code_to_index = {code: idx for idx, code in enumerate(codes)}
             missing_codes = sorted(all_concept_codes - set(codes))
@@ -444,6 +586,9 @@ def write_snapshot_hdf5_from_rf2_zip(
             concept_group.create_dataset(
                 "active", data=np.asarray([concept_active.get(code, False) for code in codes], dtype=bool)
             )
+            concept_group.attrs["policy_date"] = policy_date
+            concept_group.attrs["release_date"] = members.release_date
+            concept_group.attrs["rf2_view"] = rf2_view
 
         if include_ancestors and "ancestors_index" not in concept_group:
             ancestor_codes_base, ancestor_index, ancestor_codes, ancestor_distances = (
@@ -496,7 +641,7 @@ def write_snapshot_hdf5_from_rf2_zip(
                     filter_mode="descendants_or_self",
                     policy_date=policy_date,
                     release_date=members.release_date,
-                    rf2_view="snapshot",
+                    rf2_view=rf2_view,
                     force_overwrite=force_overwrite,
                 )
                 if write_legacy_policy_groups:
@@ -523,7 +668,7 @@ def write_snapshot_hdf5_from_rf2_zip(
                     filter_mode="semantic_tag_or_descendants_positive",
                     policy_date=policy_date,
                     release_date=members.release_date,
-                    rf2_view="snapshot",
+                    rf2_view=rf2_view,
                     force_overwrite=force_overwrite,
                 )
                 if write_legacy_policy_groups:

@@ -6,6 +6,7 @@ import zipfile
 import h5py
 
 from snomed_post_processing.rf2 import (
+    discover_full_members,
     discover_snapshot_members,
     write_snapshot_hdf5_from_rf2_zip,
 )
@@ -45,6 +46,38 @@ def _write_rf2_zip(path: pathlib.Path):
             "r1\t20260401\t1\t900000000000207008\t100\t200\t0\t116680003\t900000000000011006\t900000000000451002\n"
             "r2\t20260401\t1\t900000000000207008\t250\t200\t0\t116680003\t900000000000011006\t900000000000451002\n",
         )
+        zf.writestr(
+            f"{BASE}/Full/Terminology/sct2_Concept_Full_INT_20260401.txt",
+            "id\teffectiveTime\tactive\tmoduleId\tdefinitionStatusId\n"
+            "100\t20240401\t1\t900000000000207008\t900000000000074008\n"
+            "100\t20260401\t1\t900000000000207008\t900000000000074008\n"
+            "200\t20240401\t1\t900000000000207008\t900000000000074008\n"
+            "200\t20260401\t1\t900000000000207008\t900000000000074008\n"
+            "250\t20260401\t1\t900000000000207008\t900000000000074008\n"
+            "300\t20240401\t1\t900000000000207008\t900000000000074008\n"
+            "300\t20260401\t0\t900000000000207008\t900000000000074008\n",
+        )
+        zf.writestr(
+            f"{BASE}/Full/Terminology/sct2_Description_Full-en_INT_20260401.txt",
+            "id\teffectiveTime\tactive\tmoduleId\tconceptId\tlanguageCode\ttypeId\tterm\tcaseSignificanceId\n"
+            "d1\t20240401\t1\t900000000000207008\t100\ten\t900000000000003001\tOld thing 2024 (finding)\t900000000000448009\n"
+            "d1\t20260401\t1\t900000000000207008\t100\ten\t900000000000003001\tOld thing (finding)\t900000000000448009\n"
+            "d2\t20240401\t1\t900000000000207008\t200\ten\t900000000000003001\tNew thing (finding)\t900000000000448009\n"
+            "d4\t20260401\t1\t900000000000207008\t250\ten\t900000000000003001\tPolicy root child (procedure)\t900000000000448009\n"
+            "d3\t20240401\t1\t900000000000207008\t300\ten\t900000000000003001\tInactive thing (finding)\t900000000000448009\n",
+        )
+        zf.writestr(
+            f"{BASE}/Full/Refset/Content/der2_cRefset_AssociationFull_INT_20260401.txt",
+            "id\teffectiveTime\tactive\tmoduleId\trefsetId\treferencedComponentId\ttargetComponentId\n"
+            "a1\t20260401\t1\t900000000000207008\t900000000000526001\t300\t200\n"
+            "a2\t20260401\t0\t900000000000207008\t900000000000527005\t100\t200\n",
+        )
+        zf.writestr(
+            f"{BASE}/Full/Terminology/sct2_Relationship_Full_INT_20260401.txt",
+            "id\teffectiveTime\tactive\tmoduleId\tsourceId\tdestinationId\trelationshipGroup\ttypeId\tcharacteristicTypeId\tmodifierId\n"
+            "r1\t20240401\t1\t900000000000207008\t100\t200\t0\t116680003\t900000000000011006\t900000000000451002\n"
+            "r2\t20260401\t1\t900000000000207008\t250\t200\t0\t116680003\t900000000000011006\t900000000000451002\n",
+        )
 
 
 class TestRf2Hdf5Ingestion(unittest.TestCase):
@@ -58,6 +91,53 @@ class TestRf2Hdf5Ingestion(unittest.TestCase):
         self.assertTrue(members.concept.endswith("sct2_Concept_Snapshot_INT_20260401.txt"))
         self.assertTrue(members.description.endswith("sct2_Description_Snapshot-en_INT_20260401.txt"))
         self.assertTrue(members.association.endswith("der2_cRefset_AssociationSnapshot_INT_20260401.txt"))
+
+    def test_discover_full_members_ignores_snapshot_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            zip_path = pathlib.Path(tmp) / "rf2.zip"
+            _write_rf2_zip(zip_path)
+
+            members = discover_full_members(zip_path)
+
+        self.assertTrue(members.concept.endswith("sct2_Concept_Full_INT_20260401.txt"))
+        self.assertTrue(members.description.endswith("sct2_Description_Full-en_INT_20260401.txt"))
+        self.assertTrue(members.association.endswith("der2_cRefset_AssociationFull_INT_20260401.txt"))
+        self.assertEqual(members.view, "full")
+
+    def test_full_mode_reconstructs_policy_date_from_latest_rows(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            zip_path = pathlib.Path(tmp) / "rf2.zip"
+            output_path = pathlib.Path(tmp) / "rf2-full-20240401.hdf5"
+            _write_rf2_zip(zip_path)
+
+            summary = write_snapshot_hdf5_from_rf2_zip(
+                zip_path,
+                output_path,
+                rf2_view="full",
+                policy_date="20240401",
+                whitelist_root_codes=["200"],
+                blacklist_filter_tags=["finding"],
+            )
+
+            with h5py.File(output_path, "r") as h5_file:
+                codes = [x.decode() for x in h5_file["concepts/codes"][:]]
+                fsns = [x.decode() for x in h5_file["concepts/fsn"][:]]
+                active = h5_file["concepts/active"][:].tolist()
+                whitelist_indices = h5_file["policy_views/whitelist/0/concept_index"][:].tolist()
+                blacklist_indices = h5_file["policy_views/blacklist/0/concept_index"][:].tolist()
+                whitelist_codes = [codes[idx] for idx in whitelist_indices]
+                blacklist_codes = [codes[idx] for idx in blacklist_indices]
+                whitelist_attrs = dict(h5_file["policy_views/whitelist/0"].attrs)
+
+        self.assertEqual(summary.files.view, "full")
+        self.assertEqual(codes, ["100", "200", "300"])
+        self.assertEqual(fsns[0], "Old thing 2024 (finding)")
+        self.assertEqual(active, [True, True, True])
+        self.assertEqual(whitelist_codes, ["100", "200"])
+        self.assertEqual(blacklist_codes, ["100", "200", "300"])
+        self.assertEqual(whitelist_attrs["policy_date"], "20240401")
+        self.assertEqual(whitelist_attrs["release_date"], "20260401")
+        self.assertEqual(whitelist_attrs["rf2_view"], "full")
 
     def test_add_blacklist_policy_reuses_existing_concepts(self):
         with tempfile.TemporaryDirectory() as tmp:

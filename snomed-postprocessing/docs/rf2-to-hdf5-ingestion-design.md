@@ -463,7 +463,22 @@ Policy views store date metadata:
 /policy_views/<whitelist|blacklist>/0.attrs["rf2_view"]
 ```
 
-In current RF2 Snapshot mode, `policy_date` must equal the Snapshot `release_date`, because Snapshot files only represent one release state. To use a recent RF2 package to generate policy views for an earlier date, the ingestion must use RF2 Full reconstruction: latest row per component/member at or before the requested policy date, then active filtering. Snapshot mode rejects mismatching earlier policy dates rather than silently creating a misleading policy view.
+In RF2 Snapshot mode, `policy_date` must equal the Snapshot `release_date`, because Snapshot files only represent one release state. To use a recent RF2 package to generate policy views for an earlier date, use `--rf2-view full`: the ingestion reconstructs the latest row per component/member at or before the requested policy date, then applies active filtering.
+
+Example:
+
+```bash
+uv run create-concepts-dump \
+  --zip data/international.zip \
+  --rf2-view full \
+  --policy-date 20240401 \
+  --dump-mode version \
+  --filter-list config/blacklist_filter_tags.txt \
+  --output data/gemtex_snomedct_codes_reconstructed_20240401_from_20260401.hdf5 \
+  138875005
+```
+
+Snapshot mode still rejects mismatching earlier policy dates rather than silently creating a misleading policy view. `/concepts` also stores `policy_date`, `release_date`, and `rf2_view`; an existing concept table with mismatching metadata is not reused unless it is rebuilt with `--force-overwrite-concepts`.
 
 Snowstorm mode still uses explicit server settings:
 

@@ -320,7 +320,14 @@ def log_documents(
 @click.option(
     "--policy-date",
     default=None,
-    help="Policy date as YYYYMMDD for RF2 ZIP mode. Snapshot mode currently requires this to equal the Snapshot release date.",
+    help="Policy date as YYYYMMDD for RF2 ZIP mode. Snapshot mode requires this to equal the Snapshot release date; Full mode reconstructs state at or before this date.",
+)
+@click.option(
+    "--rf2-view",
+    default="snapshot",
+    show_default=True,
+    type=click.Choice(["snapshot", "full"], case_sensitive=False),
+    help="RF2 release view to ingest from the ZIP.",
 )
 @click.option(
     "--write-legacy-policy-groups",
@@ -395,6 +402,7 @@ def create_concept_id_dump(
     language: str,
     include_ancestors: bool,
     policy_date: Optional[str],
+    rf2_view: str,
     write_legacy_policy_groups: bool,
     use_secure_protocol: bool,
     port: Optional[int],
@@ -517,6 +525,7 @@ def create_concept_id_dump(
                 zip_path=rf2_zip,
                 output_path=output,
                 language=language,
+                rf2_view=rf2_view,
                 include_associations=True,
                 include_ancestors=include_ancestors,
                 whitelist_root_codes=whitelist_root_codes,
