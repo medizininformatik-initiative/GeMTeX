@@ -336,9 +336,36 @@ Store compact flat arrays:
 
 This supports nearest-whitelisted-ancestor fallback without one HDF5 group per concept.
 
-## 9. Proposed Implementation Modules
+## 9. Implementation Modules
 
-Suggested package structure:
+The first implementation is provided as a compact module:
+
+```text
+src/snomed_post_processing/rf2/__init__.py
+```
+
+It currently supports Snapshot-based ingestion from RF2 ZIP files and writes enriched HDF5 data under:
+
+```text
+/concepts
+/historical_associations
+```
+
+The module exposes:
+
+```python
+discover_snapshot_members(zip_path, language="en")
+write_snapshot_hdf5_from_rf2_zip(
+    zip_path,
+    output_path,
+    language="en",
+    include_associations=True,
+    include_ancestors=False,
+    force_overwrite=False,
+)
+```
+
+A future refactor can split it into the originally proposed package structure:
 
 ```text
 src/snomed_post_processing/rf2/

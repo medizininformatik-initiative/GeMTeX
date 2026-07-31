@@ -1,0 +1,92 @@
+import pathlib
+import tempfile
+import unittest
+import zipfile
+
+import h5py
+
+from snomed_post_processing.rf2 import (
+    discover_snapshot_members,
+    write_snapshot_hdf5_from_rf2_zip,
+)
+
+
+BASE = "SnomedCT_InternationalRF2_PRODUCTION_20260401T120000Z"
+
+
+def _write_rf2_zip(path: pathlib.Path):
+    with zipfile.ZipFile(path, "w") as zf:
+        zf.writestr("__MACOSX/._ignored.txt", "not\trf2\n")
+        zf.writestr(
+            f"{BASE}/Snapshot/Terminology/sct2_Concept_Snapshot_INT_20260401.txt",
+            "id\teffectiveTime\tactive\tmoduleId\tdefinitionStatusId\n"
+            "100\t20260401\t1\t900000000000207008\t900000000000074008\n"
+            "200\t20260401\t1\t900000000000207008\t900000000000074008\n"
+            "300\t20260401\t0\t900000000000207008\t900000000000074008\n",
+        )
+        zf.writestr(
+            f"{BASE}/Snapshot/Terminology/sct2_Description_Snapshot-en_INT_20260401.txt",
+            "id\teffectiveTime\tactive\tmoduleId\tconceptId\tlanguageCode\ttypeId\tterm\tcaseSignificanceId\n"
+            "d1\t20260401\t1\t900000000000207008\t100\ten\t900000000000003001\tOld thing (finding)\t900000000000448009\n"
+            "d2\t20260401\t1\t900000000000207008\t200\ten\t900000000000003001\tNew thing (finding)\t900000000000448009\n"
+            "d3\t20260401\t1\t900000000000207008\t300\ten\t900000000000003001\tInactive thing (finding)\t900000000000448009\n",
+        )
+        zf.writestr(
+            f"{BASE}/Snapshot/Refset/Content/der2_cRefset_AssociationSnapshot_INT_20260401.txt",
+            "id\teffectiveTime\tactive\tmoduleId\trefsetId\treferencedComponentId\ttargetComponentId\n"
+            "a1\t20260401\t1\t900000000000207008\t900000000000526001\t100\t200\n"
+            "a2\t20260401\t0\t900000000000207008\t900000000000527005\t300\t200\n",
+        )
+        zf.writestr(
+            f"{BASE}/Snapshot/Terminology/sct2_Relationship_Snapshot_INT_20260401.txt",
+            "id\teffectiveTime\tactive\tmoduleId\tsourceId\tdestinationId\trelationshipGroup\ttypeId\tcharacteristicTypeId\tmodifierId\n"
+            "r1\t20260401\t1\t900000000000207008\t100\t200\t0\t116680003\t900000000000011006\t900000000000451002\n",
+        )
+
+
+class TestRf2Hdf5Ingestion(unittest.TestCase):
+    def test_discover_snapshot_members_ignores_macos_noise(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            zip_path = pathlib.Path(tmp) / "rf2.zip"
+            _write_rf2_zip(zip_path)
+
+            members = discover_snapshot_members(zip_path)
+
+        self.assertTrue(members.concept.endswith("sct2_Concept_Snapshot_INT_20260401.txt"))
+        self.assertTrue(members.description.endswith("sct2_Description_Snapshot-en_INT_20260401.txt"))
+        self.assertTrue(members.association.endswith("der2_cRefset_AssociationSnapshot_INT_20260401.txt"))
+
+    def test_write_snapshot_hdf5_with_historical_associations(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            zip_path = pathlib.Path(tmp) / "rf2.zip"
+            output_path = pathlib.Path(tmp) / "rf2.hdf5"
+            _write_rf2_zip(zip_path)
+
+            summary = write_snapshot_hdf5_from_rf2_zip(
+                zip_path,
+                output_path,
+                include_ancestors=True,
+            )
+
+            with h5py.File(output_path, "r") as h5_file:
+                concept_codes = [x.decode() for x in h5_file["concepts/codes"][:]]
+                fsns = [x.decode() for x in h5_file["concepts/fsn"][:]]
+                semantic_tags = [x.decode() for x in h5_file["concepts/semantic_tag"][:]]
+                source_codes = [x.decode() for x in h5_file["historical_associations/source_code"][:]]
+                target_codes = [x.decode() for x in h5_file["historical_associations/target_code"][:]]
+                association_types = [x.decode() for x in h5_file["historical_associations/association_type"][:]]
+                self.assertIn("ancestors_index", h5_file["concepts"])
+
+        self.assertEqual(summary.concept_count, 2)
+        self.assertEqual(summary.fsn_count, 2)
+        self.assertEqual(summary.association_count, 1)
+        self.assertEqual(concept_codes, ["100", "200"])
+        self.assertEqual(fsns, ["Old thing (finding)", "New thing (finding)"])
+        self.assertEqual(semantic_tags, ["finding", "finding"])
+        self.assertEqual(source_codes, ["100"])
+        self.assertEqual(target_codes, ["200"])
+        self.assertEqual(association_types, ["REPLACED_BY"])
+
+
+if __name__ == "__main__":
+    unittest.main()
