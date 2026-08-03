@@ -1,0 +1,244 @@
+"""Sanitization suggestion utilities.
+
+This module contains the first, conservative sanitization phase: resolve
+structured ``CriticalFinding`` records against the compact SNOMED HDF5 layout
+and return suggestion objects. It does not mutate documents or CAS files.
+"""
+
+from __future__ import annotations
+
+import dataclasses
+import enum
+import pathlib
+from typing import Optional, Sequence, Union
+
+import h5py
+import numpy as np
+
+from ..uima_processing import CriticalFinding
+
+DEFAULT_ALLOWED_ASSOCIATION_TYPES = ("SAME_AS", "REPLACED_BY")
+
+
+class SanitizationStatus(str, enum.Enum):
+    HISTORICAL_ASSOCIATION_REPLACEMENT = "historical_association_replacement"
+    AMBIGUOUS_REPLACEMENT = "ambiguous_replacement"
+    NO_POLICY_ACCEPTABLE_CANDIDATE = "no_policy_acceptable_candidate"
+    NO_HISTORICAL_ASSOCIATION = "no_historical_association"
+    BLACKLISTED_NO_AUTO_SANITIZATION = "blacklisted_no_auto_sanitization"
+    NO_REPLACEMENT = "no_replacement"
+
+
+@dataclasses.dataclass(frozen=True)
+class SanitizationCandidate:
+    code: str
+    fsn: Optional[str]
+    association_type: str
+    active: bool
+    in_whitelist: bool
+    in_blacklist: bool
+    effective_time: Optional[str] = None
+    refset_id: Optional[str] = None
+
+    @property
+    def policy_acceptable(self) -> bool:
+        return self.active and self.in_whitelist and not self.in_blacklist
+
+
+@dataclasses.dataclass(frozen=True)
+class SanitizationSuggestion:
+    finding: CriticalFinding
+    status: SanitizationStatus
+    replacement_code: Optional[str] = None
+    replacement_fsn: Optional[str] = None
+    association_type: Optional[str] = None
+    reason: str = ""
+    candidate_count: int = 0
+    candidates: tuple[SanitizationCandidate, ...] = ()
+
+
+class SanitizationResolver:
+    """Resolve ``CriticalFinding`` objects against a compact SNOMED HDF5 file."""
+
+    def __init__(
+        self,
+        hdf5_path: Union[str, pathlib.Path],
+        allowed_association_types: Sequence[str] = DEFAULT_ALLOWED_ASSOCIATION_TYPES,
+    ):
+        self.hdf5_path = pathlib.Path(hdf5_path)
+        self.allowed_association_types = frozenset(allowed_association_types)
+        self._load()
+
+    def _load(self):
+        with h5py.File(self.hdf5_path, "r") as h5_file:
+            _require_groups(h5_file)
+            self.codes = tuple(_decode_array(h5_file["concepts/codes"][:]))
+            self.fsn = tuple(_decode_array(h5_file["concepts/fsn"][:]))
+            self.active = np.asarray(h5_file["concepts/active"][:], dtype=bool)
+            self.code_to_index = {code: idx for idx, code in enumerate(self.codes)}
+
+            self.whitelist_indices = _read_policy_indices(h5_file, "whitelist")
+            self.blacklist_indices = _read_policy_indices(h5_file, "blacklist")
+
+            hist = h5_file["historical_associations"]
+            self.association_source_index = np.asarray(hist["source_index"][:], dtype=np.int64)
+            self.association_target_index = np.asarray(hist["target_index"][:], dtype=np.int64)
+            self.association_type_id = np.asarray(hist["association_type_id"][:], dtype=np.int64)
+            self.association_types = tuple(_decode_array(hist["association_types"][:]))
+            self.association_active = np.asarray(hist["active"][:], dtype=bool)
+            self.association_effective_time = tuple(_decode_array(hist["effective_time"][:]))
+            self.association_refset_id = tuple(_decode_array(hist["refset_id"][:]))
+
+    def suggest(self, finding: CriticalFinding) -> SanitizationSuggestion:
+        if finding.ignored:
+            return SanitizationSuggestion(
+                finding=finding,
+                status=SanitizationStatus.NO_REPLACEMENT,
+                reason="ignored findings are informational and are not sanitized",
+            )
+        if finding.list_type == "blacklist":
+            return SanitizationSuggestion(
+                finding=finding,
+                status=SanitizationStatus.BLACKLISTED_NO_AUTO_SANITIZATION,
+                reason="automatic sanitization for blacklist findings is disabled",
+            )
+        if finding.list_type != "whitelist":
+            return SanitizationSuggestion(
+                finding=finding,
+                status=SanitizationStatus.NO_REPLACEMENT,
+                reason=f"unsupported finding list type: {finding.list_type}",
+            )
+        if not finding.code:
+            return SanitizationSuggestion(
+                finding=finding,
+                status=SanitizationStatus.NO_REPLACEMENT,
+                reason="finding has no SNOMED CT code",
+            )
+
+        source_index = self.code_to_index.get(finding.code)
+        if source_index is None:
+            return SanitizationSuggestion(
+                finding=finding,
+                status=SanitizationStatus.NO_HISTORICAL_ASSOCIATION,
+                reason="source concept is not present in /concepts",
+            )
+
+        candidates = self._historical_candidates(source_index)
+        if not candidates:
+            return SanitizationSuggestion(
+                finding=finding,
+                status=SanitizationStatus.NO_HISTORICAL_ASSOCIATION,
+                reason="no active allowed historical association found for source concept",
+            )
+
+        acceptable = [candidate for candidate in candidates if candidate.policy_acceptable]
+        if not acceptable:
+            return SanitizationSuggestion(
+                finding=finding,
+                status=SanitizationStatus.NO_POLICY_ACCEPTABLE_CANDIDATE,
+                reason="historical associations exist, but no candidate satisfies active/whitelist/blacklist policy",
+                candidate_count=len(candidates),
+                candidates=tuple(candidates),
+            )
+
+        unique_targets = {(candidate.code, candidate.association_type) for candidate in acceptable}
+        if len({candidate.code for candidate in acceptable}) > 1:
+            return SanitizationSuggestion(
+                finding=finding,
+                status=SanitizationStatus.AMBIGUOUS_REPLACEMENT,
+                reason="multiple policy-acceptable replacement targets found",
+                candidate_count=len(acceptable),
+                candidates=tuple(acceptable),
+            )
+
+        chosen = acceptable[0]
+        if len(unique_targets) > 1:
+            # Same replacement code through multiple association types is still
+            # deterministic, but expose the ambiguity in the candidate list.
+            association_type = ",".join(sorted({candidate.association_type for candidate in acceptable}))
+        else:
+            association_type = chosen.association_type
+        return SanitizationSuggestion(
+            finding=finding,
+            status=SanitizationStatus.HISTORICAL_ASSOCIATION_REPLACEMENT,
+            replacement_code=chosen.code,
+            replacement_fsn=chosen.fsn,
+            association_type=association_type,
+            reason="single policy-acceptable historical association replacement found",
+            candidate_count=len(acceptable),
+            candidates=tuple(acceptable),
+        )
+
+    def suggest_all(self, findings: Sequence[CriticalFinding]) -> list[SanitizationSuggestion]:
+        return [self.suggest(finding) for finding in findings]
+
+    def _historical_candidates(self, source_index: int) -> list[SanitizationCandidate]:
+        row_indices = np.where(
+            (self.association_source_index == source_index) & self.association_active
+        )[0]
+        candidates: list[SanitizationCandidate] = []
+        for row_index in row_indices:
+            association_type = self.association_types[int(self.association_type_id[row_index])]
+            if association_type not in self.allowed_association_types:
+                continue
+            target_index = int(self.association_target_index[row_index])
+            if target_index < 0 or target_index >= len(self.codes):
+                continue
+            candidates.append(
+                SanitizationCandidate(
+                    code=self.codes[target_index],
+                    fsn=self.fsn[target_index] or None,
+                    association_type=association_type,
+                    active=bool(self.active[target_index]),
+                    in_whitelist=target_index in self.whitelist_indices,
+                    in_blacklist=target_index in self.blacklist_indices,
+                    effective_time=self.association_effective_time[row_index] or None,
+                    refset_id=self.association_refset_id[row_index] or None,
+                )
+            )
+        return candidates
+
+
+def suggest_sanitization(
+    finding: CriticalFinding,
+    hdf5_path: Union[str, pathlib.Path],
+    allowed_association_types: Sequence[str] = DEFAULT_ALLOWED_ASSOCIATION_TYPES,
+) -> SanitizationSuggestion:
+    return SanitizationResolver(hdf5_path, allowed_association_types).suggest(finding)
+
+
+def _require_groups(h5_file: h5py.File):
+    required_paths = [
+        "concepts/codes",
+        "concepts/fsn",
+        "concepts/active",
+        "policy_views/whitelist/0/concept_index",
+        "policy_views/blacklist/0/concept_index",
+        "historical_associations/source_index",
+        "historical_associations/target_index",
+        "historical_associations/association_type_id",
+        "historical_associations/association_types",
+        "historical_associations/effective_time",
+        "historical_associations/active",
+        "historical_associations/refset_id",
+    ]
+    missing = [path for path in required_paths if path not in h5_file]
+    if missing:
+        raise ValueError(
+            "HDF5 file is not sanitization-ready; missing compact dataset(s): "
+            + ", ".join(missing)
+        )
+
+
+def _read_policy_indices(h5_file: h5py.File, policy: str) -> frozenset[int]:
+    return frozenset(int(idx) for idx in h5_file[f"policy_views/{policy}/0/concept_index"][:])
+
+
+def _decode_array(values) -> list[str]:
+    decoded = []
+    for value in values:
+        if isinstance(value, (bytes, bytearray)):
+            decoded.append(value.decode("utf-8"))
+        else:
+            decoded.append(str(value))
+    return decoded
