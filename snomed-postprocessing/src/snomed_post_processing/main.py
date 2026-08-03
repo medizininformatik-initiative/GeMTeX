@@ -29,9 +29,16 @@ from .utils import (
     get_project_zip,
 )
 from .uima_processing import (
+    CriticalFinding,
     process_inception_zip,
     get_annotator_names,
     create_log_from_results,
+)
+from .sanitization import (
+    DEFAULT_ALLOWED_ASSOCIATION_TYPES,
+    SUPPORTED_ASSOCIATION_TYPES,
+    SanitizationResolver,
+    write_sanitization_markdown_report,
 )
 
 
@@ -167,6 +174,19 @@ def common_click_args(fnc):
     type=click.Choice(["overlap", "covered-by", "contains", "exact"], case_sensitive=False),
     help="How target annotations must match ignore-overlap annotations to be ignored.",
 )
+@click.option(
+    "--suggest-sanitization",
+    is_flag=True,
+    help="Write a separate Markdown report with conservative sanitization replacement suggestions.",
+)
+@click.option(
+    "--sanitization-association-type",
+    multiple=True,
+    default=DEFAULT_ALLOWED_ASSOCIATION_TYPES,
+    show_default=True,
+    type=click.Choice(SUPPORTED_ASSOCIATION_TYPES, case_sensitive=False),
+    help="Historical association type allowed for sanitization suggestions. Can be provided multiple times.",
+)
 def log_documents(
     process_path: str,
     lists_path: Optional[str],
@@ -183,6 +203,8 @@ def log_documents(
     annotation_type: tuple[str, ...],
     ignore_overlap_type: tuple[str, ...],
     ignore_overlap_mode: str,
+    suggest_sanitization: bool,
+    sanitization_association_type: tuple[str, ...],
 ):
     """
     Analyzes an INCEpTION project zip file (if PROCESS_PATH points to a local zip file) or a particular project in an INCEpTION instance
@@ -259,6 +281,7 @@ def log_documents(
 
     erroneous_doc_count = 0
     dump_dictionary = None if omit_dump else {}
+    critical_findings: list[CriticalFinding] = []
     if result := process_inception_zip(
         project_zip,
         annotator_filter=names_filter,
@@ -271,10 +294,32 @@ def log_documents(
             output_path_masked.open("w", encoding="utf-8") as log_doc_masked,
         ):
             erroneous_doc_count = create_log_from_results(
-                result, log_doc, log_doc_masked, lists_path, None, dump_dictionary
+                result,
+                log_doc,
+                log_doc_masked,
+                lists_path,
+                None,
+                dump_dictionary,
+                critical_findings=critical_findings,
             )
         with output_path.with_suffix(".json").open("w") as json_file:
             json.dump(dump_dictionary, json_file, ensure_ascii=False, indent=2)
+
+        if suggest_sanitization:
+            sanitization_output_path = output_path.with_name(
+                output_path.stem.replace("critical_documents", "sanitization_suggestions")
+                + output_path.suffix
+            )
+            resolver = SanitizationResolver(
+                lists_path,
+                allowed_association_types=sanitization_association_type,
+            )
+            suggestions = resolver.suggest_all(critical_findings)
+            with sanitization_output_path.open("w", encoding="utf-8") as sanitization_report:
+                write_sanitization_markdown_report(suggestions, sanitization_report)
+            logging.info(
+                f"Sanitization suggestion report written to '{sanitization_output_path.resolve()}'."
+            )
 
     if not keep_export and use_api:
         logging.info(

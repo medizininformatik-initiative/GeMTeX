@@ -207,6 +207,7 @@ Recommended order:
 A candidate replacement is acceptable only if:
 
 ```text
+candidate is active
 candidate in target whitelist
 and candidate not in target blacklist
 ```
@@ -241,7 +242,7 @@ For each `CriticalFinding`:
 1. If finding has no real code, skip:
 
 ```text
-status = empty_or_missing_code
+status = no_replacement
 replacement = None
 ```
 
@@ -270,6 +271,7 @@ REPLACED_BY
 5. Filter candidate targets by target policy:
 
 ```text
+candidate active
 candidate in whitelist
 candidate not in blacklist
 ```
@@ -323,9 +325,9 @@ Suggested statuses:
 
 ## 9. Reporting
 
-Sanitization should extend critical reports, not replace them.
+Sanitization suggestions are written to a separate Markdown report, not embedded into the existing critical-findings report. This keeps the reporting/checking output stable and makes replacement review an explicit second artifact.
 
-Possible Markdown columns:
+Standalone Markdown columns:
 
 | Original Code | Covered Text | Offset | Failure Type | Sanitization Status | Replacement Code | Replacement FSN |
 |---|---|---:|---|---|---|---|
@@ -333,7 +335,7 @@ Possible Markdown columns:
 | `789` | example | `(30, 40)` | `not_in_whitelist` | `no_replacement` |  |  |
 | `999` | example | `(50, 60)` | `blacklisted` | `blacklisted_no_auto_sanitization` |  |  |
 
-The JSON dump should preserve structured original and replacement information:
+A future dedicated JSON sanitization report may preserve structured original and replacement information:
 
 ```json
 {
@@ -353,22 +355,27 @@ The JSON dump should preserve structured original and replacement information:
 
 ## 10. CLI Shape
 
-Sanitization should be an optional extension of the existing critical-document command.
+Sanitization suggestions are an optional extension of the existing critical-document command.
 
-Example:
+Implemented example:
 
 ```bash
 uv run log-critical-documents \
   --lists-path target-release.hdf5 \
-  --sanitize \
+  --suggest-sanitization \
   /path/to/inception-export.zip
 ```
 
-Optional policy flags may include:
+Implemented policy flags:
 
 ```bash
---sanitize-allow-association SAME_AS \
---sanitize-allow-association REPLACED_BY \
+--sanitization-association-type SAME_AS \
+--sanitization-association-type REPLACED_BY
+```
+
+Future policy flags may include:
+
+```bash
 --sanitize-allow-possibly-equivalent \
 --sanitize-blacklist \
 --sanitize-ancestor-fallback
@@ -419,23 +426,25 @@ This better matches the desired workflow: only codes already flagged by the curr
 
 Implemented. The analysis path now materializes whitelist/blacklist findings as structured `CriticalFinding` records first, and Markdown/JSON reporting is rendered from those records at the end of the run. This makes `CriticalFinding` the default bridge between policy checking and future sanitization.
 
+A new module `snomed_post_processing.sanitization` implements the first conservative, suggestion-only resolver. It consumes `CriticalFinding` records and the compact HDF5 layout and returns `SanitizationSuggestion` objects without mutating documents.
+
 ### Phase 2: Historical association storage
 
-Extend HDF5 dump generation so target-release dumps can include active historical associations derived from RF2 Full release data.
+Implemented. HDF5 dump generation can include compact historical associations derived from RF2 association refsets.
 
 ### Phase 3: Sanitization resolver
 
-Implement a resolver that consumes:
+Implemented. The resolver consumes:
 
 ```text
 CriticalFinding + enriched target HDF5
 ```
 
-and returns a structured sanitization result.
+and returns structured `SanitizationSuggestion` results.
 
-### Phase 4: Report integration
+### Phase 4: Separate report integration
 
-Add sanitization columns to Markdown reports and structured fields to JSON dumps.
+Implemented. CLI and Streamlit can generate a separate Markdown sanitization suggestion report. The existing critical-findings Markdown/masked Markdown/JSON outputs remain unchanged.
 
 ### Phase 5: Optional advanced fallback
 

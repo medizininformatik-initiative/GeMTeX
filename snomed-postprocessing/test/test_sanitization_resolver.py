@@ -1,3 +1,4 @@
+import io
 import pathlib
 import tempfile
 import unittest
@@ -6,9 +7,12 @@ import h5py
 import numpy as np
 
 from snomed_post_processing.sanitization import (
+    DEFAULT_ALLOWED_ASSOCIATION_TYPES,
+    SUPPORTED_ASSOCIATION_TYPES,
     SanitizationResolver,
     SanitizationStatus,
     suggest_sanitization,
+    write_sanitization_markdown_report,
 )
 from snomed_post_processing.uima_processing import CriticalFinding
 
@@ -69,6 +73,10 @@ def _write_sanitization_ready_hdf5(
 
 
 class TestSanitizationResolver(unittest.TestCase):
+    def test_supported_association_types_back_defaults(self):
+        self.assertTrue(set(DEFAULT_ALLOWED_ASSOCIATION_TYPES).issubset(SUPPORTED_ASSOCIATION_TYPES))
+        self.assertIn("POSSIBLY_EQUIVALENT_TO", SUPPORTED_ASSOCIATION_TYPES)
+
     def test_suggests_single_policy_acceptable_historical_replacement(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             hdf5_path = pathlib.Path(tmpdir) / "concepts.hdf5"
@@ -151,6 +159,29 @@ class TestSanitizationResolver(unittest.TestCase):
             suggestion = suggest_sanitization(_finding(), hdf5_path)
 
         self.assertEqual(suggestion.status, SanitizationStatus.NO_HISTORICAL_ASSOCIATION)
+
+    def test_writes_standalone_markdown_report(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            hdf5_path = pathlib.Path(tmpdir) / "concepts.hdf5"
+            _write_sanitization_ready_hdf5(hdf5_path)
+            suggestion = suggest_sanitization(_finding(), hdf5_path)
+
+        output = io.StringIO()
+        write_sanitization_markdown_report([suggestion], output)
+        report = output.getvalue()
+
+        self.assertIn("# Sanitization Suggestions", report)
+        self.assertIn("suggestion-only", report)
+        self.assertIn("## Replacement suggestions", report)
+        self.assertIn("### annotator-a", report)
+        self.assertIn("| Document | Source Code | Covered Text | Status | Replacement Code | Replacement FSN | Association |", report)
+        self.assertIn("historical_association_replacement", report)
+        self.assertIn("200", report)
+        self.assertIn("Replacement concept (finding)", report)
+        self.assertNotIn("| Annotator |", report)
+        self.assertNotIn("Offset", report)
+        self.assertNotIn("Candidate Count", report)
+        self.assertNotIn("Reason", report)
 
 
 if __name__ == "__main__":
