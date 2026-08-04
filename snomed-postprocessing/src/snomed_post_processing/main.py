@@ -38,6 +38,7 @@ from .sanitization import (
     DEFAULT_ALLOWED_ASSOCIATION_TYPES,
     SUPPORTED_ASSOCIATION_TYPES,
     SanitizationResolver,
+    format_association_type_descriptions,
     write_sanitization_markdown_report,
 )
 
@@ -185,7 +186,8 @@ def common_click_args(fnc):
     default=DEFAULT_ALLOWED_ASSOCIATION_TYPES,
     show_default=True,
     type=click.Choice(SUPPORTED_ASSOCIATION_TYPES, case_sensitive=False),
-    help="Historical association type allowed for sanitization suggestions. Can be provided multiple times.",
+    help="Historical association type allowed for sanitization suggestions. Can be provided multiple times. Meanings: "
+    + format_association_type_descriptions().replace("\n", " "),
 )
 def log_documents(
     process_path: str,

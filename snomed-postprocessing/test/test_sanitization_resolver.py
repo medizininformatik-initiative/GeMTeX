@@ -1,3 +1,4 @@
+import dataclasses
 import io
 import pathlib
 import tempfile
@@ -7,8 +8,10 @@ import h5py
 import numpy as np
 
 from snomed_post_processing.sanitization import (
+    ASSOCIATION_TYPE_DESCRIPTIONS,
     DEFAULT_ALLOWED_ASSOCIATION_TYPES,
     SUPPORTED_ASSOCIATION_TYPES,
+    format_association_type_descriptions,
     SanitizationResolver,
     SanitizationStatus,
     suggest_sanitization,
@@ -73,9 +76,13 @@ def _write_sanitization_ready_hdf5(
 
 
 class TestSanitizationResolver(unittest.TestCase):
-    def test_supported_association_types_back_defaults(self):
+    def test_supported_association_types_back_defaults_and_descriptions(self):
         self.assertTrue(set(DEFAULT_ALLOWED_ASSOCIATION_TYPES).issubset(SUPPORTED_ASSOCIATION_TYPES))
         self.assertIn("POSSIBLY_EQUIVALENT_TO", SUPPORTED_ASSOCIATION_TYPES)
+        self.assertEqual(set(SUPPORTED_ASSOCIATION_TYPES), set(ASSOCIATION_TYPE_DESCRIPTIONS))
+        descriptions = format_association_type_descriptions()
+        self.assertIn("SAME_AS", descriptions)
+        self.assertIn("Source concept is considered equivalent", descriptions)
 
     def test_suggests_single_policy_acceptable_historical_replacement(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -166,6 +173,10 @@ class TestSanitizationResolver(unittest.TestCase):
             _write_sanitization_ready_hdf5(hdf5_path)
             suggestion = suggest_sanitization(_finding(), hdf5_path)
 
+        suggestion = dataclasses.replace(
+            suggestion,
+            finding=dataclasses.replace(suggestion.finding, covered_text="line1\r\nline2\nline3\rline4"),
+        )
         output = io.StringIO()
         write_sanitization_markdown_report([suggestion], output)
         report = output.getvalue()
@@ -178,6 +189,9 @@ class TestSanitizationResolver(unittest.TestCase):
         self.assertIn("historical_association_replacement", report)
         self.assertIn("200", report)
         self.assertIn("Replacement concept (finding)", report)
+        self.assertIn("line1 line2 line3 line4", report)
+        self.assertNotIn("line1\r", report)
+        self.assertNotIn("line2\n", report)
         self.assertNotIn("| Annotator |", report)
         self.assertNotIn("Offset", report)
         self.assertNotIn("Candidate Count", report)

@@ -75,7 +75,7 @@ class TestIgnoreOverlapReporting(unittest.TestCase):
                         "doc.txt": DocumentAnnotations(
                             snomed_codes=np.asarray([b"222", b"333"], dtype="bytes"),
                             offsets=np.asarray([(10, 20), (30, 40)], dtype="i,i"),
-                            text=np.asarray(["ignored", "actionable"], dtype=np.dtypes.StringDType),
+                            text=np.asarray(["ignored\r\ntext", "actionable\ntext\rmore"], dtype=np.dtypes.StringDType),
                             layers=np.asarray(["gemtex.Concept", "gemtex.Concept"], dtype=np.dtypes.StringDType),
                             length=2,
                             ignore_mask=np.asarray([True, False], dtype=bool),
@@ -105,10 +105,14 @@ class TestIgnoreOverlapReporting(unittest.TestCase):
         self.assertIn("# Blacklist\n", report)
         self.assertIn("333", report)
         self.assertIn("Actionable concept (finding)", report)
+        self.assertIn("actionable text more", report)
+        self.assertNotIn("actionable\ntext", report)
         self.assertIn("# Ignored faulty concepts", report)
         self.assertIn("## Blacklist", report)
         self.assertIn("222", report)
         self.assertIn("Ignored concept (finding)", report)
+        self.assertIn("ignored text", report)
+        self.assertNotIn("ignored\r\ntext", report)
         self.assertNotIn("Overlap Details", report)
 
     def test_compact_policy_views_are_supported_without_legacy_groups(self):

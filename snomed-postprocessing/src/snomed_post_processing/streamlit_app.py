@@ -18,6 +18,7 @@ from snomed_post_processing.sanitization import (
     DEFAULT_ALLOWED_ASSOCIATION_TYPES,
     SUPPORTED_ASSOCIATION_TYPES,
     SanitizationResolver,
+    format_association_type_descriptions,
     write_sanitization_markdown_report,
 )
 from snomed_post_processing.utils import get_project_zip
@@ -220,7 +221,7 @@ with st.sidebar:
     st.header("Sanitization suggestions")
     suggest_sanitization = st.checkbox(
         "Create separate sanitization suggestion report",
-        value=False,
+        value=True,
         help="Generates a standalone Markdown report with conservative historical-association replacement suggestions. Documents are not modified.",
     )
     sanitization_association_types = st.multiselect(
@@ -228,6 +229,10 @@ with st.sidebar:
         options=list(SUPPORTED_ASSOCIATION_TYPES),
         default=list(DEFAULT_ALLOWED_ASSOCIATION_TYPES),
         help="Used only when sanitization suggestions are enabled.",
+    )
+    st.caption(
+        "Association type meanings:\n"
+        + format_association_type_descriptions()
     )
 
 

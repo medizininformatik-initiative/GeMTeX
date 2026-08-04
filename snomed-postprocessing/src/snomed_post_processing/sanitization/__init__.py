@@ -17,16 +17,24 @@ import numpy as np
 
 from ..uima_processing import CriticalFinding
 
-SUPPORTED_ASSOCIATION_TYPES = (
-    "SAME_AS",
-    "REPLACED_BY",
-    "POSSIBLY_EQUIVALENT_TO",
-    "WAS_A",
-    "MOVED_TO",
-    "MOVED_FROM",
-    "ALTERNATIVE",
-)
+ASSOCIATION_TYPE_DESCRIPTIONS = {
+    "SAME_AS": "Source concept is considered equivalent to the target concept.",
+    "REPLACED_BY": "Source concept was retired and replaced by the target concept.",
+    "POSSIBLY_EQUIVALENT_TO": "Source concept may be equivalent to the target concept; manual review is recommended.",
+    "WAS_A": "Source concept used to be classified as the target concept; usually broader/less exact.",
+    "MOVED_TO": "Concept was moved to another namespace/module and points to its new target.",
+    "MOVED_FROM": "Inverse move association; usually not useful for forward replacement suggestions.",
+    "ALTERNATIVE": "Alternative target concept exists, but equivalence is not guaranteed.",
+}
+SUPPORTED_ASSOCIATION_TYPES = tuple(ASSOCIATION_TYPE_DESCRIPTIONS.keys())
 DEFAULT_ALLOWED_ASSOCIATION_TYPES = ("SAME_AS", "REPLACED_BY")
+
+
+def format_association_type_descriptions() -> str:
+    return "\n".join(
+        f"- {association_type}: {description}"
+        for association_type, description in ASSOCIATION_TYPE_DESCRIPTIONS.items()
+    )
 
 
 class SanitizationStatus(str, enum.Enum):
@@ -329,7 +337,13 @@ def _write_grouped_suggestion_table(
 
 
 def _md(value: str) -> str:
-    return str(value).replace("|", "\\|").replace("\n", " ")
+    return (
+        str(value)
+        .replace("\r\n", " ")
+        .replace("\n", " ")
+        .replace("\r", " ")
+        .replace("|", "\\|")
+    )
 
 
 def _require_groups(h5_file: h5py.File):

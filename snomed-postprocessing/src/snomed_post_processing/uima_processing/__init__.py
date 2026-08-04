@@ -627,6 +627,16 @@ def _format_overlap_layers(overlaps: list[IgnoreOverlap]) -> str:
     return ", ".join(sorted({overlap.layer for overlap in overlaps}))
 
 
+def _markdown_cell(value) -> str:
+    return (
+        str(value)
+        .replace("\r\n", " ")
+        .replace("\n", " ")
+        .replace("\r", " ")
+        .replace("|", "\\|")
+    )
+
+
 def _finding_tag(finding: CriticalFinding) -> str:
     if not finding.fsn:
         return ""
@@ -689,9 +699,9 @@ def _render_finding_sections(
                     current_document = document
                 code = finding.code or "nan"
                 if list_type == "whitelist":
-                    fi.write(f"| {code} | {finding.covered_text} | {_format_finding_offset(finding)} |\n")
+                    fi.write(f"| {_markdown_cell(code)} | {_markdown_cell(finding.covered_text)} | {_format_finding_offset(finding)} |\n")
                 else:
-                    fi.write(f"| {code} | {finding.covered_text} | {_format_finding_offset(finding)} | {finding.fsn or ''} |\n")
+                    fi.write(f"| {_markdown_cell(code)} | {_markdown_cell(finding.covered_text)} | {_format_finding_offset(finding)} | {_markdown_cell(finding.fsn or '')} |\n")
             fi.write("\n\n")
 
     def write_ignored_section(ignored_findings: list[CriticalFinding]):
@@ -733,9 +743,9 @@ def _render_finding_sections(
                         fi.write("| " + " | ".join(["--:"] * len(columns)) + " |\n")
                         current_document = document
                     overlap_layers = _format_overlap_layers(list(finding.ignore_overlaps))
-                    row = f"| {finding.layer or ''} | {finding.code or 'nan'} | {finding.covered_text} | {_format_finding_offset(finding)} | {finding.reason} | {overlap_layers}"
+                    row = f"| {_markdown_cell(finding.layer or '')} | {_markdown_cell(finding.code or 'nan')} | {_markdown_cell(finding.covered_text)} | {_format_finding_offset(finding)} | {_markdown_cell(finding.reason)} | {_markdown_cell(overlap_layers)}"
                     if list_type == "blacklist":
-                        row += f" | {finding.fsn or ''}"
+                        row += f" | {_markdown_cell(finding.fsn or '')}"
                     fi.write(row + " |\n")
             fi.write("\n\n")
 
