@@ -51,6 +51,7 @@ def generate_report(
     ignore_overlap_mode: str = "overlap",
     suggest_sanitization: bool = False,
     sanitization_association_types: Optional[list[str]] = None,
+    sanitization_progress_obj: Optional[dict] = None,
     sanitize_semantic_bm25_fallback: bool = False,
     sanitize_blacklist_suggestions: bool = False,
     sanitize_bm25_min_score: float = 1.5,
@@ -93,16 +94,39 @@ def generate_report(
             json_dump_dictionary,
             critical_findings=critical_findings,
         )
+    if progress_obj is not None and progress_obj.get("obj") is not None:
+        progress_obj["obj"].empty()
+
     with output_json.open("w", encoding="utf-8") as json_fi:
         json.dump(json_dump_dictionary, json_fi, indent=2, ensure_ascii=False)
 
     if suggest_sanitization:
+        sanitization_progress = (
+            sanitization_progress_obj.get("obj")
+            if sanitization_progress_obj is not None
+            else None
+        )
+        if sanitization_progress is not None:
+            sanitization_progress.progress(
+                0.0,
+                text="Preparing sanitization suggestions...",
+            )
         resolver = SanitizationResolver(
             lists_path,
             allowed_association_types=sanitization_association_types or list(DEFAULT_ALLOWED_ASSOCIATION_TYPES),
         )
+        if sanitization_progress is not None:
+            sanitization_progress.progress(
+                0.25,
+                text=f"Resolving historical-association suggestions for {len(critical_findings)} finding(s)...",
+            )
         suggestions = resolver.suggest_all(critical_findings)
         if sanitize_semantic_bm25_fallback:
+            if sanitization_progress is not None:
+                sanitization_progress.progress(
+                    0.65,
+                    text="Running semantic BM25 fallback suggestions...",
+                )
             suggestions = apply_semantic_bm25_fallback(
                 suggestions,
                 lists_path,
@@ -111,8 +135,20 @@ def generate_report(
                 max_candidates=sanitize_bm25_max_candidates,
                 allow_blacklist_findings=sanitize_blacklist_suggestions,
             )
+        if sanitization_progress is not None:
+            sanitization_progress.progress(
+                0.9,
+                text="Writing sanitization suggestion report...",
+            )
         with output_sanitization_md.open("w", encoding="utf-8") as sanitization_fi:
             write_sanitization_markdown_report(suggestions, sanitization_fi)
+        if sanitization_progress is not None:
+            sanitization_progress.progress(
+                1.0,
+                text="Sanitization suggestions finished.",
+            )
+            time.sleep(0.2)
+            sanitization_progress.empty()
     else:
         output_sanitization_md = None
 
@@ -336,8 +372,9 @@ if st.button("Run analysis", type="primary", disabled=not (zip_file and hdf5_fil
         if zip_temp_path is None:
             raise RuntimeError("ZIP file was not prepared correctly.")
         progress_bar = st.progress(
-            0.0, text="Running analysis... this may take a while."
+            0.0, text="Running document analysis... this may take a while."
         )
+        sanitization_progress_placeholder = st.empty()
         time.sleep(1)
 
         if hdf5_temp_path is None:
@@ -376,6 +413,7 @@ if st.button("Run analysis", type="primary", disabled=not (zip_file and hdf5_fil
             ignore_overlap_mode=ignore_overlap_mode,
             suggest_sanitization=suggest_sanitization,
             sanitization_association_types=sanitization_association_types,
+            sanitization_progress_obj={"obj": sanitization_progress_placeholder},
             sanitize_semantic_bm25_fallback=sanitize_semantic_bm25_fallback,
             sanitize_blacklist_suggestions=sanitize_blacklist_suggestions,
             sanitize_bm25_min_score=sanitize_bm25_min_score,
@@ -383,6 +421,7 @@ if st.button("Run analysis", type="primary", disabled=not (zip_file and hdf5_fil
             sanitize_bm25_max_candidates=int(sanitize_bm25_max_candidates),
         )
         progress_bar.empty()
+        sanitization_progress_placeholder.empty()
 
         report_text = output_path_md.read_text(encoding="utf-8")
         report_text_masked = output_path_md_masked.read_text(encoding="utf-8")
