@@ -18,10 +18,15 @@ from snomed_post_processing.sanitization import (
     DEFAULT_ALLOWED_ASSOCIATION_TYPES,
     SUPPORTED_ASSOCIATION_TYPES,
     SanitizationResolver,
+    apply_semantic_bm25_fallback,
     format_association_type_descriptions,
     write_sanitization_markdown_report,
 )
 from snomed_post_processing.utils import get_project_zip
+from snomed_post_processing.hdf5_metadata import (
+    inspect_hdf5_metadata,
+    format_hdf5_metadata_summary,
+)
 
 
 st.set_page_config(page_title="GeMTeX SNOMED CT Postprocessing", layout="wide")
@@ -46,6 +51,11 @@ def generate_report(
     ignore_overlap_mode: str = "overlap",
     suggest_sanitization: bool = False,
     sanitization_association_types: Optional[list[str]] = None,
+    sanitize_semantic_bm25_fallback: bool = False,
+    sanitize_blacklist_suggestions: bool = False,
+    sanitize_bm25_min_score: float = 1.5,
+    sanitize_bm25_min_lexical_score: float = 0.15,
+    sanitize_bm25_max_candidates: int = 5,
 ) -> tuple[pathlib.Path, pathlib.Path, pathlib.Path, Optional[pathlib.Path], int]:
     json_dump_dictionary = {}
     output_md = project_zip.parent / (
@@ -92,6 +102,15 @@ def generate_report(
             allowed_association_types=sanitization_association_types or list(DEFAULT_ALLOWED_ASSOCIATION_TYPES),
         )
         suggestions = resolver.suggest_all(critical_findings)
+        if sanitize_semantic_bm25_fallback:
+            suggestions = apply_semantic_bm25_fallback(
+                suggestions,
+                lists_path,
+                min_score=sanitize_bm25_min_score,
+                min_lexical_score=sanitize_bm25_min_lexical_score,
+                max_candidates=sanitize_bm25_max_candidates,
+                allow_blacklist_findings=sanitize_blacklist_suggestions,
+            )
         with output_sanitization_md.open("w", encoding="utf-8") as sanitization_fi:
             write_sanitization_markdown_report(suggestions, sanitization_fi)
     else:
@@ -230,6 +249,40 @@ with st.sidebar:
         default=list(DEFAULT_ALLOWED_ASSOCIATION_TYPES),
         help="Used only when sanitization suggestions are enabled.",
     )
+    sanitize_semantic_bm25_fallback = st.checkbox(
+        "Use semantic BM25 fallback for unresolved whitelist findings",
+        value=False,
+        help="Suggestion-only fallback. Historical associations are tried first; BM25 suggestions are written to the same sanitization report when score thresholds are met.",
+    )
+    sanitize_blacklist_suggestions = st.checkbox(
+        "Include blacklist findings in BM25 sanitization suggestions",
+        value=False,
+        disabled=not sanitize_semantic_bm25_fallback,
+        help="Suggestion-only. Proposes active whitelisted non-blacklisted replacements for blacklisted findings when BM25 thresholds are met.",
+    )
+    with st.expander("BM25 fallback thresholds", expanded=False):
+        sanitize_bm25_min_score = st.number_input(
+            "Minimum BM25 score",
+            min_value=0.0,
+            value=1.5,
+            step=0.1,
+            help="Higher values make BM25 fallback suggestions more conservative.",
+        )
+        sanitize_bm25_min_lexical_score = st.number_input(
+            "Minimum lexical overlap ratio",
+            min_value=0.0,
+            max_value=1.0,
+            value=0.15,
+            step=0.05,
+            help="Minimum fraction of query tokens that must occur in the candidate label.",
+        )
+        sanitize_bm25_max_candidates = st.number_input(
+            "Maximum retained candidates",
+            min_value=1,
+            max_value=50,
+            value=5,
+            step=1,
+        )
     st.caption(
         "Association type meanings:\n"
         + format_association_type_descriptions()
@@ -238,6 +291,7 @@ with st.sidebar:
 
 annotator_selection = None
 zip_temp_path = None
+hdf5_temp_path = None
 
 if zip_file := st.session_state.get("zip_file"):
     zip_temp_path = save_uploaded_file(zip_file, ".zip")
@@ -269,6 +323,13 @@ if zip_file := st.session_state.get("zip_file"):
 
 if hdf5_file is not None:
     st.success(f"HDF5 uploaded: {hdf5_file.name}")
+    try:
+        hdf5_temp_path = save_uploaded_file(hdf5_file, ".hdf5")
+        hdf5_summary = inspect_hdf5_metadata(hdf5_temp_path)
+        with st.expander("HDF5 metadata summary", expanded=True):
+            st.markdown(format_hdf5_metadata_summary(hdf5_summary, markdown=True, include_path=False))
+    except Exception as exc:
+        st.warning(f"Could not read HDF5 metadata: {exc}")
 
 if st.button("Run analysis", type="primary", disabled=not (zip_file and hdf5_file)):
     try:
@@ -279,7 +340,8 @@ if st.button("Run analysis", type="primary", disabled=not (zip_file and hdf5_fil
         )
         time.sleep(1)
 
-        hdf5_temp_path = save_uploaded_file(hdf5_file, ".hdf5")
+        if hdf5_temp_path is None:
+            hdf5_temp_path = save_uploaded_file(hdf5_file, ".hdf5")
 
         annotator_filter = (
             [name.lower() for name in annotator_selection]
@@ -314,6 +376,11 @@ if st.button("Run analysis", type="primary", disabled=not (zip_file and hdf5_fil
             ignore_overlap_mode=ignore_overlap_mode,
             suggest_sanitization=suggest_sanitization,
             sanitization_association_types=sanitization_association_types,
+            sanitize_semantic_bm25_fallback=sanitize_semantic_bm25_fallback,
+            sanitize_blacklist_suggestions=sanitize_blacklist_suggestions,
+            sanitize_bm25_min_score=sanitize_bm25_min_score,
+            sanitize_bm25_min_lexical_score=sanitize_bm25_min_lexical_score,
+            sanitize_bm25_max_candidates=int(sanitize_bm25_max_candidates),
         )
         progress_bar.empty()
 

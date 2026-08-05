@@ -32,6 +32,7 @@ scttsrapy = { git = "https://github.com/AberystwythSystemsBiology/SCTTSRApy" }
 [project.scripts]
 log-critical-documents = "snomed_post_processing.main:log_documents"
 create-concepts-dump = "snomed_post_processing.main:create_concept_id_dump"
+summarize-hdf5 = "snomed_post_processing.main:summarize_hdf5"
 list-branches = "snomed_post_processing.main:list_branches"
 program-entry = "snomed_post_processing.main:help_me"
 

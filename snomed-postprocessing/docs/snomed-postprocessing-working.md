@@ -24,7 +24,8 @@ Defined in `pyproject.toml`:
 | Command | Python function | Purpose |
 |---|---|---|
 | `log-critical-documents` | `snomed_post_processing.main:log_documents` | Process an INCEpTION ZIP/local or remote project and create reports. |
-| `create-concepts-dump` | `snomed_post_processing.main:create_concept_id_dump` | Create/update HDF5 whitelist/blacklist dumps from Snowstorm. |
+| `create-concepts-dump` | `snomed_post_processing.main:create_concept_id_dump` | Create/update HDF5 whitelist/blacklist dumps from Snowstorm/RF2 ZIP. |
+| `summarize-hdf5` | `snomed_post_processing.main:summarize_hdf5` | Print a concise metadata summary for an HDF5 file. |
 | `list-branches` | `snomed_post_processing.main:list_branches` | List available Snowstorm branches. |
 | `program-entry` | `snomed_post_processing.main:help_me` | Fallback/help command. |
 
@@ -313,6 +314,22 @@ Behavior:
 - Stores corresponding FSNs in `fsn`.
 - `force_overwrite=True` deletes and recreates an existing list group.
 - Revision support is noted but not implemented; existing datasets are skipped unless forced.
+
+### HDF5 metadata summary
+
+A concise metadata summary can be printed for generated or uploaded HDF5 files:
+
+```bash
+uv run summarize-hdf5 data/gemtex_snomedct_codes_20260401.hdf5
+```
+
+Markdown output is available with:
+
+```bash
+uv run summarize-hdf5 --markdown data/gemtex_snomedct_codes_20260401.hdf5
+```
+
+The Streamlit GUI displays the same summary automatically after it reads an uploaded HDF5 file.
 
 ## 9. Docker Behavior
 

@@ -38,9 +38,11 @@ from .sanitization import (
     DEFAULT_ALLOWED_ASSOCIATION_TYPES,
     SUPPORTED_ASSOCIATION_TYPES,
     SanitizationResolver,
+    apply_semantic_bm25_fallback,
     format_association_type_descriptions,
     write_sanitization_markdown_report,
 )
+from .hdf5_metadata import inspect_hdf5_metadata, format_hdf5_metadata_summary
 
 
 class ClickUnion(click.ParamType):
@@ -189,6 +191,37 @@ def common_click_args(fnc):
     help="Historical association type allowed for sanitization suggestions. Can be provided multiple times. Meanings: "
     + format_association_type_descriptions().replace("\n", " "),
 )
+@click.option(
+    "--sanitize-semantic-bm25-fallback",
+    is_flag=True,
+    help="Use suggestion-only BM25 fallback for unresolved whitelist sanitization findings.",
+)
+@click.option(
+    "--sanitize-blacklist-suggestions",
+    is_flag=True,
+    help="Allow suggestion-only BM25 replacement suggestions for blacklist findings. Requires --sanitize-semantic-bm25-fallback.",
+)
+@click.option(
+    "--sanitize-bm25-min-score",
+    default=1.5,
+    show_default=True,
+    type=float,
+    help="Minimum BM25 score required for semantic BM25 fallback suggestions.",
+)
+@click.option(
+    "--sanitize-bm25-min-lexical-score",
+    default=0.15,
+    show_default=True,
+    type=float,
+    help="Minimum query-token overlap ratio required for semantic BM25 fallback suggestions.",
+)
+@click.option(
+    "--sanitize-bm25-max-candidates",
+    default=5,
+    show_default=True,
+    type=int,
+    help="Maximum BM25 fallback candidates retained internally per finding.",
+)
 def log_documents(
     process_path: str,
     lists_path: Optional[str],
@@ -207,6 +240,11 @@ def log_documents(
     ignore_overlap_mode: str,
     suggest_sanitization: bool,
     sanitization_association_type: tuple[str, ...],
+    sanitize_semantic_bm25_fallback: bool,
+    sanitize_blacklist_suggestions: bool,
+    sanitize_bm25_min_score: float,
+    sanitize_bm25_min_lexical_score: float,
+    sanitize_bm25_max_candidates: int,
 ):
     """
     Analyzes an INCEpTION project zip file (if PROCESS_PATH points to a local zip file) or a particular project in an INCEpTION instance
@@ -308,6 +346,10 @@ def log_documents(
             json.dump(dump_dictionary, json_file, ensure_ascii=False, indent=2)
 
         if suggest_sanitization:
+            if sanitize_blacklist_suggestions and not sanitize_semantic_bm25_fallback:
+                logging.warning(
+                    "--sanitize-blacklist-suggestions requires --sanitize-semantic-bm25-fallback; blacklist suggestions will remain disabled."
+                )
             sanitization_output_path = output_path.with_name(
                 output_path.stem.replace("critical_documents", "sanitization_suggestions")
                 + output_path.suffix
@@ -317,6 +359,15 @@ def log_documents(
                 allowed_association_types=sanitization_association_type,
             )
             suggestions = resolver.suggest_all(critical_findings)
+            if sanitize_semantic_bm25_fallback:
+                suggestions = apply_semantic_bm25_fallback(
+                    suggestions,
+                    lists_path,
+                    min_score=sanitize_bm25_min_score,
+                    min_lexical_score=sanitize_bm25_min_lexical_score,
+                    max_candidates=sanitize_bm25_max_candidates,
+                    allow_blacklist_findings=sanitize_blacklist_suggestions,
+                )
             with sanitization_output_path.open("w", encoding="utf-8") as sanitization_report:
                 write_sanitization_markdown_report(suggestions, sanitization_report)
             logging.info(
@@ -701,6 +752,22 @@ def create_concept_id_dump(
 
 
 @click.command()
+@click.argument(
+    "hdf5_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
+)
+@click.option(
+    "--markdown",
+    is_flag=True,
+    help="Render the metadata summary as Markdown.",
+)
+def summarize_hdf5(hdf5_path: pathlib.Path, markdown: bool):
+    """Print a concise metadata summary for a SNOMED postprocessing HDF5 file."""
+    summary = inspect_hdf5_metadata(hdf5_path)
+    click.echo(format_hdf5_metadata_summary(summary, markdown=markdown))
+
+
+@click.command()
 @click_server_options
 @click_log_level
 def list_branches(
@@ -722,6 +789,7 @@ def help_me():
     \b
      * log-critical-documents
      * create-concepts-dump
+     * summarize-hdf5
      * list-branches
 
     Each command has a '--help' option that provides further information, e.g. 'log-critical-documents --help'
@@ -730,6 +798,7 @@ def help_me():
         "Please use one of the following commands:"
         "\n\n * log-critical-documents"
         "\n * create-concepts-dump"
+        "\n * summarize-hdf5"
         "\n * list-branches"
         "\n\nEach command has a '--help' option that provides further information, e.g. 'log-critical-documents --help'"
     )

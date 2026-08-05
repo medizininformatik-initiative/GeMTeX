@@ -39,6 +39,7 @@ def format_association_type_descriptions() -> str:
 
 class SanitizationStatus(str, enum.Enum):
     HISTORICAL_ASSOCIATION_REPLACEMENT = "historical_association_replacement"
+    SEMANTIC_BM25_REPLACEMENT = "semantic_bm25_replacement"
     AMBIGUOUS_REPLACEMENT = "ambiguous_replacement"
     NO_POLICY_ACCEPTABLE_CANDIDATE = "no_policy_acceptable_candidate"
     NO_HISTORICAL_ASSOCIATION = "no_historical_association"
@@ -381,3 +382,30 @@ def _decode_array(values) -> list[str]:
         else:
             decoded.append(str(value))
     return decoded
+
+
+from .semantic_bm25 import (  # noqa: E402  # imported late to avoid circular initialization
+    SemanticBm25Candidate,
+    SemanticBm25Resolver,
+    SemanticBm25Suggestion,
+    apply_semantic_bm25_fallback,
+    suggest_semantic_bm25,
+)
+
+__all__ = [
+    "ASSOCIATION_TYPE_DESCRIPTIONS",
+    "SUPPORTED_ASSOCIATION_TYPES",
+    "DEFAULT_ALLOWED_ASSOCIATION_TYPES",
+    "format_association_type_descriptions",
+    "SanitizationStatus",
+    "SanitizationCandidate",
+    "SanitizationSuggestion",
+    "SanitizationResolver",
+    "suggest_sanitization",
+    "write_sanitization_markdown_report",
+    "SemanticBm25Candidate",
+    "SemanticBm25Resolver",
+    "SemanticBm25Suggestion",
+    "apply_semantic_bm25_fallback",
+    "suggest_semantic_bm25",
+]

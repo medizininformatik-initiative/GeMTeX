@@ -226,14 +226,22 @@ Do not automatically sanitize by default.
 
 Blacklist violations usually encode intentional policy decisions. Replacing a blacklisted concept with a broader ancestor may hide an intentionally forbidden annotation.
 
-Initial behavior should be:
+Historical associations are primarily useful for whitelist findings, because retired/inactive concepts are normally absent from the active whitelist and are therefore flagged as `not_in_whitelist`, not as `blacklisted`. Blacklisted concepts in the RF2-derived policy views are usually active but policy-forbidden, so historical `SAME_AS`/`REPLACED_BY` associations are not expected to be the main replacement mechanism for them.
+
+Initial behavior remains:
 
 ```text
 status = blacklisted_no_auto_sanitization
 replacement = None
 ```
 
-A future explicit option may allow blacklist sanitization, but it should be separate and clearly documented.
+An explicit option can enable suggestion-only blacklist sanitization via semantic BM25 fallback. This does not use historical associations as the primary mechanism and does not mutate source documents. Candidates must still satisfy the target policy:
+
+```text
+candidate active
+candidate in whitelist
+candidate not in blacklist
+```
 
 ## 7. Sanitization Algorithm
 
@@ -252,6 +260,8 @@ replacement = None
 status = blacklisted_no_auto_sanitization
 replacement = None
 ```
+
+If blacklist sanitization is enabled, skip historical-association lookup as the main path and use the BM25 fallback rules below.
 
 3. If finding is a whitelist finding:
 
@@ -293,13 +303,22 @@ candidates = [...]
 
 or apply an explicit deterministic tie-breaker if configured.
 
-8. If no acceptable historical candidate exists and ancestor fallback is enabled:
+8. If no acceptable historical candidate exists and semantic BM25 fallback is enabled, or if this is a blacklist finding with explicit blacklist suggestions enabled:
+
+```text
+rank active whitelist concepts that are not blacklisted by lexical BM25 similarity
+return only candidates above strict score/overlap thresholds
+```
+
+BM25 fallback is suggestion-only and intended for manual review. It must not auto-apply replacements.
+
+9. If no acceptable historical/BM25 candidate exists and ancestor fallback is enabled:
 
 ```text
 find nearest ancestor in target whitelist and not in target blacklist
 ```
 
-9. If no replacement exists:
+10. If no replacement exists:
 
 ```text
 status = no_replacement
@@ -316,6 +335,7 @@ Suggested statuses:
 | `empty_or_missing_code` | Finding has no usable SNOMED code. |
 | `blacklisted_no_auto_sanitization` | Blacklist finding; auto-sanitization disabled. |
 | `historical_association_replacement` | Replacement found via allowed historical association. |
+| `semantic_bm25_replacement` | Suggestion-only replacement found via policy-aware BM25 lexical similarity. |
 | `ambiguous_replacement` | Multiple acceptable replacement candidates. |
 | `no_policy_acceptable_candidate` | Historical candidates exist but none satisfy whitelist/blacklist policy. |
 | `no_historical_association` | No association known for the faulty code. |
@@ -377,7 +397,11 @@ Future policy flags may include:
 
 ```bash
 --sanitize-allow-possibly-equivalent \
---sanitize-blacklist \
+--sanitize-blacklist-suggestions \
+--sanitize-semantic-bm25-fallback \
+--sanitize-bm25-min-score 1.5 \
+--sanitize-bm25-min-lexical-score 0.15 \
+--sanitize-bm25-max-candidates 5 \
 --sanitize-ancestor-fallback
 ```
 
@@ -387,7 +411,8 @@ The first implementation should keep the default conservative:
 sanitize whitelist findings only
 allow SAME_AS and REPLACED_BY
 reject ambiguous replacements
-no blacklist sanitization
+no blacklist sanitization unless explicitly enabled
+no BM25 fallback unless explicitly enabled
 no ancestor fallback unless explicitly enabled
 ```
 
@@ -448,7 +473,7 @@ Implemented. CLI and Streamlit can generate a separate Markdown sanitization sug
 
 ### Phase 5: Optional advanced fallback
 
-Add ancestor fallback and/or source-target mode only if historical associations are insufficient for real data.
+Implemented for suggestion reporting. A dependency-free semantic BM25 module (`snomed_post_processing.sanitization.semantic_bm25`) can rank active, whitelisted, non-blacklisted concepts from the compact HDF5 layout as suggestion-only fallback candidates. CLI and Streamlit expose this as an opt-in fallback; accepted BM25 replacements are written to the existing standalone sanitization suggestion report with status `semantic_bm25_replacement`. Blacklist findings can be included explicitly via `--sanitize-blacklist-suggestions` / the Streamlit checkbox, but remain disabled by default. Ancestor fallback and/or source-target mode should be added only if historical associations and BM25 suggestions are insufficient for real data.
 
 ## 13. Summary
 
