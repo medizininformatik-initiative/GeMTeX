@@ -14,6 +14,7 @@ from snomed_post_processing.sanitization import (
 )
 from snomed_post_processing.sanitization.semantic_bm25 import (
     SemanticBm25Resolver,
+    _query_text,
     suggest_semantic_bm25,
 )
 from snomed_post_processing.uima_processing import CriticalFinding
@@ -72,6 +73,25 @@ def _write_compact_hdf5(
 
 
 class TestSemanticBm25Sanitization(unittest.TestCase):
+    def test_query_text_excludes_snomed_code(self):
+        query = _query_text(
+            _finding(code="123456789", covered_text="alpha therapy"),
+            "Old alpha concept (procedure)",
+        )
+
+        self.assertEqual(query, "alpha therapy Old alpha concept (procedure)")
+        self.assertNotIn("123456789", query)
+
+    def test_fsn_lookup_uses_code_index_map(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            hdf5_path = pathlib.Path(tmpdir) / "concepts.hdf5"
+            _write_compact_hdf5(hdf5_path)
+            resolver = SemanticBm25Resolver(hdf5_path)
+
+        self.assertEqual(resolver.code_to_index["100"], 1)
+        self.assertEqual(resolver.fsn_by_code("100"), "Alpha therapy procedure (procedure)")
+        self.assertIsNone(resolver.fsn_by_code("missing"))
+
     def test_suggests_policy_acceptable_bm25_replacement(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             hdf5_path = pathlib.Path(tmpdir) / "concepts.hdf5"

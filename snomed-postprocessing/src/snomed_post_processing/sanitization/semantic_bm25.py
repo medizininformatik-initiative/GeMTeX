@@ -184,6 +184,7 @@ class SemanticBm25Resolver:
                 )
             self.codes = tuple(_decode_array(h5_file["concepts/codes"][:]))
             self.fsn = tuple(_decode_array(h5_file["concepts/fsn"][:]))
+            self.code_to_index = {code: idx for idx, code in enumerate(self.codes)}
             self.active = np.asarray(h5_file["concepts/active"][:], dtype=bool)
             self.whitelist_indices = frozenset(
                 int(idx) for idx in h5_file["policy_views/whitelist/0/concept_index"][:]
@@ -265,10 +266,10 @@ class SemanticBm25Resolver:
     def fsn_by_code(self, code: Optional[str]) -> Optional[str]:
         if not code:
             return None
-        for idx, candidate_code in enumerate(self.codes):
-            if candidate_code == code:
-                return self.fsn[idx]
-        return None
+        idx = self.code_to_index.get(code)
+        if idx is None:
+            return None
+        return self.fsn[idx]
 
 
 def suggest_semantic_bm25(
@@ -322,7 +323,7 @@ def apply_semantic_bm25_fallback(
 
 def _query_text(finding: CriticalFinding, source_fsn: Optional[str] = None) -> str:
     return " ".join(
-        part for part in (finding.covered_text, source_fsn or "", finding.code or "") if part
+        part for part in (finding.covered_text, source_fsn or "") if part
     )
 
 
