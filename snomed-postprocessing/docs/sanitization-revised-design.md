@@ -181,8 +181,8 @@ Optional hierarchy fallback data may use the previous compact ancestor represent
 
 ```text
 /concepts/ancestors_index
-/concepts/ancestors_codes
-/concepts/ancestors_distance
+/concepts/ancestor_concept_index
+/concepts/ancestor_distance
 ```
 
 This is not required for the first historical-association-based implementation.

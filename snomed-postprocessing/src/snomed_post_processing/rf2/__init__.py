@@ -594,7 +594,21 @@ def write_snapshot_hdf5_from_rf2_zip(
             concept_group.attrs["release_date"] = members.release_date
             concept_group.attrs["rf2_view"] = rf2_view
 
-        if include_ancestors and "ancestors_index" not in concept_group:
+        new_ancestor_datasets = {"ancestors_index", "ancestor_concept_index", "ancestor_distance"}
+        if include_ancestors:
+            for legacy_dataset_name in ("ancestors_codes", "ancestors_distance"):
+                if legacy_dataset_name in concept_group:
+                    del concept_group[legacy_dataset_name]
+        if include_ancestors and not new_ancestor_datasets.issubset(concept_group.keys()):
+            for dataset_name in (
+                "ancestors_index",
+                "ancestor_concept_index",
+                "ancestor_distance",
+                "ancestors_codes",
+                "ancestors_distance",
+            ):
+                if dataset_name in concept_group:
+                    del concept_group[dataset_name]
             ancestor_codes_base, ancestor_index, ancestor_codes, ancestor_distances = (
                 _compute_compact_ancestor_arrays(
                     {code: fsn_by_code.get(code, "") for code in all_concept_codes},
@@ -609,9 +623,13 @@ def write_snapshot_hdf5_from_rf2_zip(
                 raise ValueError(
                     "Computed ancestor concept order does not match /concepts/codes."
                 )
-            concept_group.create_dataset("ancestors_index", data=ancestor_index)
-            _write_string_dataset(concept_group, "ancestors_codes", ancestor_codes)
-            concept_group.create_dataset("ancestors_distance", data=ancestor_distances)
+            ancestor_code_to_index = {code: idx for idx, code in enumerate(codes)}
+            concept_group.create_dataset("ancestors_index", data=ancestor_index.astype(np.int32))
+            concept_group.create_dataset(
+                "ancestor_concept_index",
+                data=np.asarray([ancestor_code_to_index[str(code)] for code in ancestor_codes], dtype=np.int32),
+            )
+            concept_group.create_dataset("ancestor_distance", data=ancestor_distances.astype(np.int16))
 
         if include_associations and "historical_associations" not in h5_file:
             assoc_group = h5_file.create_group("historical_associations")

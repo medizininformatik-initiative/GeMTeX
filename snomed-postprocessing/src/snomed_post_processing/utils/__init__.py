@@ -426,12 +426,13 @@ def _write_concepts_extension(
     ds_codes[:] = codes
     ds_fsn = concept_group.create_dataset("fsn", shape=(fsn.shape[0],), dtype="T")
     ds_fsn[:] = fsn
-    concept_group.create_dataset("ancestors_index", data=ancestor_index)
-    ds_ancestor_codes = concept_group.create_dataset(
-        "ancestors_codes", shape=(ancestor_codes.shape[0],), dtype="T"
+    code_to_index = {str(code): idx for idx, code in enumerate(codes.tolist())}
+    concept_group.create_dataset("ancestors_index", data=ancestor_index.astype(np.int32))
+    concept_group.create_dataset(
+        "ancestor_concept_index",
+        data=np.asarray([code_to_index[str(code)] for code in ancestor_codes.tolist()], dtype=np.int32),
     )
-    ds_ancestor_codes[:] = ancestor_codes
-    concept_group.create_dataset("ancestors_distance", data=ancestor_distances)
+    concept_group.create_dataset("ancestor_distance", data=ancestor_distances.astype(np.int16))
 
 
 def dump_codes_to_hdf5(

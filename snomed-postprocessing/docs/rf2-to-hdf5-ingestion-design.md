@@ -321,8 +321,8 @@ Optional hierarchy/ancestor support:
 
 ```text
 /concepts/ancestors_index
-/concepts/ancestors_codes
-/concepts/ancestors_distance
+/concepts/ancestor_concept_index
+/concepts/ancestor_distance
 ```
 
 ## 8. Ancestor Computation
@@ -348,8 +348,8 @@ Store compact flat arrays:
 
 ```text
 /concepts/ancestors_index      # per concept: [start, length]
-/concepts/ancestors_codes      # flat ancestor code array
-/concepts/ancestors_distance   # flat distance array
+/concepts/ancestor_concept_index  # flat int32 concept indices into /concepts/codes
+/concepts/ancestor_distance       # flat int16 distance array
 ```
 
 This supports nearest-whitelisted-ancestor fallback without one HDF5 group per concept.

@@ -65,7 +65,7 @@ def inspect_hdf5_metadata(path: Union[str, pathlib.Path]) -> Hdf5MetadataSummary
             concepts_rf2_view = _attr(concepts, "rf2_view")
             has_ancestors = all(
                 name in concepts
-                for name in ("ancestors_index", "ancestors_codes", "ancestors_distance")
+                for name in ("ancestors_index", "ancestor_concept_index", "ancestor_distance")
             )
 
         policy_view_counts = []

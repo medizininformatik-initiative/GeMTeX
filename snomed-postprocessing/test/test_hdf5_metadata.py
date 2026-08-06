@@ -26,9 +26,9 @@ class TestHdf5MetadataSummary(unittest.TestCase):
                 concepts.create_dataset("fsn", data=np.asarray(["Old (finding)", "New (finding)"], dtype=object), dtype=_STRING_DTYPE)
                 concepts.create_dataset("active", data=np.asarray([False, True], dtype=bool))
                 concepts.create_dataset("semantic_tags", data=np.asarray(["finding"], dtype=object), dtype=_STRING_DTYPE)
-                concepts.create_dataset("ancestors_index", data=np.asarray([0, 0, 0], dtype=np.int64))
-                concepts.create_dataset("ancestors_codes", data=np.asarray([], dtype=object), dtype=_STRING_DTYPE)
-                concepts.create_dataset("ancestors_distance", data=np.asarray([], dtype=np.int64))
+                concepts.create_dataset("ancestors_index", data=np.asarray([0, 0, 0], dtype=np.int32))
+                concepts.create_dataset("ancestor_concept_index", data=np.asarray([], dtype=np.int32))
+                concepts.create_dataset("ancestor_distance", data=np.asarray([], dtype=np.int16))
 
                 policy_views = h5_file.create_group("policy_views")
                 whitelist = policy_views.create_group("whitelist").create_group("0")

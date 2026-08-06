@@ -132,7 +132,7 @@ def download_md_report(md_report, output_fi: pathlib.Path, label: str):
 
 
 st.title("SNOMED Postprocessing")
-st.write("""Simple GUI for analyzing all critical documents in the given INCEpTION dump (supported export formats: ``json``).  
+st.write("""Simple GUI for analyzing all critical documents in the given INCEpTION dump (supported export formats: JSON CAS and XMI).  
          Critical are documents when they contain SNOMED CT codes that are either on the blacklist or are not on the whitelist.  
          Whitelist and blacklist are both defined in a ``hdf5`` file, that must be provided.""")
 

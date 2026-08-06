@@ -73,6 +73,26 @@ def _load_document(path: Union[str, pathlib.Path]) -> cassis.Cas:
     return cassis.load_cas_from_json(path.open("r", encoding="utf-8"))
 
 
+def _load_typesystem_from_zip(zip_file: zipfile.ZipFile):
+    for info in zip_file.infolist():
+        if info.is_dir():
+            continue
+        if pathlib.Path(info.filename).name == "TypeSystem.xml":
+            with zip_file.open(info.filename) as typesystem_file:
+                return cassis.load_typesystem(typesystem_file)
+    return None
+
+
+def _load_cas_from_zip_member(zip_file: zipfile.ZipFile, cas_path: str, typesystem=None):
+    lower_path = cas_path.lower()
+    with zip_file.open(cas_path) as cas_file:
+        if lower_path.endswith(".json"):
+            return cassis.load_cas_from_json(cas_file, typesystem=typesystem)
+        if lower_path.endswith(".xmi"):
+            return cassis.load_cas_from_xmi(cas_file, typesystem=typesystem, lenient=True)
+        raise ValueError(f"Unsupported CAS format for '{cas_path}'.")
+
+
 def _read_project(zip_file: zipfile.ZipFile, file_name: str) -> Optional[list[dict]]:
     try:
         project_meta = json.loads(zip_file.read("exportedproject.json").decode("utf-8"))
@@ -298,6 +318,7 @@ def process_inception_zip(
         with zipfile.ZipFile(file_path, "r") as zip_file:
             # ---- Read project metadata ----
             project_documents = _read_project(zip_file, file_name)
+            typesystem = _load_typesystem_from_zip(zip_file)
 
             # ---- Process each document ----
             logging.info(f" Started processing project {file_name}")
@@ -326,8 +347,7 @@ def process_inception_zip(
                             )
                             continue
 
-                        with zip_file.open(cas_path) as cas_file:
-                            cas = cassis.load_cas_from_json(cas_file)
+                        cas = _load_cas_from_zip_member(zip_file, cas_path, typesystem=typesystem)
                         doc_anno = get_annotations_from_document(
                             cas,
                             annotation_types,

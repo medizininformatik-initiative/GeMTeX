@@ -4,6 +4,7 @@ import unittest
 import zipfile
 
 import h5py
+import numpy as np
 
 from snomed_post_processing.rf2 import (
     ASSOCIATION_REFSET_IDS,
@@ -256,6 +257,12 @@ class TestRf2Hdf5Ingestion(unittest.TestCase):
                 whitelist_policy_date = h5_file["policy_views/whitelist/0"].attrs["policy_date"]
                 blacklist_release_date = h5_file["policy_views/blacklist/0"].attrs["release_date"]
                 self.assertIn("ancestors_index", h5_file["concepts"])
+                self.assertIn("ancestor_concept_index", h5_file["concepts"])
+                self.assertIn("ancestor_distance", h5_file["concepts"])
+                self.assertNotIn("ancestors_codes", h5_file["concepts"])
+                self.assertEqual(h5_file["concepts/ancestors_index"].dtype, np.dtype("int32"))
+                self.assertEqual(h5_file["concepts/ancestor_concept_index"].dtype, np.dtype("int32"))
+                self.assertEqual(h5_file["concepts/ancestor_distance"].dtype, np.dtype("int16"))
                 self.assertNotIn("source_code", h5_file["historical_associations"])
 
         self.assertEqual(summary.concept_count, 4)
