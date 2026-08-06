@@ -55,7 +55,8 @@ class TestHdf5MetadataSummary(unittest.TestCase):
         self.assertEqual(summary.historical_association_type_counts, (("REPLACED_BY", 1),))
         self.assertIn("Sanitization-ready: yes", text)
         self.assertIn("whitelist/0: 1 concepts", text)
-        self.assertIn("REPLACED_BY=1", text)
+        self.assertIn("  - REPLACED_BY: 1", text)
+        self.assertNotIn("Types:", text)
         self.assertIn("### HDF5 metadata summary", markdown)
         self.assertNotIn(str(hdf5_path), markdown)
 

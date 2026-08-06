@@ -25,6 +25,10 @@ ASSOCIATION_TYPE_DESCRIPTIONS = {
     "MOVED_TO": "Concept was moved to another namespace/module and points to its new target.",
     "MOVED_FROM": "Inverse move association; usually not useful for forward replacement suggestions.",
     "ALTERNATIVE": "Alternative target concept exists, but equivalence is not guaranteed.",
+    "PARTIALLY_EQUIVALENT_TO": "Source concept is partially equivalent to the target concept; manual review is recommended.",
+    "POSSIBLY_REPLACED_BY": "Source concept may have been replaced by the target concept; manual review is recommended.",
+    "REFERS_TO": "Source concept refers to the target concept; not necessarily a safe replacement.",
+    "SIMILAR_TO": "Source concept is similar to the target concept; equivalence is not guaranteed.",
 }
 SUPPORTED_ASSOCIATION_TYPES = tuple(ASSOCIATION_TYPE_DESCRIPTIONS.keys())
 DEFAULT_ALLOWED_ASSOCIATION_TYPES = ("SAME_AS", "REPLACED_BY")

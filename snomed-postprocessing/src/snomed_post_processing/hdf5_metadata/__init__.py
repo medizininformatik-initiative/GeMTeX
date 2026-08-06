@@ -156,11 +156,8 @@ def format_hdf5_metadata_summary(
         ]
     )
     if summary.historical_association_type_counts:
-        assoc_summary = ", ".join(
-            f"{association_type}={count:,}"
-            for association_type, count in summary.historical_association_type_counts
-        )
-        lines.append(f"  - Types: {assoc_summary}")
+        for association_type, count in summary.historical_association_type_counts:
+            lines.append(f"  - {association_type}: {count:,}")
     if summary.policy_view_counts:
         lines.append("- Compact policy views:")
         for policy, view_name, count in summary.policy_view_counts:

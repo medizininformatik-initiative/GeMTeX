@@ -6,6 +6,7 @@ import zipfile
 import h5py
 
 from snomed_post_processing.rf2 import (
+    ASSOCIATION_REFSET_IDS,
     discover_full_members,
     discover_snapshot_members,
     write_snapshot_hdf5_from_rf2_zip,
@@ -81,6 +82,12 @@ def _write_rf2_zip(path: pathlib.Path):
 
 
 class TestRf2Hdf5Ingestion(unittest.TestCase):
+    def test_association_refset_id_mapping_includes_extended_types(self):
+        self.assertEqual(ASSOCIATION_REFSET_IDS["1186924009"], "PARTIALLY_EQUIVALENT_TO")
+        self.assertEqual(ASSOCIATION_REFSET_IDS["1186921001"], "POSSIBLY_REPLACED_BY")
+        self.assertEqual(ASSOCIATION_REFSET_IDS["900000000000531004"], "REFERS_TO")
+        self.assertEqual(ASSOCIATION_REFSET_IDS["900000000000529008"], "SIMILAR_TO")
+
     def test_discover_snapshot_members_ignores_macos_noise(self):
         with tempfile.TemporaryDirectory() as tmp:
             zip_path = pathlib.Path(tmp) / "rf2.zip"

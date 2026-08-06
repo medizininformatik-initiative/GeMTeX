@@ -4,18 +4,20 @@
 
 Add an optional sanitization mode that suggests replacements only for SNOMED CT annotation codes that have already been flagged as faulty by the current whitelist/blacklist checks.
 
-The current checking workflow remains authoritative and unchanged:
+The current checking workflow remains authoritative and is now explicitly separated from sanitization:
 
 ```text
 INCEpTION export
     ↓
 load annotations
     ↓
-run existing whitelist/blacklist checks
+run whitelist/blacklist checks
     ↓
-produce critical findings
+produce reports + CriticalFindings JSON
+
+CriticalFindings JSON + sanitization-ready HDF5
     ↓
-optionally sanitize only those critical findings
+produce separate sanitization suggestion report
 ```
 
 Sanitization must not pre-process, normalize, or replace all codes before checking. Codes that pass the current checks are not touched.
@@ -72,9 +74,11 @@ CriticalFinding(
 )
 ```
 
+The checking command writes a versioned `critical_findings_*.json` artifact next to the normal reports under the processing/output directory. Sanitization is not run by the checking command.
+
 ### 3.2 Sanitization phase
 
-Only critical findings are passed to the sanitization module.
+Only critical findings loaded from the `CriticalFindings` JSON artifact are passed to the sanitization module.
 
 ```text
 critical finding
@@ -375,37 +379,40 @@ A future dedicated JSON sanitization report may preserve structured original and
 
 ## 10. CLI Shape
 
-Sanitization suggestions are an optional extension of the existing critical-document command.
+Sanitization suggestions are a separate second command that consumes the `CriticalFindings` JSON artifact from the checking command.
 
-Implemented example:
+Checking example:
 
 ```bash
 uv run log-critical-documents \
   --lists-path target-release.hdf5 \
-  --suggest-sanitization \
   /path/to/inception-export.zip
 ```
 
-Implemented policy flags:
+This writes the normal reports plus `critical_findings_*.json` next to them.
+
+Sanitization example:
 
 ```bash
---sanitization-association-type SAME_AS \
---sanitization-association-type REPLACED_BY
+uv run suggest-sanitization \
+  --lists-path target-release.hdf5 \
+  --critical-findings /path/to/critical_findings_*.json \
+  --output /path/to/sanitization_suggestions.md
 ```
 
-Future policy flags may include:
+Policy flags:
 
 ```bash
---sanitize-allow-possibly-equivalent \
---sanitize-blacklist-suggestions \
---sanitize-semantic-bm25-fallback \
---sanitize-bm25-min-score 1.5 \
---sanitize-bm25-min-lexical-score 0.15 \
---sanitize-bm25-max-candidates 5 \
---sanitize-ancestor-fallback
+--association-type SAME_AS \
+--association-type REPLACED_BY \
+--semantic-bm25-fallback \
+--blacklist-suggestions \
+--bm25-min-score 1.5 \
+--bm25-min-lexical-score 0.15 \
+--bm25-max-candidates 5
 ```
 
-The first implementation should keep the default conservative:
+The implementation keeps the default conservative:
 
 ```text
 sanitize whitelist findings only

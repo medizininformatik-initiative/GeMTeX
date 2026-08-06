@@ -42,6 +42,7 @@ from .sanitization import (
     format_association_type_descriptions,
     write_sanitization_markdown_report,
 )
+from .findings_io import read_critical_findings_json, write_critical_findings_json
 from .hdf5_metadata import inspect_hdf5_metadata, format_hdf5_metadata_summary
 
 
@@ -177,51 +178,6 @@ def common_click_args(fnc):
     type=click.Choice(["overlap", "covered-by", "contains", "exact"], case_sensitive=False),
     help="How target annotations must match ignore-overlap annotations to be ignored.",
 )
-@click.option(
-    "--suggest-sanitization",
-    is_flag=True,
-    help="Write a separate Markdown report with conservative sanitization replacement suggestions.",
-)
-@click.option(
-    "--sanitization-association-type",
-    multiple=True,
-    default=DEFAULT_ALLOWED_ASSOCIATION_TYPES,
-    show_default=True,
-    type=click.Choice(SUPPORTED_ASSOCIATION_TYPES, case_sensitive=False),
-    help="Historical association type allowed for sanitization suggestions. Can be provided multiple times. Meanings: "
-    + format_association_type_descriptions().replace("\n", " "),
-)
-@click.option(
-    "--sanitize-semantic-bm25-fallback",
-    is_flag=True,
-    help="Use suggestion-only BM25 fallback for unresolved whitelist sanitization findings.",
-)
-@click.option(
-    "--sanitize-blacklist-suggestions",
-    is_flag=True,
-    help="Allow suggestion-only BM25 replacement suggestions for blacklist findings. Requires --sanitize-semantic-bm25-fallback.",
-)
-@click.option(
-    "--sanitize-bm25-min-score",
-    default=1.5,
-    show_default=True,
-    type=float,
-    help="Minimum BM25 score required for semantic BM25 fallback suggestions.",
-)
-@click.option(
-    "--sanitize-bm25-min-lexical-score",
-    default=0.15,
-    show_default=True,
-    type=float,
-    help="Minimum query-token overlap ratio required for semantic BM25 fallback suggestions.",
-)
-@click.option(
-    "--sanitize-bm25-max-candidates",
-    default=5,
-    show_default=True,
-    type=int,
-    help="Maximum BM25 fallback candidates retained internally per finding.",
-)
 def log_documents(
     process_path: str,
     lists_path: Optional[str],
@@ -238,13 +194,6 @@ def log_documents(
     annotation_type: tuple[str, ...],
     ignore_overlap_type: tuple[str, ...],
     ignore_overlap_mode: str,
-    suggest_sanitization: bool,
-    sanitization_association_type: tuple[str, ...],
-    sanitize_semantic_bm25_fallback: bool,
-    sanitize_blacklist_suggestions: bool,
-    sanitize_bm25_min_score: float,
-    sanitize_bm25_min_lexical_score: float,
-    sanitize_bm25_max_candidates: int,
 ):
     """
     Analyzes an INCEpTION project zip file (if PROCESS_PATH points to a local zip file) or a particular project in an INCEpTION instance
@@ -345,34 +294,24 @@ def log_documents(
         with output_path.with_suffix(".json").open("w") as json_file:
             json.dump(dump_dictionary, json_file, ensure_ascii=False, indent=2)
 
-        if suggest_sanitization:
-            if sanitize_blacklist_suggestions and not sanitize_semantic_bm25_fallback:
-                logging.warning(
-                    "--sanitize-blacklist-suggestions requires --sanitize-semantic-bm25-fallback; blacklist suggestions will remain disabled."
-                )
-            sanitization_output_path = output_path.with_name(
-                output_path.stem.replace("critical_documents", "sanitization_suggestions")
-                + output_path.suffix
-            )
-            resolver = SanitizationResolver(
-                lists_path,
-                allowed_association_types=sanitization_association_type,
-            )
-            suggestions = resolver.suggest_all(critical_findings)
-            if sanitize_semantic_bm25_fallback:
-                suggestions = apply_semantic_bm25_fallback(
-                    suggestions,
-                    lists_path,
-                    min_score=sanitize_bm25_min_score,
-                    min_lexical_score=sanitize_bm25_min_lexical_score,
-                    max_candidates=sanitize_bm25_max_candidates,
-                    allow_blacklist_findings=sanitize_blacklist_suggestions,
-                )
-            with sanitization_output_path.open("w", encoding="utf-8") as sanitization_report:
-                write_sanitization_markdown_report(suggestions, sanitization_report)
-            logging.info(
-                f"Sanitization suggestion report written to '{sanitization_output_path.resolve()}'."
-            )
+        critical_findings_output_path = output_path.with_name(
+            output_path.stem.replace("critical_documents", "critical_findings")
+            + ".json"
+        )
+        write_critical_findings_json(
+            critical_findings,
+            critical_findings_output_path,
+            metadata={
+                "command": "log-critical-documents",
+                "lists_path": str(lists_path),
+                "annotation_types": list(annotation_type),
+                "ignore_overlap_types": list(ignore_overlap_type),
+                "ignore_overlap_mode": ignore_overlap_mode,
+            },
+        )
+        logging.info(
+            f"Critical findings JSON written to '{critical_findings_output_path.resolve()}'."
+        )
 
     if not keep_export and use_api:
         logging.info(
@@ -751,6 +690,104 @@ def create_concept_id_dump(
         pickle.dump(codes, open(pickle_path, "wb"))
 
 
+@click.command(name="suggest-sanitization")
+@click.option(
+    "--lists-path",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
+    help="Path to the sanitization-ready HDF5 policy file.",
+)
+@click.option(
+    "--critical-findings",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
+    help="Path to the CriticalFindings JSON produced by log-critical-documents.",
+)
+@click.option(
+    "--output",
+    required=True,
+    type=click.Path(dir_okay=False, path_type=pathlib.Path),
+    help="Output Markdown path for sanitization suggestions.",
+)
+@click.option(
+    "--association-type",
+    multiple=True,
+    default=DEFAULT_ALLOWED_ASSOCIATION_TYPES,
+    show_default=True,
+    type=click.Choice(SUPPORTED_ASSOCIATION_TYPES, case_sensitive=False),
+    help="Historical association type allowed for sanitization suggestions. Can be provided multiple times. Meanings: "
+    + format_association_type_descriptions().replace("\n", " "),
+)
+@click.option(
+    "--semantic-bm25-fallback",
+    is_flag=True,
+    help="Use suggestion-only BM25 fallback for unresolved whitelist sanitization findings.",
+)
+@click.option(
+    "--blacklist-suggestions",
+    is_flag=True,
+    help="Allow suggestion-only BM25 replacement suggestions for blacklist findings. Requires --semantic-bm25-fallback.",
+)
+@click.option(
+    "--bm25-min-score",
+    default=1.5,
+    show_default=True,
+    type=float,
+    help="Minimum BM25 score required for semantic BM25 fallback suggestions.",
+)
+@click.option(
+    "--bm25-min-lexical-score",
+    default=0.15,
+    show_default=True,
+    type=float,
+    help="Minimum query-token overlap ratio required for semantic BM25 fallback suggestions.",
+)
+@click.option(
+    "--bm25-max-candidates",
+    default=5,
+    show_default=True,
+    type=int,
+    help="Maximum BM25 fallback candidates retained internally per finding.",
+)
+@click_log_level
+def suggest_sanitization_cli(
+    lists_path: pathlib.Path,
+    critical_findings: pathlib.Path,
+    output: pathlib.Path,
+    association_type: tuple[str, ...],
+    semantic_bm25_fallback: bool,
+    blacklist_suggestions: bool,
+    bm25_min_score: float,
+    bm25_min_lexical_score: float,
+    bm25_max_candidates: int,
+    log_level: str,
+):
+    """Create sanitization suggestions from a CriticalFindings JSON artifact."""
+    set_log_level(log_level)
+    if blacklist_suggestions and not semantic_bm25_fallback:
+        raise click.UsageError("--blacklist-suggestions requires --semantic-bm25-fallback.")
+
+    findings = read_critical_findings_json(critical_findings)
+    resolver = SanitizationResolver(
+        lists_path,
+        allowed_association_types=association_type,
+    )
+    suggestions = resolver.suggest_all(findings)
+    if semantic_bm25_fallback:
+        suggestions = apply_semantic_bm25_fallback(
+            suggestions,
+            lists_path,
+            min_score=bm25_min_score,
+            min_lexical_score=bm25_min_lexical_score,
+            max_candidates=bm25_max_candidates,
+            allow_blacklist_findings=blacklist_suggestions,
+        )
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with output.open("w", encoding="utf-8") as sanitization_report:
+        write_sanitization_markdown_report(suggestions, sanitization_report)
+    logging.info(f"Sanitization suggestion report written to '{output.resolve()}'.")
+
+
 @click.command()
 @click.argument(
     "hdf5_path",
@@ -790,6 +827,7 @@ def help_me():
      * log-critical-documents
      * create-concepts-dump
      * summarize-hdf5
+     * suggest-sanitization
      * list-branches
 
     Each command has a '--help' option that provides further information, e.g. 'log-critical-documents --help'
@@ -799,6 +837,7 @@ def help_me():
         "\n\n * log-critical-documents"
         "\n * create-concepts-dump"
         "\n * summarize-hdf5"
+        "\n * suggest-sanitization"
         "\n * list-branches"
         "\n\nEach command has a '--help' option that provides further information, e.g. 'log-critical-documents --help'"
     )

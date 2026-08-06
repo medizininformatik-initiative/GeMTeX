@@ -79,6 +79,10 @@ class TestSanitizationResolver(unittest.TestCase):
     def test_supported_association_types_back_defaults_and_descriptions(self):
         self.assertTrue(set(DEFAULT_ALLOWED_ASSOCIATION_TYPES).issubset(SUPPORTED_ASSOCIATION_TYPES))
         self.assertIn("POSSIBLY_EQUIVALENT_TO", SUPPORTED_ASSOCIATION_TYPES)
+        self.assertIn("PARTIALLY_EQUIVALENT_TO", SUPPORTED_ASSOCIATION_TYPES)
+        self.assertIn("POSSIBLY_REPLACED_BY", SUPPORTED_ASSOCIATION_TYPES)
+        self.assertIn("REFERS_TO", SUPPORTED_ASSOCIATION_TYPES)
+        self.assertIn("SIMILAR_TO", SUPPORTED_ASSOCIATION_TYPES)
         self.assertEqual(set(SUPPORTED_ASSOCIATION_TYPES), set(ASSOCIATION_TYPE_DESCRIPTIONS))
         descriptions = format_association_type_descriptions()
         self.assertIn("SAME_AS", descriptions)
