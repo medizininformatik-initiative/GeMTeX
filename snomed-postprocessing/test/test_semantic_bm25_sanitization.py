@@ -13,6 +13,7 @@ from snomed_post_processing.sanitization import (
     write_sanitization_markdown_report,
 )
 from snomed_post_processing.sanitization.semantic_bm25 import (
+    BM25Index,
     SemanticBm25Resolver,
     _query_text,
     suggest_semantic_bm25,
@@ -73,6 +74,22 @@ def _write_compact_hdf5(
 
 
 class TestSemanticBm25Sanitization(unittest.TestCase):
+    def test_bm25_index_scores_only_documents_reached_by_query_postings(self):
+        index = BM25Index(
+            [
+                ["alpha", "therapy", "procedure"],
+                ["beta", "therapy", "procedure"],
+                ["heart", "failure", "disorder"],
+            ]
+        )
+
+        hits = index.search(["alpha"])
+
+        self.assertEqual([hit.document_id for hit in hits], [0])
+        self.assertEqual(hits[0].matched_query_tokens, ("alpha",))
+        self.assertIn("alpha", index.inverted)
+        self.assertNotIn(2, [doc_id for doc_id, _ in index.inverted["alpha"]])
+
     def test_query_text_excludes_snomed_code(self):
         query = _query_text(
             _finding(code="123456789", covered_text="alpha therapy"),

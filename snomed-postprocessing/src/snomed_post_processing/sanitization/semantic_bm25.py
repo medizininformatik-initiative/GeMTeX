@@ -11,7 +11,7 @@ import dataclasses
 import math
 import pathlib
 import re
-from collections import Counter
+from collections import Counter, defaultdict
 from typing import Optional, Sequence, Union
 
 import h5py
@@ -55,6 +55,87 @@ class SemanticBm25Suggestion:
     score: float = 0.0
     candidate_count: int = 0
     candidates: tuple[SemanticBm25Candidate, ...] = ()
+
+
+@dataclasses.dataclass(frozen=True)
+class Bm25Hit:
+    """A scored document hit from :class:`BM25Index`."""
+
+    document_id: int
+    score: float
+    matched_query_tokens: tuple[str, ...]
+
+
+class BM25Index:
+    """Small dependency-free BM25 index with token-to-document postings.
+
+    Documents are token sequences. The inverted index lets searches score only
+    documents that contain at least one query token instead of scanning every
+    indexed document for every query.
+    """
+
+    def __init__(
+        self,
+        documents: Sequence[Sequence[str]],
+        *,
+        k1: float = 1.5,
+        b: float = 0.75,
+    ):
+        self.documents = [tuple(document) for document in documents]
+        self.k1 = float(k1)
+        self.b = float(b)
+        self.document_lengths = [len(document) for document in self.documents]
+        self.document_count = len(self.documents)
+        self.average_document_length = (
+            sum(self.document_lengths) / self.document_count
+            if self.document_count
+            else 0.0
+        )
+        self.term_frequencies = [Counter(document) for document in self.documents]
+        self.inverted: dict[str, list[tuple[int, int]]] = defaultdict(list)
+        document_frequency: Counter[str] = Counter()
+        for document_id, term_frequency in enumerate(self.term_frequencies):
+            for token, frequency in term_frequency.items():
+                self.inverted[token].append((document_id, frequency))
+                document_frequency[token] += 1
+        self.idf = {
+            term: math.log(1.0 + (self.document_count - frequency + 0.5) / (frequency + 0.5))
+            for term, frequency in document_frequency.items()
+        }
+
+    def search(self, query_tokens: Sequence[str]) -> list[Bm25Hit]:
+        if not query_tokens or self.document_count == 0:
+            return []
+
+        scores: dict[int, float] = defaultdict(float)
+        matched_tokens_by_document: dict[int, set[str]] = defaultdict(set)
+        average_document_length = max(self.average_document_length, 1e-9)
+        for token in dict.fromkeys(query_tokens):
+            postings = self.inverted.get(token)
+            if not postings:
+                continue
+            idf = self.idf.get(token, 0.0)
+            for document_id, frequency in postings:
+                document_length = self.document_lengths[document_id]
+                if document_length == 0:
+                    continue
+                denominator = frequency + self.k1 * (
+                    1.0 - self.b + self.b * document_length / average_document_length
+                )
+                scores[document_id] += idf * frequency * (self.k1 + 1.0) / denominator
+                matched_tokens_by_document[document_id].add(token)
+
+        hits = [
+            Bm25Hit(
+                document_id=document_id,
+                score=score,
+                matched_query_tokens=tuple(sorted(matched_tokens_by_document[document_id])),
+            )
+            for document_id, score in scores.items()
+            if score > 0.0
+        ]
+        hits.sort(key=lambda hit: (-hit.score, hit.document_id))
+        return hits
 
 
 class SemanticBm25Resolver:
@@ -203,49 +284,23 @@ class SemanticBm25Resolver:
             and self.fsn[idx]
         ]
         self.documents = [_tokenize(self.fsn[idx]) for idx in self.document_indices]
-        self.document_lengths = [len(document) for document in self.documents]
-        self.average_document_length = (
-            sum(self.document_lengths) / len(self.document_lengths)
-            if self.document_lengths
-            else 0.0
-        )
-        document_frequency: Counter[str] = Counter()
-        for document in self.documents:
-            document_frequency.update(set(document))
-        document_count = len(self.documents)
-        self.idf = {
-            term: math.log(1.0 + (document_count - frequency + 0.5) / (frequency + 0.5))
-            for term, frequency in document_frequency.items()
-        }
-        self.term_frequencies = [Counter(document) for document in self.documents]
+        self.bm25_index = BM25Index(self.documents, k1=self.k1, b=self.b)
 
     def _score(self, query_tokens: Sequence[str], source_code: Optional[str]) -> list[SemanticBm25Candidate]:
         query_terms = list(dict.fromkeys(query_tokens))
         query_set = set(query_tokens)
         source_tag = _semantic_tag(self.fsn_by_code(source_code)) if source_code else None
         scored: list[SemanticBm25Candidate] = []
-        for local_idx, concept_idx in enumerate(self.document_indices):
+        for hit in self.bm25_index.search(query_terms):
+            local_idx = hit.document_id
+            concept_idx = self.document_indices[local_idx]
             code = self.codes[concept_idx]
             if source_code and code == source_code:
-                continue
-            doc_len = self.document_lengths[local_idx]
-            if doc_len == 0:
-                continue
-            tf = self.term_frequencies[local_idx]
-            score = 0.0
-            for term in query_terms:
-                frequency = tf.get(term, 0)
-                if frequency == 0:
-                    continue
-                denominator = frequency + self.k1 * (
-                    1.0 - self.b + self.b * doc_len / max(self.average_document_length, 1e-9)
-                )
-                score += self.idf.get(term, 0.0) * frequency * (self.k1 + 1.0) / denominator
-            if score <= 0.0:
                 continue
             doc_set = set(self.documents[local_idx])
             lexical_score = len(query_set & doc_set) / max(len(query_set), 1)
             semantic_tag = _semantic_tag(self.fsn[concept_idx])
+            score = hit.score
             if self.use_semantic_tag_boost and source_tag and semantic_tag == source_tag:
                 score *= 1.1
             scored.append(
