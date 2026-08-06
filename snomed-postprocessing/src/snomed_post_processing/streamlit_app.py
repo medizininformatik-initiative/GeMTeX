@@ -383,7 +383,8 @@ with sanitization_tab:
         sanitize_bm25_min_score = st.number_input("Minimum BM25 score", min_value=0.0, value=1.5, step=0.1)
         sanitize_bm25_min_lexical_score = st.number_input("Minimum lexical overlap ratio", min_value=0.0, max_value=1.0, value=0.15, step=0.05)
         sanitize_bm25_max_candidates = st.number_input("Maximum retained candidates", min_value=1, max_value=50, value=5, step=1)
-    st.caption("Association type meanings:\n" + format_association_type_descriptions())
+    with st.expander("Association type meanings", expanded=False):
+        st.text(format_association_type_descriptions())
 
     if st.button(
         "Generate sanitization suggestions",

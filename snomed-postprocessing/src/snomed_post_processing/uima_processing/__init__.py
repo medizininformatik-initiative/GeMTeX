@@ -1,3 +1,4 @@
+import io
 import json
 import logging
 import pathlib
@@ -73,14 +74,75 @@ def _load_document(path: Union[str, pathlib.Path]) -> cassis.Cas:
     return cassis.load_cas_from_json(path.open("r", encoding="utf-8"))
 
 
-def _load_typesystem_from_zip(zip_file: zipfile.ZipFile):
-    for info in zip_file.infolist():
-        if info.is_dir():
-            continue
-        if pathlib.Path(info.filename).name == "TypeSystem.xml":
-            with zip_file.open(info.filename) as typesystem_file:
+def _is_ignored_zip_member(info: zipfile.ZipInfo) -> bool:
+    path = pathlib.PurePosixPath(info.filename)
+    return (
+        info.is_dir()
+        or info.filename.startswith("__MACOSX/")
+        or any(part.startswith("._") for part in path.parts)
+        or path.name in {".DS_Store", "TypeSystem.xml", "exportedproject.json"}
+    )
+
+
+def _is_supported_cas_path(path: str, allowed_extensions: Optional[list[str]] = None) -> bool:
+    lower_path = path.lower()
+    extensions = allowed_extensions or [".json", ".xmi", ".zip", ".ser"]
+    return any(lower_path.endswith(ext.lower()) for ext in extensions)
+
+
+def _load_typesystem_from_zip(zip_file: zipfile.ZipFile, cas_path: Optional[str] = None):
+    candidates = []
+    if cas_path is not None:
+        parent = pathlib.PurePosixPath(cas_path).parent
+        candidates.append(str(parent / "TypeSystem.xml"))
+    candidates.extend(
+        info.filename
+        for info in zip_file.infolist()
+        if not info.is_dir()
+        and not info.filename.startswith("__MACOSX/")
+        and pathlib.PurePosixPath(info.filename).name == "TypeSystem.xml"
+    )
+    for candidate in dict.fromkeys(candidates):
+        try:
+            with zip_file.open(candidate) as typesystem_file:
                 return cassis.load_typesystem(typesystem_file)
+        except KeyError:
+            continue
     return None
+
+
+def _load_cas_from_nested_zip(cas_zip_file, outer_path: str, typesystem=None):
+    data = cas_zip_file.read()
+    with zipfile.ZipFile(io.BytesIO(data)) as nested_zip:
+        nested_typesystem = typesystem
+        for info in nested_zip.infolist():
+            if info.is_dir():
+                continue
+            if pathlib.PurePosixPath(info.filename).name == "TypeSystem.xml":
+                with nested_zip.open(info.filename) as typesystem_file:
+                    nested_typesystem = cassis.load_typesystem(typesystem_file)
+                break
+        cas_members = [
+            info.filename
+            for info in nested_zip.infolist()
+            if not _is_ignored_zip_member(info)
+            and _is_supported_cas_path(info.filename, allowed_extensions=[".json", ".xmi"])
+        ]
+        if not cas_members:
+            raise ValueError(f"No JSON CAS or XMI found inside nested CAS ZIP '{outer_path}'.")
+        if len(cas_members) > 1:
+            non_initial = [
+                member
+                for member in cas_members
+                if not pathlib.PurePosixPath(member).name.startswith("INITIAL_CAS")
+            ]
+            if non_initial:
+                cas_members = non_initial
+        cas_member = sorted(cas_members)[0]
+        with nested_zip.open(cas_member) as nested_cas_file:
+            if cas_member.lower().endswith(".json"):
+                return cassis.load_cas_from_json(nested_cas_file, typesystem=nested_typesystem)
+            return cassis.load_cas_from_xmi(nested_cas_file, typesystem=nested_typesystem, lenient=True)
 
 
 def _load_cas_from_zip_member(zip_file: zipfile.ZipFile, cas_path: str, typesystem=None):
@@ -90,6 +152,8 @@ def _load_cas_from_zip_member(zip_file: zipfile.ZipFile, cas_path: str, typesyst
             return cassis.load_cas_from_json(cas_file, typesystem=typesystem)
         if lower_path.endswith(".xmi"):
             return cassis.load_cas_from_xmi(cas_file, typesystem=typesystem, lenient=True)
+        if lower_path.endswith(".zip"):
+            return _load_cas_from_nested_zip(cas_file, cas_path, typesystem=typesystem)
         raise ValueError(f"Unsupported CAS format for '{cas_path}'.")
 
 
@@ -97,7 +161,7 @@ def _read_project(zip_file: zipfile.ZipFile, file_name: str) -> Optional[list[di
     try:
         project_meta = json.loads(zip_file.read("exportedproject.json").decode("utf-8"))
     except KeyError:
-        logging.warning(f"No exportedproject.json found in {file_name}")
+        logging.info(f"No exportedproject.json found in {file_name}; trying flat CAS archive layout.")
         return None
 
     project_documents = project_meta.get("source_documents", [])
@@ -107,12 +171,74 @@ def _read_project(zip_file: zipfile.ZipFile, file_name: str) -> Optional[list[di
     return project_documents
 
 
+FLAT_ARCHIVE_ANNOTATOR = "flat-archive"
+
+
+def _strip_cas_suffix(name: str) -> str:
+    for suffix in (".xmi", ".json", ".zip", ".ser"):
+        if name.lower().endswith(suffix):
+            return name[: -len(suffix)]
+    return name
+
+
+def _doc_name_from_flat_cas_path(cas_path: str) -> str:
+    path = pathlib.PurePosixPath(cas_path)
+    if path.parent.name.lower().endswith((".xmi", ".json", ".zip", ".ser")):
+        return _strip_cas_suffix(path.parent.name)
+    return _strip_cas_suffix(path.name)
+
+
+def _annotator_name_from_cas_path(cas_path: str, fallback_flat_layout: bool = False) -> str:
+    path = pathlib.PurePosixPath(cas_path)
+    if fallback_flat_layout and not path.parent.name.lower().endswith((".xmi", ".json", ".zip", ".ser")):
+        return FLAT_ARCHIVE_ANNOTATOR
+    return path.stem
+
+
+def _yield_flat_archive_files(
+    zip_file: zipfile.ZipFile,
+    allowed_extensions: Optional[list[str]] = None,
+):
+    document_files: dict[str, list[str]] = {}
+    for info in zip_file.infolist():
+        if _is_ignored_zip_member(info):
+            continue
+        if not _is_supported_cas_path(info.filename, allowed_extensions):
+            continue
+        doc_name = _doc_name_from_flat_cas_path(info.filename)
+        document_files.setdefault(doc_name, []).append(info.filename)
+
+    for doc_name in sorted(document_files):
+        yield doc_name, sorted(document_files[doc_name])
+
+
+def _prefer_non_ser_files(
+    document_files: list[tuple[str, list[str]]]
+) -> list[tuple[str, list[str]]]:
+    has_non_ser = any(
+        not cas_path.lower().endswith(".ser")
+        for _, files in document_files
+        for cas_path in files
+    )
+    if not has_non_ser:
+        return document_files
+    return [
+        (doc_name, [cas_path for cas_path in files if not cas_path.lower().endswith(".ser")])
+        for doc_name, files in document_files
+        if any(not cas_path.lower().endswith(".ser") for cas_path in files)
+    ]
+
+
 def _yield_matching_files(
-    project_documents: list[dict],
+    project_documents: Optional[list[dict]],
     zip_file: zipfile.ZipFile,
     file_name: str = None,
     allowed_extensions: Optional[list[str]] = None,
 ):
+    if project_documents is None:
+        yield from _yield_flat_archive_files(zip_file, allowed_extensions=allowed_extensions)
+        return
+
     for doc in project_documents:
         doc_name = doc["name"]
         state = doc.get("state", "")
@@ -129,12 +255,9 @@ def _yield_matching_files(
         matching_files = [
             info.filename
             for info in zip_file.infolist()
-            if any(info.filename.startswith(p) for p in prefixes)
-            and (
-                allowed_extensions is None
-                or any(info.filename.endswith(ext) for ext in allowed_extensions)
-            )
-            and not info.is_dir()
+            if not _is_ignored_zip_member(info)
+            and any(info.filename.startswith(p) for p in prefixes)
+            and _is_supported_cas_path(info.filename, allowed_extensions)
         ]
 
         # Use INITIAL_CAS files only if they are the *only* files
@@ -279,17 +402,47 @@ def get_annotator_names(
     with zipfile.ZipFile(project_path, "r") as zip_file:
         file_name = project_path.name
         project_documents = _read_project(zip_file, file_name)
-        if project_documents is not None:
-            for _, fi in _yield_matching_files(
+        matched_files = list(
+            _yield_matching_files(
                 project_documents,
                 zip_file,
+                file_name,
                 allowed_extensions=allowed_extensions,
-            ):
-                for cp in fi:
-                    found_any = True
-                    annotator_names.add(str(pathlib.Path(cp).stem))
-                    if not cp.endswith(".ser"):
-                        only_ser = False
+            )
+        )
+        flat_files = list(
+            _yield_flat_archive_files(
+                zip_file,
+                allowed_extensions=allowed_extensions,
+            )
+        )
+        fallback_flat_layout = project_documents is None
+        if matched_files and all(
+            cp.lower().endswith(".ser")
+            for _, files in matched_files
+            for cp in files
+        ):
+            # Some archives contain INCEpTION metadata/serialized CAS plus an
+            # additional flat XMI/JSON export. Do not report "only .ser" until
+            # the fallback scan has also been considered.
+            flat_non_ser_files = _prefer_non_ser_files(flat_files)
+            if flat_non_ser_files:
+                matched_files = flat_non_ser_files
+                fallback_flat_layout = True
+        elif not matched_files:
+            matched_files = _prefer_non_ser_files(flat_files)
+            fallback_flat_layout = True
+
+        seen_paths = set()
+        for _, fi in matched_files:
+            for cp in fi:
+                if cp in seen_paths:
+                    continue
+                seen_paths.add(cp)
+                found_any = True
+                annotator_names.add(_annotator_name_from_cas_path(cp, fallback_flat_layout=fallback_flat_layout))
+                if not cp.lower().endswith(".ser"):
+                    only_ser = False
     return annotator_names, (only_ser if found_any else False)
 
 
@@ -319,6 +472,7 @@ def process_inception_zip(
             # ---- Read project metadata ----
             project_documents = _read_project(zip_file, file_name)
             typesystem = _load_typesystem_from_zip(zip_file)
+            typesystem_by_parent = {}
 
             # ---- Process each document ----
             logging.info(f" Started processing project {file_name}")
@@ -326,15 +480,54 @@ def process_inception_zip(
                 logging.info(
                     f" Processing only following annotators: {annotator_filter}"
                 )
-            for doc_name, matching_files in _yield_matching_files(
-                project_documents,
-                zip_file,
-                file_name,
-                allowed_extensions=allowed_extensions,
+            matching_document_files = list(
+                _yield_matching_files(
+                    project_documents,
+                    zip_file,
+                    file_name,
+                    allowed_extensions=allowed_extensions,
+                )
+            )
+            fallback_flat_layout = project_documents is None
+            if matching_document_files and all(
+                cas_path.lower().endswith(".ser")
+                for _, matching_files in matching_document_files
+                for cas_path in matching_files
             ):
+                flat_document_files = list(
+                    _yield_flat_archive_files(
+                        zip_file,
+                        allowed_extensions=allowed_extensions,
+                    )
+                )
+                flat_document_files = _prefer_non_ser_files(flat_document_files)
+                if flat_document_files:
+                    matching_document_files = flat_document_files
+                    fallback_flat_layout = True
+            elif not matching_document_files:
+                matching_document_files = _prefer_non_ser_files(
+                    list(
+                        _yield_flat_archive_files(
+                            zip_file,
+                            allowed_extensions=allowed_extensions,
+                        )
+                    )
+                )
+                fallback_flat_layout = True
+
+            for doc_name, matching_files in matching_document_files:
+                seen_doc_paths = set()
+                matching_files = [
+                    cas_path
+                    for cas_path in matching_files
+                    if not (cas_path in seen_doc_paths or seen_doc_paths.add(cas_path))
+                ]
+                non_ser_files = [cas_path for cas_path in matching_files if not cas_path.lower().endswith(".ser")]
+                if non_ser_files:
+                    matching_files = non_ser_files
                 # ---- Load each CAS, compute stats, discard CAS ----
                 for cas_path in matching_files:
-                    annotator_name = str(pathlib.Path(cas_path).stem)
+                    annotator_name = _annotator_name_from_cas_path(cas_path, fallback_flat_layout=fallback_flat_layout)
                     if (
                         annotator_filter is not None
                         and annotator_name.lower() not in annotator_filter
@@ -347,7 +540,12 @@ def process_inception_zip(
                             )
                             continue
 
-                        cas = _load_cas_from_zip_member(zip_file, cas_path, typesystem=typesystem)
+                        parent = str(pathlib.PurePosixPath(cas_path).parent)
+                        cas_typesystem = typesystem_by_parent.get(parent)
+                        if cas_typesystem is None:
+                            cas_typesystem = _load_typesystem_from_zip(zip_file, cas_path) or typesystem
+                            typesystem_by_parent[parent] = cas_typesystem
+                        cas = _load_cas_from_zip_member(zip_file, cas_path, typesystem=cas_typesystem)
                         doc_anno = get_annotations_from_document(
                             cas,
                             annotation_types,
