@@ -18,7 +18,7 @@ from .snowstorm_funcs import (
     dump_concept_ids,
     get_root_code,
 )
-from .rf2 import write_snapshot_hdf5_from_rf2_zip
+from .release_ingestion import write_snapshot_hdf5_from_rf2_zip
 from .utils import (
     DumpMode,
     FilterMode,
