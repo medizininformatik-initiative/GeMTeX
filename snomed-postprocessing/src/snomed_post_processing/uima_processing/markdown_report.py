@@ -9,7 +9,7 @@ from typing import Optional
 
 import randomname
 
-from ..utils import Information
+from ..snomed_models import Information
 from .models import CriticalFinding, IgnoreOverlap
 
 

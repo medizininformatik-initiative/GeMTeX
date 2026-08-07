@@ -17,14 +17,9 @@ import yaspin
 
 from ..cli import set_log_level
 from ..release_ingestion import write_snapshot_hdf5_from_rf2_zip
-from ..snowstorm_funcs import build_endpoint, dump_concept_ids, get_branches, get_root_code
-from ..utils import (
-    DumpMode,
-    FilterMode,
-    ListDumpType,
-    dump_codes_to_hdf5,
-    hdf5_has_concepts_extension,
-)
+from ..snowstorm import build_endpoint, dump_concept_ids, get_branches, get_root_code
+from ..hdf5_handling.dump import dump_codes_to_hdf5, hdf5_has_concepts_extension
+from ..snomed_models import DumpMode, FilterMode, ListDumpType
 
 
 def run_create_concept_id_dump(

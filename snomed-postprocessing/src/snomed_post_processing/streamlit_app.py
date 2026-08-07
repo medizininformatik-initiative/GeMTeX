@@ -26,7 +26,7 @@ from snomed_post_processing.findings_io import (
     read_critical_findings_json,
     write_critical_findings_json,
 )
-from snomed_post_processing.utils import get_project_zip
+from snomed_post_processing.inception_io import get_project_zip
 from snomed_post_processing.hdf5_handling.metadata import (
     inspect_hdf5_metadata,
     format_hdf5_metadata_summary,

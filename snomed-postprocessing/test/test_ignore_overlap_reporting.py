@@ -6,7 +6,7 @@ import unittest
 import h5py
 import numpy as np
 
-from snomed_post_processing.utils import ListDumpType
+from snomed_post_processing.snomed_models import ListDumpType
 from snomed_post_processing.uima_processing import (
     CriticalFinding,
     DocumentAnnotations,

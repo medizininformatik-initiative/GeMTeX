@@ -4,8 +4,8 @@ from typing import Union, Optional
 
 import click
 
-from ..snowstorm_funcs import build_endpoint, get_branches
-from ..utils import DumpMode, FilterMode
+from ..snowstorm import build_endpoint, get_branches
+from ..snomed_models import DumpMode, FilterMode
 from ..hdf5_handling.metadata import inspect_hdf5_metadata, format_hdf5_metadata_summary
 from .logging import set_log_level
 from .options import (

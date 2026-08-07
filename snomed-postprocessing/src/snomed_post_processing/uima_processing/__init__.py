@@ -5,7 +5,7 @@ from typing import Optional
 import h5py
 
 
-from ..utils import ListDumpType, Information
+from ..snomed_models import Information, ListDumpType
 from ..hdf5_handling.policy import read_policy_data
 from .models import (
     CriticalFinding,

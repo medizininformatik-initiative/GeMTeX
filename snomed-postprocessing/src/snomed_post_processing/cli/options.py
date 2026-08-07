@@ -11,7 +11,7 @@ from ..sanitization import (
     SUPPORTED_ASSOCIATION_TYPES,
     format_association_type_descriptions,
 )
-from ..utils import DumpMode, FilterMode
+from ..snomed_models import DumpMode, FilterMode
 from .types import ClickEnumChoice, ClickUnion
 
 

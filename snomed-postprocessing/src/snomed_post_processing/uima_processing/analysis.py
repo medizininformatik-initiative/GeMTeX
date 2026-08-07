@@ -10,7 +10,8 @@ import numpy as np
 import randomname
 import yaspin
 
-from ..utils import Information, ListDumpType, is_numeric
+from ..snomed_models import Information, ListDumpType
+from ..utils.text import is_numeric
 from .models import CriticalFinding, DocumentAnnotations, TemporaryCorpus
 
 

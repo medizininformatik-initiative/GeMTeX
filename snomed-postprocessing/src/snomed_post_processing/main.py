@@ -1,6 +1,8 @@
-"""Backward-compatible CLI entrypoint module.
+"""Compatibility entrypoint for legacy console-script imports.
 
-Command implementations live in :mod:`snomed_post_processing.cli.app`.
+The Click command implementations live in :mod:`snomed_post_processing.cli.app`.
+This module intentionally re-exports them so older references such as
+``snomed_post_processing.main:log_documents`` continue to work.
 """
 
 from __future__ import annotations

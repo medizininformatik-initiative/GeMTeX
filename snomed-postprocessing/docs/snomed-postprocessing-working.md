@@ -23,12 +23,12 @@ Defined in `pyproject.toml`:
 
 | Command | Python function | Purpose |
 |---|---|---|
-| `log-critical-documents` | `snomed_post_processing.main:log_documents` | Process an INCEpTION ZIP/local or remote project and create reports. |
-| `create-concepts-dump` | `snomed_post_processing.main:create_concept_id_dump` | Create/update HDF5 whitelist/blacklist dumps from Snowstorm/RF2 ZIP. |
-| `summarize-hdf5` | `snomed_post_processing.main:summarize_hdf5` | Print a concise metadata summary for an HDF5 file. |
-| `suggest-sanitization` | `snomed_post_processing.main:suggest_sanitization_cli` | Create sanitization suggestions from a CriticalFindings JSON artifact. |
-| `list-branches` | `snomed_post_processing.main:list_branches` | List available Snowstorm branches. |
-| `program-entry` | `snomed_post_processing.main:help_me` | Fallback/help command. |
+| `log-critical-documents` | `snomed_post_processing.cli.app:log_documents` | Process an INCEpTION ZIP/local or remote project and create reports. |
+| `create-concepts-dump` | `snomed_post_processing.cli.app:create_concept_id_dump` | Create/update HDF5 whitelist/blacklist dumps from Snowstorm/RF2 ZIP. |
+| `summarize-hdf5` | `snomed_post_processing.cli.app:summarize_hdf5` | Print a concise metadata summary for an HDF5 file. |
+| `suggest-sanitization` | `snomed_post_processing.cli.app:suggest_sanitization_cli` | Create sanitization suggestions from a CriticalFindings JSON artifact. |
+| `list-branches` | `snomed_post_processing.cli.app:list_branches` | List available Snowstorm branches. |
+| `program-entry` | `snomed_post_processing.cli.app:help_me` | Fallback/help command. |
 
 The GUI is launched directly with Streamlit:
 
@@ -42,12 +42,15 @@ Docker uses `entrypoint.sh` as a command dispatcher.
 
 ```text
 src/snomed_post_processing/
-├── main.py                    # Click CLI commands
+├── main.py                    # compatibility CLI entrypoint re-exporting cli.app commands
+├── cli/                       # Click commands, options, custom types, logging setup
+├── pipelines/                 # command orchestration pipelines
+├── hdf5_handling/             # HDF5 dump, policy access, and metadata helpers
 ├── streamlit_app.py           # Streamlit GUI
-├── uima_processing/__init__.py # INCEpTION ZIP/CAS parsing, filtering, report writing
-├── snowstorm_funcs/__init__.py # Snowstorm API traversal helpers
+├── uima_processing/           # INCEpTION ZIP/CAS parsing, filtering, report writing
+├── snowstorm/                 # Snowstorm API client, traversal, and response mapping helpers
 ├── findings_io/__init__.py    # CriticalFinding JSON serialization/deserialization
-└── utils/__init__.py          # Shared models, enums, HDF5 helpers, INCEpTION API helper
+└── utils/__init__.py          # compatibility re-exports and small shared helpers
 ```
 
 ## 4. CLI Workflow: `log-critical-documents`
@@ -300,7 +303,7 @@ Note: offsets are grouped by code across the processing run.
 
 ## 9. HDF5 Dump Creation: `create-concepts-dump`
 
-Source: `src/snomed_post_processing/main.py`, `snowstorm_funcs`, and `utils`.
+Source: `src/snomed_post_processing/cli/app.py`, `snowstorm`, and `utils`.
 
 This command connects to a Snowstorm server and recursively traverses SNOMED CT concepts to create HDF5 whitelist/blacklist datasets.
 

@@ -17,7 +17,7 @@ from ..uima_processing import (
     get_annotator_names,
     process_inception_zip,
 )
-from ..utils import get_project_zip, prompt_for_names
+from ..inception_io import get_project_zip, prompt_for_names
 
 
 def run_log_documents(
