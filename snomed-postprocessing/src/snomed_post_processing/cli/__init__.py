@@ -1,5 +1,6 @@
 """Command-line interface helpers."""
 
+from .logging import set_log_level
 from .options import (
     click_inception_client_options,
     click_log_level,
@@ -21,4 +22,5 @@ __all__ = [
     "create_concept_id_dump_options",
     "log_documents_options",
     "suggest_sanitization_options",
+    "set_log_level",
 ]
