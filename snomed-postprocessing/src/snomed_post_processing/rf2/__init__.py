@@ -20,7 +20,7 @@ from typing import Iterable, Optional, Union
 import h5py
 import numpy as np
 
-from ..utils import _compute_compact_ancestor_arrays
+from ..hdf5_dump import _compute_compact_ancestor_arrays
 
 FSN_TYPE_ID = "900000000000003001"
 IS_A_TYPE_ID = "116680003"
