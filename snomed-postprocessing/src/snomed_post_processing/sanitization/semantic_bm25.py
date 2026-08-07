@@ -18,7 +18,7 @@ import h5py
 
 from ..uima_processing import CriticalFinding
 from ..hdf5_policy import read_concepts, read_policy_indices, require_bm25_ready
-from . import SanitizationStatus
+from .models import SanitizationStatus
 
 _TOKEN_RE = re.compile(r"[\w]+", re.UNICODE)
 _SEMANTIC_TAG_RE = re.compile(r"\(([^()]*)\)\s*$")
