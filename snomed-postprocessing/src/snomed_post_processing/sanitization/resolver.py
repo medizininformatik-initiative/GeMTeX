@@ -8,7 +8,7 @@ from typing import Sequence, Union
 import h5py
 import numpy as np
 
-from ..hdf5_policy import (
+from ..hdf5_handling.policy import (
     read_concepts,
     read_historical_associations,
     read_policy_indices,

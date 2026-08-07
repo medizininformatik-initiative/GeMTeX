@@ -9,7 +9,7 @@ from typing import Any, Optional, Union
 import h5py
 import numpy as np
 
-from ..hdf5_policy import decode_array
+from .policy import decode_array
 
 
 @dataclasses.dataclass(frozen=True)

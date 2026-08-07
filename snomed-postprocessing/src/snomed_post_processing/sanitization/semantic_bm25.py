@@ -14,7 +14,7 @@ from typing import Optional, Sequence, Union
 import h5py
 
 from ..uima_processing import CriticalFinding
-from ..hdf5_policy import read_concepts, read_policy_indices, require_bm25_ready
+from ..hdf5_handling.policy import read_concepts, read_policy_indices, require_bm25_ready
 from .bm25_index import BM25Index
 from .models import SanitizationStatus
 from .semantic_models import SemanticBm25Candidate, SemanticBm25Suggestion

@@ -6,7 +6,7 @@ import h5py
 
 
 from ..utils import ListDumpType, Information
-from ..hdf5_policy import read_policy_data
+from ..hdf5_handling.policy import read_policy_data
 from .models import (
     CriticalFinding,
     DocumentAnnotations,

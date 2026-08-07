@@ -43,7 +43,7 @@ from .sanitization import (
     write_sanitization_markdown_report,
 )
 from .findings_io import read_critical_findings_json, write_critical_findings_json
-from .hdf5_metadata import inspect_hdf5_metadata, format_hdf5_metadata_summary
+from .hdf5_handling.metadata import inspect_hdf5_metadata, format_hdf5_metadata_summary
 
 
 class ClickUnion(click.ParamType):

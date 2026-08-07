@@ -12,7 +12,7 @@ from ..snomed_models import (
     SnomedTerm,
     SnowstormResponse,
 )
-from ..hdf5_dump import (
+from ..hdf5_handling.dump import (
     _compute_compact_ancestor_arrays,
     dump_codes_to_hdf5,
     hdf5_has_concepts_extension,

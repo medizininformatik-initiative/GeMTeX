@@ -6,7 +6,7 @@ import zipfile
 import h5py
 import numpy as np
 
-from snomed_post_processing.rf2 import (
+from snomed_post_processing.release_ingestion import (
     ASSOCIATION_REFSET_IDS,
     discover_full_members,
     discover_snapshot_members,

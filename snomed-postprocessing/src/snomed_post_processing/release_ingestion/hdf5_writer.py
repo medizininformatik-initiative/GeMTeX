@@ -10,7 +10,7 @@ from typing import Iterable, Optional, Union
 import h5py
 import numpy as np
 
-from ..hdf5_dump import _compute_compact_ancestor_arrays
+from ..hdf5_handling.dump import _compute_compact_ancestor_arrays
 from .discovery import discover_release_members
 from .models import Rf2IngestionSummary
 from .readers import (

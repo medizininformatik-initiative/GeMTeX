@@ -5,7 +5,7 @@ import unittest
 import h5py
 import numpy as np
 
-from snomed_post_processing.hdf5_metadata import (
+from snomed_post_processing.hdf5_handling.metadata import (
     inspect_hdf5_metadata,
     format_hdf5_metadata_summary,
 )
