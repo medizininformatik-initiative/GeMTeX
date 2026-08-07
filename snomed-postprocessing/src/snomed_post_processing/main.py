@@ -35,71 +35,23 @@ from .uima_processing import (
     create_log_from_results,
 )
 from .sanitization import (
-    DEFAULT_ALLOWED_ASSOCIATION_TYPES,
-    SUPPORTED_ASSOCIATION_TYPES,
     SanitizationResolver,
     apply_semantic_bm25_fallback,
-    format_association_type_descriptions,
     write_sanitization_markdown_report,
 )
 from .findings_io import read_critical_findings_json, write_critical_findings_json
 from .hdf5_handling.metadata import inspect_hdf5_metadata, format_hdf5_metadata_summary
 from .cli import (
-    ClickEnumChoice,
-    ClickUnion,
-    click_inception_client_options,
     click_log_level,
     click_server_options,
-    common_click_args,
+    create_concept_id_dump_options,
+    log_documents_options,
+    suggest_sanitization_options,
 )
 
 
 @click.command()
-@click.argument("process_path", type=click.STRING)
-@click.option(
-    "--lists-path",
-    default=None,
-    help="The path to the lists file in 'hdf5' format. (default: default lists are used)",
-)
-@click_server_options
-@click_inception_client_options
-@click_log_level
-@click.option(
-    "--keep-export",
-    is_flag=True,
-    help="Keeps the temporary exported INCEpTION project (when using client) after processing.",
-)
-@click.option(
-    "--omit-dump",
-    is_flag=True,
-    help="Omits the creation of a dump of all concepts in the project and their respective offsets (if not omitted, it is saved alongside the log file).",
-)
-@click.option(
-    "--forbid-prompt",
-    is_flag=True,
-    help="Forbids prompting the user to select the annotators to log manually (instead of all). Use this flag for e.g. 'docker', when you don't want to mess with providing prompt answers.",
-)
-@click.option(
-    "--annotation-type",
-    multiple=True,
-    default=("gemtex.Concept",),
-    show_default=True,
-    help="Target annotation layer/type to check for SNOMED CT codes. Can be provided multiple times.",
-)
-@click.option(
-    "--ignore-overlap-type",
-    multiple=True,
-    default=("webanno.custom.No_Human",),
-    show_default=True,
-    help="Annotation layer/type whose overlapping spans suppress faulty-code findings on target annotations. Can be provided multiple times.",
-)
-@click.option(
-    "--ignore-overlap-mode",
-    default="overlap",
-    show_default=True,
-    type=click.Choice(["overlap", "covered-by", "contains", "exact"], case_sensitive=False),
-    help="How target annotations must match ignore-overlap annotations to be ignored.",
-)
+@log_documents_options
 def log_documents(
     process_path: str,
     lists_path: Optional[str],
@@ -251,109 +203,7 @@ def log_documents(
 
 
 @click.command()
-@common_click_args
-@click.option(
-    "--zip",
-    "rf2_zip",
-    default=None,
-    type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
-    help="Path to a SNOMED CT RF2 release ZIP. If provided, HDF5 is generated from the release ZIP instead of Snowstorm.",
-)
-@click.option(
-    "--output",
-    default=None,
-    type=click.Path(dir_okay=False, path_type=pathlib.Path),
-    help="Output HDF5 path for RF2 ZIP mode. Defaults to data/gemtex_snomedct_codes_<release-date>.hdf5 when the date can be inferred.",
-)
-@click.option(
-    "--language",
-    default="en",
-    show_default=True,
-    help="RF2 description language used in ZIP mode, e.g. 'en'.",
-)
-@click.option(
-    "--include-ancestors",
-    is_flag=True,
-    help="In RF2 ZIP mode, compute compact ancestor arrays under /concepts. Historical associations are included by default.",
-)
-@click.option(
-    "--policy-date",
-    default=None,
-    help="Policy date as YYYYMMDD for RF2 ZIP mode. Snapshot mode requires this to equal the Snapshot release date; Full mode reconstructs state at or before this date.",
-)
-@click.option(
-    "--rf2-view",
-    default="snapshot",
-    show_default=True,
-    type=click.Choice(["snapshot", "full"], case_sensitive=False),
-    help="RF2 release view to ingest from the ZIP.",
-)
-@click.option(
-    "--write-legacy-policy-groups",
-    is_flag=True,
-    help="In RF2 ZIP mode, additionally write legacy /whitelist or /blacklist groups for older code.",
-)
-@click.option(
-    "--use-secure_protocol", is_flag=True, help="Whether to use 'https' for Snowstorm mode."
-)
-@click.option(
-    "--port",
-    default=None,
-    type=click.INT,
-    help="Snowstorm port. Required together with --ip when --zip is not used.",
-)
-@click.option(
-    "--ip",
-    default=None,
-    help="Snowstorm IP/host. Required together with --port when --zip is not used.",
-)
-@click.option(
-    "--branch",
-    default=0,
-    type=ClickUnion((click.INT, "int"), (click.STRING, "str")),
-    help="The branch (i.e. Release Version) of SNOMED on the server. Defaults to the first one found.",
-)
-@click.option(
-    "--dump-mode",
-    default=DumpMode.VERSION,
-    type=ClickEnumChoice(DumpMode),
-    help="Whether to whitelist ('version') or blacklist ('semantic') a code dump.",
-)
-@click.option(
-    "--filter-list",
-    "-fl",
-    default=None,
-    type=ClickUnion((click.STRING, "str"), (click.File, "file")),
-    multiple=True,
-    help="When \"dump-mode == 'semantic'\", either multiple arguments of codes (or semantic tags) or a file that contains a code (semantic tag) per line.",
-)
-@click.option(
-    "--filter-mode",
-    default=FilterMode.POSITIVE,
-    type=ClickEnumChoice(FilterMode),
-    help="'positive': only concepts with specified codes/tags will be returned; 'negative': vice versa concepts with specified codes/tags will not be returned",
-)
-@click.option(
-    "--not-recursive",
-    is_flag=True,
-    help="If this flag is set, the codes will not be resolved recursively and only the first level children will be returned.",
-)
-@click.option(
-    "--force-overwrite",
-    is_flag=True,
-    help="If this flag is set, the selected whitelist/blacklist HDF5 group will be overwritten.",
-)
-@click.option(
-    "--force-overwrite-concepts",
-    is_flag=True,
-    help="If this flag is set, an existing /concepts HDF5 extension will be rebuilt. Independent from --force-overwrite.",
-)
-@click.option(
-    "--memoize-ancestors",
-    is_flag=True,
-    help="Use memoization when computing the compact ancestor/distance HDF5 extension. Disabled by default.",
-)
-@click_log_level
+@create_concept_id_dump_options
 def create_concept_id_dump(
     root_code: str,
     rf2_zip: Optional[pathlib.Path],
@@ -615,65 +465,7 @@ def create_concept_id_dump(
 
 
 @click.command(name="suggest-sanitization")
-@click.option(
-    "--lists-path",
-    required=True,
-    type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
-    help="Path to the sanitization-ready HDF5 policy file.",
-)
-@click.option(
-    "--critical-findings",
-    required=True,
-    type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
-    help="Path to the CriticalFindings JSON produced by log-critical-documents.",
-)
-@click.option(
-    "--output",
-    required=True,
-    type=click.Path(dir_okay=False, path_type=pathlib.Path),
-    help="Output Markdown path for sanitization suggestions.",
-)
-@click.option(
-    "--association-type",
-    multiple=True,
-    default=DEFAULT_ALLOWED_ASSOCIATION_TYPES,
-    show_default=True,
-    type=click.Choice(SUPPORTED_ASSOCIATION_TYPES, case_sensitive=False),
-    help="Historical association type allowed for sanitization suggestions. Can be provided multiple times. Meanings: "
-    + format_association_type_descriptions().replace("\n", " "),
-)
-@click.option(
-    "--semantic-bm25-fallback",
-    is_flag=True,
-    help="Use suggestion-only BM25 fallback for unresolved whitelist sanitization findings.",
-)
-@click.option(
-    "--blacklist-suggestions",
-    is_flag=True,
-    help="Allow suggestion-only BM25 replacement suggestions for blacklist findings. Requires --semantic-bm25-fallback.",
-)
-@click.option(
-    "--bm25-min-score",
-    default=1.5,
-    show_default=True,
-    type=float,
-    help="Minimum BM25 score required for semantic BM25 fallback suggestions.",
-)
-@click.option(
-    "--bm25-min-lexical-score",
-    default=0.15,
-    show_default=True,
-    type=float,
-    help="Minimum query-token overlap ratio required for semantic BM25 fallback suggestions.",
-)
-@click.option(
-    "--bm25-max-candidates",
-    default=5,
-    show_default=True,
-    type=int,
-    help="Maximum BM25 fallback candidates retained internally per finding.",
-)
-@click_log_level
+@suggest_sanitization_options
 def suggest_sanitization_cli(
     lists_path: pathlib.Path,
     critical_findings: pathlib.Path,
