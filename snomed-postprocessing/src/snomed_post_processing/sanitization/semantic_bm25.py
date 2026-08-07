@@ -7,136 +7,18 @@ fallback when structured historical associations do not yield a replacement.
 
 from __future__ import annotations
 
-import dataclasses
 import math
 import pathlib
-import re
-from collections import Counter, defaultdict
 from typing import Optional, Sequence, Union
 
 import h5py
 
 from ..uima_processing import CriticalFinding
 from ..hdf5_policy import read_concepts, read_policy_indices, require_bm25_ready
+from .bm25_index import BM25Index
 from .models import SanitizationStatus
-
-_TOKEN_RE = re.compile(r"[\w]+", re.UNICODE)
-_SEMANTIC_TAG_RE = re.compile(r"\(([^()]*)\)\s*$")
-
-
-@dataclasses.dataclass(frozen=True)
-class SemanticBm25Candidate:
-    """A single policy-acceptable BM25 replacement candidate."""
-
-    code: str
-    fsn: str
-    score: float
-    lexical_score: float
-    semantic_tag: Optional[str]
-    active: bool
-    in_whitelist: bool
-    in_blacklist: bool
-
-    @property
-    def policy_acceptable(self) -> bool:
-        return self.active and self.in_whitelist and not self.in_blacklist
-
-
-@dataclasses.dataclass(frozen=True)
-class SemanticBm25Suggestion:
-    """Suggestion produced by :class:`SemanticBm25Resolver`."""
-
-    finding: CriticalFinding
-    status: SanitizationStatus
-    replacement_code: Optional[str] = None
-    replacement_fsn: Optional[str] = None
-    association_type: Optional[str] = None
-    reason: str = ""
-    score: float = 0.0
-    candidate_count: int = 0
-    candidates: tuple[SemanticBm25Candidate, ...] = ()
-
-
-@dataclasses.dataclass(frozen=True)
-class Bm25Hit:
-    """A scored document hit from :class:`BM25Index`."""
-
-    document_id: int
-    score: float
-    matched_query_tokens: tuple[str, ...]
-
-
-class BM25Index:
-    """Small dependency-free BM25 index with token-to-document postings.
-
-    Documents are token sequences. The inverted index lets searches score only
-    documents that contain at least one query token instead of scanning every
-    indexed document for every query.
-    """
-
-    def __init__(
-        self,
-        documents: Sequence[Sequence[str]],
-        *,
-        k1: float = 1.5,
-        b: float = 0.75,
-    ):
-        self.documents = [tuple(document) for document in documents]
-        self.k1 = float(k1)
-        self.b = float(b)
-        self.document_lengths = [len(document) for document in self.documents]
-        self.document_count = len(self.documents)
-        self.average_document_length = (
-            sum(self.document_lengths) / self.document_count
-            if self.document_count
-            else 0.0
-        )
-        self.term_frequencies = [Counter(document) for document in self.documents]
-        self.inverted: dict[str, list[tuple[int, int]]] = defaultdict(list)
-        document_frequency: Counter[str] = Counter()
-        for document_id, term_frequency in enumerate(self.term_frequencies):
-            for token, frequency in term_frequency.items():
-                self.inverted[token].append((document_id, frequency))
-                document_frequency[token] += 1
-        self.idf = {
-            term: math.log(1.0 + (self.document_count - frequency + 0.5) / (frequency + 0.5))
-            for term, frequency in document_frequency.items()
-        }
-
-    def search(self, query_tokens: Sequence[str]) -> list[Bm25Hit]:
-        if not query_tokens or self.document_count == 0:
-            return []
-
-        scores: dict[int, float] = defaultdict(float)
-        matched_tokens_by_document: dict[int, set[str]] = defaultdict(set)
-        average_document_length = max(self.average_document_length, 1e-9)
-        for token in dict.fromkeys(query_tokens):
-            postings = self.inverted.get(token)
-            if not postings:
-                continue
-            idf = self.idf.get(token, 0.0)
-            for document_id, frequency in postings:
-                document_length = self.document_lengths[document_id]
-                if document_length == 0:
-                    continue
-                denominator = frequency + self.k1 * (
-                    1.0 - self.b + self.b * document_length / average_document_length
-                )
-                scores[document_id] += idf * frequency * (self.k1 + 1.0) / denominator
-                matched_tokens_by_document[document_id].add(token)
-
-        hits = [
-            Bm25Hit(
-                document_id=document_id,
-                score=score,
-                matched_query_tokens=tuple(sorted(matched_tokens_by_document[document_id])),
-            )
-            for document_id, score in scores.items()
-            if score > 0.0
-        ]
-        hits.sort(key=lambda hit: (-hit.score, hit.document_id))
-        return hits
-
+from .semantic_models import SemanticBm25Candidate, SemanticBm25Suggestion
+from .semantic_text import _query_text, _semantic_tag, _tokenize
 
 class SemanticBm25Resolver:
     """Suggest policy-acceptable replacements using BM25 over concept labels.
@@ -359,24 +241,3 @@ def apply_semantic_bm25_fallback(
                 continue
         enhanced.append(suggestion)
     return enhanced
-
-
-def _query_text(finding: CriticalFinding, source_fsn: Optional[str] = None) -> str:
-    return " ".join(
-        part for part in (finding.covered_text, source_fsn or "") if part
-    )
-
-
-def _tokenize(text: Optional[str]) -> list[str]:
-    if not text:
-        return []
-    return [token.lower() for token in _TOKEN_RE.findall(text) if len(token) > 1]
-
-
-def _semantic_tag(fsn: Optional[str]) -> Optional[str]:
-    if not fsn:
-        return None
-    match = _SEMANTIC_TAG_RE.search(fsn)
-    return match.group(1).lower() if match else None
-
-

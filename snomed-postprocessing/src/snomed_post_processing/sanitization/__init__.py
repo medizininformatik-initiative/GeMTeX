@@ -25,12 +25,11 @@ from .report import (
 )
 from .resolver import SanitizationResolver, suggest_sanitization
 from .semantic_bm25 import (
-    SemanticBm25Candidate,
     SemanticBm25Resolver,
-    SemanticBm25Suggestion,
     apply_semantic_bm25_fallback,
     suggest_semantic_bm25,
 )
+from .semantic_models import SemanticBm25Candidate, SemanticBm25Suggestion
 
 __all__ = [
     "ASSOCIATION_TYPE_DESCRIPTIONS",
