@@ -49,8 +49,10 @@ src/snomed_post_processing/
 ├── gui/                       # Streamlit GUI application
 ├── uima_processing/           # INCEpTION ZIP/CAS parsing, filtering, report writing
 ├── snowstorm/                 # Snowstorm API client, traversal, and response mapping helpers
-├── findings_io/__init__.py    # CriticalFinding JSON serialization/deserialization
-└── utils/__init__.py          # compatibility re-exports and small shared helpers
+├── findings_io/               # CriticalFinding JSON serialization/deserialization
+├── snomed/                    # SNOMED CT domain models and enums
+├── inception/                 # INCEpTION project access helpers
+└── utils/                     # general text/formatting utility helpers
 ```
 
 ## 4. CLI Workflow: `log-critical-documents`
