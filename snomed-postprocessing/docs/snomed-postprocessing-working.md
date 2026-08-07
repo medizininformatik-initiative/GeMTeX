@@ -33,7 +33,7 @@ Defined in `pyproject.toml`:
 The GUI is launched directly with Streamlit:
 
 ```bash
-uv run streamlit run src/snomed_post_processing/streamlit_app.py
+uv run streamlit run src/snomed_post_processing/gui/app.py
 ```
 
 Docker uses `entrypoint.sh` as a command dispatcher.
@@ -46,7 +46,7 @@ src/snomed_post_processing/
 ├── cli/                       # Click commands, options, custom types, logging setup
 ├── pipelines/                 # command orchestration pipelines
 ├── hdf5_handling/             # HDF5 dump, policy access, and metadata helpers
-├── streamlit_app.py           # Streamlit GUI
+├── gui/                       # Streamlit GUI application
 ├── uima_processing/           # INCEpTION ZIP/CAS parsing, filtering, report writing
 ├── snowstorm/                 # Snowstorm API client, traversal, and response mapping helpers
 ├── findings_io/__init__.py    # CriticalFinding JSON serialization/deserialization
@@ -115,7 +115,7 @@ Blacklist BM25 suggestions require explicit opt-in and `--semantic-bm25-fallback
 
 ## 6. GUI Workflow
 
-Source: `src/snomed_post_processing/streamlit_app.py`
+Source: `src/snomed_post_processing/gui/app.py`
 
 The GUI wraps the same processing functions as the CLI.
 

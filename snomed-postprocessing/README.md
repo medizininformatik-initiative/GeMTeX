@@ -127,7 +127,7 @@ WARNING:root:  13 critical document(s) found. See '[...]/critical_documents_24-0
 
 #### uv
 ```
-uv run streamlit run .\src\snomed_post_processing\streamlit_app.py
+uv run streamlit run .\src\snomed_post_processing\gui\app.py
 ```
 #### Docker
 ```
