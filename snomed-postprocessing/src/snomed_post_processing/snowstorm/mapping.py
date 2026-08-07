@@ -7,7 +7,7 @@ import logging
 import re
 from typing import Union, cast
 
-from ..snomed_models import SnomedConcept, SnowstormResponse
+from ..snomed import SnomedConcept, SnowstormResponse
 from ..utils.text import flexible_whitespace_pattern
 
 

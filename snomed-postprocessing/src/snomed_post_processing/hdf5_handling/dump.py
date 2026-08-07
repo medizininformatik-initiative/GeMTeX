@@ -11,7 +11,7 @@ import h5py
 import numpy as np
 
 from .policy import has_concepts_extension
-from ..snomed_models import ListDumpType
+from ..snomed import ListDumpType
 
 
 def hdf5_has_concepts_extension(fi_path: pathlib.Path) -> bool:

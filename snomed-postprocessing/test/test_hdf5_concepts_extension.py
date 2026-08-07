@@ -11,7 +11,7 @@ from snomed_post_processing.hdf5_handling.dump import (
     _compute_compact_ancestor_arrays,
     dump_codes_to_hdf5,
 )
-from snomed_post_processing.snomed_models import ListDumpType
+from snomed_post_processing.snomed import ListDumpType
 
 
 class CompactAncestorExtensionTest(unittest.TestCase):

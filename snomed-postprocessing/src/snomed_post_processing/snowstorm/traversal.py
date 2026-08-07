@@ -7,7 +7,7 @@ from typing import Iterable, Optional, Tuple, Union
 import scttsrapy.concepts as concepts
 from scttsrapy.api import EndpointBuilder
 
-from ..snomed_models import DumpMode, FilterLists, FilterMode, SnomedConcept
+from ..snomed import DumpMode, FilterLists, FilterMode, SnomedConcept
 from .mapping import filter_by_semantic_tag, return_codes
 
 
