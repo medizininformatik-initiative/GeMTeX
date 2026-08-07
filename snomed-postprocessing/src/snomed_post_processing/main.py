@@ -44,92 +44,14 @@ from .sanitization import (
 )
 from .findings_io import read_critical_findings_json, write_critical_findings_json
 from .hdf5_handling.metadata import inspect_hdf5_metadata, format_hdf5_metadata_summary
-
-
-class ClickUnion(click.ParamType):
-    def __init__(self, *types):
-        self.types = [t[0] for t in types]
-        self.name = f"[{','.join([t[1] for t in types])}]"
-
-    def convert(self, value, param, ctx):
-        for _type in self.types:
-            try:
-                return _type.convert(value, param, ctx)
-            except click.BadParameter:
-                continue
-
-        self.fail("Didn't match any of the accepted types.")
-
-
-class ClickEnumChoice(click.ParamType):
-    def __init__(self, enum_type):
-        self.enum_type = enum_type
-        self.choices = [e.name.lower() for e in enum_type]
-        self.name = "[" + "|".join(self.choices) + "]"
-
-    def convert(self, value, param, ctx):
-        if isinstance(value, self.enum_type):
-            return value
-        value_normalized = str(value).lower()
-        for enum_value in self.enum_type:
-            if enum_value.name.lower() == value_normalized:
-                return enum_value
-        self.fail(
-            f"'{value}' is not one of {'/'.join(self.choices)}.", param, ctx
-        )
-
-
-def click_server_options(fnc):
-    fnc = click.option(
-        "--use-secure_protocol", is_flag=True, help="Whether to use 'https'."
-    )(fnc)
-    fnc = click.option(
-        "--port",
-        default=8080,
-        help="Port on which the Snowstorm/INCEpTION instance runs.",
-    )(fnc)
-    fnc = click.option(
-        "--ip",
-        default="localhost",
-        help="The IP address of the Snowstorm/INCEpTION instance.",
-    )(fnc)
-    return fnc
-
-
-def click_inception_client_options(fnc):
-    fnc = click.option(
-        "--inception-project",
-        default=None,
-        help="The name of the INCEpTION project (URL slug).",
-    )(fnc)
-    fnc = click.option(
-        "--inception-password",
-        default=None,
-        help="The username for the INCEpTION client (needs to have REMOTE role).",
-    )(fnc)
-    fnc = click.option(
-        "--inception-username",
-        default=None,
-        help="The username for the INCEpTION client (needs to have REMOTE role).",
-    )(fnc)
-    return fnc
-
-
-def click_log_level(fnc):
-    fnc = click.option(
-        "--log-level",
-        default="INFO",
-        type=click.Choice(
-            ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], case_sensitive=False
-        ),
-        help="The log level.",
-    )(fnc)
-    return fnc
-
-
-def common_click_args(fnc):
-    fnc = click.argument("root_code", default="138875005")(fnc)
-    return fnc
+from .cli import (
+    ClickEnumChoice,
+    ClickUnion,
+    click_inception_client_options,
+    click_log_level,
+    click_server_options,
+    common_click_args,
+)
 
 
 @click.command()
