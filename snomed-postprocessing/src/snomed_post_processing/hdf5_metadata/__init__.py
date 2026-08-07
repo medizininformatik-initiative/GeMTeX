@@ -9,6 +9,8 @@ from typing import Any, Optional, Union
 import h5py
 import numpy as np
 
+from ..hdf5_policy import decode_array
+
 
 @dataclasses.dataclass(frozen=True)
 class Hdf5MetadataSummary:
@@ -98,7 +100,7 @@ def inspect_hdf5_metadata(path: Union[str, pathlib.Path]) -> Hdf5MetadataSummary
             if "source_index" in hist:
                 historical_association_count = int(hist["source_index"].shape[0])
             if "association_types" in hist and "association_type_id" in hist:
-                association_types = _decode_array(hist["association_types"][:])
+                association_types = decode_array(hist["association_types"][:])
                 type_ids = hist["association_type_id"][:]
                 counts = np.bincount(type_ids.astype(np.int64), minlength=len(association_types))
                 historical_association_type_counts = tuple(
@@ -178,16 +180,6 @@ def _attr(group: h5py.Group, name: str) -> Optional[str]:
     if isinstance(value, (bytes, bytearray)):
         return value.decode("utf-8")
     return str(value)
-
-
-def _decode_array(values) -> list[str]:
-    decoded = []
-    for value in values:
-        if isinstance(value, (bytes, bytearray)):
-            decoded.append(value.decode("utf-8"))
-        else:
-            decoded.append(str(value))
-    return decoded
 
 
 def _count(value: Optional[int]) -> str:

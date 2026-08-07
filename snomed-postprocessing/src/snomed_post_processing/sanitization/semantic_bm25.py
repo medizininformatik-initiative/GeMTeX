@@ -15,9 +15,9 @@ from collections import Counter, defaultdict
 from typing import Optional, Sequence, Union
 
 import h5py
-import numpy as np
 
 from ..uima_processing import CriticalFinding
+from ..hdf5_policy import read_concepts, read_policy_indices, require_bm25_ready
 from . import SanitizationStatus
 
 _TOKEN_RE = re.compile(r"[\w]+", re.UNICODE)
@@ -250,29 +250,14 @@ class SemanticBm25Resolver:
 
     def _load(self):
         with h5py.File(self.hdf5_path, "r") as h5_file:
-            required = [
-                "concepts/codes",
-                "concepts/fsn",
-                "concepts/active",
-                "policy_views/whitelist/0/concept_index",
-                "policy_views/blacklist/0/concept_index",
-            ]
-            missing = [path for path in required if path not in h5_file]
-            if missing:
-                raise ValueError(
-                    "HDF5 file is not BM25-sanitization-ready; missing compact dataset(s): "
-                    + ", ".join(missing)
-                )
-            self.codes = tuple(_decode_array(h5_file["concepts/codes"][:]))
-            self.fsn = tuple(_decode_array(h5_file["concepts/fsn"][:]))
-            self.code_to_index = {code: idx for idx, code in enumerate(self.codes)}
-            self.active = np.asarray(h5_file["concepts/active"][:], dtype=bool)
-            self.whitelist_indices = frozenset(
-                int(idx) for idx in h5_file["policy_views/whitelist/0/concept_index"][:]
-            )
-            self.blacklist_indices = frozenset(
-                int(idx) for idx in h5_file["policy_views/blacklist/0/concept_index"][:]
-            )
+            require_bm25_ready(h5_file)
+            concepts = read_concepts(h5_file)
+            self.codes = concepts.codes
+            self.fsn = concepts.fsn
+            self.code_to_index = concepts.code_to_index
+            self.active = concepts.active
+            self.whitelist_indices = read_policy_indices(h5_file, "whitelist")
+            self.blacklist_indices = read_policy_indices(h5_file, "blacklist")
 
     def _build_index(self):
         self.document_indices = [
@@ -395,11 +380,3 @@ def _semantic_tag(fsn: Optional[str]) -> Optional[str]:
     return match.group(1).lower() if match else None
 
 
-def _decode_array(values) -> list[str]:
-    decoded = []
-    for value in values:
-        if isinstance(value, (bytes, bytearray)):
-            decoded.append(value.decode("utf-8"))
-        else:
-            decoded.append(str(value))
-    return decoded

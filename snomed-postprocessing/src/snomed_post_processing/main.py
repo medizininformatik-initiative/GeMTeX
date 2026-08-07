@@ -685,7 +685,9 @@ def create_concept_id_dump(
         )
     except Exception as e:
         logging.error(f"Error while creating hdf5 dump: '{e}'. Exiting.")
-        pickle_path = hdf5_path.with_suffix(f"-{dump_mode.name.lower()}.pickle")
+        pickle_path = hdf5_path.with_name(
+            f"{hdf5_path.stem}-{dump_mode.name.lower()}.pickle"
+        )
         logging.error(f"Dumping as pickle file: '{pickle_path}'.")
         pickle.dump(codes, open(pickle_path, "wb"))
 

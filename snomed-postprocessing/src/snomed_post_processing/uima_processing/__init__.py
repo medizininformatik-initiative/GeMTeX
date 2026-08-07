@@ -19,6 +19,7 @@ import randomname
 
 
 from ..utils import ListDumpType, Information, is_numeric
+from ..hdf5_policy import read_policy_data
 
 
 @dataclasses.dataclass
@@ -1053,19 +1054,11 @@ def create_log_from_results(
         for i, ft in enumerate(ft_iter):
             print(f"-- {ft.name.capitalize()} --")
             group_name = ft.name.lower()
-            if group_name in h5_file.keys():
-                filter_list = h5_file.get(group_name).get("0").get("codes")[:]
-                fsn_list = h5_file.get(group_name).get("0").get("fsn")[:]
-            elif (
-                "policy_views" in h5_file
-                and group_name in h5_file["policy_views"]
-                and "concepts" in h5_file
-            ):
-                concept_indices = h5_file["policy_views"][group_name]["0"]["concept_index"][:]
-                filter_list = h5_file["concepts"]["codes"][:][concept_indices]
-                fsn_list = h5_file["concepts"]["fsn"][:][concept_indices]
-            else:
+            policy_data = read_policy_data(h5_file, group_name)
+            if policy_data is None:
                 continue
+            filter_list = policy_data.codes
+            fsn_list = policy_data.fsn
             err_docs += analyze_documents(
                 project=result,
                 filter_array=filter_list,

@@ -16,6 +16,12 @@ import h5py
 import numpy as np
 
 from ..uima_processing import CriticalFinding
+from ..hdf5_policy import (
+    read_concepts,
+    read_historical_associations,
+    read_policy_indices,
+    require_sanitization_ready,
+)
 
 ASSOCIATION_TYPE_DESCRIPTIONS = {
     "SAME_AS": "Source concept is considered equivalent to the target concept.",
@@ -93,23 +99,24 @@ class SanitizationResolver:
 
     def _load(self):
         with h5py.File(self.hdf5_path, "r") as h5_file:
-            _require_groups(h5_file)
-            self.codes = tuple(_decode_array(h5_file["concepts/codes"][:]))
-            self.fsn = tuple(_decode_array(h5_file["concepts/fsn"][:]))
-            self.active = np.asarray(h5_file["concepts/active"][:], dtype=bool)
-            self.code_to_index = {code: idx for idx, code in enumerate(self.codes)}
+            require_sanitization_ready(h5_file)
+            concepts = read_concepts(h5_file)
+            self.codes = concepts.codes
+            self.fsn = concepts.fsn
+            self.active = concepts.active
+            self.code_to_index = concepts.code_to_index
 
-            self.whitelist_indices = _read_policy_indices(h5_file, "whitelist")
-            self.blacklist_indices = _read_policy_indices(h5_file, "blacklist")
+            self.whitelist_indices = read_policy_indices(h5_file, "whitelist")
+            self.blacklist_indices = read_policy_indices(h5_file, "blacklist")
 
-            hist = h5_file["historical_associations"]
-            self.association_source_index = np.asarray(hist["source_index"][:], dtype=np.int64)
-            self.association_target_index = np.asarray(hist["target_index"][:], dtype=np.int64)
-            self.association_type_id = np.asarray(hist["association_type_id"][:], dtype=np.int64)
-            self.association_types = tuple(_decode_array(hist["association_types"][:]))
-            self.association_active = np.asarray(hist["active"][:], dtype=bool)
-            self.association_effective_time = tuple(_decode_array(hist["effective_time"][:]))
-            self.association_refset_id = tuple(_decode_array(hist["refset_id"][:]))
+            associations = read_historical_associations(h5_file)
+            self.association_source_index = associations.source_index
+            self.association_target_index = associations.target_index
+            self.association_type_id = associations.association_type_id
+            self.association_types = associations.association_types
+            self.association_active = associations.active
+            self.association_effective_time = associations.effective_time
+            self.association_refset_id = associations.refset_id
 
     def suggest(self, finding: CriticalFinding) -> SanitizationSuggestion:
         if finding.ignored:
@@ -351,41 +358,6 @@ def _md(value: str) -> str:
     )
 
 
-def _require_groups(h5_file: h5py.File):
-    required_paths = [
-        "concepts/codes",
-        "concepts/fsn",
-        "concepts/active",
-        "policy_views/whitelist/0/concept_index",
-        "policy_views/blacklist/0/concept_index",
-        "historical_associations/source_index",
-        "historical_associations/target_index",
-        "historical_associations/association_type_id",
-        "historical_associations/association_types",
-        "historical_associations/effective_time",
-        "historical_associations/active",
-        "historical_associations/refset_id",
-    ]
-    missing = [path for path in required_paths if path not in h5_file]
-    if missing:
-        raise ValueError(
-            "HDF5 file is not sanitization-ready; missing compact dataset(s): "
-            + ", ".join(missing)
-        )
-
-
-def _read_policy_indices(h5_file: h5py.File, policy: str) -> frozenset[int]:
-    return frozenset(int(idx) for idx in h5_file[f"policy_views/{policy}/0/concept_index"][:])
-
-
-def _decode_array(values) -> list[str]:
-    decoded = []
-    for value in values:
-        if isinstance(value, (bytes, bytearray)):
-            decoded.append(value.decode("utf-8"))
-        else:
-            decoded.append(str(value))
-    return decoded
 
 
 from .semantic_bm25 import (  # noqa: E402  # imported late to avoid circular initialization

@@ -6,6 +6,8 @@ from typing import cast, Union, Optional
 
 import h5py
 import numpy as np
+
+from ..hdf5_policy import has_concepts_extension
 import yaspin
 from PyInquirer import prompt
 from pycaprio import Pycaprio
@@ -304,10 +306,7 @@ def snowstorm_response_to_pydantic(json_data: dict):
 
 
 def hdf5_has_concepts_extension(fi_path: pathlib.Path) -> bool:
-    if not fi_path.exists() or not fi_path.is_file():
-        return False
-    with h5py.File(str(fi_path.resolve()), "r") as h5_file:
-        return "concepts" in h5_file
+    return has_concepts_extension(fi_path)
 
 
 def _compute_ancestors_bfs(
