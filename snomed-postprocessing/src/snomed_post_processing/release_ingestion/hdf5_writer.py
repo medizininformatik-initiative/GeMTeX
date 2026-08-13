@@ -148,10 +148,9 @@ def write_snapshot_hdf5_from_rf2_zip(
     /historical_associations/effective_time
     /historical_associations/active
     /historical_associations/refset_id
-    /is_a_relationships/source_index
-    /is_a_relationships/parent_index
-    /is_a_relationships/active
-    /is_a_relationships/effective_time
+    /historical_is_a/source_index
+    /historical_is_a/parent_index
+    /historical_is_a/effective_time
     /policy_views/whitelist/0/concept_index
     /policy_views/blacklist/0/concept_index
     ```
@@ -326,16 +325,24 @@ def write_snapshot_hdf5_from_rf2_zip(
             )
             concept_group.create_dataset("ancestor_distance", data=ancestor_distances.astype(np.int16))
 
-        if include_ancestors and ("is_a_relationships" not in h5_file or force_overwrite_concepts):
-            if "is_a_relationships" in h5_file:
-                del h5_file["is_a_relationships"]
-            is_a_group = h5_file.create_group("is_a_relationships")
-            _write_int_dataset(is_a_group, "source_index", (code_to_index[rel[0]] for rel in is_a_relationships))
-            _write_int_dataset(is_a_group, "parent_index", (code_to_index[rel[1]] for rel in is_a_relationships))
-            is_a_group.create_dataset(
-                "active", data=np.asarray([rel[2] for rel in is_a_relationships], dtype=bool)
+        if include_ancestors and ("historical_is_a" not in h5_file or force_overwrite_concepts):
+            if "historical_is_a" in h5_file:
+                del h5_file["historical_is_a"]
+            historical_is_a_rows = [
+                rel
+                for rel in is_a_relationships
+                if not rel[2] and not concept_active.get(rel[0], False)
+            ]
+            historical_is_a_group = h5_file.create_group("historical_is_a")
+            historical_is_a_group.create_dataset(
+                "source_index",
+                data=np.asarray([code_to_index[rel[0]] for rel in historical_is_a_rows], dtype=np.int32),
             )
-            _write_string_dataset(is_a_group, "effective_time", (rel[3] for rel in is_a_relationships))
+            historical_is_a_group.create_dataset(
+                "parent_index",
+                data=np.asarray([code_to_index[rel[1]] for rel in historical_is_a_rows], dtype=np.int32),
+            )
+            _write_string_dataset(historical_is_a_group, "effective_time", (rel[3] for rel in historical_is_a_rows))
 
         if include_associations and "historical_associations" not in h5_file:
             assoc_group = h5_file.create_group("historical_associations")

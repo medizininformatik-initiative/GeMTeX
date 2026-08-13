@@ -25,9 +25,8 @@ class Hdf5MetadataSummary:
     has_ancestors: bool = False
     has_historical_associations: bool = False
     historical_association_count: Optional[int] = None
-    has_is_a_relationships: bool = False
-    is_a_relationship_count: Optional[int] = None
-    inactive_is_a_relationship_count: Optional[int] = None
+    has_historical_is_a: bool = False
+    historical_is_a_count: Optional[int] = None
     historical_association_type_counts: tuple[tuple[str, int], ...] = ()
     policy_view_counts: tuple[tuple[str, str, int], ...] = ()
     legacy_group_counts: tuple[tuple[str, str, int], ...] = ()
@@ -112,16 +111,12 @@ def inspect_hdf5_metadata(path: Union[str, pathlib.Path]) -> Hdf5MetadataSummary
                     if int(counts[idx]) > 0
                 )
 
-        has_is_a_relationships = "is_a_relationships" in h5_file
-        is_a_relationship_count = None
-        inactive_is_a_relationship_count = None
-        if has_is_a_relationships:
-            is_a_group = h5_file["is_a_relationships"]
-            if "source_index" in is_a_group:
-                is_a_relationship_count = int(is_a_group["source_index"].shape[0])
-            if "active" in is_a_group:
-                is_a_active = np.asarray(is_a_group["active"][:], dtype=bool)
-                inactive_is_a_relationship_count = int(np.count_nonzero(~is_a_active))
+        has_historical_is_a = "historical_is_a" in h5_file
+        historical_is_a_count = None
+        if has_historical_is_a:
+            historical_is_a_group = h5_file["historical_is_a"]
+            if "source_index" in historical_is_a_group:
+                historical_is_a_count = int(historical_is_a_group["source_index"].shape[0])
 
     return Hdf5MetadataSummary(
         path=path,
@@ -135,9 +130,8 @@ def inspect_hdf5_metadata(path: Union[str, pathlib.Path]) -> Hdf5MetadataSummary
         has_ancestors=has_ancestors,
         has_historical_associations=has_historical_associations,
         historical_association_count=historical_association_count,
-        has_is_a_relationships=has_is_a_relationships,
-        is_a_relationship_count=is_a_relationship_count,
-        inactive_is_a_relationship_count=inactive_is_a_relationship_count,
+        has_historical_is_a=has_historical_is_a,
+        historical_is_a_count=historical_is_a_count,
         historical_association_type_counts=historical_association_type_counts,
         policy_view_counts=tuple(policy_view_counts),
         legacy_group_counts=tuple(legacy_group_counts),
@@ -172,15 +166,11 @@ def format_hdf5_metadata_summary(
             f"- Semantic tags: {_count(summary.semantic_tag_count)}",
             f"- Ancestor data: {_yes_no(summary.has_ancestors)}",
             f"- Historical associations: {_count(summary.historical_association_count) if summary.has_historical_associations else 'missing'}",
-            f"- Is-a relationship states: {_count(summary.is_a_relationship_count) if summary.has_is_a_relationships else 'missing'}"
-            + (
-                f" ({summary.inactive_is_a_relationship_count:,} inactive)"
-                if summary.inactive_is_a_relationship_count is not None
-                else ""
-            ),
+            f"- Historical is-a fallback edges: {_count(summary.historical_is_a_count) if summary.has_historical_is_a else 'missing'}",
         ]
     )
     if summary.historical_association_type_counts:
+        lines.append("- Historical association types:")
         for association_type, count in summary.historical_association_type_counts:
             lines.append(f"  - {association_type}: {count:,}")
     if summary.policy_view_counts:

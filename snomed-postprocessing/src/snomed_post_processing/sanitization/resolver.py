@@ -10,11 +10,11 @@ import numpy as np
 
 from ..hdf5_handling.policy import (
     has_active_ancestor_arrays,
-    has_is_a_relationships,
+    has_historical_is_a_relationships,
     read_active_ancestors,
     read_concepts,
     read_historical_associations,
-    read_is_a_relationships,
+    read_historical_is_a_relationships,
     read_policy_indices,
     require_sanitization_ready,
 )
@@ -74,17 +74,16 @@ class SanitizationResolver:
                 self.active_ancestor_concept_index = ancestors.ancestor_concept_index
                 self.active_ancestor_distance = ancestors.ancestor_distance
 
-            self.is_a_parent_by_source: dict[int, list[tuple[int, bool, str]]] = {}
-            if has_is_a_relationships(h5_file):
-                is_a_relationships = read_is_a_relationships(h5_file)
-                for source_idx, parent_idx, active, effective_time in zip(
-                    is_a_relationships.source_index,
-                    is_a_relationships.parent_index,
-                    is_a_relationships.active,
-                    is_a_relationships.effective_time,
+            self.historical_is_a_parent_by_source: dict[int, list[tuple[int, str]]] = {}
+            if has_historical_is_a_relationships(h5_file):
+                historical_is_a = read_historical_is_a_relationships(h5_file)
+                for source_idx, parent_idx, effective_time in zip(
+                    historical_is_a.source_index,
+                    historical_is_a.parent_index,
+                    historical_is_a.effective_time,
                 ):
-                    self.is_a_parent_by_source.setdefault(int(source_idx), []).append(
-                        (int(parent_idx), bool(active), effective_time)
+                    self.historical_is_a_parent_by_source.setdefault(int(source_idx), []).append(
+                        (int(parent_idx), effective_time)
                     )
 
     def suggest(self, finding: CriticalFinding) -> SanitizationSuggestion:
@@ -260,7 +259,14 @@ class SanitizationResolver:
             candidates=suggestion_candidates,
         )
 
-    def _active_ancestor_candidates(self, source_index: int) -> list[tuple[int, int, str, str | None]]:
+    def _active_ancestor_candidates(
+        self,
+        source_index: int,
+        *,
+        distance_offset: int = 0,
+        association_type: str = "IS_A_ACTIVE",
+        effective_time: str | None = None,
+    ) -> list[tuple[int, int, str, str | None]]:
         if (
             self.active_ancestor_index is None
             or self.active_ancestor_concept_index is None
@@ -276,34 +282,39 @@ class SanitizationResolver:
             self.active_ancestor_distance[start : start + count],
         ):
             ancestor_idx = int(ancestor_idx)
-            distance = int(distance)
+            distance = int(distance) + distance_offset
             if distance > self.ancestor_max_distance:
                 continue
             if self._is_policy_acceptable_ancestor(source_index, ancestor_idx):
-                candidates.append((ancestor_idx, distance, "IS_A_ACTIVE", None))
+                candidates.append((ancestor_idx, distance, association_type, effective_time))
         candidates.sort(key=lambda candidate: (candidate[1], self.codes[candidate[0]]))
         return candidates
 
     def _historical_ancestor_candidates(self, source_index: int) -> list[tuple[int, int, str, str | None]]:
-        if not self.is_a_parent_by_source:
+        if not self.historical_is_a_parent_by_source:
             return []
         candidates = []
         queue = [(source_index, 0)]
         best_distance_by_node = {source_index: 0}
-        effective_time_by_node: dict[int, str | None] = {}
         while queue:
             current_index, current_distance = queue.pop(0)
             if current_distance >= self.ancestor_max_distance:
                 continue
-            for parent_index, relationship_active, effective_time in self.is_a_parent_by_source.get(current_index, []):
+            for parent_index, effective_time in self.historical_is_a_parent_by_source.get(current_index, []):
                 next_distance = current_distance + 1
                 if best_distance_by_node.get(parent_index, self.ancestor_max_distance + 1) <= next_distance:
                     continue
                 best_distance_by_node[parent_index] = next_distance
-                effective_time_by_node[parent_index] = effective_time
                 if self._is_policy_acceptable_ancestor(source_index, parent_index):
-                    association_type = "IS_A_ACTIVE" if relationship_active else "IS_A_HISTORICAL"
-                    candidates.append((parent_index, next_distance, association_type, effective_time))
+                    candidates.append((parent_index, next_distance, "IS_A_HISTORICAL", effective_time))
+                candidates.extend(
+                    self._active_ancestor_candidates(
+                        parent_index,
+                        distance_offset=next_distance,
+                        association_type="IS_A_HISTORICAL_THEN_ACTIVE",
+                        effective_time=effective_time,
+                    )
+                )
                 queue.append((parent_index, next_distance))
         candidates.sort(key=lambda candidate: (candidate[1], self.codes[candidate[0]]))
         return candidates

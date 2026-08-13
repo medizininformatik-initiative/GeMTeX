@@ -61,12 +61,11 @@ class AncestorsData:
 
 
 @dataclasses.dataclass(frozen=True)
-class IsARelationshipsData:
-    """Current is-a relationship states, including inactive rows when stored."""
+class HistoricalIsARelationshipsData:
+    """Inactive is-a relationship states used for historical ancestor fallback."""
 
     source_index: np.ndarray
     parent_index: np.ndarray
-    active: np.ndarray
     effective_time: tuple[str, ...]
 
 
@@ -166,14 +165,13 @@ def has_active_ancestor_arrays(h5_file: h5py.File) -> bool:
     )
 
 
-def has_is_a_relationships(h5_file: h5py.File) -> bool:
+def has_historical_is_a_relationships(h5_file: h5py.File) -> bool:
     return all(
         path in h5_file
         for path in (
-            "is_a_relationships/source_index",
-            "is_a_relationships/parent_index",
-            "is_a_relationships/active",
-            "is_a_relationships/effective_time",
+            "historical_is_a/source_index",
+            "historical_is_a/parent_index",
+            "historical_is_a/effective_time",
         )
     )
 
@@ -250,22 +248,20 @@ def read_historical_associations(h5_file: h5py.File) -> HistoricalAssociationsDa
     )
 
 
-def read_is_a_relationships(h5_file: h5py.File) -> IsARelationshipsData:
+def read_historical_is_a_relationships(h5_file: h5py.File) -> HistoricalIsARelationshipsData:
     require_paths(
         h5_file,
         [
-            "is_a_relationships/source_index",
-            "is_a_relationships/parent_index",
-            "is_a_relationships/active",
-            "is_a_relationships/effective_time",
+            "historical_is_a/source_index",
+            "historical_is_a/parent_index",
+            "historical_is_a/effective_time",
         ],
         purpose="historical-is-a-ready",
     )
-    group = h5_file["is_a_relationships"]
-    return IsARelationshipsData(
+    group = h5_file["historical_is_a"]
+    return HistoricalIsARelationshipsData(
         source_index=np.asarray(group["source_index"][:], dtype=np.int64),
         parent_index=np.asarray(group["parent_index"][:], dtype=np.int64),
-        active=np.asarray(group["active"][:], dtype=bool),
         effective_time=tuple(decode_array(group["effective_time"][:])),
     )
 

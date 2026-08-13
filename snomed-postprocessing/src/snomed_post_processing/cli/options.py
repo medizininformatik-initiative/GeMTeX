@@ -242,7 +242,7 @@ def suggest_sanitization_options(fnc):
         help=(
             "After historical associations fail for whitelist findings, try nearest active "
             "policy-acceptable ancestors first from active ancestor arrays, then through "
-            "stored historical/inactive is-a relationships."
+            "stored inactive is-a fallback edges."
         ),
     )(fnc)
     fnc = click.option(
@@ -274,7 +274,7 @@ def suggest_sanitization_options(fnc):
     fnc = click.option(
         "--semantic-bm25-fallback",
         is_flag=True,
-        help="Use suggestion-only BM25 fallback for unresolved whitelist sanitization findings.",
+        help="Use semantic BM25 for unresolved whitelist findings as fallback.",
     )(fnc)
     fnc = click.option(
         "--association-type",

@@ -484,7 +484,7 @@ Implemented. CLI and Streamlit can generate a separate Markdown sanitization sug
 
 Implemented for suggestion reporting. A dependency-free semantic BM25 module (`snomed_post_processing.sanitization.semantic_bm25`) can rank active, whitelisted, non-blacklisted concepts from the compact HDF5 layout as suggestion-only fallback candidates. CLI and Streamlit expose this as an opt-in fallback; accepted BM25 replacements are written to the existing standalone sanitization suggestion report with status `semantic_bm25_replacement`. Blacklist findings can be included explicitly via `--blacklist-suggestions` / the Streamlit checkbox, but remain disabled by default.
 
-Ancestor fallback is also implemented as an opt-in resolver step for whitelist findings. With `--activate-historical-ancestor-fallback`, the resolver tries active ancestor arrays first and then stored current/historical `is-a` relationship states. Candidate ancestors must still be active, whitelisted, and not blacklisted; the default maximum distance is controlled by `--ancestor-max-distance 3`.
+Ancestor fallback is also implemented as an opt-in resolver step for whitelist findings. With `--activate-historical-ancestor-fallback`, the resolver tries active ancestor arrays first and then compact stored inactive `is-a` edges under `/historical_is_a`. Historical fallback candidates are either the inactive edge's active parent or an active ancestor above that parent. Candidate ancestors must still be active, whitelisted, and not blacklisted; the default maximum distance is controlled by `--ancestor-max-distance 3`.
 
 ## 13. Summary
 

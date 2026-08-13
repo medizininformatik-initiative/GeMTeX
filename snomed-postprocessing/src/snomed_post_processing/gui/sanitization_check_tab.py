@@ -43,21 +43,12 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
         options=list(SUPPORTED_ASSOCIATION_TYPES),
         default=list(DEFAULT_ALLOWED_ASSOCIATION_TYPES),
     )
-    sanitize_semantic_bm25_fallback = st.checkbox(
-        "Use semantic BM25 fallback for unresolved whitelist findings",
-        value=False,
-    )
-    sanitize_blacklist_suggestions = st.checkbox(
-        "Include blacklist findings in BM25 sanitization suggestions",
-        value=False,
-        disabled=not sanitize_semantic_bm25_fallback,
-    )
     activate_historical_ancestor_fallback = st.checkbox(
         "Activate historical ancestor fallback",
         value=False,
         help=(
             "For unresolved whitelist findings: try nearest active whitelisted ancestor, "
-            "then nearest active whitelisted ancestor reachable through stored historical/inactive is-a relationships."
+            "then nearest active whitelisted ancestor reachable through stored inactive is-a fallback edges."
         ),
     )
     ancestor_max_distance = st.number_input(
@@ -67,6 +58,15 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
         value=3,
         step=1,
         disabled=not activate_historical_ancestor_fallback,
+    )
+    sanitize_semantic_bm25_fallback = st.checkbox(
+        "Use semantic BM25 for unresolved whitelist findings as fallback",
+        value=False,
+    )
+    sanitize_blacklist_suggestions = st.checkbox(
+        "Include blacklist findings in BM25 sanitization suggestions",
+        value=False,
+        disabled=not sanitize_semantic_bm25_fallback,
     )
     with st.expander("BM25 fallback thresholds", expanded=False):
         sanitize_bm25_min_score = st.number_input(
