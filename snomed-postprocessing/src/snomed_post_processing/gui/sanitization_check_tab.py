@@ -52,6 +52,22 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
         value=False,
         disabled=not sanitize_semantic_bm25_fallback,
     )
+    activate_historical_ancestor_fallback = st.checkbox(
+        "Activate historical ancestor fallback",
+        value=False,
+        help=(
+            "For unresolved whitelist findings: try nearest active whitelisted ancestor, "
+            "then nearest active whitelisted ancestor reachable through stored historical/inactive is-a relationships."
+        ),
+    )
+    ancestor_max_distance = st.number_input(
+        "Maximum ancestor distance",
+        min_value=1,
+        max_value=20,
+        value=3,
+        step=1,
+        disabled=not activate_historical_ancestor_fallback,
+    )
     with st.expander("BM25 fallback thresholds", expanded=False):
         sanitize_bm25_min_score = st.number_input(
             "Minimum BM25 score", min_value=0.0, value=1.5, step=0.1
@@ -90,6 +106,8 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                 inputs.hdf5_temp_path,
                 allowed_association_types=sanitization_association_types
                 or list(DEFAULT_ALLOWED_ASSOCIATION_TYPES),
+                activate_historical_ancestor_fallback=activate_historical_ancestor_fallback,
+                ancestor_max_distance=int(ancestor_max_distance),
             )
             sanitization_progress.progress(
                 0.25,

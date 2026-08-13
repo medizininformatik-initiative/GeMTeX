@@ -230,6 +230,22 @@ def suggest_sanitization_options(fnc):
     """Apply options for the suggest-sanitization command."""
     fnc = click_log_level(fnc)
     fnc = click.option(
+        "--ancestor-max-distance",
+        default=3,
+        show_default=True,
+        type=int,
+        help="Maximum is-a distance for active/historical ancestor fallback suggestions.",
+    )(fnc)
+    fnc = click.option(
+        "--activate-historical-ancestor-fallback",
+        is_flag=True,
+        help=(
+            "After historical associations fail for whitelist findings, try nearest active "
+            "policy-acceptable ancestors first from active ancestor arrays, then through "
+            "stored historical/inactive is-a relationships."
+        ),
+    )(fnc)
+    fnc = click.option(
         "--bm25-max-candidates",
         default=5,
         show_default=True,

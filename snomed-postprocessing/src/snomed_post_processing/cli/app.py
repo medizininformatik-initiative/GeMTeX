@@ -124,6 +124,8 @@ def suggest_sanitization_cli(
     bm25_min_score: float,
     bm25_min_lexical_score: float,
     bm25_max_candidates: int,
+    activate_historical_ancestor_fallback: bool,
+    ancestor_max_distance: int,
     log_level: str,
 ):
     """Create sanitization suggestions from a CriticalFindings JSON artifact."""
@@ -137,6 +139,8 @@ def suggest_sanitization_cli(
         bm25_min_score=bm25_min_score,
         bm25_min_lexical_score=bm25_min_lexical_score,
         bm25_max_candidates=bm25_max_candidates,
+        activate_historical_ancestor_fallback=activate_historical_ancestor_fallback,
+        ancestor_max_distance=ancestor_max_distance,
         log_level=log_level,
     )
 

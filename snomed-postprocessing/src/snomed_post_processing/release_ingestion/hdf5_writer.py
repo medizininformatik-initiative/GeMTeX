@@ -18,6 +18,7 @@ from .readers import (
     _read_active_parent_map,
     _read_concept_active_state,
     _read_fsns,
+    _read_is_a_relationship_rows,
     _semantic_tag_from_fsn,
 )
 
@@ -147,6 +148,10 @@ def write_snapshot_hdf5_from_rf2_zip(
     /historical_associations/effective_time
     /historical_associations/active
     /historical_associations/refset_id
+    /is_a_relationships/source_index
+    /is_a_relationships/parent_index
+    /is_a_relationships/active
+    /is_a_relationships/effective_time
     /policy_views/whitelist/0/concept_index
     /policy_views/blacklist/0/concept_index
     ```
@@ -197,6 +202,7 @@ def write_snapshot_hdf5_from_rf2_zip(
             )
 
         parent_map: dict[str, set[str]] = {}
+        is_a_relationships: list[tuple[str, str, bool, str]] = []
         need_relationships = include_ancestors or bool(whitelist_root_codes) or bool(blacklist_root_codes)
         if need_relationships:
             logging.info("Reading active RF2 %s is-a relationships from %s", members.view, members.relationship)
@@ -207,8 +213,22 @@ def write_snapshot_hdf5_from_rf2_zip(
                 policy_date=policy_date,
                 reconstruct_latest=reconstruct_latest,
             )
+        if include_ancestors:
+            logging.info("Reading RF2 %s is-a relationship states from %s", members.view, members.relationship)
+            is_a_relationships = _read_is_a_relationship_rows(
+                zf,
+                members.relationship,
+                policy_date=policy_date,
+                reconstruct_latest=reconstruct_latest,
+            )
 
-        all_concept_codes = active_concepts | {a[0] for a in associations} | {a[1] for a in associations}
+        all_concept_codes = (
+            active_concepts
+            | {a[0] for a in associations}
+            | {a[1] for a in associations}
+            | {rel[0] for rel in is_a_relationships}
+            | {rel[1] for rel in is_a_relationships}
+        )
         logging.info("Reading RF2 %s FSNs from %s", members.view, members.description)
         fsn_by_code = _read_fsns(
             zf,
@@ -305,6 +325,17 @@ def write_snapshot_hdf5_from_rf2_zip(
                 data=np.asarray([ancestor_code_to_index[str(code)] for code in ancestor_codes], dtype=np.int32),
             )
             concept_group.create_dataset("ancestor_distance", data=ancestor_distances.astype(np.int16))
+
+        if include_ancestors and ("is_a_relationships" not in h5_file or force_overwrite_concepts):
+            if "is_a_relationships" in h5_file:
+                del h5_file["is_a_relationships"]
+            is_a_group = h5_file.create_group("is_a_relationships")
+            _write_int_dataset(is_a_group, "source_index", (code_to_index[rel[0]] for rel in is_a_relationships))
+            _write_int_dataset(is_a_group, "parent_index", (code_to_index[rel[1]] for rel in is_a_relationships))
+            is_a_group.create_dataset(
+                "active", data=np.asarray([rel[2] for rel in is_a_relationships], dtype=bool)
+            )
+            _write_string_dataset(is_a_group, "effective_time", (rel[3] for rel in is_a_relationships))
 
         if include_associations and "historical_associations" not in h5_file:
             assoc_group = h5_file.create_group("historical_associations")

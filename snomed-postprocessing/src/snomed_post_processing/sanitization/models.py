@@ -36,7 +36,10 @@ def format_association_type_descriptions() -> str:
 class SanitizationStatus(str, enum.Enum):
     HISTORICAL_ASSOCIATION_REPLACEMENT = "historical_association_replacement"
     SEMANTIC_BM25_REPLACEMENT = "semantic_bm25_replacement"
+    NEAREST_TARGET_ANCESTOR = "nearest_target_ancestor"
+    NEAREST_HISTORICAL_ANCESTOR = "nearest_historical_ancestor"
     AMBIGUOUS_REPLACEMENT = "ambiguous_replacement"
+    AMBIGUOUS_ANCESTOR = "ambiguous_ancestor"
     NO_POLICY_ACCEPTABLE_CANDIDATE = "no_policy_acceptable_candidate"
     NO_HISTORICAL_ASSOCIATION = "no_historical_association"
     BLACKLISTED_NO_AUTO_SANITIZATION = "blacklisted_no_auto_sanitization"

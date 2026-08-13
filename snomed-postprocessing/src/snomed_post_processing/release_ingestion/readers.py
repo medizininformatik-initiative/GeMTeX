@@ -162,6 +162,62 @@ def _read_active_associations(
     return associations
 
 
+def _read_is_a_relationship_rows(
+    zf: zipfile.ZipFile,
+    member: Optional[str],
+    *,
+    policy_date: Optional[str] = None,
+    reconstruct_latest: bool = False,
+) -> list[tuple[str, str, bool, str]]:
+    """Read current is-a relationship rows, preserving active state."""
+    if member is None:
+        return []
+    relationships = []
+    relationship_rows: dict[str, dict[str, str]] = {}
+    for row in _iter_rf2_rows(
+        zf,
+        member,
+        {
+            "id",
+            "effectiveTime",
+            "active",
+            "moduleId",
+            "sourceId",
+            "destinationId",
+            "relationshipGroup",
+            "typeId",
+            "characteristicTypeId",
+            "modifierId",
+        },
+    ):
+        if row["typeId"] != IS_A_TYPE_ID or not _at_or_before(row, policy_date):
+            continue
+        if reconstruct_latest:
+            previous = relationship_rows.get(row["id"])
+            if previous is None or row["effectiveTime"] >= previous["effectiveTime"]:
+                relationship_rows[row["id"]] = row
+        else:
+            relationships.append(
+                (
+                    row["sourceId"],
+                    row["destinationId"],
+                    row["active"] == "1",
+                    row["effectiveTime"],
+                )
+            )
+    if reconstruct_latest:
+        for row in relationship_rows.values():
+            relationships.append(
+                (
+                    row["sourceId"],
+                    row["destinationId"],
+                    row["active"] == "1",
+                    row["effectiveTime"],
+                )
+            )
+    return relationships
+
+
 def _read_active_parent_map(
     zf: zipfile.ZipFile,
     member: Optional[str],

@@ -26,6 +26,8 @@ def run_sanitization_check(
     bm25_min_score: float,
     bm25_min_lexical_score: float,
     bm25_max_candidates: int,
+    activate_historical_ancestor_fallback: bool,
+    ancestor_max_distance: int,
     log_level: str,
 ):
     """Create sanitization suggestions from a CriticalFindings JSON artifact."""
@@ -37,6 +39,8 @@ def run_sanitization_check(
     resolver = SanitizationResolver(
         lists_path,
         allowed_association_types=association_type,
+        activate_historical_ancestor_fallback=activate_historical_ancestor_fallback,
+        ancestor_max_distance=ancestor_max_distance,
     )
     suggestions = resolver.suggest_all(findings)
     if semantic_bm25_fallback:

@@ -15,7 +15,7 @@ def write_sanitization_markdown_report(
     """Write a standalone Markdown report for sanitization suggestions."""
     output_file.write(f"# {title}\n\n")
     output_file.write(
-        "This report is suggestion-only. It is generated from structured critical findings and SNOMED CT historical associations; it does not modify source documents.\n\n"
+        "This report is suggestion-only. It is generated from structured critical findings, SNOMED CT historical associations, and optional fallback mechanisms; it does not modify source documents.\n\n"
     )
     output_file.write("## Summary\n\n")
     output_file.write("| Status | Count |\n")

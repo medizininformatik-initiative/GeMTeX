@@ -405,6 +405,8 @@ Policy flags:
 ```bash
 --association-type SAME_AS \
 --association-type REPLACED_BY \
+--activate-historical-ancestor-fallback \
+--ancestor-max-distance 3 \
 --semantic-bm25-fallback \
 --blacklist-suggestions \
 --bm25-min-score 1.5 \
@@ -480,7 +482,9 @@ Implemented. CLI and Streamlit can generate a separate Markdown sanitization sug
 
 ### Phase 5: Optional advanced fallback
 
-Implemented for suggestion reporting. A dependency-free semantic BM25 module (`snomed_post_processing.sanitization.semantic_bm25`) can rank active, whitelisted, non-blacklisted concepts from the compact HDF5 layout as suggestion-only fallback candidates. CLI and Streamlit expose this as an opt-in fallback; accepted BM25 replacements are written to the existing standalone sanitization suggestion report with status `semantic_bm25_replacement`. Blacklist findings can be included explicitly via `--sanitize-blacklist-suggestions` / the Streamlit checkbox, but remain disabled by default. Ancestor fallback and/or source-target mode should be added only if historical associations and BM25 suggestions are insufficient for real data.
+Implemented for suggestion reporting. A dependency-free semantic BM25 module (`snomed_post_processing.sanitization.semantic_bm25`) can rank active, whitelisted, non-blacklisted concepts from the compact HDF5 layout as suggestion-only fallback candidates. CLI and Streamlit expose this as an opt-in fallback; accepted BM25 replacements are written to the existing standalone sanitization suggestion report with status `semantic_bm25_replacement`. Blacklist findings can be included explicitly via `--blacklist-suggestions` / the Streamlit checkbox, but remain disabled by default.
+
+Ancestor fallback is also implemented as an opt-in resolver step for whitelist findings. With `--activate-historical-ancestor-fallback`, the resolver tries active ancestor arrays first and then stored current/historical `is-a` relationship states. Candidate ancestors must still be active, whitelisted, and not blacklisted; the default maximum distance is controlled by `--ancestor-max-distance 3`.
 
 ## 13. Summary
 

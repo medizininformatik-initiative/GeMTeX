@@ -51,6 +51,25 @@ class HistoricalAssociationsData:
     refset_id: tuple[str, ...]
 
 
+@dataclasses.dataclass(frozen=True)
+class AncestorsData:
+    """Compact active ancestor arrays under /concepts."""
+
+    ancestor_index: np.ndarray
+    ancestor_concept_index: np.ndarray
+    ancestor_distance: np.ndarray
+
+
+@dataclasses.dataclass(frozen=True)
+class IsARelationshipsData:
+    """Current is-a relationship states, including inactive rows when stored."""
+
+    source_index: np.ndarray
+    parent_index: np.ndarray
+    active: np.ndarray
+    effective_time: tuple[str, ...]
+
+
 def has_concepts_extension(path: Union[str, pathlib.Path]) -> bool:
     path = pathlib.Path(path)
     if not path.exists() or not path.is_file():
@@ -136,6 +155,29 @@ def require_bm25_ready(h5_file: h5py.File) -> None:
     )
 
 
+def has_active_ancestor_arrays(h5_file: h5py.File) -> bool:
+    return all(
+        path in h5_file
+        for path in (
+            "concepts/ancestors_index",
+            "concepts/ancestor_concept_index",
+            "concepts/ancestor_distance",
+        )
+    )
+
+
+def has_is_a_relationships(h5_file: h5py.File) -> bool:
+    return all(
+        path in h5_file
+        for path in (
+            "is_a_relationships/source_index",
+            "is_a_relationships/parent_index",
+            "is_a_relationships/active",
+            "is_a_relationships/effective_time",
+        )
+    )
+
+
 def read_concepts(h5_file: h5py.File) -> ConceptsData:
     require_paths(
         h5_file,
@@ -164,6 +206,24 @@ def read_policy_indices(
     )
 
 
+def read_active_ancestors(h5_file: h5py.File) -> AncestorsData:
+    require_paths(
+        h5_file,
+        [
+            "concepts/ancestors_index",
+            "concepts/ancestor_concept_index",
+            "concepts/ancestor_distance",
+        ],
+        purpose="active-ancestor-ready",
+    )
+    concepts = h5_file["concepts"]
+    return AncestorsData(
+        ancestor_index=np.asarray(concepts["ancestors_index"][:], dtype=np.int64),
+        ancestor_concept_index=np.asarray(concepts["ancestor_concept_index"][:], dtype=np.int64),
+        ancestor_distance=np.asarray(concepts["ancestor_distance"][:], dtype=np.int64),
+    )
+
+
 def read_historical_associations(h5_file: h5py.File) -> HistoricalAssociationsData:
     require_paths(
         h5_file,
@@ -187,6 +247,26 @@ def read_historical_associations(h5_file: h5py.File) -> HistoricalAssociationsDa
         active=np.asarray(hist["active"][:], dtype=bool),
         effective_time=tuple(decode_array(hist["effective_time"][:])),
         refset_id=tuple(decode_array(hist["refset_id"][:])),
+    )
+
+
+def read_is_a_relationships(h5_file: h5py.File) -> IsARelationshipsData:
+    require_paths(
+        h5_file,
+        [
+            "is_a_relationships/source_index",
+            "is_a_relationships/parent_index",
+            "is_a_relationships/active",
+            "is_a_relationships/effective_time",
+        ],
+        purpose="historical-is-a-ready",
+    )
+    group = h5_file["is_a_relationships"]
+    return IsARelationshipsData(
+        source_index=np.asarray(group["source_index"][:], dtype=np.int64),
+        parent_index=np.asarray(group["parent_index"][:], dtype=np.int64),
+        active=np.asarray(group["active"][:], dtype=bool),
+        effective_time=tuple(decode_array(group["effective_time"][:])),
     )
 
 
