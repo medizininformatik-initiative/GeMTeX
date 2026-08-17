@@ -26,7 +26,7 @@ Column names can be: `ZipFileName`/`FileName`/`Name` and `UserId`/`User`
 ### 2. Run the Tool
 
 **Windows**:
-!!! Please have PYTHON is your PATH!
+!!! Please have PYTHON in your PATH! (recommended to use the direct method with calling python3)
 
 ```bash
 cd C:\gemtex\py-anonymizer-semann-gemtex
