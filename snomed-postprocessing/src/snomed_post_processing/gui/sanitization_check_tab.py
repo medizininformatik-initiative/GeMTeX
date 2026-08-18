@@ -16,10 +16,11 @@ from snomed_post_processing.sanitization import (
     SanitizationResolver,
     apply_semantic_bm25_fallback,
     format_association_type_descriptions,
+    sanitization_suggestions_json_text,
     write_sanitization_markdown_report,
 )
 
-from .downloads import download_md_report
+from .downloads import download_json_report, download_md_report
 from .files import save_uploaded_file
 from .sidebar import GuiInputs
 
@@ -156,21 +157,53 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
             sanitization_progress.progress(
                 0.9, text="Writing sanitization suggestion report..."
             )
-            output_sanitization_md = pathlib.Path(
-                tempfile.mkdtemp(prefix="snomed_gui_sanitization_")
-            ) / (
-                f"sanitization_suggestions_{datetime.datetime.now().strftime('%d-%m-%Y_%H-%M')}.md"
-            )
+            output_dir = pathlib.Path(tempfile.mkdtemp(prefix="snomed_gui_sanitization_"))
+            timestamp = datetime.datetime.now().strftime('%d-%m-%Y_%H-%M')
+            output_sanitization_md = output_dir / f"sanitization_suggestions_{timestamp}.md"
+            output_sanitization_json = output_dir / f"sanitization_suggestions_{timestamp}.json"
+            sanitization_settings = {
+                "allowed_association_types": list(
+                    sanitization_association_types or DEFAULT_ALLOWED_ASSOCIATION_TYPES
+                ),
+                "historical_ancestor_fallback": bool(activate_historical_ancestor_fallback),
+                "ancestor_max_distance": int(ancestor_max_distance) if use_absolute_ancestor_limit else None,
+                "ancestor_max_relative_distance": (
+                    float(ancestor_max_relative_distance) if use_relative_ancestor_limit else None
+                ),
+                "semantic_bm25_fallback": bool(sanitize_semantic_bm25_fallback),
+                "blacklist_bm25_suggestions": bool(sanitize_blacklist_suggestions),
+                "bm25_min_score": float(sanitize_bm25_min_score),
+                "bm25_min_lexical_score": float(sanitize_bm25_min_lexical_score),
+                "bm25_max_candidates": int(sanitize_bm25_max_candidates),
+            }
+            sanitization_metadata = {
+                "source": "streamlit_sanitization_check_tab",
+                "hdf5_file_name": getattr(inputs.hdf5_file, "name", None),
+                "finding_count": len(findings),
+                "suggestion_count": len(suggestions),
+                "settings": sanitization_settings,
+            }
             with output_sanitization_md.open("w", encoding="utf-8") as sanitization_fi:
                 write_sanitization_markdown_report(suggestions, sanitization_fi)
+            sanitization_json_text = sanitization_suggestions_json_text(
+                suggestions,
+                metadata=sanitization_metadata,
+            )
+            output_sanitization_json.write_text(sanitization_json_text + "\n", encoding="utf-8")
             sanitization_progress.progress(
                 1.0, text="Sanitization suggestions finished."
             )
             time.sleep(0.2)
             sanitization_progress.empty()
 
+            st.session_state["sanitization_suggestions"] = suggestions
+            st.session_state["sanitization_suggestions_metadata"] = sanitization_metadata
+            st.session_state["sanitization_suggestions_report_path"] = str(output_sanitization_md)
+            st.session_state["sanitization_suggestions_json_path"] = str(output_sanitization_json)
+
             sanitization_report_text = output_sanitization_md.read_text(encoding="utf-8")
             st.success("Sanitization suggestions finished.")
+            download_json_report(sanitization_json_text, output_sanitization_json)
             download_md_report(
                 sanitization_report_text,
                 output_sanitization_md,
