@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import pathlib
 from typing import Sequence, Union
 
@@ -119,6 +120,9 @@ class SanitizationResolver:
                 status=SanitizationStatus.NO_HISTORICAL_ASSOCIATION,
                 reason="source concept is not present in /concepts",
             )
+
+        if not finding.fsn and self.fsn[source_index]:
+            finding = dataclasses.replace(finding, fsn=self.fsn[source_index])
 
         candidates = self._historical_candidates(source_index)
         acceptable = [candidate for candidate in candidates if candidate.policy_acceptable]

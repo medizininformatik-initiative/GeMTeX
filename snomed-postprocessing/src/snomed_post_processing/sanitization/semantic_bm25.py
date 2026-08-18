@@ -7,6 +7,7 @@ fallback when structured historical associations do not yield a replacement.
 
 from __future__ import annotations
 
+import dataclasses
 import math
 import pathlib
 from typing import Optional, Sequence, Union
@@ -72,7 +73,11 @@ class SemanticBm25Resolver:
                 reason=f"unsupported finding list type: {finding.list_type}",
             )
 
-        query = _query_text(finding, self.fsn_by_code(finding.code))
+        source_fsn = self.fsn_by_code(finding.code)
+        if not finding.fsn and source_fsn:
+            finding = dataclasses.replace(finding, fsn=source_fsn)
+
+        query = _query_text(finding, source_fsn)
         query_tokens = _tokenize(query)
         if not query_tokens:
             return SemanticBm25Suggestion(

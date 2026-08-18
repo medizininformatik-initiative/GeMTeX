@@ -38,7 +38,7 @@ def render_sidebar() -> GuiInputs:
         st.header("Annotation layers")
         annotation_types_text = st.text_area(
             "Target annotation types to check",
-            value="gemtex.Concept",
+            value="gemtex.Concept\nwebanno.custom.Concept",
             help="One UIMA layer/type per line. Faulty SNOMED code checks run on these annotations.",
         )
         ignore_overlap_types_text = st.text_area(

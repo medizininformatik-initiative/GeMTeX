@@ -87,7 +87,7 @@ def log_documents_options(fnc):
     fnc = click.option(
         "--annotation-type",
         multiple=True,
-        default=("gemtex.Concept",),
+        default=("gemtex.Concept", "webanno.custom.Concept"),
         show_default=True,
         help="Target annotation layer/type to check for SNOMED CT codes. Can be provided multiple times.",
     )(fnc)
