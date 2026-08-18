@@ -51,13 +51,32 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
             "then nearest active whitelisted ancestor reachable through stored inactive is-a fallback edges."
         ),
     )
+    use_absolute_ancestor_limit = st.checkbox(
+        "Use absolute ancestor distance limit",
+        value=True,
+        disabled=not activate_historical_ancestor_fallback,
+    )
     ancestor_max_distance = st.number_input(
-        "Maximum ancestor distance",
+        "Maximum absolute ancestor distance",
         min_value=1,
         max_value=20,
         value=3,
         step=1,
+        disabled=not activate_historical_ancestor_fallback or not use_absolute_ancestor_limit,
+    )
+    use_relative_ancestor_limit = st.checkbox(
+        "Use relative ancestor distance limit",
+        value=True,
         disabled=not activate_historical_ancestor_fallback,
+    )
+    ancestor_max_relative_distance = st.number_input(
+        "Maximum relative ancestor distance",
+        min_value=0.0,
+        max_value=1.0,
+        value=0.35,
+        step=0.05,
+        disabled=not activate_historical_ancestor_fallback or not use_relative_ancestor_limit,
+        help="Distance divided by source depth-to-root. Lower values reject broader jumps in shallow hierarchies.",
     )
     sanitize_semantic_bm25_fallback = st.checkbox(
         "Use semantic BM25 for unresolved whitelist findings as fallback",
@@ -107,7 +126,12 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                 allowed_association_types=sanitization_association_types
                 or list(DEFAULT_ALLOWED_ASSOCIATION_TYPES),
                 activate_historical_ancestor_fallback=activate_historical_ancestor_fallback,
-                ancestor_max_distance=int(ancestor_max_distance),
+                ancestor_max_distance=(
+                    int(ancestor_max_distance) if use_absolute_ancestor_limit else None
+                ),
+                ancestor_max_relative_distance=(
+                    float(ancestor_max_relative_distance) if use_relative_ancestor_limit else None
+                ),
             )
             sanitization_progress.progress(
                 0.25,

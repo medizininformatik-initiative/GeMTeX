@@ -23,6 +23,8 @@ class Hdf5MetadataSummary:
     concepts_release_date: Optional[str] = None
     concepts_rf2_view: Optional[str] = None
     has_ancestors: bool = False
+    has_depth_to_root: bool = False
+    known_max_depth_to_root: Optional[int] = None
     has_historical_associations: bool = False
     historical_association_count: Optional[int] = None
     has_historical_is_a: bool = False
@@ -55,6 +57,8 @@ def inspect_hdf5_metadata(path: Union[str, pathlib.Path]) -> Hdf5MetadataSummary
         concepts_release_date = None
         concepts_rf2_view = None
         has_ancestors = False
+        has_depth_to_root = False
+        known_max_depth_to_root = None
 
         if has_concepts:
             concepts = h5_file["concepts"]
@@ -71,6 +75,15 @@ def inspect_hdf5_metadata(path: Union[str, pathlib.Path]) -> Hdf5MetadataSummary
                 name in concepts
                 for name in ("ancestors_index", "ancestor_concept_index", "ancestor_distance")
             )
+            has_depth_to_root = all(
+                name in concepts for name in ("min_depth_to_root", "max_depth_to_root")
+            )
+            known_max_depth_to_root = None
+            if has_depth_to_root:
+                max_depths = np.asarray(concepts["max_depth_to_root"][:], dtype=np.int64)
+                known_depths = max_depths[max_depths >= 0]
+                if known_depths.size:
+                    known_max_depth_to_root = int(np.max(known_depths))
 
         policy_view_counts = []
         if "policy_views" in h5_file:
@@ -128,6 +141,8 @@ def inspect_hdf5_metadata(path: Union[str, pathlib.Path]) -> Hdf5MetadataSummary
         concepts_release_date=concepts_release_date,
         concepts_rf2_view=concepts_rf2_view,
         has_ancestors=has_ancestors,
+        has_depth_to_root=has_depth_to_root,
+        known_max_depth_to_root=known_max_depth_to_root,
         has_historical_associations=has_historical_associations,
         historical_association_count=historical_association_count,
         has_historical_is_a=has_historical_is_a,
@@ -156,7 +171,7 @@ def format_hdf5_metadata_summary(
             f"- Sanitization-ready: {_yes_no(summary.sanitization_ready)}",
             f"- Concepts: {_count(summary.concept_count)}"
             + (
-                f" ({summary.active_concept_count:,} active)"
+                f" ({summary.active_concept_count:,} active at policy date)"
                 if summary.active_concept_count is not None
                 else ""
             ),
@@ -165,6 +180,12 @@ def format_hdf5_metadata_summary(
             f"- RF2 view: {summary.concepts_rf2_view or 'unknown'}",
             f"- Semantic tags: {_count(summary.semantic_tag_count)}",
             f"- Ancestor data: {_yes_no(summary.has_ancestors)}",
+            f"- Depth-to-root data: {_yes_no(summary.has_depth_to_root)}"
+            + (
+                f" (max known depth {summary.known_max_depth_to_root})"
+                if summary.known_max_depth_to_root is not None
+                else ""
+            ),
             f"- Historical associations: {_count(summary.historical_association_count) if summary.has_historical_associations else 'missing'}",
             f"- Historical is-a fallback edges: {_count(summary.historical_is_a_count) if summary.has_historical_is_a else 'missing'}",
         ]

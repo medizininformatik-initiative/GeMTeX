@@ -11,9 +11,11 @@ import numpy as np
 
 from ..hdf5_handling.policy import (
     has_active_ancestor_arrays,
+    has_depth_to_root_arrays,
     has_historical_is_a_relationships,
     read_active_ancestors,
     read_concepts,
+    read_depth_to_root,
     read_historical_associations,
     read_historical_is_a_relationships,
     read_policy_indices,
@@ -37,12 +39,20 @@ class SanitizationResolver:
         allowed_association_types: Sequence[str] = DEFAULT_ALLOWED_ASSOCIATION_TYPES,
         *,
         activate_historical_ancestor_fallback: bool = False,
-        ancestor_max_distance: int = 3,
+        ancestor_max_distance: int | None = 3,
+        ancestor_max_relative_distance: float | None = 0.35,
     ):
         self.hdf5_path = pathlib.Path(hdf5_path)
         self.allowed_association_types = frozenset(allowed_association_types)
         self.activate_historical_ancestor_fallback = bool(activate_historical_ancestor_fallback)
-        self.ancestor_max_distance = int(ancestor_max_distance)
+        self.ancestor_max_distance = (
+            None if ancestor_max_distance is None else int(ancestor_max_distance)
+        )
+        self.ancestor_max_relative_distance = (
+            None
+            if ancestor_max_relative_distance is None
+            else float(ancestor_max_relative_distance)
+        )
         self._load()
 
     def _load(self):
@@ -74,6 +84,13 @@ class SanitizationResolver:
                 self.active_ancestor_index = ancestors.ancestor_index
                 self.active_ancestor_concept_index = ancestors.ancestor_concept_index
                 self.active_ancestor_distance = ancestors.ancestor_distance
+
+            self.min_depth_to_root = None
+            self.max_depth_to_root = None
+            if has_depth_to_root_arrays(h5_file):
+                depth_to_root = read_depth_to_root(h5_file)
+                self.min_depth_to_root = depth_to_root.min_depth_to_root
+                self.max_depth_to_root = depth_to_root.max_depth_to_root
 
             self.historical_is_a_parent_by_source: dict[int, list[tuple[int, str]]] = {}
             if has_historical_is_a_relationships(h5_file):
@@ -270,6 +287,7 @@ class SanitizationResolver:
         distance_offset: int = 0,
         association_type: str = "IS_A_ACTIVE",
         effective_time: str | None = None,
+        estimated_source_depth: int | None = None,
     ) -> list[tuple[int, int, str, str | None]]:
         if (
             self.active_ancestor_index is None
@@ -287,9 +305,14 @@ class SanitizationResolver:
         ):
             ancestor_idx = int(ancestor_idx)
             distance = int(distance) + distance_offset
-            if distance > self.ancestor_max_distance:
+            if self.ancestor_max_distance is not None and distance > self.ancestor_max_distance:
                 continue
-            if self._is_policy_acceptable_ancestor(source_index, ancestor_idx):
+            if self._is_policy_acceptable_ancestor(source_index, ancestor_idx) and self._is_within_relative_ancestor_distance(
+                source_index,
+                ancestor_idx,
+                distance,
+                estimated_source_depth=estimated_source_depth,
+            ):
                 candidates.append((ancestor_idx, distance, association_type, effective_time))
         candidates.sort(key=lambda candidate: (candidate[1], self.codes[candidate[0]]))
         return candidates
@@ -302,14 +325,24 @@ class SanitizationResolver:
         best_distance_by_node = {source_index: 0}
         while queue:
             current_index, current_distance = queue.pop(0)
-            if current_distance >= self.ancestor_max_distance:
+            if self.ancestor_max_distance is not None and current_distance >= self.ancestor_max_distance:
                 continue
             for parent_index, effective_time in self.historical_is_a_parent_by_source.get(current_index, []):
                 next_distance = current_distance + 1
-                if best_distance_by_node.get(parent_index, self.ancestor_max_distance + 1) <= next_distance:
+                previous_best_distance = best_distance_by_node.get(parent_index)
+                if previous_best_distance is not None and previous_best_distance <= next_distance:
                     continue
                 best_distance_by_node[parent_index] = next_distance
-                if self._is_policy_acceptable_ancestor(source_index, parent_index):
+                estimated_source_depth = self._estimated_historical_source_depth(
+                    parent_index,
+                    next_distance,
+                )
+                if self._is_policy_acceptable_ancestor(source_index, parent_index) and self._is_within_relative_ancestor_distance(
+                    source_index,
+                    parent_index,
+                    next_distance,
+                    estimated_source_depth=estimated_source_depth,
+                ):
                     candidates.append((parent_index, next_distance, "IS_A_HISTORICAL", effective_time))
                 candidates.extend(
                     self._active_ancestor_candidates(
@@ -317,6 +350,7 @@ class SanitizationResolver:
                         distance_offset=next_distance,
                         association_type="IS_A_HISTORICAL_THEN_ACTIVE",
                         effective_time=effective_time,
+                        estimated_source_depth=estimated_source_depth,
                     )
                 )
                 queue.append((parent_index, next_distance))
@@ -332,6 +366,41 @@ class SanitizationResolver:
             and ancestor_index in self.whitelist_indices
             and ancestor_index not in self.blacklist_indices
         )
+
+    def _is_within_relative_ancestor_distance(
+        self,
+        source_index: int,
+        ancestor_index: int,
+        distance: int,
+        *,
+        estimated_source_depth: int | None = None,
+    ) -> bool:
+        if self.ancestor_max_relative_distance is None or self.max_depth_to_root is None:
+            return True
+
+        source_depth = estimated_source_depth
+        if source_depth is None and 0 <= source_index < len(self.max_depth_to_root):
+            source_depth = int(self.max_depth_to_root[source_index])
+        if (source_depth is None or source_depth <= 0) and 0 <= ancestor_index < len(self.max_depth_to_root):
+            ancestor_depth = int(self.max_depth_to_root[ancestor_index])
+            if ancestor_depth >= 0:
+                source_depth = ancestor_depth + int(distance)
+
+        if source_depth is None or source_depth <= 0:
+            return True
+        return (int(distance) / source_depth) <= self.ancestor_max_relative_distance
+
+    def _estimated_historical_source_depth(
+        self,
+        parent_index: int,
+        distance_to_parent: int,
+    ) -> int | None:
+        if self.max_depth_to_root is None or not (0 <= parent_index < len(self.max_depth_to_root)):
+            return None
+        parent_depth = int(self.max_depth_to_root[parent_index])
+        if parent_depth < 0:
+            return None
+        return parent_depth + int(distance_to_parent)
 
     def _ancestor_candidate(
         self,

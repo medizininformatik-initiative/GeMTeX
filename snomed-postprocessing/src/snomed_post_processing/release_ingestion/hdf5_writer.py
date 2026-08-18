@@ -57,6 +57,53 @@ def _categorical_ids(values: list[str]) -> tuple[list[str], list[int]]:
     return categories, [category_to_id[value] for value in values]
 
 
+def _compute_depth_to_root_arrays(
+    codes: list[str],
+    parent_map: dict[str, set[str]],
+    *,
+    root_code: str = "138875005",
+) -> tuple[np.ndarray, np.ndarray]:
+    """Compute min/max active is-a depth to the SNOMED root for each concept.
+
+    Unknown/unreachable concepts receive ``-1``. This is expected for inactive
+    concepts that are only present because of historical associations/fallback
+    edges and therefore have no active parent path in the policy-date hierarchy.
+    """
+
+    memo: dict[str, tuple[int, int]] = {}
+    visiting: set[str] = set()
+
+    def depth(code: str) -> tuple[int, int]:
+        if code in memo:
+            return memo[code]
+        if code == root_code:
+            memo[code] = (0, 0)
+            return memo[code]
+        if code in visiting:
+            logging.warning("Cycle detected while computing hierarchy depth at %s", code)
+            return (-1, -1)
+        visiting.add(code)
+        parent_depths = [depth(parent) for parent in parent_map.get(code, set())]
+        visiting.remove(code)
+        reachable = [(min_depth, max_depth) for min_depth, max_depth in parent_depths if min_depth >= 0]
+        if not reachable:
+            memo[code] = (-1, -1)
+        else:
+            memo[code] = (
+                min(min_depth for min_depth, _max_depth in reachable) + 1,
+                max(max_depth for _min_depth, max_depth in reachable) + 1,
+            )
+        return memo[code]
+
+    min_depths = np.empty((len(codes),), dtype=np.int16)
+    max_depths = np.empty((len(codes),), dtype=np.int16)
+    for idx, code in enumerate(codes):
+        min_depth, max_depth = depth(code)
+        min_depths[idx] = min_depth
+        max_depths[idx] = max_depth
+    return min_depths, max_depths
+
+
 def _write_legacy_policy_group(
     h5_file: h5py.File,
     group_name: str,
@@ -141,6 +188,8 @@ def write_snapshot_hdf5_from_rf2_zip(
     /concepts/semantic_tag_id
     /concepts/semantic_tags
     /concepts/active
+    /concepts/min_depth_to_root
+    /concepts/max_depth_to_root
     /historical_associations/source_index
     /historical_associations/target_index
     /historical_associations/association_type_id
@@ -324,6 +373,14 @@ def write_snapshot_hdf5_from_rf2_zip(
                 data=np.asarray([ancestor_code_to_index[str(code)] for code in ancestor_codes], dtype=np.int32),
             )
             concept_group.create_dataset("ancestor_distance", data=ancestor_distances.astype(np.int16))
+
+        if include_ancestors and not {"min_depth_to_root", "max_depth_to_root"}.issubset(concept_group.keys()):
+            for dataset_name in ("min_depth_to_root", "max_depth_to_root"):
+                if dataset_name in concept_group:
+                    del concept_group[dataset_name]
+            min_depths, max_depths = _compute_depth_to_root_arrays(codes, parent_map)
+            concept_group.create_dataset("min_depth_to_root", data=min_depths)
+            concept_group.create_dataset("max_depth_to_root", data=max_depths)
 
         if include_ancestors and ("historical_is_a" not in h5_file or force_overwrite_concepts):
             if "historical_is_a" in h5_file:

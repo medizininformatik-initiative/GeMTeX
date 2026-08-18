@@ -61,6 +61,14 @@ class AncestorsData:
 
 
 @dataclasses.dataclass(frozen=True)
+class DepthToRootData:
+    """Per-concept active hierarchy depth to root; -1 means unknown/unreachable."""
+
+    min_depth_to_root: np.ndarray
+    max_depth_to_root: np.ndarray
+
+
+@dataclasses.dataclass(frozen=True)
 class HistoricalIsARelationshipsData:
     """Inactive is-a relationship states used for historical ancestor fallback."""
 
@@ -165,6 +173,16 @@ def has_active_ancestor_arrays(h5_file: h5py.File) -> bool:
     )
 
 
+def has_depth_to_root_arrays(h5_file: h5py.File) -> bool:
+    return all(
+        path in h5_file
+        for path in (
+            "concepts/min_depth_to_root",
+            "concepts/max_depth_to_root",
+        )
+    )
+
+
 def has_historical_is_a_relationships(h5_file: h5py.File) -> bool:
     return all(
         path in h5_file
@@ -219,6 +237,19 @@ def read_active_ancestors(h5_file: h5py.File) -> AncestorsData:
         ancestor_index=np.asarray(concepts["ancestors_index"][:], dtype=np.int64),
         ancestor_concept_index=np.asarray(concepts["ancestor_concept_index"][:], dtype=np.int64),
         ancestor_distance=np.asarray(concepts["ancestor_distance"][:], dtype=np.int64),
+    )
+
+
+def read_depth_to_root(h5_file: h5py.File) -> DepthToRootData:
+    require_paths(
+        h5_file,
+        ["concepts/min_depth_to_root", "concepts/max_depth_to_root"],
+        purpose="depth-to-root-ready",
+    )
+    concepts = h5_file["concepts"]
+    return DepthToRootData(
+        min_depth_to_root=np.asarray(concepts["min_depth_to_root"][:], dtype=np.int64),
+        max_depth_to_root=np.asarray(concepts["max_depth_to_root"][:], dtype=np.int64),
     )
 
 

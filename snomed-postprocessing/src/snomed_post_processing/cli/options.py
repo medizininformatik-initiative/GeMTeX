@@ -230,11 +230,24 @@ def suggest_sanitization_options(fnc):
     """Apply options for the suggest-sanitization command."""
     fnc = click_log_level(fnc)
     fnc = click.option(
+        "--ancestor-max-relative-distance",
+        default=0.35,
+        show_default=True,
+        type=float,
+        help=(
+            "Maximum relative is-a distance for ancestor fallback suggestions "
+            "(distance divided by source depth-to-root). Use a negative value to disable."
+        ),
+    )(fnc)
+    fnc = click.option(
         "--ancestor-max-distance",
         default=3,
         show_default=True,
         type=int,
-        help="Maximum is-a distance for active/historical ancestor fallback suggestions.",
+        help=(
+            "Maximum absolute is-a distance for active/historical ancestor fallback "
+            "suggestions. Use a negative value to disable."
+        ),
     )(fnc)
     fnc = click.option(
         "--activate-historical-ancestor-fallback",
