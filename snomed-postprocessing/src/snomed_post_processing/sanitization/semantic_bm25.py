@@ -241,8 +241,16 @@ def apply_semantic_bm25_fallback(
             )
         ):
             bm25_suggestion = resolver.suggest(finding)
-            if bm25_suggestion.replacement_code is not None:
-                enhanced.append(bm25_suggestion)
+            if (
+                bm25_suggestion.replacement_code is not None
+                or bm25_suggestion.status == SanitizationStatus.AMBIGUOUS_REPLACEMENT
+            ):
+                enhanced.append(
+                    dataclasses.replace(
+                        bm25_suggestion,
+                        context_candidates=tuple(getattr(suggestion, "candidates", ())),
+                    )
+                )
                 continue
         enhanced.append(suggestion)
     return enhanced

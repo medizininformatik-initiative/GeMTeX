@@ -176,19 +176,23 @@ class SanitizationResolver:
         if ancestor_suggestion is not None:
             return ancestor_suggestion
 
+        ancestor_context = self._ancestor_context_candidates(source_index)
+        combined_candidates = tuple(candidates) + tuple(ancestor_context)
         if candidates:
             return SanitizationSuggestion(
                 finding=finding,
                 status=SanitizationStatus.NO_POLICY_ACCEPTABLE_CANDIDATE,
-                reason="historical associations exist, but no candidate satisfies active/whitelist/blacklist policy",
-                candidate_count=len(candidates),
-                candidates=tuple(candidates),
+                reason="historical associations exist, but no candidate satisfies active/whitelist/blacklist policy or enabled ancestor-distance limits",
+                candidate_count=len(combined_candidates),
+                candidates=combined_candidates,
             )
 
         return SanitizationSuggestion(
             finding=finding,
             status=SanitizationStatus.NO_HISTORICAL_ASSOCIATION,
             reason="no active allowed historical association found for source concept",
+            candidate_count=len(ancestor_context),
+            candidates=tuple(ancestor_context),
         )
 
     def suggest_all(self, findings: Sequence[CriticalFinding]) -> list[SanitizationSuggestion]:
@@ -288,6 +292,7 @@ class SanitizationResolver:
         association_type: str = "IS_A_ACTIVE",
         effective_time: str | None = None,
         estimated_source_depth: int | None = None,
+        enforce_distance_limits: bool = True,
     ) -> list[tuple[int, int, str, str | None]]:
         if (
             self.active_ancestor_index is None
@@ -305,13 +310,16 @@ class SanitizationResolver:
         ):
             ancestor_idx = int(ancestor_idx)
             distance = int(distance) + distance_offset
-            if self.ancestor_max_distance is not None and distance > self.ancestor_max_distance:
+            if enforce_distance_limits and self.ancestor_max_distance is not None and distance > self.ancestor_max_distance:
                 continue
-            if self._is_policy_acceptable_ancestor(source_index, ancestor_idx) and self._is_within_relative_ancestor_distance(
-                source_index,
-                ancestor_idx,
-                distance,
-                estimated_source_depth=estimated_source_depth,
+            if self._is_policy_acceptable_ancestor(source_index, ancestor_idx) and (
+                not enforce_distance_limits
+                or self._is_within_relative_ancestor_distance(
+                    source_index,
+                    ancestor_idx,
+                    distance,
+                    estimated_source_depth=estimated_source_depth,
+                )
             ):
                 candidates.append((ancestor_idx, distance, association_type, effective_time))
         candidates.sort(key=lambda candidate: (candidate[1], self.codes[candidate[0]]))
@@ -351,6 +359,75 @@ class SanitizationResolver:
                         association_type="IS_A_HISTORICAL_THEN_ACTIVE",
                         effective_time=effective_time,
                         estimated_source_depth=estimated_source_depth,
+                    )
+                )
+                queue.append((parent_index, next_distance))
+        candidates.sort(key=lambda candidate: (candidate[1], self.codes[candidate[0]]))
+        return candidates
+
+    def _ancestor_context_candidates(self, source_index: int) -> list[SanitizationCandidate]:
+        """Return nearest policy-acceptable ancestors rejected by distance limits.
+
+        These are not replacement suggestions. They are preserved as context so
+        that a later BM25 fallback report can show the closest structured
+        hierarchy candidate alongside the lexical BM25 top-k list.
+        """
+        if not self.activate_historical_ancestor_fallback:
+            return []
+
+        accepted = {
+            idx
+            for idx, _distance, _association_type, _effective_time in (
+                self._active_ancestor_candidates(source_index)
+                + self._historical_ancestor_candidates(source_index)
+            )
+        }
+        relaxed = (
+            self._active_ancestor_candidates(
+                source_index,
+                association_type="IS_A_ACTIVE_OUTSIDE_DISTANCE_LIMIT",
+                enforce_distance_limits=False,
+            )
+            + self._historical_ancestor_candidates_relaxed(source_index)
+        )
+        rejected = [candidate for candidate in relaxed if candidate[0] not in accepted]
+        if not rejected:
+            return []
+        min_distance = min(distance for _idx, distance, _association_type, _effective_time in rejected)
+        nearest = [candidate for candidate in rejected if candidate[1] == min_distance]
+        return [
+            self._ancestor_candidate(idx, association_type, effective_time)
+            for idx, _distance, association_type, effective_time in nearest
+        ]
+
+    def _historical_ancestor_candidates_relaxed(self, source_index: int) -> list[tuple[int, int, str, str | None]]:
+        if not self.historical_is_a_parent_by_source:
+            return []
+        candidates = []
+        queue = [(source_index, 0)]
+        best_distance_by_node = {source_index: 0}
+        while queue:
+            current_index, current_distance = queue.pop(0)
+            for parent_index, effective_time in self.historical_is_a_parent_by_source.get(current_index, []):
+                next_distance = current_distance + 1
+                previous_best_distance = best_distance_by_node.get(parent_index)
+                if previous_best_distance is not None and previous_best_distance <= next_distance:
+                    continue
+                best_distance_by_node[parent_index] = next_distance
+                estimated_source_depth = self._estimated_historical_source_depth(
+                    parent_index,
+                    next_distance,
+                )
+                if self._is_policy_acceptable_ancestor(source_index, parent_index):
+                    candidates.append((parent_index, next_distance, "IS_A_HISTORICAL_OUTSIDE_DISTANCE_LIMIT", effective_time))
+                candidates.extend(
+                    self._active_ancestor_candidates(
+                        parent_index,
+                        distance_offset=next_distance,
+                        association_type="IS_A_HISTORICAL_THEN_ACTIVE_OUTSIDE_DISTANCE_LIMIT",
+                        effective_time=effective_time,
+                        estimated_source_depth=estimated_source_depth,
+                        enforce_distance_limits=False,
                     )
                 )
                 queue.append((parent_index, next_distance))

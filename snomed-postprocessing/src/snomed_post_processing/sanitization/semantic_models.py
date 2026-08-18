@@ -6,7 +6,7 @@ import dataclasses
 from typing import Optional
 
 from ..uima_processing import CriticalFinding
-from .models import SanitizationStatus
+from .models import SanitizationCandidate, SanitizationStatus
 
 
 @dataclasses.dataclass(frozen=True)
@@ -40,6 +40,7 @@ class SemanticBm25Suggestion:
     score: float = 0.0
     candidate_count: int = 0
     candidates: tuple[SemanticBm25Candidate, ...] = ()
+    context_candidates: tuple[SanitizationCandidate, ...] = ()
 
 
 @dataclasses.dataclass(frozen=True)

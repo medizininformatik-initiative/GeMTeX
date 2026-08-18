@@ -61,6 +61,7 @@ def _write_replacement_table(
             "Replacement Code",
             "Replacement FSN",
             "Association",
+            "Candidates / context",
         ),
         row_builder=lambda suggestion: (
             suggestion.finding.document,
@@ -71,6 +72,7 @@ def _write_replacement_table(
             suggestion.replacement_code or "",
             suggestion.replacement_fsn or "",
             suggestion.association_type or "",
+            _format_candidates(suggestion),
         ),
     )
 
@@ -84,12 +86,14 @@ def _write_unresolved_table(
         output_file,
         heading,
         suggestions,
-        columns=("Document", "Source Code", "Covered Text", "Status"),
+        columns=("Document", "Source Code", "Covered Text", "Original FSN", "Status", "Candidates / context"),
         row_builder=lambda suggestion: (
             suggestion.finding.document,
             suggestion.finding.code or "",
             suggestion.finding.covered_text,
+            suggestion.finding.fsn or "",
             suggestion.status.value,
+            _format_candidates(suggestion),
         ),
     )
 
@@ -119,6 +123,28 @@ def _write_grouped_suggestion_table(
                 + " |\n"
             )
         output_file.write("\n")
+
+
+def _format_candidates(suggestion) -> str:
+    parts = []
+    context_candidates = getattr(suggestion, "context_candidates", ()) or ()
+    if context_candidates:
+        parts.append(
+            "Nearest rejected ancestor: "
+            + _format_candidate_list(context_candidates)
+        )
+    candidates = getattr(suggestion, "candidates", ()) or ()
+    if candidates:
+        label = "BM25 candidates" if suggestion.association_type == "BM25" else "Candidates"
+        parts.append(label + ": " + _format_candidate_list(candidates))
+    return " / ".join(parts)
+
+
+def _format_candidate_list(candidates) -> str:
+    return "; ".join(
+        f"{candidate.code} — {candidate.fsn or ''}"
+        for candidate in candidates
+    )
 
 
 def _md(value: str) -> str:
