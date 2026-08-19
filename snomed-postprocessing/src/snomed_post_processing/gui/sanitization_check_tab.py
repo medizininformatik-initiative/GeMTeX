@@ -203,7 +203,7 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
 
             sanitization_report_text = output_sanitization_md.read_text(encoding="utf-8")
             st.success("Sanitization suggestions finished.")
-            download_json_report(sanitization_json_text, output_sanitization_json)
+            download_json_report(sanitization_json_text, output_sanitization_json, "sanitization suggestion")
             download_md_report(
                 sanitization_report_text,
                 output_sanitization_md,

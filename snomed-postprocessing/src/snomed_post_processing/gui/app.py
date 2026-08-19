@@ -32,7 +32,7 @@ if inputs.hdf5_file is not None:
     try:
         inputs.hdf5_temp_path = save_uploaded_file(inputs.hdf5_file, ".hdf5")
         hdf5_summary = inspect_hdf5_metadata(inputs.hdf5_temp_path)
-        with st.expander("HDF5 metadata summary", expanded=True):
+        with st.expander("HDF5 metadata summary", expanded=False):
             st.markdown(
                 format_hdf5_metadata_summary(
                     hdf5_summary,

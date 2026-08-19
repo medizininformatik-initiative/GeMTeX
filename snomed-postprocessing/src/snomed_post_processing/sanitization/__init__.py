@@ -7,6 +7,12 @@ semantic BM25 fallback suggestions. It does not mutate documents or CAS files.
 
 from __future__ import annotations
 
+from .decisions_json import (
+    read_sanitization_decisions_json,
+    sanitization_decisions_json_text,
+    sanitization_decisions_payload,
+    write_sanitization_decisions_json,
+)
 from .json_io import (
     read_sanitization_suggestions_json,
     read_sanitization_suggestions_json_with_metadata,
@@ -56,6 +62,10 @@ __all__ = [
     "SemanticBm25Suggestion",
     "apply_semantic_bm25_fallback",
     "suggest_semantic_bm25",
+    "sanitization_decisions_payload",
+    "sanitization_decisions_json_text",
+    "write_sanitization_decisions_json",
+    "read_sanitization_decisions_json",
     "sanitization_suggestion_to_dict",
     "sanitization_suggestion_from_dict",
     "sanitization_suggestions_payload",

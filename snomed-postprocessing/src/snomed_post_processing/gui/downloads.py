@@ -8,9 +8,9 @@ import streamlit as st
 
 
 @st.fragment
-def download_json_report(json_dump, output_fi: pathlib.Path):
+def download_json_report(json_dump, output_fi: pathlib.Path, label: str):
     st.download_button(
-        label="Download sanitization suggestion json",
+        label=f"Download {label} json",
         data=json_dump,
         file_name=output_fi.name,
         mime="text/json",

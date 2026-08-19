@@ -106,20 +106,26 @@ def render_policy_tab(inputs: GuiInputs) -> None:
 
             st.success("Policy check finished.")
             st.metric("Critical documents found", erroneous_doc_count)
-            st.write(f"Report saved to folder: `{output_path_md.parent.resolve()}`")
 
-            for triple in [
-                (report_text, output_path_md, "markdown"),
-                (report_text_masked, output_path_md_masked, "masked markdown"),
-            ]:
-                download_md_report(*triple)
-            download_json_report(json_text, output_path_json)
             st.download_button(
                 label="Download CriticalFindings JSON",
                 data=findings_json_text,
                 file_name=output_path_findings_json.name,
                 mime="application/json",
+                help="Download the critical findings as JSON to load them in later for sanitization.",
             )
+
+            st.subheader("Reports")
+            st.write(f"Report saved to folder: `{output_path_md.parent.resolve()}`")
+            report_col1, report_col2, report_col3 = st.columns(3)
+            for col, triple in zip(
+                    [report_col1, report_col2],
+                    [(report_text, output_path_md, "markdown"), (report_text_masked, output_path_md_masked, "masked markdown"),]
+            ):
+                with col:
+                    download_md_report(*triple)
+            with report_col3:
+                download_json_report(json_text, output_path_json, "report")
 
             with st.expander("Preview report"):
                 st.markdown(report_text)
