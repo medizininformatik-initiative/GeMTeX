@@ -39,6 +39,8 @@ Eine Demo bzw. Machbarkeitsnachweis wie CDA Dokumente Level One über XSLT Style
 Python-Skripte um die [Averbis Health Discovery](https://averbis.com/health-discovery/) per API anzusprechen.
 * [`inception-export`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/scripts/inception-export)  
 Pyhon CLI/Streamlit GUI to export INCEpTION Projects in a KDS compliant form   
+* [`py-anonymizer`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/scripts/py-anonymizer)  
+Prozessiert Semann Annotationsdateien (``.zip``) und anonymisiert Annotator:innen auf Grundlage einer ``csv``.  
 * [`uima_cas_converter`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/scripts/uima_cas_converter)  
 Ein einfaches Skript um UIMA CAS-Dateien von `json` in `xmi` umzuschreiben oder umgekehrt.
 * [`zip-renaming`](https://github.com/medizininformatik-initiative/GeMTeX/tree/main/scripts/zip-renaming)  
