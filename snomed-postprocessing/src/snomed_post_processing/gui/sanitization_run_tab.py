@@ -26,8 +26,9 @@ NO_REPLACEMENT_LABEL = "— no replacement selected —"
 def render_sanitization_run_tab(inputs: GuiInputs) -> None:
     st.write("Review sanitization suggestions before applying them back to CAS documents.")
 
+    st.subheader("Loading from external")
     uploaded_decisions_file = st.file_uploader(
-        "Reviewed sanitization decisions JSON",
+        "(Optional) Reviewed sanitization decisions JSON",
         type=["json"],
         help="Optional: load a previously saved review state after loading/generating the matching suggestions.",
     )
@@ -43,7 +44,7 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
                 st.error(f"Could not load sanitization decisions JSON: {exc}")
 
     uploaded_suggestions_file = st.file_uploader(
-        "Sanitization suggestions JSON",
+        "(Optional) Sanitization suggestions JSON",
         type=["json"],
         help="Upload suggestions saved from the sanitization-check tab, or use suggestions from this session.",
     )
@@ -80,6 +81,7 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
 
     _render_suggestion_settings(st.session_state.get("sanitization_suggestions_metadata") or {})
 
+    st.subheader("Results")
     rows = _suggestions_to_review_rows(suggestions)
     reviewed_decisions = _render_document_review_sections(rows)
     st.session_state["sanitization_review_decisions"] = reviewed_decisions
