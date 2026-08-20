@@ -112,6 +112,7 @@ def _run_rf2_zip_dump(
     memoize_ancestors: bool,
 ) -> None:
     code_filter = _read_optional_filter_list(filter_list)
+    blacklist_rule_source_name = _filter_list_source_name(filter_list) if code_filter else None
     blacklist_root_codes, blacklist_filter_tags = _split_rf2_blacklist_filters(code_filter)
     whitelist_root_codes = _rf2_whitelist_roots(root_code, dump_mode, code_filter)
     output = output or _default_rf2_output_path(rf2_zip)
@@ -127,6 +128,8 @@ def _run_rf2_zip_dump(
             whitelist_root_codes=whitelist_root_codes,
             blacklist_filter_tags=blacklist_filter_tags,
             blacklist_root_codes=blacklist_root_codes,
+            blacklist_raw_rules=code_filter,
+            blacklist_rule_source_name=blacklist_rule_source_name,
             policy_date=policy_date,
             write_legacy_policy_groups=write_legacy_policy_groups,
             force_overwrite=force_overwrite,
@@ -142,6 +145,13 @@ def _run_rf2_zip_dump(
         f"{summary.association_count} historical association(s), {summary.whitelist_count} whitelist policy concept(s), "
         f"and {summary.blacklist_count} blacklist policy concept(s)."
     )
+
+
+def _filter_list_source_name(filter_list: Union[str, click.File]) -> str:
+    first = pathlib.Path(filter_list[0])
+    if first.is_file():
+        return first.name
+    return "CLI arguments"
 
 
 def _read_optional_filter_list(filter_list: Union[str, click.File]) -> Optional[list[str]]:

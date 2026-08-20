@@ -13,6 +13,20 @@ from .policy import decode_array
 
 
 @dataclasses.dataclass(frozen=True)
+class BlacklistRuleMetadata:
+    raw: str
+    kind: str
+
+
+@dataclasses.dataclass(frozen=True)
+class BlacklistMetadata:
+    view_name: str
+    source_name: Optional[str]
+    format_version: Optional[str]
+    rules: tuple[BlacklistRuleMetadata, ...]
+
+
+@dataclasses.dataclass(frozen=True)
 class Hdf5MetadataSummary:
     path: pathlib.Path
     has_concepts: bool
@@ -32,6 +46,7 @@ class Hdf5MetadataSummary:
     historical_association_type_counts: tuple[tuple[str, int], ...] = ()
     policy_view_counts: tuple[tuple[str, str, int], ...] = ()
     legacy_group_counts: tuple[tuple[str, str, int], ...] = ()
+    blacklist_metadata: tuple[BlacklistMetadata, ...] = ()
 
     @property
     def sanitization_ready(self) -> bool:
@@ -124,6 +139,27 @@ def inspect_hdf5_metadata(path: Union[str, pathlib.Path]) -> Hdf5MetadataSummary
                     if int(counts[idx]) > 0
                 )
 
+        blacklist_metadata = []
+        if "metadata" in h5_file and "blacklists" in h5_file["metadata"]:
+            blacklists_group = h5_file["metadata/blacklists"]
+            for view_name in sorted(blacklists_group.keys()):
+                view = blacklists_group[view_name]
+                raw_rules = decode_array(view["rules_raw"][:]) if "rules_raw" in view else []
+                rule_kinds = decode_array(view["rules_kind"][:]) if "rules_kind" in view else []
+                if len(rule_kinds) < len(raw_rules):
+                    rule_kinds = [*rule_kinds, *("unknown" for _ in range(len(raw_rules) - len(rule_kinds)))]
+                blacklist_metadata.append(
+                    BlacklistMetadata(
+                        view_name=view_name,
+                        source_name=_attr(view, "source_name"),
+                        format_version=_attr(view, "format_version"),
+                        rules=tuple(
+                            BlacklistRuleMetadata(raw=raw, kind=kind)
+                            for raw, kind in zip(raw_rules, rule_kinds)
+                        ),
+                    )
+                )
+
         has_historical_is_a = "historical_is_a" in h5_file
         historical_is_a_count = None
         if has_historical_is_a:
@@ -150,6 +186,7 @@ def inspect_hdf5_metadata(path: Union[str, pathlib.Path]) -> Hdf5MetadataSummary
         historical_association_type_counts=historical_association_type_counts,
         policy_view_counts=tuple(policy_view_counts),
         legacy_group_counts=tuple(legacy_group_counts),
+        blacklist_metadata=tuple(blacklist_metadata),
     )
 
 
@@ -204,7 +241,26 @@ def format_hdf5_metadata_summary(
         lines.append("- Legacy groups:")
         for policy, view_name, count in summary.legacy_group_counts:
             lines.append(f"  - {policy}/{view_name}: {count:,} concepts")
+    if summary.blacklist_metadata:
+        lines.append("- Blacklist rule metadata:")
+        for metadata in summary.blacklist_metadata:
+            source = f", source: {metadata.source_name}" if metadata.source_name else ""
+            lines.append(
+                f"  - blacklists/{metadata.view_name}: {len(metadata.rules):,} rule(s){source}"
+            )
+            for rule in metadata.rules[:10]:
+                lines.append(f"    - {_format_blacklist_rule_kind(rule.kind)}: {rule.raw}")
+            if len(metadata.rules) > 10:
+                lines.append(f"    - ... {len(metadata.rules) - 10:,} more rule(s)")
     return "\n".join(lines) + "\n"
+
+
+def _format_blacklist_rule_kind(kind: str) -> str:
+    if kind == "fsn_tag":
+        return "FSN tag"
+    if kind == "concept_descendants":
+        return "Concept + descendants"
+    return kind or "unknown"
 
 
 def _attr(group: h5py.Group, name: str) -> Optional[str]:

@@ -119,6 +119,38 @@ def _write_legacy_policy_group(
     )
 
 
+def _blacklist_rule_kind(rule: str) -> str:
+    return "concept_descendants" if str(rule).strip().isdigit() else "fsn_tag"
+
+
+def _write_blacklist_metadata(
+    h5_file: h5py.File,
+    *,
+    raw_rules: Iterable[str],
+    source_name: Optional[str],
+    force_overwrite: bool,
+):
+    metadata_group = h5_file["metadata"] if "metadata" in h5_file else h5_file.create_group("metadata")
+    blacklists_group = (
+        metadata_group["blacklists"]
+        if "blacklists" in metadata_group
+        else metadata_group.create_group("blacklists")
+    )
+    if "0" in blacklists_group:
+        if not force_overwrite:
+            raise ValueError(
+                "HDF5 blacklist metadata '/metadata/blacklists/0' already exists. Use --force-overwrite to replace it."
+            )
+        del blacklists_group["0"]
+    group = blacklists_group.create_group("0")
+    rules = [str(rule).strip() for rule in raw_rules if str(rule).strip()]
+    group.attrs["format_version"] = 1
+    if source_name:
+        group.attrs["source_name"] = source_name
+    _write_string_dataset(group, "rules_raw", rules)
+    _write_string_dataset(group, "rules_kind", (_blacklist_rule_kind(rule) for rule in rules))
+
+
 def _write_policy_view(
     policy_views_group: h5py.Group,
     policy_name: str,
@@ -172,6 +204,8 @@ def write_snapshot_hdf5_from_rf2_zip(
     whitelist_root_codes: Optional[Iterable[str]] = None,
     blacklist_filter_tags: Optional[Iterable[str]] = None,
     blacklist_root_codes: Optional[Iterable[str]] = None,
+    blacklist_raw_rules: Optional[Iterable[str]] = None,
+    blacklist_rule_source_name: Optional[str] = None,
     policy_date: Optional[str] = None,
     write_legacy_policy_groups: bool = False,
     force_overwrite: bool = False,
@@ -228,6 +262,7 @@ def write_snapshot_hdf5_from_rf2_zip(
     whitelist_root_codes = list(whitelist_root_codes or [])
     blacklist_filter_tags = list(blacklist_filter_tags or [])
     blacklist_root_codes = list(blacklist_root_codes or [])
+    blacklist_raw_rules = list(blacklist_raw_rules or [*blacklist_filter_tags, *blacklist_root_codes])
 
     with zipfile.ZipFile(zip_path) as zf:
         logging.info("Reading RF2 %s concept active state from %s", members.view, members.concept)
@@ -461,6 +496,12 @@ def write_snapshot_hdf5_from_rf2_zip(
                     policy_date=policy_date,
                     release_date=members.release_date,
                     rf2_view=rf2_view,
+                    force_overwrite=force_overwrite,
+                )
+                _write_blacklist_metadata(
+                    h5_file,
+                    raw_rules=blacklist_raw_rules,
+                    source_name=blacklist_rule_source_name,
                     force_overwrite=force_overwrite,
                 )
                 if write_legacy_policy_groups:
