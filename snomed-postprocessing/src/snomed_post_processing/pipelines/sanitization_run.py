@@ -1,40 +1,231 @@
-"""Sanitization-run pipeline for applying suggestions to UIMA/CAS files.
-
-This module intentionally starts as a skeleton. The sanitization-check pipeline
-produces suggestion reports; this future pipeline will apply reviewed
-sanitization decisions to exported INCEpTION/UIMA CAS files.
-"""
+"""Sanitization-run pipeline for applying reviewed suggestions to UIMA/CAS files."""
 
 from __future__ import annotations
 
+import dataclasses
+import io
 import pathlib
-from typing import Optional
+import zipfile
+from typing import Any, Optional
+
+from ..uima_processing.io import (
+    _annotator_name_from_cas_path,
+    _load_cas_from_zip_member,
+    _load_typesystem_from_zip,
+    _prefer_non_ser_files,
+    _read_project,
+    _yield_flat_archive_files,
+    _yield_matching_files,
+)
 
 
-class SanitizationRunNotImplementedError(NotImplementedError):
-    """Raised when the not-yet-implemented sanitization run pipeline is invoked."""
+@dataclasses.dataclass(frozen=True)
+class SanitizationRunResult:
+    output_project: pathlib.Path
+    decision_count: int
+    applied_decision_count: int
+    changed_annotation_count: int
+    changed_member_count: int
+    unmatched_decisions: tuple[dict[str, Any], ...]
+    skipped_decisions: tuple[dict[str, Any], ...]
+
+
+class SanitizationRunError(RuntimeError):
+    """Raised when the sanitization run cannot be completed."""
 
 
 def run_sanitization(
     input_project: pathlib.Path,
-    suggestions_path: pathlib.Path,
+    decisions: list[dict[str, Any]],
     output_project: pathlib.Path,
     *,
-    dry_run: bool = True,
     annotator_filter: Optional[set[str]] = None,
-):
-    """Apply reviewed sanitization suggestions to UIMA/CAS files.
+    id_prefix: str = "http://snomed.info/id/",
+) -> SanitizationRunResult:
+    """Apply reviewed sanitization decisions to copied INCEpTION/UIMA project ZIP.
 
-    Planned behavior:
-    - read a project ZIP or extracted project directory from ``input_project``
-    - read reviewed sanitization suggestions from ``suggestions_path``
-    - update matching UIMA/CAS annotations safely
-    - write the sanitized project to ``output_project``
-    - support ``dry_run`` reporting before modifying/writing CAS content
-
-    This is a placeholder until CAS mutation semantics and reviewed suggestion
-    input format are finalized.
+    The original project is never modified. Only JSON CAS and XMI members are
+    rewritten; unsupported ``.ser`` files are copied unchanged. Decisions are
+    matched conservatively by document, annotator, layer, span, and source code.
     """
-    raise SanitizationRunNotImplementedError(
-        "Sanitization run is not implemented yet. Use the sanitization-check pipeline to generate suggestion reports first."
+    input_project = pathlib.Path(input_project)
+    output_project = pathlib.Path(output_project)
+    if not input_project.exists() or not input_project.is_file():
+        raise FileNotFoundError(f"Input project does not exist: {input_project}")
+    if input_project.resolve() == output_project.resolve():
+        raise SanitizationRunError("Output project must be different from input project.")
+
+    applicable_decisions = [decision for decision in decisions if _is_applicable_decision(decision)]
+    skipped_decisions = [decision for decision in decisions if not _is_applicable_decision(decision)]
+    decisions_by_key = _group_decisions_by_document_annotator(applicable_decisions)
+    matched_decision_indices: set[int] = set()
+    changed_member_count = 0
+    changed_annotation_count = 0
+
+    output_project.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(input_project, "r") as in_zip:
+        project_documents = _read_project(in_zip, input_project.name)
+        typesystem = _load_typesystem_from_zip(in_zip)
+        typesystem_by_parent = {}
+        matching_document_files = list(
+            _yield_matching_files(
+                project_documents,
+                in_zip,
+                input_project.name,
+                allowed_extensions=[".json", ".xmi", ".ser"],
+            )
+        )
+        fallback_flat_layout = project_documents is None
+        if matching_document_files and all(
+            cas_path.lower().endswith(".ser")
+            for _, matching_files in matching_document_files
+            for cas_path in matching_files
+        ):
+            flat_document_files = _prefer_non_ser_files(
+                list(_yield_flat_archive_files(in_zip, allowed_extensions=[".json", ".xmi", ".ser"]))
+            )
+            if flat_document_files:
+                matching_document_files = flat_document_files
+                fallback_flat_layout = True
+        elif not matching_document_files:
+            matching_document_files = _prefer_non_ser_files(
+                list(_yield_flat_archive_files(in_zip, allowed_extensions=[".json", ".xmi", ".ser"]))
+            )
+            fallback_flat_layout = True
+
+        member_to_doc_annotator: dict[str, tuple[str, str]] = {}
+        for document, matching_files in matching_document_files:
+            seen_doc_paths = set()
+            matching_files = [
+                cas_path
+                for cas_path in matching_files
+                if not (cas_path in seen_doc_paths or seen_doc_paths.add(cas_path))
+            ]
+            non_ser_files = [cas_path for cas_path in matching_files if not cas_path.lower().endswith(".ser")]
+            if non_ser_files:
+                matching_files = non_ser_files
+            for cas_path in matching_files:
+                annotator = _annotator_name_from_cas_path(cas_path, fallback_flat_layout=fallback_flat_layout)
+                if annotator_filter is not None and annotator.lower() not in annotator_filter:
+                    continue
+                member_to_doc_annotator[cas_path] = (document, annotator)
+
+        with zipfile.ZipFile(output_project, "w", compression=zipfile.ZIP_DEFLATED) as out_zip:
+            for info in in_zip.infolist():
+                if info.filename.lower().endswith(".ser"):
+                    continue
+                data = in_zip.read(info.filename)
+                replacement_data = data
+                if not info.is_dir() and info.filename in member_to_doc_annotator:
+                    document, annotator = member_to_doc_annotator[info.filename]
+                    key = (document, annotator)
+                    member_decisions = decisions_by_key.get(key, [])
+                    if member_decisions and not info.filename.lower().endswith(".ser"):
+                        parent = str(pathlib.PurePosixPath(info.filename).parent)
+                        cas_typesystem = typesystem_by_parent.get(parent)
+                        if cas_typesystem is None:
+                            cas_typesystem = _load_typesystem_from_zip(in_zip, info.filename) or typesystem
+                            typesystem_by_parent[parent] = cas_typesystem
+                        cas = _load_cas_from_zip_member(in_zip, info.filename, typesystem=cas_typesystem)
+                        changed = _apply_decisions_to_cas(cas, member_decisions, matched_decision_indices, id_prefix=id_prefix)
+                        if changed:
+                            replacement_data = _serialize_cas_for_member(cas, info.filename)
+                            changed_member_count += 1
+                            changed_annotation_count += changed
+                out_zip.writestr(_copy_zip_info(info), replacement_data)
+
+    unmatched_decisions = tuple(
+        decision
+        for idx, decision in enumerate(applicable_decisions)
+        if idx not in matched_decision_indices
     )
+    return SanitizationRunResult(
+        output_project=output_project,
+        decision_count=len(decisions),
+        applied_decision_count=len(applicable_decisions),
+        changed_annotation_count=changed_annotation_count,
+        changed_member_count=changed_member_count,
+        unmatched_decisions=unmatched_decisions,
+        skipped_decisions=tuple(skipped_decisions),
+    )
+
+
+def _is_applicable_decision(decision: dict[str, Any]) -> bool:
+    return bool(decision.get("apply")) and bool(decision.get("valid_choice")) and bool(decision.get("replacement_code"))
+
+
+def _group_decisions_by_document_annotator(decisions: list[dict[str, Any]]) -> dict[tuple[str, str], list[tuple[int, dict[str, Any]]]]:
+    grouped: dict[tuple[str, str], list[tuple[int, dict[str, Any]]]] = {}
+    for idx, decision in enumerate(decisions):
+        grouped.setdefault((str(decision.get("document", "")), str(decision.get("annotator", ""))), []).append((idx, decision))
+    return grouped
+
+
+def _apply_decisions_to_cas(cas, decisions: list[tuple[int, dict[str, Any]]], matched_indices: set[int], *, id_prefix: str) -> int:
+    changed = 0
+    for decision_idx, decision in decisions:
+        for annotation in _matching_annotations(cas, decision, id_prefix=id_prefix):
+            current_id = annotation.get("id")
+            annotation.set("id", _replacement_id(current_id, str(decision["replacement_code"]), id_prefix=id_prefix))
+            matched_indices.add(decision_idx)
+            changed += 1
+            break
+    return changed
+
+
+def _matching_annotations(cas, decision: dict[str, Any], *, id_prefix: str):
+    layer = decision.get("layer")
+    if not layer:
+        return
+    try:
+        annotations = cas.select(str(layer))
+    except Exception:
+        return
+    offset = tuple(decision.get("offset") or ())
+    source_code = str(decision.get("source_code", ""))
+    covered_text = str(decision.get("covered_text", ""))
+    for annotation in annotations:
+        if len(offset) == 2 and (int(annotation.begin), int(annotation.end)) != (int(offset[0]), int(offset[1])):
+            continue
+        current_code = _normalize_snomed_id(annotation.get("id"), id_prefix=id_prefix)
+        if source_code and current_code != source_code.lower():
+            continue
+        if covered_text:
+            try:
+                if annotation.get_covered_text() != covered_text:
+                    continue
+            except Exception:
+                pass
+        yield annotation
+
+
+def _normalize_snomed_id(value: Any, *, id_prefix: str) -> str:
+    if value is None:
+        return ""
+    prefix = id_prefix if id_prefix.endswith("/") else id_prefix + "/"
+    return str(value).strip().lower().removeprefix(prefix.lower()).strip()
+
+
+def _replacement_id(current_id: Any, replacement_code: str, *, id_prefix: str) -> str:
+    if current_id is not None and str(current_id).strip().lower().startswith(id_prefix.lower()):
+        prefix = id_prefix if id_prefix.endswith("/") else id_prefix + "/"
+        return prefix + replacement_code
+    return replacement_code
+
+
+def _serialize_cas_for_member(cas, member_name: str) -> bytes:
+    if member_name.lower().endswith(".json"):
+        return cas.to_json().encode("utf-8")
+    if member_name.lower().endswith(".xmi"):
+        return cas.to_xmi().encode("utf-8")
+    raise SanitizationRunError(f"Unsupported writable CAS format: {member_name}")
+
+
+def _copy_zip_info(info: zipfile.ZipInfo) -> zipfile.ZipInfo:
+    copied = zipfile.ZipInfo(info.filename, date_time=info.date_time)
+    copied.comment = info.comment
+    copied.extra = info.extra
+    copied.internal_attr = info.internal_attr
+    copied.external_attr = info.external_attr
+    copied.create_system = info.create_system
+    return copied

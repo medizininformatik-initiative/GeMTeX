@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import datetime
 import pathlib
+import tempfile
 from typing import Any
 
 import pandas as pd
@@ -16,7 +18,9 @@ from snomed_post_processing.sanitization import (
 
 from .downloads import download_json_report
 from snomed_post_processing.sanitization.models import SanitizationStatus
+from snomed_post_processing.pipelines.sanitization_run import run_sanitization
 
+from .files import save_uploaded_file
 from .sidebar import GuiInputs
 
 
@@ -27,25 +31,10 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
     st.write("Review sanitization suggestions before applying them back to CAS documents.")
 
     st.subheader("Loading from external")
-    uploaded_decisions_file = st.file_uploader(
-        "(Optional) Reviewed sanitization decisions JSON",
-        type=["json"],
-        help="Optional: load a previously saved review state after loading/generating the matching suggestions.",
-    )
-    if uploaded_decisions_file is not None:
-        upload_key = _uploaded_file_key(uploaded_decisions_file)
-        if st.session_state.get("loaded_sanitization_decisions_upload_key") != upload_key:
-            try:
-                decisions, metadata = read_sanitization_decisions_json(uploaded_decisions_file)
-                _restore_decision_state(decisions, metadata)
-                st.session_state["loaded_sanitization_decisions_upload_key"] = upload_key
-                st.success(f"Loaded reviewed decisions from {uploaded_decisions_file.name}.")
-            except Exception as exc:
-                st.error(f"Could not load sanitization decisions JSON: {exc}")
-
     uploaded_suggestions_file = st.file_uploader(
         "(Optional) Sanitization suggestions JSON",
         type=["json"],
+        key="sanitization_suggestions_json_uploader",
         help="Upload suggestions saved from the sanitization-check tab, or use suggestions from this session.",
     )
     if uploaded_suggestions_file is not None:
@@ -58,16 +47,46 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
                 st.session_state["sanitization_suggestions_report_path"] = None
                 st.session_state["sanitization_suggestions_json_path"] = uploaded_suggestions_file.name
                 st.session_state["loaded_sanitization_suggestions_upload_key"] = upload_key
-                st.success(f"Loaded suggestions from {uploaded_suggestions_file.name}.")
+                _bump_review_state_revision()
+                st.session_state["sanitization_last_load_message"] = f"Loaded suggestions from {uploaded_suggestions_file.name}."
+                st.rerun()
             except Exception as exc:
                 st.error(f"Could not load sanitization suggestions JSON: {exc}")
 
+    uploaded_decisions_file = st.file_uploader(
+        "(Optional) Reviewed sanitization decisions JSON",
+        type=["json"],
+        key="sanitization_decisions_json_uploader",
+        help="Optional: load a previously saved review state after loading/generating the matching suggestions.",
+    )
+    if uploaded_decisions_file is not None:
+        upload_key = _uploaded_file_key(uploaded_decisions_file)
+        if st.session_state.get("loaded_sanitization_decisions_upload_key") != upload_key:
+            try:
+                decisions, metadata = read_sanitization_decisions_json(uploaded_decisions_file)
+                _restore_decision_state(decisions, metadata)
+                st.session_state["loaded_sanitization_decisions_upload_key"] = upload_key
+                _bump_review_state_revision()
+                st.session_state["sanitization_last_load_message"] = f"Loaded reviewed decisions from {uploaded_decisions_file.name}."
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Could not load sanitization decisions JSON: {exc}")
+
+    if st.session_state.get("sanitization_last_load_message"):
+        st.success(st.session_state.pop("sanitization_last_load_message"))
+
     suggestions = st.session_state.get("sanitization_suggestions")
     if not suggestions:
-        st.info(
-            "No sanitization suggestions are available yet. Generate suggestions in the previous tab "
-            "or upload a saved suggestions JSON file."
-        )
+        if st.session_state.get("sanitization_restored_decisions_by_index"):
+            st.info(
+                "Reviewed decisions are loaded, but no sanitization suggestions are available yet. "
+                "Upload the matching suggestions JSON or generate suggestions in the previous tab."
+            )
+        else:
+            st.info(
+                "No sanitization suggestions are available yet. Generate suggestions in the previous tab "
+                "or upload a saved suggestions JSON file."
+            )
         st.button("Run sanitization", type="primary", disabled=True)
         return
 
@@ -88,11 +107,6 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
 
     decisions_metadata = _decisions_metadata(rows)
     decisions_text = sanitization_decisions_json_text(reviewed_decisions, metadata=decisions_metadata)
-    download_json_report(
-        decisions_text,
-        pathlib.Path("reviewed_sanitization_decisions.json"),
-        "reviewed sanitization suggestion"
-    )
 
     invalid_selected_rows = [
         decision for decision in reviewed_decisions if decision["apply"] and not decision["valid_choice"]
@@ -105,15 +119,80 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
             "Please choose one of the row's candidate options."
         )
 
-    st.info(
-        "CAS write-back is still not implemented. This tab currently prepares reviewed "
-        "replacement decisions for the next implementation step."
+    _render_sanitization_run_controls(
+        reviewed_decisions,
+        decisions_text,
+        selected_count=selected_count,
+        has_invalid_selected_rows=bool(invalid_selected_rows),
     )
-    st.button("Run sanitization", type="primary", disabled=True)
+
+
+def _render_sanitization_run_controls(
+    reviewed_decisions: list[dict[str, Any]],
+    decisions_text: str,
+    *,
+    selected_count: int,
+    has_invalid_selected_rows: bool,
+) -> None:
+    st.subheader("Run")
+    project_source = st.session_state.get("zip_file")
+    if project_source is None:
+        st.info("Upload or load an INCEpTION project ZIP in the sidebar before running sanitization.")
+
+    run_disabled = project_source is None or selected_count == 0 or has_invalid_selected_rows
+    run_clicked = st.button(
+        "Run sanitization",
+        type="primary",
+        disabled=run_disabled,
+        help=(
+            "Writes a sanitized copy of the uploaded project ZIP. The original project is not modified."
+        ),
+    )
+
+    download_json_report(
+        decisions_text,
+        pathlib.Path("reviewed_sanitization_decisions.json"),
+        "reviewed sanitization decisions",
+    )
+    if not run_clicked:
+        return
+
+    try:
+        input_project = save_uploaded_file(project_source, ".zip")
+        output_dir = pathlib.Path(tempfile.mkdtemp(prefix="snomed_gui_sanitized_"))
+        output_project = output_dir / f"sanitized_project_{datetime.datetime.now().strftime('%d-%m-%Y_%H-%M')}.zip"
+        with st.spinner("Applying reviewed sanitization decisions to copied CAS files..."):
+            result = run_sanitization(
+                input_project,
+                reviewed_decisions,
+                output_project,
+            )
+        st.success(
+            f"Sanitized project written. Changed {result.changed_annotation_count} annotation(s) "
+            f"in {result.changed_member_count} CAS file(s)."
+        )
+        if result.unmatched_decisions:
+            st.warning(f"{len(result.unmatched_decisions)} applied decision(s) could not be matched to a CAS annotation.")
+        st.download_button(
+            "Download sanitized project ZIP",
+            data=output_project.read_bytes(),
+            file_name=output_project.name,
+            mime="application/zip",
+        )
+    except Exception as exc:
+        st.error(f"Sanitization run failed: {exc}")
 
 
 def _uploaded_file_key(uploaded_file: Any) -> tuple[str, int | None]:
     return (getattr(uploaded_file, "name", ""), getattr(uploaded_file, "size", None))
+
+
+def _review_state_revision() -> int:
+    return int(st.session_state.get("sanitization_review_state_revision", 0))
+
+
+def _bump_review_state_revision() -> None:
+    st.session_state["sanitization_review_state_revision"] = _review_state_revision() + 1
 
 
 def _render_document_review_sections(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -139,7 +218,7 @@ def _render_document_review_sections(rows: list[dict[str, Any]]) -> list[dict[st
             review_df = pd.DataFrame(document_rows).drop(columns=["Document", "_offset", "_layer"], errors="ignore")
             edited = st.data_editor(
                 _style_review_table(review_df),
-                key=f"sanitization_review_editor_{_safe_key(document)}",
+                key=f"sanitization_review_editor_{_safe_key(document)}_{_review_state_revision()}",
                 width="stretch",
                 hide_index=True,
                 disabled=[
