@@ -26,8 +26,13 @@ from .sidebar import GuiInputs
 
 
 def render_sanitization_check_tab(inputs: GuiInputs) -> None:
+    if inputs.target_view == "release":
+        st.info(
+            "Release-view normalization suggestions are planned next. They will reuse this review/apply workflow, "
+            "but replacement candidates will only need to be active in the release and optionally not blacklisted."
+        )
     st.write(
-        "Generate sanitization suggestions from CriticalFindings JSON produced by the policy check step."
+        "Generate sanitization suggestions from CriticalFindings JSON produced by the check step."
     )
     uploaded_findings_file = st.file_uploader(
         "CriticalFindings JSON",
@@ -80,14 +85,16 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
         help="Distance divided by source depth-to-root. Lower values reject broader jumps in shallow hierarchies.",
     )
     sanitize_semantic_bm25_fallback = st.checkbox(
-        "Use semantic BM25 for unresolved whitelist findings as fallback",
+        "Use semantic BM25 for unresolved findings as fallback",
         value=False,
     )
-    sanitize_blacklist_suggestions = st.checkbox(
-        "Include blacklist findings in BM25 sanitization suggestions",
-        value=False,
-        disabled=not sanitize_semantic_bm25_fallback,
-    )
+    sanitize_blacklist_suggestions = False
+    if inputs.target_view == "policy" or inputs.release_blacklist_mode != "none":
+        sanitize_blacklist_suggestions = st.checkbox(
+            "Include blacklist findings in BM25 sanitization suggestions",
+            value=False,
+            disabled=not sanitize_semantic_bm25_fallback,
+        )
     with st.expander("BM25 fallback thresholds", expanded=False):
         sanitize_bm25_min_score = st.number_input(
             "Minimum BM25 score", min_value=0.0, value=1.5, step=0.1
@@ -108,7 +115,7 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
     if st.button(
         "Generate sanitization suggestions",
         type="primary",
-        disabled=not inputs.hdf5_file or not (use_session_findings or uploaded_findings_file),
+        disabled=inputs.target_view != "policy" or not inputs.hdf5_file or not (use_session_findings or uploaded_findings_file),
     ):
         try:
             if inputs.hdf5_temp_path is None:
@@ -162,6 +169,8 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
             output_sanitization_md = output_dir / f"sanitization_suggestions_{timestamp}.md"
             output_sanitization_json = output_dir / f"sanitization_suggestions_{timestamp}.json"
             sanitization_settings = {
+                "target_view": inputs.target_view,
+                "release_blacklist_mode": inputs.release_blacklist_mode,
                 "allowed_association_types": list(
                     sanitization_association_types or DEFAULT_ALLOWED_ASSOCIATION_TYPES
                 ),

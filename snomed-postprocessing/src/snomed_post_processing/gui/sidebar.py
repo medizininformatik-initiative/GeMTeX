@@ -19,6 +19,9 @@ class GuiInputs:
     annotation_types_text: str
     ignore_overlap_types_text: str
     ignore_overlap_mode: str
+    target_view: str = "policy"
+    release_blacklist_mode: str = "none"
+    runtime_blacklist_file: Any = None
     hdf5_temp_path: pathlib.Path | None = None
 
 
@@ -34,7 +37,43 @@ def render_sidebar() -> GuiInputs:
                 "INCEpTION project ZIP", type=["zip"]
             )
 
-        hdf5_file = st.file_uploader("Whitelist/Blacklist HDF5", type=["hdf5"])
+        hdf5_file = st.file_uploader("SNOMED HDF5", type=["hdf5"])
+        st.header("Target view")
+        target_label = st.radio(
+            "Validate/sanitize against",
+            options=[
+                "Policy view: whitelist/blacklist",
+                "Release view: active concepts",
+            ],
+            index=0,
+            help=(
+                "Policy view uses whitelist and blacklist policy views. Release view ignores the whitelist "
+                "and validates against active release concepts, with an optional blacklist."
+            ),
+        )
+        target_view = "release" if target_label.startswith("Release") else "policy"
+        release_blacklist_mode = "none"
+        runtime_blacklist_file = None
+        if target_view == "release":
+            release_blacklist_label = st.radio(
+                "Release-view blacklist",
+                options=[
+                    "No blacklist",
+                    "Use embedded HDF5 blacklist",
+                    "Upload runtime blacklist file",
+                ],
+                index=0,
+                help=(
+                    "Blacklist files are line-separated: numeric lines exclude a concept and descendants; "
+                    "non-numeric lines exclude by FSN semantic tag. Runtime resolution is planned."
+                ),
+            )
+            if release_blacklist_label.startswith("Use embedded"):
+                release_blacklist_mode = "embedded"
+            elif release_blacklist_label.startswith("Upload"):
+                release_blacklist_mode = "runtime"
+                runtime_blacklist_file = st.file_uploader("Runtime blacklist rule file", type=["txt"])
+                st.caption("Runtime blacklist calculation is planned; embedded HDF5 blacklist is the first supported release blacklist source.")
         st.header("Annotation layers")
         annotation_types_text = st.text_area(
             "Target annotation types to check",
@@ -63,6 +102,9 @@ def render_sidebar() -> GuiInputs:
         annotation_types_text=annotation_types_text,
         ignore_overlap_types_text=ignore_overlap_types_text,
         ignore_overlap_mode=ignore_overlap_mode,
+        target_view=target_view,
+        release_blacklist_mode=release_blacklist_mode,
+        runtime_blacklist_file=runtime_blacklist_file,
     )
 
 

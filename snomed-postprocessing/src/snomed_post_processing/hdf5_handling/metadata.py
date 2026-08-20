@@ -195,6 +195,7 @@ def format_hdf5_metadata_summary(
     *,
     markdown: bool = False,
     include_path: bool = True,
+    include_blacklist_rule_details: bool = True,
 ) -> str:
     lines = []
     if markdown:
@@ -242,16 +243,19 @@ def format_hdf5_metadata_summary(
         for policy, view_name, count in summary.legacy_group_counts:
             lines.append(f"  - {policy}/{view_name}: {count:,} concepts")
     if summary.blacklist_metadata:
-        lines.append("- Blacklist rule metadata:")
-        for metadata in summary.blacklist_metadata:
-            source = f", source: {metadata.source_name}" if metadata.source_name else ""
-            lines.append(
-                f"  - blacklists/{metadata.view_name}: {len(metadata.rules):,} rule(s){source}"
-            )
-            for rule in metadata.rules[:10]:
-                lines.append(f"    - {_format_blacklist_rule_kind(rule.kind)}: {rule.raw}")
-            if len(metadata.rules) > 10:
-                lines.append(f"    - ... {len(metadata.rules) - 10:,} more rule(s)")
+        if not include_blacklist_rule_details:
+            lines.append("- Blacklist rule metadata: yes (see below)")
+        else:
+            lines.append("- Blacklist rule metadata:")
+            for metadata in summary.blacklist_metadata:
+                source = f", source: {metadata.source_name}" if metadata.source_name else ""
+                lines.append(
+                    f"  - blacklists/{metadata.view_name}: {len(metadata.rules):,} rule(s){source}"
+                )
+                for rule in metadata.rules[:10]:
+                    lines.append(f"    - {_format_blacklist_rule_kind(rule.kind)}: {rule.raw}")
+                if len(metadata.rules) > 10:
+                    lines.append(f"    - ... {len(metadata.rules) - 10:,} more rule(s)")
     return "\n".join(lines) + "\n"
 
 

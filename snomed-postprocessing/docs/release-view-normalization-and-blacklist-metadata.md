@@ -137,3 +137,26 @@ Tabs:
 ```
 
 The review/apply tab should stay shared. Suggestions JSON should include target-view metadata so reviewed decisions can be interpreted correctly later.
+
+## Implementation status
+
+Implemented so far:
+
+- HDF5 blacklist rule metadata is written for RF2 ZIP blacklist creation.
+- HDF5 metadata summaries display embedded blacklist rule metadata.
+- The GUI sidebar has a target-view selector:
+  - Policy view: whitelist/blacklist
+  - Release view: active concepts
+- Release-view GUI exposes blacklist-source choices:
+  - no blacklist
+  - embedded HDF5 blacklist
+  - runtime blacklist file
+- The GUI tab names and helper text now reflect the selected target view.
+- Existing policy check/suggestion/run behavior remains functional and is still the only executable validation mode.
+
+Still to implement:
+
+- Release-view check pipeline.
+- Release-view replacement resolver semantics.
+- Runtime blacklist resolution from an uploaded rule file.
+- CLI commands/options for release-view checking and suggestion generation.

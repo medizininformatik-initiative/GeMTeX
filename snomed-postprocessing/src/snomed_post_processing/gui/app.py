@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import h5py
 import streamlit as st
+
+from snomed_post_processing.hdf5_handling.policy import decode_array
 
 from snomed_post_processing.hdf5_handling.metadata import (
     format_hdf5_metadata_summary,
@@ -16,13 +19,31 @@ from snomed_post_processing.gui.sanitization_run_tab import render_sanitization_
 from snomed_post_processing.gui.sidebar import render_sidebar
 
 
+def _numeric_blacklist_rule_fsns(hdf5_path, numeric_rules: list[str]) -> dict[str, str]:
+    if hdf5_path is None or not numeric_rules:
+        return {}
+    requested = set(numeric_rules)
+    with h5py.File(hdf5_path, "r") as h5_file:
+        if "concepts" not in h5_file or "codes" not in h5_file["concepts"] or "fsn" not in h5_file["concepts"]:
+            return {}
+        concepts = h5_file["concepts"]
+        codes = decode_array(concepts["codes"][:])
+        fsns = decode_array(concepts["fsn"][:])
+    return {code: fsn for code, fsn in zip(codes, fsns) if code in requested and fsn}
+
+
+def _format_blacklist_rule_for_gui(raw_rule: str, kind: str, numeric_rule_fsns: dict[str, str]) -> str:
+    if kind == "concept_descendants" and raw_rule in numeric_rule_fsns:
+        return f"{raw_rule} - {numeric_rule_fsns[raw_rule]}"
+    return raw_rule
+
+
 st.set_page_config(page_title="GeMTeX SNOMED CT Postprocessing", layout="wide")
 
 st.title("SNOMED Postprocessing")
 st.write(
-    """Simple GUI for analyzing all critical documents in the given INCEpTION dump (supported export formats: JSON CAS and XMI).  
-         Critical are documents when they contain SNOMED CT codes that are either on the blacklist or are not on the whitelist.  
-         Whitelist and blacklist are both defined in a ``hdf5`` file, that must be provided."""
+    """Simple GUI for checking SNOMED CT annotations in INCEpTION exports and applying reviewed sanitization replacements to copied CAS files.  
+         Choose a target view in the sidebar: policy view uses whitelist/blacklist policy views; release view targets active release concepts with an optional blacklist."""
 )
 
 inputs = render_sidebar()
@@ -38,17 +59,46 @@ if inputs.hdf5_file is not None:
                     hdf5_summary,
                     markdown=True,
                     include_path=False,
+                    include_blacklist_rule_details=False,
                 )
             )
+            if hdf5_summary.blacklist_metadata:
+                st.divider()
+                st.markdown("#### Embedded blacklist rule metadata")
+                for blacklist_metadata in hdf5_summary.blacklist_metadata:
+                    source = blacklist_metadata.source_name or "unknown"
+                    st.caption(
+                        f"blacklists/{blacklist_metadata.view_name} · "
+                        f"{len(blacklist_metadata.rules):,} rule(s) · source: {source}"
+                    )
+                    numeric_rule_fsns = _numeric_blacklist_rule_fsns(
+                        inputs.hdf5_temp_path,
+                        [rule.raw for rule in blacklist_metadata.rules if rule.kind == "concept_descendants"],
+                    )
+                    st.dataframe(
+                        [
+                            {
+                                "Rule kind": rule.kind,
+                                "Rule": _format_blacklist_rule_for_gui(rule.raw, rule.kind, numeric_rule_fsns),
+                            }
+                            for rule in blacklist_metadata.rules
+                        ],
+                        hide_index=True,
+                        width="stretch",
+                    )
+            elif any(policy == "blacklist" for policy, _, _ in hdf5_summary.policy_view_counts):
+                st.info(
+                    "This HDF5 contains a compact blacklist view, but no embedded blacklist rule metadata was found. "
+                    "Recreate or update the HDF5 with the current RF2 ingestion code to store the original blacklist rules."
+                )
     except Exception as exc:
         st.warning(f"Could not read HDF5 metadata: {exc}")
 
+check_label = "1. Check policy" if inputs.target_view == "policy" else "1. Check release view"
+suggest_label = "2. Suggest policy sanitization" if inputs.target_view == "policy" else "2. Suggest release normalization"
+run_label = "3. Review & apply"
 policy_tab, sanitization_check_tab, sanitization_run_tab = st.tabs(
-    [
-        "1. Check whitelist/blacklist",
-        "2. Sanitization suggestions",
-        "3. Sanitization run",
-    ]
+    [check_label, suggest_label, run_label]
 )
 
 with policy_tab:
