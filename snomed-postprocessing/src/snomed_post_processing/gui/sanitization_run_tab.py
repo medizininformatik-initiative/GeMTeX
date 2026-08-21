@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import datetime
+import io
 import pathlib
 import tempfile
+import zipfile
 from typing import Any
 
 import pandas as pd
@@ -19,6 +21,12 @@ from snomed_post_processing.sanitization import (
 from .downloads import download_json_report
 from snomed_post_processing.sanitization.models import SanitizationStatus
 from snomed_post_processing.pipelines.sanitization_run import run_sanitization
+from snomed_post_processing.uima_processing.io import (
+    _load_cas_from_zip_member,
+    _load_typesystem_from_zip,
+    _read_project,
+    _yield_matching_files,
+)
 
 from .files import save_uploaded_file
 from .sidebar import GuiInputs
@@ -60,7 +68,8 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
     if report_path:
         st.caption(f"Suggestion report: `{report_path}`")
 
-    rows = _suggestions_to_review_rows(suggestions)
+    document_texts = _project_document_text_lookup(st.session_state.get("zip_file"))
+    rows = _suggestions_to_review_rows(suggestions, document_texts)
     actionable_rows = [row for row in rows if _row_has_actionable_replacement(row)]
     non_actionable_rows = [row for row in rows if not _row_has_actionable_replacement(row)]
     _render_review_summary(rows)
@@ -299,6 +308,85 @@ def _uploaded_file_key(uploaded_file: Any) -> tuple[str, int | None]:
     return (getattr(uploaded_file, "name", ""), getattr(uploaded_file, "size", None))
 
 
+def _project_document_text_lookup(project_source: Any) -> dict[str, str]:
+    if project_source is None:
+        return {}
+    upload_key = _uploaded_file_key(project_source)
+    cache_key = "sanitization_project_text_lookup_key"
+    if st.session_state.get(cache_key) == upload_key:
+        return st.session_state.get("sanitization_project_text_lookup", {})
+    try:
+        data = project_source.getvalue()
+        lookup = _extract_project_document_texts(data, getattr(project_source, "name", None))
+    except Exception:
+        lookup = {}
+    st.session_state[cache_key] = upload_key
+    st.session_state["sanitization_project_text_lookup"] = lookup
+    return lookup
+
+
+def _extract_project_document_texts(project_zip_bytes: bytes, file_name: str | None) -> dict[str, str]:
+    lookup: dict[str, str] = {}
+    with zipfile.ZipFile(io.BytesIO(project_zip_bytes)) as zip_file:
+        project_documents = _read_project(zip_file, file_name or "uploaded project")
+        for document_name, cas_paths in _yield_matching_files(
+            project_documents,
+            zip_file,
+            file_name=file_name,
+            allowed_extensions=[".json", ".xmi"],
+        ):
+            for cas_path in cas_paths:
+                try:
+                    typesystem = _load_typesystem_from_zip(zip_file, cas_path)
+                    cas = _load_cas_from_zip_member(zip_file, cas_path, typesystem=typesystem)
+                    text = _cas_document_text(cas)
+                except Exception:
+                    continue
+                if text:
+                    _store_document_text_aliases(lookup, document_name, cas_path, text)
+                    break
+    return lookup
+
+
+def _cas_document_text(cas: Any) -> str:
+    text = getattr(cas, "sofa_string", None)
+    if text:
+        return str(text)
+    try:
+        sofa = cas.get_sofa()
+        text = getattr(sofa, "sofaString", None)
+        if text:
+            return str(text)
+    except Exception:
+        pass
+    return ""
+
+
+def _store_document_text_aliases(
+    lookup: dict[str, str], document_name: str, cas_path: str, text: str
+) -> None:
+    path = pathlib.PurePosixPath(cas_path)
+    aliases = {
+        document_name,
+        path.name,
+        path.parent.name,
+        _strip_known_suffix(document_name),
+        _strip_known_suffix(path.name),
+        _strip_known_suffix(path.parent.name),
+    }
+    for alias in aliases:
+        if alias:
+            lookup.setdefault(alias, text)
+
+
+def _strip_known_suffix(name: str) -> str:
+    lower = name.lower()
+    for suffix in (".xmi", ".json", ".zip", ".ser"):
+        if lower.endswith(suffix):
+            return name[: -len(suffix)]
+    return name
+
+
 def _keep_document_open(document: str) -> None:
     st.session_state["sanitization_keep_document_open"] = document
 
@@ -373,6 +461,8 @@ def _render_document_review_sections(rows: list[dict[str, Any]]) -> list[dict[st
                         "Annotator",
                         "Source code",
                         "Covered text",
+                        "Policy issue",
+                        "Finding context",
                         "Suggested replacement",
                         "Why suggested",
                         "Original FSN",
@@ -384,6 +474,14 @@ def _render_document_review_sections(rows: list[dict[str, Any]]) -> list[dict[st
                         "Apply": st.column_config.CheckboxColumn(
                             "Apply",
                             help="Toggle whether this suggestion should be applied in the sanitization run.",
+                        ),
+                        "Policy issue": st.column_config.TextColumn(
+                            "Policy issue",
+                            help="Whether the original finding came from the whitelist or blacklist policy check.",
+                        ),
+                        "Finding context": st.column_config.TextColumn(
+                            "Finding context",
+                            help="Short document/location context for the original annotation.",
                         ),
                         "Suggested replacement": st.column_config.TextColumn(
                             "Suggested replacement",
@@ -531,14 +629,14 @@ def _render_manual_choice_cards(rows: list[dict[str, Any]], document: str) -> li
                     f"**#{row_number} · {row.get('Source code', '')}** — "
                     f"{row.get('Covered text', '')}"
                 )
+                st.caption(row.get("Policy issue", "Reason: unknown"))
+                st.caption(f"Text context: {row.get('Finding context', '')}")
                 st.caption(
-                    f"Annotator: {row.get('Annotator', '')} · Status: {row.get('Status', '')}"
+                    f"Suggestion type: {row.get('Status', '')} · Annotator: {row.get('Annotator', '')}"
                 )
                 if row.get("Original FSN"):
                     st.caption(f"Original FSN: {row['Original FSN']}")
                 choice_hints = row.get("_choice_hints", {})
-                if options and options[0] != NO_REPLACEMENT_LABEL:
-                    st.caption(f"Top-ranked candidate: {choice_hints.get(options[0], 'rank #1')}")
                 choice = st.selectbox(
                     "Replacement candidate",
                     options=options,
@@ -731,7 +829,9 @@ def _render_suggestion_settings(metadata: dict[str, Any]) -> None:
     )
 
 
-def _suggestions_to_review_rows(suggestions: list[Any]) -> list[dict[str, Any]]:
+def _suggestions_to_review_rows(
+    suggestions: list[Any], document_texts: dict[str, str] | None = None
+) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     restored_by_index = st.session_state.get("sanitization_restored_decisions_by_index", {})
     for idx, suggestion in enumerate(suggestions):
@@ -754,6 +854,8 @@ def _suggestions_to_review_rows(suggestions: list[Any]) -> list[dict[str, Any]]:
                 "Annotator": suggestion.finding.annotator,
                 "Source code": suggestion.finding.code or "",
                 "Covered text": suggestion.finding.covered_text,
+                "Policy issue": _policy_issue_label(suggestion.finding),
+                "Finding context": _finding_context_label(suggestion.finding, document_texts or {}),
                 "Suggested replacement": selected_label if needs_choice else replacement_label,
                 "Why suggested": replacement_hints.get(
                     selected_label if needs_choice else replacement_label, ""
@@ -841,6 +943,64 @@ def _format_choice_option(option: str, hints: dict[str, str]) -> str:
     if hint:
         return f"{option} [{hint}]"
     return option
+
+
+def _policy_issue_label(finding: Any) -> str:
+    list_type = str(getattr(finding, "list_type", "") or "").lower()
+    reason = str(getattr(finding, "reason", "") or "").replace("_", " ").strip()
+    if list_type == "blacklist":
+        return "Reason: blacklisted"
+    if list_type == "whitelist":
+        return "Reason: not on whitelist"
+    return f"Reason: {reason}" if reason else "Reason: policy finding"
+
+
+def _finding_context_label(finding: Any, document_texts: dict[str, str]) -> str:
+    document_text = _lookup_document_text(document_texts, str(getattr(finding, "document", "")))
+    offset = getattr(finding, "offset", None)
+    if document_text and offset and len(offset) == 2:
+        return _offset_context(document_text, int(offset[0]), int(offset[1]))
+    covered_text = _compact_text(getattr(finding, "covered_text", ""), max_length=80)
+    if covered_text:
+        return f"… {covered_text} …"
+    return "No document text context available."
+
+
+def _lookup_document_text(document_texts: dict[str, str], document: str) -> str:
+    for alias in (document, _strip_known_suffix(document)):
+        if alias in document_texts:
+            return document_texts[alias]
+    return ""
+
+
+def _offset_context(text: str, begin: int, end: int, *, word_window: int = 2, char_window: int = 25) -> str:
+    if begin < 0 or end < begin or begin > len(text):
+        return _character_context(text, begin, end, char_window=char_window)
+    end = min(end, len(text))
+    left_words = text[:begin].split()
+    right_words = text[end:].split()
+    target = _compact_text(text[begin:end], max_length=80)
+    if left_words or right_words:
+        left = " ".join(left_words[-word_window:])
+        right = " ".join(right_words[:word_window])
+        return f"… {left} [{target}] {right} …".replace("  ", " ").strip()
+    return _character_context(text, begin, end, char_window=char_window)
+
+
+def _character_context(text: str, begin: int, end: int, *, char_window: int) -> str:
+    begin = max(0, min(begin, len(text)))
+    end = max(begin, min(end, len(text)))
+    left = _compact_text(text[max(0, begin - char_window):begin], max_length=char_window)
+    target = _compact_text(text[begin:end], max_length=80)
+    right = _compact_text(text[end:min(len(text), end + char_window)], max_length=char_window)
+    return f"… {left} [{target}] {right} …".replace("  ", " ").strip()
+
+
+def _compact_text(value: Any, *, max_length: int) -> str:
+    text = " ".join(str(value or "").split())
+    if len(text) <= max_length:
+        return text
+    return f"{text[: max_length - 1].rstrip()}…"
 
 
 def _suggestion_rationale(suggestion: Any, *, rank: int) -> str:
