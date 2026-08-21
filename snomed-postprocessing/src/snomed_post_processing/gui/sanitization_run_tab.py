@@ -158,14 +158,22 @@ def _render_sanitization_run_controls(
         return
 
     try:
-        input_project = save_uploaded_file(project_source, ".zip")
-        output_dir = pathlib.Path(tempfile.mkdtemp(prefix="snomed_gui_sanitized_"))
-        output_project = output_dir / f"sanitized_project_{datetime.datetime.now().strftime('%d-%m-%Y_%H-%M')}.zip"
-        with st.spinner("Applying reviewed sanitization decisions to copied CAS files..."):
+        with st.status("Running reviewed sanitization...", expanded=True) as status:
+            st.write("Saving uploaded project ZIP to a temporary workspace...")
+            input_project = save_uploaded_file(project_source, ".zip")
+            output_dir = pathlib.Path(tempfile.mkdtemp(prefix="snomed_gui_sanitized_"))
+            output_project = output_dir / f"sanitized_project_{datetime.datetime.now().strftime('%d-%m-%Y_%H-%M')}.zip"
+            st.write("Applying reviewed decisions to copied JSON/XMI CAS files...")
             result = run_sanitization(
                 input_project,
                 reviewed_decisions,
                 output_project,
+            )
+            st.write("Preparing sanitized project ZIP for download...")
+            status.update(
+                label="Reviewed sanitization finished.",
+                state="complete",
+                expanded=False,
             )
         st.success(
             f"Sanitized project written. Changed {result.changed_annotation_count} annotation(s) "

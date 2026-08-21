@@ -60,47 +60,52 @@ def render_policy_tab(inputs: GuiInputs) -> None:
         try:
             if zip_temp_path is None:
                 raise RuntimeError("ZIP file was not prepared correctly.")
-            progress_bar = st.progress(
-                0.0, text="Running document analysis... this may take a while."
-            )
-            time.sleep(1)
+            with st.status("Running policy check...", expanded=True) as status:
+                st.write("Preparing project ZIP and SNOMED HDF5 inputs...")
+                progress_bar = st.progress(
+                    0.0, text="Running document analysis... this may take a while."
+                )
+                time.sleep(1)
 
-            if inputs.hdf5_temp_path is None:
-                inputs.hdf5_temp_path = save_uploaded_file(inputs.hdf5_file, ".hdf5")
+                if inputs.hdf5_temp_path is None:
+                    inputs.hdf5_temp_path = save_uploaded_file(inputs.hdf5_file, ".hdf5")
 
-            annotator_filter = (
-                [name.lower() for name in annotator_selection]
-                if annotator_selection
-                else None
-            )
-            annotation_types = [
-                line.strip()
-                for line in inputs.annotation_types_text.splitlines()
-                if line.strip()
-            ] or ["gemtex.Concept"]
-            ignore_overlap_types = [
-                line.strip()
-                for line in inputs.ignore_overlap_types_text.splitlines()
-                if line.strip()
-            ]
+                st.write("Preparing annotator and annotation-layer filters...")
+                annotator_filter = (
+                    [name.lower() for name in annotator_selection]
+                    if annotator_selection
+                    else None
+                )
+                annotation_types = [
+                    line.strip()
+                    for line in inputs.annotation_types_text.splitlines()
+                    if line.strip()
+                ] or ["gemtex.Concept"]
+                ignore_overlap_types = [
+                    line.strip()
+                    for line in inputs.ignore_overlap_types_text.splitlines()
+                    if line.strip()
+                ]
 
-            (
-                output_path_md,
-                output_path_md_masked,
-                output_path_json,
-                output_path_findings_json,
-                erroneous_doc_count,
-                critical_findings,
-            ) = generate_report(
-                project_zip=zip_temp_path,
-                lists_path=inputs.hdf5_temp_path,
-                anno_filter=annotator_filter,
-                progress_obj={"obj": progress_bar, "text_pre": ""},
-                annotation_types=annotation_types,
-                ignore_overlap_types=ignore_overlap_types,
-                ignore_overlap_mode=inputs.ignore_overlap_mode,
-            )
-            progress_bar.empty()
+                st.write("Checking annotations and writing reports...")
+                (
+                    output_path_md,
+                    output_path_md_masked,
+                    output_path_json,
+                    output_path_findings_json,
+                    erroneous_doc_count,
+                    critical_findings,
+                ) = generate_report(
+                    project_zip=zip_temp_path,
+                    lists_path=inputs.hdf5_temp_path,
+                    anno_filter=annotator_filter,
+                    progress_obj={"obj": progress_bar, "text_pre": ""},
+                    annotation_types=annotation_types,
+                    ignore_overlap_types=ignore_overlap_types,
+                    ignore_overlap_mode=inputs.ignore_overlap_mode,
+                )
+                progress_bar.empty()
+                status.update(label="Policy check finished.", state="complete", expanded=False)
 
             report_text = output_path_md.read_text(encoding="utf-8")
             report_text_masked = output_path_md_masked.read_text(encoding="utf-8")
