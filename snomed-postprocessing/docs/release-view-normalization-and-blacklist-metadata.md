@@ -23,6 +23,19 @@ Apply reviewed replacements to a copied export
 
 ## Target views
 
+Target dates are selected by selecting an HDF5 built for that view. Runtime
+checking and sanitization do not reconstruct arbitrary earlier SNOMED snapshots
+from a single HDF5 file. In other words, the HDF5 is a materialized view:
+
+```text
+RF2 source release + chosen policy/view date
+        -> enriched HDF5
+        -> check and sanitize against that same baked-in view
+```
+
+To check or sanitize for another policy date or release snapshot, create or
+select another HDF5 materialized for that date.
+
 ### Policy view
 
 Current behavior.

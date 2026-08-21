@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import time
-
 import streamlit as st
 
 from snomed_post_processing.uima_processing import get_annotator_names
@@ -17,11 +15,16 @@ from .sidebar import GuiInputs
 def render_policy_tab(inputs: GuiInputs) -> None:
     if inputs.target_view == "release":
         st.info(
-            "Release-view checking is being wired next. It will validate annotations against active concepts "
-            "in the selected HDF5 release and optionally the embedded/runtime blacklist."
+            "Release-view checking is being wired next. It will validate annotations "
+            "against active concepts in the materialized HDF5 release view and "
+            "optionally the embedded/runtime blacklist."
         )
     else:
-        st.caption("Policy view: annotations are critical when they are not in the whitelist or are in the blacklist.")
+        st.caption(
+            "Policy view: annotations are critical when they are not in the "
+            "whitelist or are in the blacklist for the materialized policy/view "
+            "date stored in the uploaded HDF5."
+        )
     annotator_selection = None
     zip_temp_path = None
 
@@ -62,11 +65,6 @@ def render_policy_tab(inputs: GuiInputs) -> None:
                 raise RuntimeError("ZIP file was not prepared correctly.")
             with st.status("Running policy check...", expanded=True) as status:
                 st.write("Preparing project ZIP and SNOMED HDF5 inputs...")
-                progress_bar = st.progress(
-                    0.0, text="Running document analysis... this may take a while."
-                )
-                time.sleep(1)
-
                 if inputs.hdf5_temp_path is None:
                     inputs.hdf5_temp_path = save_uploaded_file(inputs.hdf5_file, ".hdf5")
 
@@ -88,6 +86,9 @@ def render_policy_tab(inputs: GuiInputs) -> None:
                 ]
 
                 st.write("Checking annotations and writing reports...")
+                progress_bar = st.progress(
+                    0.0, text="Running document analysis... this may take a while."
+                )
                 (
                     output_path_md,
                     output_path_md_masked,

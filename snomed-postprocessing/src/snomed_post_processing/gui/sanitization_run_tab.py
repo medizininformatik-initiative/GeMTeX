@@ -61,13 +61,25 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
         st.caption(f"Suggestion report: `{report_path}`")
 
     rows = _suggestions_to_review_rows(suggestions)
+    actionable_rows = [row for row in rows if _row_has_actionable_replacement(row)]
+    non_actionable_rows = [row for row in rows if not _row_has_actionable_replacement(row)]
     _render_review_summary(rows)
+    _render_non_actionable_summary(non_actionable_rows)
 
     with st.popover("Suggestion metadata"):
         _render_suggestion_settings(st.session_state.get("sanitization_suggestions_metadata") or {})
 
     st.subheader("Review workspace")
-    reviewed_decisions = _render_document_review_sections(rows)
+    reviewed_decisions = _review_rows_to_decisions(non_actionable_rows, non_actionable_rows, {})
+    if actionable_rows:
+        _render_manual_choice_bulk_actions(actionable_rows)
+        reviewed_decisions.extend(_render_document_review_sections(actionable_rows))
+    else:
+        st.info(
+            "No actionable replacement suggestions are available. This can happen, "
+            "for example, when the findings are blacklist-only and blacklist BM25 "
+            "suggestions were not enabled."
+        )
     st.session_state["sanitization_review_decisions"] = reviewed_decisions
 
     decisions_metadata = _decisions_metadata(rows)
@@ -287,6 +299,10 @@ def _uploaded_file_key(uploaded_file: Any) -> tuple[str, int | None]:
     return (getattr(uploaded_file, "name", ""), getattr(uploaded_file, "size", None))
 
 
+def _keep_document_open(document: str) -> None:
+    st.session_state["sanitization_keep_document_open"] = document
+
+
 def _review_state_revision() -> int:
     return int(st.session_state.get("sanitization_review_state_revision", 0))
 
@@ -322,47 +338,235 @@ def _render_document_review_sections(rows: list[dict[str, Any]]) -> list[dict[st
         reviewed_key = _document_reviewed_key(document)
         reviewed = bool(st.session_state.get(reviewed_key, False))
         focus_match = _document_matches_focus(document, document_rows, focus)
+        keep_open = st.session_state.get("sanitization_keep_document_open") == document
         title = _document_review_title(document, document_rows, reviewed)
-        with st.expander(title, expanded=focus_match and not reviewed):
+        with st.expander(title, expanded=(focus_match or keep_open) and not reviewed):
             if reviewed:
                 st.success("This document section is marked as reviewed.")
-            review_df = pd.DataFrame(document_rows).drop(columns=["Document", "_offset", "_layer"], errors="ignore")
-            edited = st.data_editor(
-                _style_review_table(review_df),
-                key=f"sanitization_review_editor_{_safe_key(document)}_{_review_state_revision()}",
-                width="stretch",
-                hide_index=True,
-                disabled=[
-                    "#",
-                    "Annotator",
-                    "Source code",
-                    "Covered text",
-                    "Suggested replacement",
-                    "Original FSN",
-                    "Status",
-                ],
-                column_config={
-                    "Apply": st.column_config.CheckboxColumn(
-                        "Apply",
-                        help="Toggle whether this suggestion should be applied in the sanitization run.",
-                    ),
-                    "Suggested replacement": st.column_config.TextColumn(
+            _render_document_metrics(document_rows)
+
+            manual_rows = [row for row in document_rows if row.get("_needs_choice")]
+            automatic_rows = [row for row in document_rows if not row.get("_needs_choice")]
+
+            if manual_rows:
+                st.markdown("#### Manual choices")
+                _render_manual_choice_bulk_actions(
+                    manual_rows,
+                    label_prefix=f"document {_safe_key(document)}",
+                    compact=True,
+                )
+                decisions.extend(_render_manual_choice_cards(manual_rows, document))
+
+            if automatic_rows:
+                st.markdown("#### Automatic suggestions")
+                review_df = pd.DataFrame(automatic_rows).drop(
+                    columns=["Document", "_offset", "_layer", "_status_raw"],
+                    errors="ignore",
+                )
+                edited = st.data_editor(
+                    review_df,
+                    key=f"sanitization_review_editor_{_safe_key(document)}_{_review_state_revision()}",
+                    width="stretch",
+                    hide_index=True,
+                    disabled=[
+                        "#",
+                        "Annotator",
+                        "Source code",
+                        "Covered text",
                         "Suggested replacement",
-                        help="Unambiguous replacement, or a row-specific choice selected below.",
-                    ),
-                    "_valid_choices": None,
-                    "_needs_choice": None,
-                },
-            )
-            row_choices = _render_row_choice_controls(document_rows)
-            decisions.extend(
-                _review_rows_to_decisions(edited.to_dict("records"), document_rows, row_choices)
-            )
+                        "Why suggested",
+                        "Original FSN",
+                        "Status",
+                    ],
+                    on_change=_keep_document_open,
+                    args=(document,),
+                    column_config={
+                        "Apply": st.column_config.CheckboxColumn(
+                            "Apply",
+                            help="Toggle whether this suggestion should be applied in the sanitization run.",
+                        ),
+                        "Suggested replacement": st.column_config.TextColumn(
+                            "Suggested replacement",
+                            help="Single suggested replacement for this row.",
+                        ),
+                        "Why suggested": st.column_config.TextColumn(
+                            "Why suggested",
+                            help="Short ranking or provenance hint for the candidate.",
+                        ),
+                        "_valid_choices": None,
+                        "_choice_hints": None,
+                        "_needs_choice": None,
+                    },
+                )
+                decisions.extend(
+                    _review_rows_to_decisions(edited.to_dict("records"), automatic_rows, {})
+                )
+
             st.checkbox(
-                "Mark this document section as reviewed",
+                "Document reviewed",
                 key=reviewed_key,
-                help="On the next rerun this section will collapse and be marked with a checkmark.",
+                help=(
+                    "This is separate from saving choices: it marks your review "
+                    "progress and collapses this document on the next rerun."
+                ),
             )
+    return decisions
+
+
+def _render_document_metrics(document_rows: list[dict[str, Any]]) -> None:
+    selected = sum(1 for row in document_rows if _row_apply_selected(row))
+    manual_total = sum(1 for row in document_rows if row.get("_needs_choice"))
+    manual_selected = sum(
+        1 for row in document_rows if row.get("_needs_choice") and _row_apply_selected(row)
+    )
+    no_replacement = sum(
+        1 for row in document_rows if row.get("Suggested replacement") == NO_REPLACEMENT_LABEL
+    )
+    manual_text = (
+        f"{manual_selected}/{manual_total} manual-review selected"
+        if manual_total
+        else "0 manual-review rows"
+    )
+    st.caption(
+        f"{selected} replacement(s) selected · {manual_text} · "
+        f"{no_replacement} without replacement"
+    )
+
+
+def _render_manual_choice_bulk_actions(
+    rows: list[dict[str, Any]], *, label_prefix: str = "all", compact: bool = False
+) -> None:
+    manual_rows = [row for row in rows if row.get("_needs_choice")]
+    if not manual_rows:
+        return
+    applied_count = sum(1 for row in manual_rows if _row_apply_selected(row))
+    if compact:
+        st.caption(
+            f"Bulk actions for {len(manual_rows)} manual-choice suggestion(s) in "
+            f"this document; {applied_count} currently selected."
+        )
+    elif applied_count == len(manual_rows):
+        st.success(
+            f"All {len(manual_rows)} manual-choice suggestion(s) currently have "
+            "an applied replacement selected. Inspect exceptions per document before running."
+        )
+    else:
+        st.warning(
+            f"{len(manual_rows)} suggestion(s) need manual choices; "
+            f"{applied_count} currently have an applied replacement selected. If the first "
+            "candidate is acceptable as a review starting point, use the bulk action "
+            "below and then inspect exceptions per document."
+        )
+    action_col1, action_col2 = st.columns(2)
+    safe_label = _safe_key(label_prefix)
+    with action_col1:
+        if st.button(
+            "Apply first candidate" if compact else "Apply first candidate to all manual choices",
+            key=f"manual_apply_first_{safe_label}",
+            help=(
+                "Selects the first ranked candidate for each manual-choice row and "
+                "marks it for application. Review carefully before running."
+            ),
+            width="stretch",
+        ):
+            _set_manual_choice_defaults(manual_rows, apply=True)
+            st.rerun()
+    with action_col2:
+        if st.button(
+            "Clear manual choices" if compact else "Clear all manual applications",
+            key=f"manual_clear_{safe_label}",
+            help="Keeps candidate selections but unchecks manual-choice applications.",
+            width="stretch",
+        ):
+            _set_manual_choice_defaults(manual_rows, apply=False)
+            st.rerun()
+
+
+def _set_manual_choice_defaults(rows: list[dict[str, Any]], *, apply: bool) -> None:
+    for row in rows:
+        row_number = int(row["#"])
+        options = list(row.get("_valid_choices", ()))
+        choice = options[0] if options else NO_REPLACEMENT_LABEL
+        if apply and choice != NO_REPLACEMENT_LABEL:
+            st.session_state[_choice_key(row_number)] = choice
+            st.session_state[_previous_choice_key(row_number)] = choice
+            st.session_state[_manual_apply_key(row_number)] = True
+        else:
+            st.session_state[_manual_apply_key(row_number)] = False
+
+
+def _save_manual_choice_form(document: str, row_numbers: list[int]) -> None:
+    _keep_document_open(document)
+    for row_number in row_numbers:
+        choice = st.session_state.get(_choice_key(row_number), NO_REPLACEMENT_LABEL)
+        previous_choice_key = _previous_choice_key(row_number)
+        previous_choice = st.session_state.get(previous_choice_key)
+        if choice == NO_REPLACEMENT_LABEL:
+            st.session_state[_manual_apply_key(row_number)] = False
+        elif previous_choice is not None and previous_choice != choice:
+            st.session_state[_manual_apply_key(row_number)] = True
+        st.session_state[previous_choice_key] = choice
+
+
+def _render_manual_choice_cards(rows: list[dict[str, Any]], document: str) -> list[dict[str, Any]]:
+    decisions: list[dict[str, Any]] = []
+    st.caption(
+        "These rows need an explicit replacement choice before they can be applied. "
+        "Dropdown and checkbox edits are batched; click Save to update the page."
+    )
+    row_numbers = [int(row["#"]) for row in rows]
+    with st.form(f"manual_choice_form_{_safe_key(document)}"):
+        for row in rows:
+            row_number = int(row["#"])
+            options = list(row.get("_valid_choices", ()))
+            if not options:
+                options = [NO_REPLACEMENT_LABEL]
+            current_choice = st.session_state.get(_choice_key(row_number), row.get("Suggested replacement"))
+            if current_choice not in options:
+                current_choice = options[0]
+            previous_choice_key = _previous_choice_key(row_number)
+            st.session_state.setdefault(previous_choice_key, current_choice)
+            with st.container(border=True):
+                st.markdown(
+                    f"**#{row_number} · {row.get('Source code', '')}** — "
+                    f"{row.get('Covered text', '')}"
+                )
+                st.caption(
+                    f"Annotator: {row.get('Annotator', '')} · Status: {row.get('Status', '')}"
+                )
+                if row.get("Original FSN"):
+                    st.caption(f"Original FSN: {row['Original FSN']}")
+                choice_hints = row.get("_choice_hints", {})
+                if options and options[0] != NO_REPLACEMENT_LABEL:
+                    st.caption(f"Top-ranked candidate: {choice_hints.get(options[0], 'rank #1')}")
+                choice = st.selectbox(
+                    "Replacement candidate",
+                    options=options,
+                    index=options.index(current_choice),
+                    key=_choice_key(row_number),
+                    format_func=lambda option, hints=choice_hints: _format_choice_option(option, hints),
+                )
+                if choice_hint := choice_hints.get(choice):
+                    st.caption(f"Selected candidate rationale: {choice_hint}")
+                apply = st.checkbox(
+                    "Apply this replacement",
+                    value=bool(row.get("Apply")) and choice != NO_REPLACEMENT_LABEL,
+                    key=_manual_apply_key(row_number),
+                    disabled=choice == NO_REPLACEMENT_LABEL,
+                )
+            decisions.extend(
+                _review_rows_to_decisions(
+                    [{**row, "Apply": apply, "Suggested replacement": choice}],
+                    [row],
+                    {row_number: choice},
+                )
+            )
+        st.form_submit_button(
+            "Save choices",
+            help="Save dropdown and apply-checkbox edits for this document.",
+            on_click=_save_manual_choice_form,
+            args=(document, row_numbers),
+        )
     return decisions
 
 
@@ -370,7 +574,7 @@ def _document_matches_focus(
     document: str, document_rows: list[dict[str, Any]], focus: str
 ) -> bool:
     if focus == "All":
-        return True
+        return False
     if focus == "Needs choice":
         return any(row.get("_needs_choice") for row in document_rows)
     if focus == "No replacement":
@@ -386,15 +590,21 @@ def _document_matches_focus(
 def _document_review_title(
     document: str, document_rows: list[dict[str, Any]], reviewed: bool
 ) -> str:
-    selected = sum(1 for row in document_rows if row.get("Apply"))
-    needs_choice = sum(1 for row in document_rows if row.get("_needs_choice"))
+    selected = sum(1 for row in document_rows if _row_apply_selected(row))
+    manual_total = sum(1 for row in document_rows if row.get("_needs_choice"))
+    manual_selected = sum(
+        1 for row in document_rows if row.get("_needs_choice") and _row_apply_selected(row)
+    )
     no_replacement = sum(
         1 for row in document_rows if row.get("Suggested replacement") == NO_REPLACEMENT_LABEL
     )
     prefix = "✅" if reviewed else "📝"
-    details = [f"{len(document_rows)} finding(s)", f"{selected} selected"]
-    if needs_choice:
-        details.append(f"{needs_choice} need choice")
+    details = [f"{len(document_rows)} finding(s)", f"{selected} replacement(s) selected"]
+    if manual_total:
+        if manual_selected == manual_total:
+            details.append("all manual choices selected")
+        else:
+            details.append(f"{manual_selected}/{manual_total} manual choices selected")
     if no_replacement:
         details.append(f"{no_replacement} no replacement")
     return f"{prefix} {document} — {' · '.join(details)}"
@@ -405,6 +615,47 @@ def _group_rows_by_document(rows: list[dict[str, Any]]) -> dict[str, list[dict[s
     for row in rows:
         grouped.setdefault(str(row.get("Document", "")), []).append(row)
     return grouped
+
+
+def _row_has_actionable_replacement(row: dict[str, Any]) -> bool:
+    return bool(row.get("_valid_choices")) and row.get("Suggested replacement") != NO_REPLACEMENT_LABEL
+
+
+def _row_apply_selected(row: dict[str, Any]) -> bool:
+    if not row.get("_needs_choice"):
+        return bool(row.get("Apply"))
+    row_number = int(row["#"])
+    choice = st.session_state.get(_choice_key(row_number), row.get("Suggested replacement"))
+    return (
+        bool(st.session_state.get(_manual_apply_key(row_number), row.get("Apply")))
+        and choice != NO_REPLACEMENT_LABEL
+    )
+
+
+def _render_non_actionable_summary(rows: list[dict[str, Any]]) -> None:
+    if not rows:
+        return
+    st.info(
+        f"{len(rows)} suggestion(s) have no actionable replacement and are excluded "
+        "from the review/apply workspace."
+    )
+    with st.expander("Show non-actionable findings", expanded=False):
+        st.dataframe(
+            pd.DataFrame(rows).drop(
+                columns=[
+                    "Apply",
+                    "_valid_choices",
+                    "_choice_hints",
+                    "_needs_choice",
+                    "_offset",
+                    "_layer",
+                    "_status_raw",
+                ],
+                errors="ignore",
+            ),
+            hide_index=True,
+            width="stretch",
+        )
 
 
 def _render_review_summary(rows: list[dict[str, Any]]) -> None:
@@ -455,6 +706,7 @@ def _restore_decision_state(decisions: list[dict[str, Any]], metadata: dict[str,
         replacement_choice = decision.get("replacement_choice")
         if replacement_choice:
             st.session_state[_choice_key(row_number)] = replacement_choice
+        st.session_state[_manual_apply_key(row_number)] = bool(decision.get("apply"))
     reviewed_documents = metadata.get("reviewed_documents", []) if isinstance(metadata, dict) else []
     for document in reviewed_documents:
         st.session_state[_document_reviewed_key(str(document))] = True
@@ -469,24 +721,14 @@ def _render_suggestion_settings(metadata: dict[str, Any]) -> None:
     st.json(
         {
             "hdf5_file_name": metadata.get("hdf5_file_name"),
+            "hdf5_release_date": metadata.get("hdf5_release_date"),
+            "hdf5_policy_date": metadata.get("hdf5_policy_date"),
+            "hdf5_rf2_view": metadata.get("hdf5_rf2_view"),
             "finding_count": metadata.get("finding_count"),
             "suggestion_count": metadata.get("suggestion_count"),
             "settings": settings,
         }
     )
-
-
-def _style_review_table(review_df: pd.DataFrame):
-    def highlight_choice_cells(data: pd.DataFrame) -> pd.DataFrame:
-        styles = pd.DataFrame("", index=data.index, columns=data.columns)
-        if "_needs_choice" in data.columns and "Suggested replacement" in data.columns:
-            styles.loc[
-                data["_needs_choice"].astype(bool),
-                "Suggested replacement",
-            ] = "background-color: #fff3cd; color: #664d03; font-weight: 600"
-        return styles
-
-    return review_df.style.apply(highlight_choice_cells, axis=None)
 
 
 def _suggestions_to_review_rows(suggestions: list[Any]) -> list[dict[str, Any]]:
@@ -495,7 +737,7 @@ def _suggestions_to_review_rows(suggestions: list[Any]) -> list[dict[str, Any]]:
     for idx, suggestion in enumerate(suggestions):
         row_number = idx + 1
         restored_decision = restored_by_index.get(idx, {})
-        replacement_options = _replacement_options(suggestion)
+        replacement_options, replacement_hints = _replacement_options_and_hints(suggestion)
         replacement_label = _replacement_label(suggestion)
         is_automatic_replacement = replacement_label != NO_REPLACEMENT_LABEL
         needs_choice = _needs_row_specific_choice(suggestion, replacement_options)
@@ -513,39 +755,20 @@ def _suggestions_to_review_rows(suggestions: list[Any]) -> list[dict[str, Any]]:
                 "Source code": suggestion.finding.code or "",
                 "Covered text": suggestion.finding.covered_text,
                 "Suggested replacement": selected_label if needs_choice else replacement_label,
+                "Why suggested": replacement_hints.get(
+                    selected_label if needs_choice else replacement_label, ""
+                ),
                 "Original FSN": suggestion.finding.fsn or "",
-                "Status": _status_value(suggestion.status),
+                "Status": _status_label(suggestion.status),
+                "_status_raw": _status_value(suggestion.status),
                 "_offset": tuple(suggestion.finding.offset),
                 "_layer": suggestion.finding.layer,
                 "_valid_choices": tuple(replacement_options),
+                "_choice_hints": replacement_hints,
                 "_needs_choice": needs_choice,
             }
         )
     return rows
-
-
-def _render_row_choice_controls(rows: list[dict[str, Any]]) -> dict[int, str]:
-    choice_rows = [row for row in rows if row.get("_needs_choice")]
-    if not choice_rows:
-        return {}
-
-    st.caption(
-        "Replacement choices for highlighted rows. Options can include the nearest rejected ancestor "
-        "and retained BM25 candidates."
-    )
-    choices: dict[int, str] = {}
-    for row in choice_rows:
-        options = list(row.get("_valid_choices", ()))
-        if not options:
-            continue
-        row_number = int(row["#"])
-        label = f"#{row_number}: {row['Document']} — {row['Source code']} — {row['Covered text']}"
-        choices[row_number] = st.selectbox(
-            label,
-            options=options,
-            key=_choice_key(row_number),
-        )
-    return choices
 
 
 def _review_rows_to_decisions(
@@ -580,26 +803,76 @@ def _review_rows_to_decisions(
     return decisions
 
 
-def _replacement_options(suggestion: Any) -> list[str]:
-    labels = []
+def _replacement_options_and_hints(suggestion: Any) -> tuple[list[str], dict[str, str]]:
+    labels: list[str] = []
+    hints: dict[str, str] = {}
     seen = set()
 
-    def add_label(label: str) -> None:
-        if label and label not in seen:
+    def add_label(label: str, hint: str) -> None:
+        if not label:
+            return
+        if label not in seen:
             labels.append(label)
             seen.add(label)
+        if hint and (label not in hints or hints[label].startswith("rank #")):
+            hints[label] = hint
 
     replacement_label = _replacement_label(suggestion)
     if replacement_label != NO_REPLACEMENT_LABEL:
-        add_label(replacement_label)
+        add_label(replacement_label, _suggestion_rationale(suggestion, rank=1))
         if not _needs_top_k_choice(suggestion):
-            return labels
+            return labels, hints
 
-    for candidate in getattr(suggestion, "context_candidates", ()) or ():
-        add_label(_code_fsn_label(getattr(candidate, "code", None), getattr(candidate, "fsn", None)))
-    for candidate in getattr(suggestion, "candidates", ()) or ():
-        add_label(_code_fsn_label(getattr(candidate, "code", None), getattr(candidate, "fsn", None)))
-    return labels
+    for rank, candidate in enumerate(getattr(suggestion, "context_candidates", ()) or (), start=1):
+        add_label(
+            _code_fsn_label(getattr(candidate, "code", None), getattr(candidate, "fsn", None)),
+            _candidate_rationale(candidate, rank=rank),
+        )
+    for rank, candidate in enumerate(getattr(suggestion, "candidates", ()) or (), start=1):
+        add_label(
+            _code_fsn_label(getattr(candidate, "code", None), getattr(candidate, "fsn", None)),
+            _candidate_rationale(candidate, rank=rank),
+        )
+    return labels, hints
+
+
+def _format_choice_option(option: str, hints: dict[str, str]) -> str:
+    hint = hints.get(option)
+    if hint:
+        return f"{option} [{hint}]"
+    return option
+
+
+def _suggestion_rationale(suggestion: Any, *, rank: int) -> str:
+    if hasattr(suggestion, "score"):
+        return (
+            f"rank #{rank} · BM25 {float(getattr(suggestion, 'score', 0.0)):.2f}"
+        )
+    association_type = getattr(suggestion, "association_type", None)
+    if association_type:
+        return f"rank #{rank} · {association_type}"
+    return f"rank #{rank} · {_status_label(getattr(suggestion, 'status', 'suggested'))}"
+
+
+def _candidate_rationale(candidate: Any, *, rank: int) -> str:
+    if hasattr(candidate, "score"):
+        parts = [
+            f"rank #{rank}",
+            f"BM25 {float(getattr(candidate, 'score', 0.0)):.2f}",
+            f"lexical {float(getattr(candidate, 'lexical_score', 0.0)):.2f}",
+        ]
+        semantic_tag = getattr(candidate, "semantic_tag", None)
+        if semantic_tag:
+            parts.append(str(semantic_tag))
+        return " · ".join(parts)
+    association_type = getattr(candidate, "association_type", None)
+    parts = [f"rank #{rank}"]
+    if association_type:
+        parts.append(str(association_type))
+    effective_time = getattr(candidate, "effective_time", None)
+    if effective_time:
+        parts.append(f"effective {effective_time}")
+    return " · ".join(parts)
 
 
 def _needs_row_specific_choice(suggestion: Any, replacement_options: list[str]) -> bool:
@@ -622,6 +895,14 @@ def _needs_top_k_choice(suggestion: Any) -> bool:
 
 def _choice_key(row_number: int) -> str:
     return f"sanitization_replacement_choice_{row_number}"
+
+
+def _manual_apply_key(row_number: int) -> str:
+    return f"sanitization_manual_apply_{row_number}"
+
+
+def _previous_choice_key(row_number: int) -> str:
+    return f"sanitization_previous_replacement_choice_{row_number}"
 
 
 def _document_reviewed_key(document: str) -> str:
@@ -652,6 +933,22 @@ def _fsn_from_label(label: str) -> str | None:
     if not label or label == NO_REPLACEMENT_LABEL or " — " not in label:
         return None
     return label.split(" — ", 1)[1] or None
+
+
+def _status_label(status: Any) -> str:
+    labels = {
+        SanitizationStatus.HISTORICAL_ASSOCIATION_REPLACEMENT.value: "Historical association",
+        SanitizationStatus.SEMANTIC_BM25_REPLACEMENT.value: "BM25/manual review",
+        SanitizationStatus.NEAREST_TARGET_ANCESTOR.value: "Nearest active ancestor",
+        SanitizationStatus.NEAREST_HISTORICAL_ANCESTOR.value: "Nearest historical ancestor",
+        SanitizationStatus.AMBIGUOUS_REPLACEMENT.value: "Ambiguous replacement",
+        SanitizationStatus.AMBIGUOUS_ANCESTOR.value: "Ambiguous ancestor",
+        SanitizationStatus.NO_POLICY_ACCEPTABLE_CANDIDATE.value: "No acceptable candidate",
+        SanitizationStatus.NO_HISTORICAL_ASSOCIATION.value: "No historical association",
+        SanitizationStatus.BLACKLISTED_NO_AUTO_SANITIZATION.value: "Blacklisted/no automatic sanitization",
+    }
+    value = _status_value(status)
+    return labels.get(value, value.replace("_", " ").title())
 
 
 def _status_value(status: Any) -> str:

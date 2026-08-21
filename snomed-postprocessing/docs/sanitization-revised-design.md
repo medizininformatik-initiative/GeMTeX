@@ -36,15 +36,18 @@ The revised implementation should primarily use:
 target release policy + target release history = post-hoc replacement suggestions
 ```
 
-A single enriched HDF5 file for a specific target release can contain:
+A single enriched HDF5 file for a specific materialized target view can contain:
 
-- the current whitelist;
-- the current blacklist;
-- active concept metadata for the target release;
-- historical association data for inactive/deprecated concepts;
+- the whitelist for that policy/view date;
+- the blacklist for that policy/view date;
+- active concept metadata for that materialized release/policy view;
+- historical association data reconstructed for that view;
 - optionally hierarchy/ancestor data for fallback generalization.
 
-This avoids requiring a separate `source.hdf5` in the common case.
+The check and sanitization phases must use the same materialized HDF5 view. The
+runtime does not choose arbitrary earlier SNOMED release snapshots from one HDF5;
+to target another date, build or select another HDF5 for that date. This avoids
+requiring a separate `source.hdf5` in the common case.
 
 ## 3. Runtime Workflow
 

@@ -49,8 +49,9 @@ inputs = render_sidebar()
 
 if inputs.target_view == "policy":
     st.info(
-        "**Current target: Policy rules** — annotations must be allowed by the "
-        "embedded whitelist/blacklist policy views.",
+        "**Current target: Policy rules** — annotations must be valid in the "
+        "materialized policy view stored in the uploaded HDF5. To use another "
+        "policy date, select an HDF5 built for that date.",
         icon="🎯",
     )
 else:
@@ -60,9 +61,10 @@ else:
         "runtime": "runtime blacklist rules",
     }.get(inputs.release_blacklist_mode, inputs.release_blacklist_mode)
     st.info(
-        "**Current target: Active release** — annotations must be active release "
-        f"concepts; blacklist mode: {blacklist_label}. Release execution is not "
-        "enabled yet.",
+        "**Current target: Active release** — annotations must be active concepts "
+        "in the materialized release view stored in the uploaded HDF5; blacklist "
+        f"mode: {blacklist_label}. To use another release snapshot, select an "
+        "HDF5 built for that snapshot. Release execution is not enabled yet.",
         icon="🎯",
     )
 
@@ -71,6 +73,14 @@ if inputs.hdf5_file is not None:
     try:
         inputs.hdf5_temp_path = save_uploaded_file(inputs.hdf5_file, ".hdf5")
         hdf5_summary = inspect_hdf5_metadata(inputs.hdf5_temp_path)
+        st.caption(
+            "HDF5 materialized view: "
+            f"release date `{hdf5_summary.concepts_release_date or 'unknown'}`, "
+            f"policy/view date `{hdf5_summary.concepts_policy_date or 'unknown'}`, "
+            f"RF2 view `{hdf5_summary.concepts_rf2_view or 'unknown'}`. "
+            "Checks and suggestions use this baked-in view; arbitrary earlier "
+            "dates cannot be selected from this HDF5 unless they were materialized."
+        )
         with st.expander("HDF5 metadata summary", expanded=False):
             st.markdown(
                 format_hdf5_metadata_summary(

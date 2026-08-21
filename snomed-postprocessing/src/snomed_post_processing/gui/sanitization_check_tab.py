@@ -10,6 +10,7 @@ import time
 import streamlit as st
 
 from snomed_post_processing.findings_io import read_critical_findings_json
+from snomed_post_processing.hdf5_handling.metadata import inspect_hdf5_metadata
 from snomed_post_processing.sanitization import (
     ASSOCIATION_TYPE_DESCRIPTIONS,
     DEFAULT_ALLOWED_ASSOCIATION_TYPES,
@@ -40,7 +41,9 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
             "but replacement candidates will only need to be active in the release and optionally not blacklisted."
         )
     st.write(
-        "Generate sanitization suggestions from CriticalFindings JSON produced by the check step."
+        "Generate sanitization suggestions from CriticalFindings JSON produced by "
+        "the check step. Policy suggestions target the same materialized HDF5 "
+        "policy/view date used for checking."
     )
     session_findings_available = st.session_state.get("critical_findings") is not None
     uploaded_findings_file = None
@@ -186,15 +189,18 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                 st.write("Preparing HDF5 and CriticalFindings inputs...")
                 if inputs.hdf5_temp_path is None:
                     inputs.hdf5_temp_path = save_uploaded_file(inputs.hdf5_file, ".hdf5")
+                hdf5_summary = inspect_hdf5_metadata(inputs.hdf5_temp_path)
+                st.write(
+                    "Using HDF5 materialized view: "
+                    f"release date {hdf5_summary.concepts_release_date or 'unknown'}, "
+                    f"policy/view date {hdf5_summary.concepts_policy_date or 'unknown'}."
+                )
                 if use_session_findings:
                     findings = st.session_state["critical_findings"]
                 else:
                     findings_path = save_uploaded_file(uploaded_findings_file, ".json")
                     findings = read_critical_findings_json(findings_path)
 
-                sanitization_progress = st.progress(
-                    0.0, text="Preparing sanitization suggestions..."
-                )
                 st.write("Creating resolver and loading SNOMED lookup data...")
                 resolver = SanitizationResolver(
                     inputs.hdf5_temp_path,
@@ -210,22 +216,22 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                         else None
                     ),
                 )
-                sanitization_progress.progress(
+                st.write(
+                    f"Resolving historical association candidates for {len(findings)} finding(s)..."
+                )
+                sanitization_progress = st.progress(
                     0.25,
                     text=(
                         f"Resolving historical-association suggestions for "
                         f"{len(findings)} finding(s)..."
                     ),
                 )
-                st.write(
-                    f"Resolving historical association candidates for {len(findings)} finding(s)..."
-                )
                 suggestions = resolver.suggest_all(findings)
                 if sanitize_semantic_bm25_fallback:
+                    st.write("Running semantic BM25 fallback for unresolved findings...")
                     sanitization_progress.progress(
                         0.65, text="Running semantic BM25 fallback suggestions..."
                     )
-                    st.write("Running semantic BM25 fallback for unresolved findings...")
                     suggestions = apply_semantic_bm25_fallback(
                         suggestions,
                         inputs.hdf5_temp_path,
@@ -234,10 +240,10 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                         max_candidates=int(sanitize_bm25_max_candidates),
                         allow_blacklist_findings=sanitize_blacklist_suggestions,
                     )
+                st.write("Writing Markdown and JSON suggestion reports...")
                 sanitization_progress.progress(
                     0.9, text="Writing sanitization suggestion report..."
                 )
-                st.write("Writing Markdown and JSON suggestion reports...")
                 output_dir = pathlib.Path(
                     tempfile.mkdtemp(prefix="snomed_gui_sanitization_")
                 )
@@ -264,6 +270,9 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
             sanitization_metadata = {
                 "source": "streamlit_sanitization_check_tab",
                 "hdf5_file_name": getattr(inputs.hdf5_file, "name", None),
+                "hdf5_release_date": hdf5_summary.concepts_release_date,
+                "hdf5_policy_date": hdf5_summary.concepts_policy_date,
+                "hdf5_rf2_view": hdf5_summary.concepts_rf2_view,
                 "finding_count": len(findings),
                 "suggestion_count": len(suggestions),
                 "settings": sanitization_settings,
