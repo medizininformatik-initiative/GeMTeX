@@ -30,47 +30,9 @@ NO_REPLACEMENT_LABEL = "— no replacement selected —"
 def render_sanitization_run_tab(inputs: GuiInputs) -> None:
     st.write("Review sanitization suggestions before applying them back to CAS documents.")
 
-    st.subheader("Loading from external")
-    uploaded_suggestions_file = st.file_uploader(
-        "(Optional) Sanitization suggestions JSON",
-        type=["json"],
-        key="sanitization_suggestions_json_uploader",
-        help="Upload suggestions saved from the sanitization-check tab, or use suggestions from this session.",
-    )
-    if uploaded_suggestions_file is not None:
-        upload_key = _uploaded_file_key(uploaded_suggestions_file)
-        if st.session_state.get("loaded_sanitization_suggestions_upload_key") != upload_key:
-            try:
-                suggestions, metadata = read_sanitization_suggestions_json_with_metadata(uploaded_suggestions_file)
-                st.session_state["sanitization_suggestions"] = suggestions
-                st.session_state["sanitization_suggestions_metadata"] = metadata
-                st.session_state["sanitization_suggestions_report_path"] = None
-                st.session_state["sanitization_suggestions_json_path"] = uploaded_suggestions_file.name
-                st.session_state["loaded_sanitization_suggestions_upload_key"] = upload_key
-                _bump_review_state_revision()
-                st.session_state["sanitization_last_load_message"] = f"Loaded suggestions from {uploaded_suggestions_file.name}."
-                st.rerun()
-            except Exception as exc:
-                st.error(f"Could not load sanitization suggestions JSON: {exc}")
-
-    uploaded_decisions_file = st.file_uploader(
-        "(Optional) Reviewed sanitization decisions JSON",
-        type=["json"],
-        key="sanitization_decisions_json_uploader",
-        help="Optional: load a previously saved review state after loading/generating the matching suggestions.",
-    )
-    if uploaded_decisions_file is not None:
-        upload_key = _uploaded_file_key(uploaded_decisions_file)
-        if st.session_state.get("loaded_sanitization_decisions_upload_key") != upload_key:
-            try:
-                decisions, metadata = read_sanitization_decisions_json(uploaded_decisions_file)
-                _restore_decision_state(decisions, metadata)
-                st.session_state["loaded_sanitization_decisions_upload_key"] = upload_key
-                _bump_review_state_revision()
-                st.session_state["sanitization_last_load_message"] = f"Loaded reviewed decisions from {uploaded_decisions_file.name}."
-                st.rerun()
-            except Exception as exc:
-                st.error(f"Could not load sanitization decisions JSON: {exc}")
+    st.subheader("Sources")
+    _render_suggestion_source_selector()
+    _render_decision_source_selector()
 
     if st.session_state.get("sanitization_last_load_message"):
         st.success(st.session_state.pop("sanitization_last_load_message"))
@@ -98,10 +60,13 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
     if report_path:
         st.caption(f"Suggestion report: `{report_path}`")
 
-    _render_suggestion_settings(st.session_state.get("sanitization_suggestions_metadata") or {})
-
-    st.subheader("Results")
     rows = _suggestions_to_review_rows(suggestions)
+    _render_review_summary(rows)
+
+    with st.popover("Suggestion metadata"):
+        _render_suggestion_settings(st.session_state.get("sanitization_suggestions_metadata") or {})
+
+    st.subheader("Review workspace")
     reviewed_decisions = _render_document_review_sections(rows)
     st.session_state["sanitization_review_decisions"] = reviewed_decisions
 
@@ -127,6 +92,124 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
     )
 
 
+def _render_suggestion_source_selector() -> None:
+    session_suggestions_available = st.session_state.get("sanitization_suggestions") is not None
+    if session_suggestions_available:
+        source = st.segmented_control(
+            "Sanitization suggestions source",
+            options=["Current session", "Upload JSON"],
+            default="Current session",
+            key="sanitization_suggestions_source",
+            help=(
+                "Use suggestions generated in this browser session, or upload a "
+                "saved sanitization suggestions JSON file."
+            ),
+            width="stretch",
+        ) or "Current session"
+    else:
+        source = "Upload JSON"
+        st.info(
+            "No sanitization suggestions are available in the current session. "
+            "Upload a suggestions JSON file or generate suggestions in the previous tab."
+        )
+
+    if source != "Upload JSON":
+        return
+
+    uploaded_suggestions_file = st.file_uploader(
+        "Sanitization suggestions JSON",
+        type=["json"],
+        key="sanitization_suggestions_json_uploader",
+        help="Upload suggestions saved from the sanitization-check tab.",
+    )
+    if uploaded_suggestions_file is None:
+        return
+    upload_key = _uploaded_file_key(uploaded_suggestions_file)
+    if st.session_state.get("loaded_sanitization_suggestions_upload_key") == upload_key:
+        return
+    try:
+        suggestions, metadata = read_sanitization_suggestions_json_with_metadata(
+            uploaded_suggestions_file
+        )
+        st.session_state["sanitization_suggestions"] = suggestions
+        st.session_state["sanitization_suggestions_metadata"] = metadata
+        st.session_state["sanitization_suggestions_report_path"] = None
+        st.session_state["sanitization_suggestions_json_path"] = uploaded_suggestions_file.name
+        st.session_state["loaded_sanitization_suggestions_upload_key"] = upload_key
+        _bump_review_state_revision()
+        st.session_state["sanitization_last_load_message"] = (
+            f"Loaded suggestions from {uploaded_suggestions_file.name}."
+        )
+        st.rerun()
+    except Exception as exc:
+        st.error(f"Could not load sanitization suggestions JSON: {exc}")
+
+
+def _render_decision_source_selector() -> None:
+    review_state = st.segmented_control(
+        "Review state",
+        options=["Start fresh", "Load reviewed decisions"],
+        default="Start fresh",
+        key="sanitization_review_state_source",
+        help="Optionally restore a saved review state after loading matching suggestions.",
+        width="stretch",
+    ) or "Start fresh"
+    if review_state != "Load reviewed decisions":
+        return
+
+    uploaded_decisions_file = st.file_uploader(
+        "Reviewed sanitization decisions JSON",
+        type=["json"],
+        key="sanitization_decisions_json_uploader",
+        help="Load a previously saved review state after loading/generating matching suggestions.",
+    )
+    if uploaded_decisions_file is None:
+        return
+    upload_key = _uploaded_file_key(uploaded_decisions_file)
+    if st.session_state.get("loaded_sanitization_decisions_upload_key") == upload_key:
+        return
+    try:
+        decisions, metadata = read_sanitization_decisions_json(uploaded_decisions_file)
+        _restore_decision_state(decisions, metadata)
+        st.session_state["loaded_sanitization_decisions_upload_key"] = upload_key
+        _bump_review_state_revision()
+        st.session_state["sanitization_last_load_message"] = (
+            f"Loaded reviewed decisions from {uploaded_decisions_file.name}."
+        )
+        st.rerun()
+    except Exception as exc:
+        st.error(f"Could not load sanitization decisions JSON: {exc}")
+
+
+def _render_run_readiness(
+    *,
+    project_loaded: bool,
+    selected_count: int,
+    has_invalid_selected_rows: bool,
+) -> None:
+    if project_loaded and selected_count > 0 and not has_invalid_selected_rows:
+        st.success(
+            f"Ready to run: project ZIP loaded and {selected_count} valid "
+            "replacement(s) selected."
+        )
+        return
+
+    messages = []
+    if project_loaded:
+        messages.append("✅ Project ZIP loaded")
+    else:
+        messages.append("❌ Upload or load an INCEpTION project ZIP in the sidebar")
+    if selected_count > 0:
+        messages.append(f"✅ {selected_count} valid replacement(s) selected")
+    else:
+        messages.append("❌ Select at least one valid replacement")
+    if has_invalid_selected_rows:
+        messages.append("⚠️ Some selected rows have invalid replacement choices")
+    else:
+        messages.append("✅ No invalid selected replacement choices")
+    st.warning("Cannot run yet:\n\n" + "\n".join(f"- {message}" for message in messages))
+
+
 def _render_sanitization_run_controls(
     reviewed_decisions: list[dict[str, Any]],
     decisions_text: str,
@@ -136,24 +219,33 @@ def _render_sanitization_run_controls(
 ) -> None:
     st.subheader("Run")
     project_source = st.session_state.get("zip_file")
-    if project_source is None:
-        st.info("Upload or load an INCEpTION project ZIP in the sidebar before running sanitization.")
-
     run_disabled = project_source is None or selected_count == 0 or has_invalid_selected_rows
-    run_clicked = st.button(
-        "Run sanitization",
-        type="primary",
-        disabled=run_disabled,
-        help=(
-            "Writes a sanitized copy of the uploaded project ZIP. The original project is not modified."
-        ),
+    _render_run_readiness(
+        project_loaded=project_source is not None,
+        selected_count=selected_count,
+        has_invalid_selected_rows=has_invalid_selected_rows,
     )
 
-    download_json_report(
-        decisions_text,
-        pathlib.Path("reviewed_sanitization_decisions.json"),
-        "reviewed sanitization decisions",
-    )
+    control_col1, control_col2 = st.columns([1, 1])
+    with control_col1:
+        run_clicked = st.button(
+            "Run sanitization",
+            type="primary",
+            disabled=run_disabled,
+            help=(
+                "Writes a sanitized copy of the uploaded project ZIP. The original "
+                "project is not modified."
+            ),
+            width="stretch",
+        )
+    with control_col2:
+        with st.popover("Review artifacts", width="stretch"):
+            download_json_report(
+                decisions_text,
+                pathlib.Path("reviewed_sanitization_decisions.json"),
+                "reviewed sanitization decisions",
+            )
+            st.caption("Save this JSON to restore the current review state later.")
     if not run_clicked:
         return
 
@@ -214,13 +306,24 @@ def _render_document_review_sections(rows: list[dict[str, Any]]) -> list[dict[st
         1 for document in grouped_rows if st.session_state.get(_document_reviewed_key(document), False)
     )
     st.caption(f"Reviewed {reviewed_count} of {len(grouped_rows)} document section(s).")
+    focus = st.pills(
+        "Focus documents",
+        options=["All", "Needs choice", "No replacement", "Unreviewed"],
+        default="All",
+        key="sanitization_review_focus",
+        help=(
+            "Controls which document sections open by default. Other sections stay "
+            "available so hidden edits are not lost."
+        ),
+        width="stretch",
+    ) or "All"
 
     for document, document_rows in grouped_rows.items():
         reviewed_key = _document_reviewed_key(document)
         reviewed = bool(st.session_state.get(reviewed_key, False))
-        title_prefix = "✅" if reviewed else "📝"
-        title = f"{title_prefix} {document} — {len(document_rows)} finding(s)"
-        with st.expander(title, expanded=not reviewed):
+        focus_match = _document_matches_focus(document, document_rows, focus)
+        title = _document_review_title(document, document_rows, reviewed)
+        with st.expander(title, expanded=focus_match and not reviewed):
             if reviewed:
                 st.success("This document section is marked as reviewed.")
             review_df = pd.DataFrame(document_rows).drop(columns=["Document", "_offset", "_layer"], errors="ignore")
@@ -263,11 +366,65 @@ def _render_document_review_sections(rows: list[dict[str, Any]]) -> list[dict[st
     return decisions
 
 
+def _document_matches_focus(
+    document: str, document_rows: list[dict[str, Any]], focus: str
+) -> bool:
+    if focus == "All":
+        return True
+    if focus == "Needs choice":
+        return any(row.get("_needs_choice") for row in document_rows)
+    if focus == "No replacement":
+        return any(
+            row.get("Suggested replacement") == NO_REPLACEMENT_LABEL
+            for row in document_rows
+        )
+    if focus == "Unreviewed":
+        return not bool(st.session_state.get(_document_reviewed_key(document), False))
+    return True
+
+
+def _document_review_title(
+    document: str, document_rows: list[dict[str, Any]], reviewed: bool
+) -> str:
+    selected = sum(1 for row in document_rows if row.get("Apply"))
+    needs_choice = sum(1 for row in document_rows if row.get("_needs_choice"))
+    no_replacement = sum(
+        1 for row in document_rows if row.get("Suggested replacement") == NO_REPLACEMENT_LABEL
+    )
+    prefix = "✅" if reviewed else "📝"
+    details = [f"{len(document_rows)} finding(s)", f"{selected} selected"]
+    if needs_choice:
+        details.append(f"{needs_choice} need choice")
+    if no_replacement:
+        details.append(f"{no_replacement} no replacement")
+    return f"{prefix} {document} — {' · '.join(details)}"
+
+
 def _group_rows_by_document(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
     grouped: dict[str, list[dict[str, Any]]] = {}
     for row in rows:
         grouped.setdefault(str(row.get("Document", "")), []).append(row)
     return grouped
+
+
+def _render_review_summary(rows: list[dict[str, Any]]) -> None:
+    grouped_rows = _group_rows_by_document(rows)
+    automatic_replacements = sum(
+        1
+        for row in rows
+        if row.get("Suggested replacement") != NO_REPLACEMENT_LABEL
+        and not row.get("_needs_choice")
+    )
+    needs_choice = sum(1 for row in rows if row.get("_needs_choice"))
+    no_replacement = sum(
+        1 for row in rows if row.get("Suggested replacement") == NO_REPLACEMENT_LABEL
+    )
+    metric_cols = st.columns(5)
+    metric_cols[0].metric("Suggestions", len(rows))
+    metric_cols[1].metric("Documents", len(grouped_rows))
+    metric_cols[2].metric("Automatic", automatic_replacements)
+    metric_cols[3].metric("Need choice", needs_choice)
+    metric_cols[4].metric("No replacement", no_replacement)
 
 
 def _decisions_metadata(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -309,15 +466,14 @@ def _render_suggestion_settings(metadata: dict[str, Any]) -> None:
     if not isinstance(settings, dict):
         st.caption("No sanitization-generation settings found in the loaded suggestions JSON.")
         return
-    with st.expander("Settings used to generate these suggestions", expanded=False):
-        st.json(
-            {
-                "hdf5_file_name": metadata.get("hdf5_file_name"),
-                "finding_count": metadata.get("finding_count"),
-                "suggestion_count": metadata.get("suggestion_count"),
-                "settings": settings,
-            }
-        )
+    st.json(
+        {
+            "hdf5_file_name": metadata.get("hdf5_file_name"),
+            "finding_count": metadata.get("finding_count"),
+            "suggestion_count": metadata.get("suggestion_count"),
+            "settings": settings,
+        }
+    )
 
 
 def _style_review_table(review_df: pd.DataFrame):
