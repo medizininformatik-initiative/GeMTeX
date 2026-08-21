@@ -189,7 +189,10 @@ class TestSanitizationResolver(unittest.TestCase):
         self.assertIn("suggestion-only", report)
         self.assertIn("## Replacement suggestions", report)
         self.assertIn("### annotator-a", report)
-        self.assertIn("| Document | Source Code | Covered Text | Status | Replacement Code | Replacement FSN | Association |", report)
+        self.assertIn(
+            "| Document | Source Code | Covered Text | Original FSN | Status | Replacement Code | Replacement FSN | Association | Candidates / context |",
+            report,
+        )
         self.assertIn("historical_association_replacement", report)
         self.assertIn("200", report)
         self.assertIn("Replacement concept (finding)", report)

@@ -1,7 +1,7 @@
 [project]
 name = "snomed_post_processing"
 
-version = "1.6.0"
+version = "2.0.0"
 description = "Program that creates SNOMED CT dumps of a particular version and/or with some filters for semantic tags or concept ids applied. It also logs SNOMED CT annotated documents under these filters in mind."
 readme = "README.md"
 requires-python = "~=3.9.0"
@@ -24,6 +24,11 @@ dependencies = [
     "scttsrapy",
     "streamlit>=1.50.0",
     "yaspin>=3.3.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.0,<9",
 ]
 
 [tool.uv.sources]
