@@ -42,11 +42,29 @@ st.set_page_config(page_title="GeMTeX SNOMED CT Postprocessing", layout="wide")
 
 st.title("SNOMED Postprocessing")
 st.write(
-    """Simple GUI for checking SNOMED CT annotations in INCEpTION exports and applying reviewed sanitization replacements to copied CAS files.  
-         Choose a target view in the sidebar: policy view uses whitelist/blacklist policy views; release view targets active release concepts with an optional blacklist."""
+    """Check SNOMED CT annotations in INCEpTION exports, generate replacement suggestions, and apply reviewed sanitization decisions to a copied project ZIP."""
 )
 
 inputs = render_sidebar()
+
+if inputs.target_view == "policy":
+    st.info(
+        "**Current target: Policy rules** — annotations must be allowed by the "
+        "embedded whitelist/blacklist policy views.",
+        icon="🎯",
+    )
+else:
+    blacklist_label = {
+        "none": "no blacklist",
+        "embedded": "embedded HDF5 blacklist",
+        "runtime": "runtime blacklist rules",
+    }.get(inputs.release_blacklist_mode, inputs.release_blacklist_mode)
+    st.info(
+        "**Current target: Active release** — annotations must be active release "
+        f"concepts; blacklist mode: {blacklist_label}. Release execution is not "
+        "enabled yet.",
+        icon="🎯",
+    )
 
 if inputs.hdf5_file is not None:
     st.success(f"HDF5 uploaded: {inputs.hdf5_file.name}")
