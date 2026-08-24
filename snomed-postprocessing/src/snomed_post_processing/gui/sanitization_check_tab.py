@@ -17,7 +17,9 @@ from snomed_post_processing.sanitization import (
     SUPPORTED_ASSOCIATION_TYPES,
     SanitizationResolver,
     apply_semantic_bm25_fallback,
+    build_snogit_sidecar,
     format_association_type_descriptions,
+    list_snogit_zip_members,
     sanitization_suggestions_json_text,
     write_sanitization_markdown_report,
 )
@@ -107,6 +109,13 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
             if not sanitize_semantic_bm25_fallback:
                 st.caption("Enable Semantic BM25 fallback to include blacklist findings.")
 
+    use_snogit_bm25 = False
+    snogit_sidecar_file = None
+    snogit_zip_file = None
+    snogit_sidecar_path_text = ""
+    snogit_zip_path_text = ""
+    selected_snogit_members = []
+
     with st.popover("Advanced suggestion settings"):
         st.markdown("#### Historical associations")
         sanitization_association_types = st.multiselect(
@@ -172,14 +181,78 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
         sanitize_bm25_max_candidates = st.number_input(
             "Maximum retained candidates", min_value=1, max_value=50, value=5, step=1
         )
+        st.markdown("#### Optional SNOGIT/interface terms")
+        use_snogit_bm25 = st.checkbox(
+            "Use SNOGIT/interface terms for BM25 candidates",
+            value=False,
+            disabled=not sanitize_semantic_bm25_fallback,
+            help=(
+                "Use a processed SNOGIT cache if available. This can be a cache downloaded/saved from a previous run. "
+                "If no cache is provided, provide SNOGIT-release.zip and a reusable cache will be built during this run."
+            ),
+        )
+        if use_snogit_bm25:
+            snogit_sidecar_file = st.file_uploader(
+                "Processed SNOGIT cache HDF5",
+                type=["hdf5", "h5"],
+                help="Optional. This can be a compatible processed SNOGIT cache from a previous run; if provided, it is used directly.",
+                key="snogit_sidecar_upload",
+            )
+            snogit_sidecar_path_text = st.text_input(
+                "Or processed SNOGIT cache path on this server",
+                value="",
+                help="Use this for large cache files that are already available on the machine running Streamlit.",
+                key="snogit_sidecar_path_text",
+            )
+            snogit_zip_file = st.file_uploader(
+                "SNOGIT release ZIP for on-demand cache creation",
+                type=["zip"],
+                help="Required only when no processed cache is provided. Default Streamlit uploads are limited to 200 MB unless server.maxUploadSize is increased.",
+                key="snogit_zip_upload",
+            )
+            snogit_zip_path_text = st.text_input(
+                "Or SNOGIT release ZIP path on this server",
+                value="",
+                help="Recommended for the multi-GB SNOGIT-release.zip. The path must be readable by the Streamlit server process.",
+                key="snogit_zip_path_text",
+            )
+            snogit_sidecar_path_candidate = pathlib.Path(snogit_sidecar_path_text).expanduser() if snogit_sidecar_path_text.strip() else None
+            snogit_zip_path_candidate = pathlib.Path(snogit_zip_path_text).expanduser() if snogit_zip_path_text.strip() else None
+            if (snogit_zip_file is not None or snogit_zip_path_candidate is not None) and snogit_sidecar_file is None and snogit_sidecar_path_candidate is None:
+                try:
+                    snogit_zip_temp_path = snogit_zip_path_candidate or save_uploaded_file(snogit_zip_file, ".zip")
+                    snogit_members = list_snogit_zip_members(snogit_zip_temp_path)
+                    default_members = [member.name for member in snogit_members if member.recommended_default]
+                    selected_snogit_members = st.multiselect(
+                        "SNOGIT ZIP members",
+                        options=[member.name for member in snogit_members],
+                        default=default_members,
+                        help=(
+                            "Default is the newest general SNOGIT_*.dat member only. "
+                            "ELGA and Latin files can be selected explicitly."
+                        ),
+                    )
+                    if default_members:
+                        st.caption(f"Default general SNOGIT member: {default_members[0]}")
+                except Exception as exc:
+                    st.warning(f"Could not inspect SNOGIT ZIP members: {exc}")
         st.divider()
         st.markdown("#### Association type meanings")
         st.text(format_association_type_descriptions())
 
+    snogit_ready = (
+        not use_snogit_bm25
+        or snogit_sidecar_file is not None
+        or bool(snogit_sidecar_path_text.strip())
+        or ((snogit_zip_file is not None or bool(snogit_zip_path_text.strip())) and bool(selected_snogit_members))
+    )
+    if use_snogit_bm25 and not snogit_ready:
+        st.info("To use SNOGIT BM25 candidates, provide a processed SNOGIT cache or provide a SNOGIT ZIP and select at least one member.")
+
     if st.button(
         "Generate sanitization suggestions",
         type="primary",
-        disabled=inputs.target_view != "policy" or not inputs.hdf5_file or not (use_session_findings or uploaded_findings_file),
+        disabled=inputs.target_view != "policy" or not inputs.hdf5_file or not (use_session_findings or uploaded_findings_file) or not snogit_ready,
     ):
         try:
             with st.status(
@@ -227,9 +300,41 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                     ),
                 )
                 suggestions = resolver.suggest_all(findings)
+                snogit_sidecar_path = None
+                snogit_sidecar_build_result = None
+                if sanitize_semantic_bm25_fallback and use_snogit_bm25:
+                    if snogit_sidecar_file is not None:
+                        st.write("Using uploaded processed SNOGIT cache...")
+                        snogit_sidecar_path = save_uploaded_file(snogit_sidecar_file, ".hdf5")
+                    elif snogit_sidecar_path_text.strip():
+                        st.write("Using processed SNOGIT cache from server path...")
+                        snogit_sidecar_path = pathlib.Path(snogit_sidecar_path_text).expanduser()
+                    elif snogit_zip_file is not None or snogit_zip_path_text.strip():
+                        st.write("Building reusable SNOGIT cache from selected ZIP member(s)...")
+                        sanitization_progress.empty()
+                        sanitization_progress = st.progress(
+                            0.55, text="Building SNOGIT cache..."
+                        )
+                        snogit_zip_path = pathlib.Path(snogit_zip_path_text).expanduser() if snogit_zip_path_text.strip() else save_uploaded_file(snogit_zip_file, ".zip")
+                        output_dir_for_sidecar = pathlib.Path(
+                            tempfile.mkdtemp(prefix="snomed_gui_snogit_sidecar_")
+                        )
+                        timestamp_for_sidecar = datetime.datetime.now().strftime('%d-%m-%Y_%H-%M')
+                        snogit_sidecar_path = output_dir_for_sidecar / f"snogit_sidecar_{timestamp_for_sidecar}.hdf5"
+                        snogit_sidecar_build_result = build_snogit_sidecar(
+                            hdf5_path=inputs.hdf5_temp_path,
+                            snogit_zip_path=snogit_zip_path,
+                            output_path=snogit_sidecar_path,
+                            members=selected_snogit_members,
+                        )
+                        st.write(
+                            "SNOGIT cache built: "
+                            f"{snogit_sidecar_build_result.rows_written:,} term row(s) written."
+                        )
                 if sanitize_semantic_bm25_fallback:
                     st.write("Running semantic BM25 fallback for unresolved findings...")
-                    sanitization_progress.progress(
+                    sanitization_progress.empty()
+                    sanitization_progress = st.progress(
                         0.65, text="Running semantic BM25 fallback suggestions..."
                     )
                     suggestions = apply_semantic_bm25_fallback(
@@ -239,9 +344,11 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                         min_lexical_score=sanitize_bm25_min_lexical_score,
                         max_candidates=int(sanitize_bm25_max_candidates),
                         allow_blacklist_findings=sanitize_blacklist_suggestions,
+                        snogit_sidecar_path=snogit_sidecar_path,
                     )
                 st.write("Writing Markdown and JSON suggestion reports...")
-                sanitization_progress.progress(
+                sanitization_progress.empty()
+                sanitization_progress = st.progress(
                     0.9, text="Writing sanitization suggestion report..."
                 )
                 output_dir = pathlib.Path(
@@ -266,6 +373,14 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                 "bm25_min_score": float(sanitize_bm25_min_score),
                 "bm25_min_lexical_score": float(sanitize_bm25_min_lexical_score),
                 "bm25_max_candidates": int(sanitize_bm25_max_candidates),
+                "snogit_bm25": bool(use_snogit_bm25),
+                "snogit_members": list(selected_snogit_members),
+                "snogit_sidecar_built": snogit_sidecar_build_result is not None,
+                "snogit_sidecar_rows_written": (
+                    snogit_sidecar_build_result.rows_written
+                    if snogit_sidecar_build_result is not None
+                    else None
+                ),
             }
             sanitization_metadata = {
                 "source": "streamlit_sanitization_check_tab",
@@ -304,6 +419,13 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
             st.success("Sanitization suggestions finished.")
 
             download_json_report(sanitization_json_text, output_sanitization_json, "sanitization suggestion")
+            if snogit_sidecar_build_result is not None and snogit_sidecar_path is not None:
+                st.download_button(
+                    label="Download processed SNOGIT cache HDF5",
+                    data=pathlib.Path(snogit_sidecar_path).read_bytes(),
+                    file_name=pathlib.Path(snogit_sidecar_path).name,
+                    mime="application/x-hdf5",
+                )
 
             st.subheader("Reports")
             download_md_report(

@@ -1024,6 +1024,9 @@ def _candidate_rationale(candidate: Any, *, rank: int) -> str:
         semantic_tag = getattr(candidate, "semantic_tag", None)
         if semantic_tag:
             parts.append(str(semantic_tag))
+        if getattr(candidate, "source", "snomed_fsn") == "snogit":
+            matched_term = getattr(candidate, "matched_term", None)
+            parts.append("SNOGIT" + (f": {_compact_text(matched_term, max_length=60)}" if matched_term else ""))
         return " · ".join(parts)
     association_type = getattr(candidate, "association_type", None)
     parts = [f"rank #{rank}"]

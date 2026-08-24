@@ -21,6 +21,9 @@ class SemanticBm25Candidate:
     active: bool
     in_whitelist: bool
     in_blacklist: bool
+    source: str = "snomed_fsn"
+    matched_term: Optional[str] = None
+    source_member: Optional[str] = None
 
     @property
     def policy_acceptable(self) -> bool:

@@ -40,6 +40,9 @@ def semantic_bm25_candidate_to_dict(candidate: SemanticBm25Candidate) -> dict[st
         "active": bool(candidate.active),
         "in_whitelist": bool(candidate.in_whitelist),
         "in_blacklist": bool(candidate.in_blacklist),
+        "source": candidate.source,
+        "matched_term": candidate.matched_term,
+        "source_member": candidate.source_member,
     }
 
 
@@ -60,6 +63,9 @@ def candidate_from_dict(data: dict[str, Any]) -> SanitizationCandidate | Semanti
             active=bool(data.get("active", False)),
             in_whitelist=bool(data.get("in_whitelist", False)),
             in_blacklist=bool(data.get("in_blacklist", False)),
+            source=str(data.get("source", "snomed_fsn")),
+            matched_term=None if data.get("matched_term") is None else str(data.get("matched_term")),
+            source_member=None if data.get("source_member") is None else str(data.get("source_member")),
         )
     return SanitizationCandidate(
         code=str(data["code"]),

@@ -45,6 +45,15 @@ from .semantic_bm25 import (
     suggest_semantic_bm25,
 )
 from .semantic_models import SemanticBm25Candidate, SemanticBm25Suggestion
+from .snogit_sidecar import (
+    SnogitSidecarBuildResult,
+    SnogitSidecarTerms,
+    SnogitZipMember,
+    build_snogit_sidecar,
+    list_snogit_zip_members,
+    read_snogit_sidecar_terms,
+    validate_snogit_sidecar_compatibility,
+)
 
 __all__ = [
     "ASSOCIATION_TYPE_DESCRIPTIONS",
@@ -62,6 +71,13 @@ __all__ = [
     "SemanticBm25Suggestion",
     "apply_semantic_bm25_fallback",
     "suggest_semantic_bm25",
+    "SnogitZipMember",
+    "SnogitSidecarTerms",
+    "SnogitSidecarBuildResult",
+    "list_snogit_zip_members",
+    "build_snogit_sidecar",
+    "read_snogit_sidecar_terms",
+    "validate_snogit_sidecar_compatibility",
     "sanitization_decisions_payload",
     "sanitization_decisions_json_text",
     "write_sanitization_decisions_json",

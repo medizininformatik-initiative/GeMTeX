@@ -2,6 +2,7 @@ import io
 import pathlib
 import tempfile
 import unittest
+import zipfile
 
 import h5py
 import numpy as np
@@ -10,6 +11,9 @@ from snomed_post_processing.sanitization import (
     SanitizationStatus,
     SanitizationSuggestion,
     apply_semantic_bm25_fallback,
+    build_snogit_sidecar,
+    list_snogit_zip_members,
+    validate_snogit_sidecar_compatibility,
     write_sanitization_markdown_report,
 )
 from snomed_post_processing.sanitization.semantic_bm25 import (
@@ -47,6 +51,9 @@ def _write_compact_hdf5(
 ):
     with h5py.File(path, "w") as h5_file:
         concepts = h5_file.create_group("concepts")
+        concepts.attrs["release_date"] = "20260401"
+        concepts.attrs["policy_date"] = "20240401"
+        concepts.attrs["rf2_view"] = "snapshot"
         concepts.create_dataset(
             "codes",
             data=np.asarray(["999", "100", "200", "300"], dtype=object),
@@ -233,6 +240,77 @@ class TestSemanticBm25Sanitization(unittest.TestCase):
         self.assertIn("semantic_bm25_replacement", report)
         self.assertIn("BM25", report)
         self.assertIn("Alpha therapy procedure", report)
+
+    def test_snogit_sidecar_defaults_to_newest_general_member(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            zip_path = pathlib.Path(tmpdir) / "SNOGIT-release.zip"
+            with zipfile.ZipFile(zip_path, "w") as archive:
+                archive.writestr("release/SNOGIT_ELGA_20260611.dat", "100\telga\tAlpha\tELGA term\n")
+                archive.writestr("release/SNOGIT_20260712.dat", "100\tgeneral-new\tAlpha\tGeneral new\n")
+                archive.writestr("release/SNOGIT_20250101.dat", "100\tgeneral-old\tAlpha\tGeneral old\n")
+                archive.writestr("release/SNOMED_LATIN_FULL_20260713.dat", "100\tAlpha\tLatin\n")
+
+            members = list_snogit_zip_members(zip_path)
+
+        defaults = [member.name for member in members if member.recommended_default]
+        self.assertEqual(defaults, ["release/SNOGIT_20260712.dat"])
+
+    def test_builds_minimal_snogit_sidecar_and_validates_hdf5_compatibility(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = pathlib.Path(tmpdir)
+            hdf5_path = tmpdir / "concepts.hdf5"
+            sidecar_path = tmpdir / "snogit-sidecar.hdf5"
+            zip_path = tmpdir / "SNOGIT-release.zip"
+            _write_compact_hdf5(hdf5_path, blacklist_indices=(3,))
+            with zipfile.ZipFile(zip_path, "w") as archive:
+                archive.writestr(
+                    "release/SNOGIT_20260712.dat",
+                    "100\tt1\tAlpha therapy procedure (procedure)\tHerzinfarkt\n"
+                    "100\tt2\tAlpha therapy procedure (procedure)\tHerzinfarkt\n"
+                    "300\tt3\tForbidden concept (procedure)\tVerboten\n"
+                    "missing\tt4\tUnknown\tUnbekannt\n",
+                )
+
+            result = build_snogit_sidecar(
+                hdf5_path=hdf5_path,
+                snogit_zip_path=zip_path,
+                output_path=sidecar_path,
+            )
+
+            self.assertEqual(result.selected_members, ("release/SNOGIT_20260712.dat",))
+            self.assertEqual(result.rows_written, 1)
+            self.assertTrue(validate_snogit_sidecar_compatibility(sidecar_path, hdf5_path))
+
+    def test_snogit_sidecar_terms_are_used_as_bm25_candidates(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = pathlib.Path(tmpdir)
+            hdf5_path = tmpdir / "concepts.hdf5"
+            sidecar_path = tmpdir / "snogit-sidecar.hdf5"
+            zip_path = tmpdir / "SNOGIT-release.zip"
+            _write_compact_hdf5(hdf5_path, blacklist_indices=(3,))
+            with zipfile.ZipFile(zip_path, "w") as archive:
+                archive.writestr(
+                    "release/SNOGIT_20260712.dat",
+                    "100\tt1\tAlpha therapy procedure (procedure)\tHerzinfarkt\n",
+                )
+            build_snogit_sidecar(
+                hdf5_path=hdf5_path,
+                snogit_zip_path=zip_path,
+                output_path=sidecar_path,
+            )
+
+            suggestion = suggest_semantic_bm25(
+                _finding(code="missing-source", covered_text="Herzinfarkt"),
+                hdf5_path,
+                min_score=0.1,
+                min_lexical_score=0.5,
+                snogit_sidecar_path=sidecar_path,
+            )
+
+        self.assertEqual(suggestion.status, SanitizationStatus.SEMANTIC_BM25_REPLACEMENT)
+        self.assertEqual(suggestion.replacement_code, "100")
+        self.assertEqual(suggestion.candidates[0].source, "snogit")
+        self.assertEqual(suggestion.candidates[0].matched_term, "Herzinfarkt")
 
     def test_requires_compact_policy_views(self):
         with tempfile.TemporaryDirectory() as tmpdir:

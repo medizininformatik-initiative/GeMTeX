@@ -141,10 +141,18 @@ def _format_candidates(suggestion) -> str:
 
 
 def _format_candidate_list(candidates) -> str:
-    return "; ".join(
-        f"{candidate.code} — {candidate.fsn or ''}"
-        for candidate in candidates
-    )
+    return "; ".join(_format_candidate(candidate) for candidate in candidates)
+
+
+def _format_candidate(candidate) -> str:
+    text = f"{candidate.code} — {candidate.fsn or ''}"
+    if getattr(candidate, "source", "snomed_fsn") == "snogit":
+        matched_term = getattr(candidate, "matched_term", None)
+        if matched_term:
+            text += f" [SNOGIT: {matched_term}]"
+        else:
+            text += " [SNOGIT]"
+    return text
 
 
 def _md(value: str) -> str:
