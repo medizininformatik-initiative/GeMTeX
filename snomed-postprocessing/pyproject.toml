@@ -38,6 +38,7 @@ scttsrapy = { git = "https://github.com/AberystwythSystemsBiology/SCTTSRApy" }
 log-critical-documents = "snomed_post_processing.cli.app:log_documents"
 create-concepts-dump = "snomed_post_processing.cli.app:create_concept_id_dump"
 summarize-hdf5 = "snomed_post_processing.cli.app:summarize_hdf5"
+build-snogit-cache = "snomed_post_processing.cli.app:build_snogit_cache_cli"
 suggest-sanitization = "snomed_post_processing.cli.app:suggest_sanitization_cli"
 list-branches = "snomed_post_processing.cli.app:list_branches"
 program-entry = "snomed_post_processing.cli.app:help_me"

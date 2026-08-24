@@ -226,6 +226,39 @@ def create_concept_id_dump_options(fnc):
     return fnc
 
 
+def build_snogit_cache_options(fnc):
+    """Apply options for the build-snogit-cache command."""
+    fnc = click_log_level(fnc)
+    fnc = click.option(
+        "--snogit-member",
+        multiple=True,
+        help=(
+            "SNOGIT ZIP .dat member to include. Can be provided multiple times. "
+            "Defaults to the newest general SNOGIT_*.dat member."
+        ),
+    )(fnc)
+    fnc = click.option(
+        "--output",
+        required=True,
+        type=click.Path(dir_okay=False, path_type=pathlib.Path),
+        help="Output path for the processed SNOGIT cache HDF5.",
+    )(fnc)
+    fnc = click.option(
+        "--snogit-zip",
+        required=True,
+        type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
+        help="Path to the SNOGIT release ZIP.",
+    )(fnc)
+    fnc = click.option(
+        "--hdf5",
+        "hdf5_path",
+        required=True,
+        type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
+        help="Main SNOMED/policy HDF5 used for concept-index mapping and policy filtering.",
+    )(fnc)
+    return fnc
+
+
 def suggest_sanitization_options(fnc):
     """Apply options for the suggest-sanitization command."""
     fnc = click_log_level(fnc)
@@ -280,35 +313,13 @@ def suggest_sanitization_options(fnc):
         help="Minimum BM25 score required for semantic BM25 fallback suggestions.",
     )(fnc)
     fnc = click.option(
-        "--snogit-member",
-        multiple=True,
+        "--use-snogit-cache",
+        default=None,
+        type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
         help=(
-            "SNOGIT ZIP .dat member to include when building a sidecar. Can be provided multiple times. "
-            "Defaults to the newest general SNOGIT_*.dat member."
+            "Use optional SNOGIT/interface terms from this processed SNOGIT cache HDF5 "
+            "for semantic BM25 candidates. This single option enables SNOGIT evidence."
         ),
-    )(fnc)
-    fnc = click.option(
-        "--write-snogit-sidecar",
-        default=None,
-        type=click.Path(dir_okay=False, path_type=pathlib.Path),
-        help="Output path for an on-demand processed SNOGIT HDF5 sidecar.",
-    )(fnc)
-    fnc = click.option(
-        "--snogit-zip",
-        default=None,
-        type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
-        help="SNOGIT release ZIP used to build a sidecar when --use-snogit is set and no --snogit-sidecar is provided.",
-    )(fnc)
-    fnc = click.option(
-        "--snogit-sidecar",
-        default=None,
-        type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
-        help="Processed SNOGIT HDF5 sidecar to use for BM25 candidates.",
-    )(fnc)
-    fnc = click.option(
-        "--use-snogit",
-        is_flag=True,
-        help="Use optional SNOGIT/interface terms for semantic BM25 candidates.",
     )(fnc)
     fnc = click.option(
         "--blacklist-suggestions",

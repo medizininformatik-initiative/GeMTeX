@@ -10,11 +10,13 @@ from ..hdf5_handling.metadata import inspect_hdf5_metadata, format_hdf5_metadata
 from .logging import set_log_level
 from .options import (
     click_log_level,
+    build_snogit_cache_options,
     click_server_options,
     create_concept_id_dump_options,
     log_documents_options,
     suggest_sanitization_options,
 )
+from ..sanitization import build_snogit_sidecar
 from ..pipelines import (
     run_create_concept_id_dump,
     run_log_documents,
@@ -112,6 +114,34 @@ def create_concept_id_dump(
         log_level=log_level,
     )
 
+@click.command(name="build-snogit-cache")
+@build_snogit_cache_options
+def build_snogit_cache_cli(
+    hdf5_path: pathlib.Path,
+    snogit_zip: pathlib.Path,
+    output: pathlib.Path,
+    snogit_member: tuple[str, ...],
+    log_level: str,
+):
+    """Build a reusable processed SNOGIT cache HDF5."""
+    set_log_level(log_level)
+    result = build_snogit_sidecar(
+        hdf5_path=hdf5_path,
+        snogit_zip_path=snogit_zip,
+        output_path=output,
+        members=snogit_member or None,
+    )
+    click.echo(f"Processed SNOGIT cache written to: {result.output_path.resolve()}")
+    click.echo("Selected member(s): " + ", ".join(result.selected_members))
+    click.echo(f"Rows read: {result.rows_read:,}")
+    click.echo(f"Rows kept: {result.rows_kept:,}")
+    click.echo(f"Rows written: {result.rows_written:,}")
+    click.echo(f"Rows skipped unknown concept: {result.rows_skipped_unknown_concept:,}")
+    click.echo(f"Rows skipped policy-ineligible: {result.rows_skipped_policy:,}")
+    click.echo(f"Rows skipped empty term: {result.rows_skipped_empty_term:,}")
+    click.echo(f"Duplicate rows skipped: {result.duplicate_rows:,}")
+
+
 @click.command(name="suggest-sanitization")
 @suggest_sanitization_options
 def suggest_sanitization_cli(
@@ -124,11 +154,7 @@ def suggest_sanitization_cli(
     bm25_min_score: float,
     bm25_min_lexical_score: float,
     bm25_max_candidates: int,
-    use_snogit: bool,
-    snogit_sidecar: Optional[pathlib.Path],
-    snogit_zip: Optional[pathlib.Path],
-    write_snogit_sidecar: Optional[pathlib.Path],
-    snogit_member: tuple[str, ...],
+    use_snogit_cache: Optional[pathlib.Path],
     activate_historical_ancestor_fallback: bool,
     ancestor_max_distance: int,
     ancestor_max_relative_distance: float,
@@ -145,11 +171,7 @@ def suggest_sanitization_cli(
         bm25_min_score=bm25_min_score,
         bm25_min_lexical_score=bm25_min_lexical_score,
         bm25_max_candidates=bm25_max_candidates,
-        use_snogit=use_snogit,
-        snogit_sidecar=snogit_sidecar,
-        snogit_zip=snogit_zip,
-        write_snogit_sidecar=write_snogit_sidecar,
-        snogit_member=snogit_member,
+        use_snogit_cache=use_snogit_cache,
         activate_historical_ancestor_fallback=activate_historical_ancestor_fallback,
         ancestor_max_distance=None if ancestor_max_distance < 0 else ancestor_max_distance,
         ancestor_max_relative_distance=(
@@ -197,6 +219,7 @@ def help_me():
      * log-critical-documents
      * create-concepts-dump
      * summarize-hdf5
+     * build-snogit-cache
      * suggest-sanitization
      * list-branches
 
@@ -207,6 +230,7 @@ def help_me():
         "\n\n * log-critical-documents"
         "\n * create-concepts-dump"
         "\n * summarize-hdf5"
+        "\n * build-snogit-cache"
         "\n * suggest-sanitization"
         "\n * list-branches"
         "\n\nEach command has a '--help' option that provides further information, e.g. 'log-critical-documents --help'"
