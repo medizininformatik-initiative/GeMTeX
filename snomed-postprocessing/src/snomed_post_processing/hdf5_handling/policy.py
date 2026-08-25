@@ -39,6 +39,32 @@ class ConceptsData:
 
 
 @dataclasses.dataclass(frozen=True)
+class CandidateValidity:
+    """Mode-specific acceptability of a concept as sanitization target."""
+
+    exists: bool
+    active: bool
+    in_whitelist: Optional[bool]
+    in_blacklist: bool
+    acceptable: bool
+    reason: str
+
+
+@dataclasses.dataclass(frozen=True)
+class CandidateValiditySets:
+    """Precomputed policy/release membership arrays for fast candidate checks."""
+
+    active: np.ndarray
+    whitelist_indices: frozenset[int]
+    blacklist_indices: frozenset[int]
+    mode: str
+    exclude_blacklist: bool = True
+
+    def check_index(self, concept_index: int) -> CandidateValidity:
+        return candidate_validity_from_sets(self, concept_index)
+
+
+@dataclasses.dataclass(frozen=True)
 class HistoricalAssociationsData:
     """Compact /historical_associations data."""
 
@@ -220,6 +246,82 @@ def read_policy_indices(
     return frozenset(
         int(idx) for idx in h5_file[f"policy_views/{policy}/{version}/concept_index"][:]
     )
+
+
+def read_candidate_validity_sets(
+    h5_file: h5py.File,
+    *,
+    mode: str,
+    exclude_blacklist: bool = True,
+    version: str = POLICY_VIEW_VERSION,
+) -> CandidateValiditySets:
+    """Read reusable membership data for sanitization candidate checks.
+
+    ``mode='policy'`` requires active + whitelist + not blacklist.
+    ``mode='release'`` requires active and, optionally, not blacklist. Release
+    mode intentionally does not require whitelist membership.
+    """
+    if mode not in {"policy", "release"}:
+        raise ValueError(f"Unsupported candidate-validity mode: {mode!r}")
+    require_paths(h5_file, ["concepts/active"], purpose="candidate-validity-ready")
+    active = np.asarray(h5_file["concepts/active"][:], dtype=bool)
+    whitelist_indices = read_policy_indices(h5_file, "whitelist", version=version)
+    blacklist_indices = read_policy_indices(h5_file, "blacklist", version=version)
+    return CandidateValiditySets(
+        active=active,
+        whitelist_indices=whitelist_indices,
+        blacklist_indices=blacklist_indices,
+        mode=mode,
+        exclude_blacklist=bool(exclude_blacklist),
+    )
+
+
+def candidate_validity_from_sets(
+    sets: CandidateValiditySets,
+    concept_index: int,
+) -> CandidateValidity:
+    idx = int(concept_index)
+    exists = 0 <= idx < len(sets.active)
+    active = bool(sets.active[idx]) if exists else False
+    in_whitelist = idx in sets.whitelist_indices if exists else False
+    in_blacklist = idx in sets.blacklist_indices if exists else False
+    if not exists:
+        return CandidateValidity(False, False, None if sets.mode == "release" else False, False, False, "concept index does not exist")
+    if not active:
+        return CandidateValidity(True, False, None if sets.mode == "release" else in_whitelist, in_blacklist, False, "concept is inactive")
+    if sets.mode == "policy":
+        if not in_whitelist:
+            return CandidateValidity(True, True, False, in_blacklist, False, "concept is not in whitelist")
+        if in_blacklist:
+            return CandidateValidity(True, True, True, True, False, "concept is in blacklist")
+        return CandidateValidity(True, True, True, False, True, "concept is active, whitelisted, and not blacklisted")
+    if sets.exclude_blacklist and in_blacklist:
+        return CandidateValidity(True, True, None, True, False, "concept is in blacklist")
+    return CandidateValidity(True, True, None, in_blacklist, True, "concept is active in release view")
+
+
+def read_allowed_candidate_indices(
+    h5_file: h5py.File,
+    *,
+    mode: str,
+    exclude_blacklist: bool = True,
+    version: str = POLICY_VIEW_VERSION,
+) -> frozenset[int]:
+    """Return all concept indices acceptable as sanitization targets."""
+    sets = read_candidate_validity_sets(
+        h5_file,
+        mode=mode,
+        exclude_blacklist=exclude_blacklist,
+        version=version,
+    )
+    active_indices = {int(idx) for idx in np.flatnonzero(sets.active)}
+    if mode == "policy":
+        return frozenset(active_indices & sets.whitelist_indices - sets.blacklist_indices)
+    if mode == "release":
+        if exclude_blacklist:
+            return frozenset(active_indices - sets.blacklist_indices)
+        return frozenset(active_indices)
+    raise ValueError(f"Unsupported candidate-validity mode: {mode!r}")
 
 
 def read_active_ancestors(h5_file: h5py.File) -> AncestorsData:

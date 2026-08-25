@@ -17,6 +17,7 @@ from ..hdf5_handling.policy import (
     read_concepts,
     read_depth_to_root,
     read_historical_associations,
+    read_candidate_validity_sets,
     read_historical_is_a_relationships,
     read_policy_indices,
     require_sanitization_ready,
@@ -41,6 +42,8 @@ class SanitizationResolver:
         activate_historical_ancestor_fallback: bool = False,
         ancestor_max_distance: int | None = 3,
         ancestor_max_relative_distance: float | None = 0.35,
+        target_view: str = "policy",
+        release_exclude_blacklist: bool = True,
     ):
         self.hdf5_path = pathlib.Path(hdf5_path)
         self.allowed_association_types = frozenset(allowed_association_types)
@@ -53,6 +56,10 @@ class SanitizationResolver:
             if ancestor_max_relative_distance is None
             else float(ancestor_max_relative_distance)
         )
+        if target_view not in {"policy", "release"}:
+            raise ValueError(f"Unsupported sanitization target view: {target_view!r}")
+        self.target_view = target_view
+        self.release_exclude_blacklist = bool(release_exclude_blacklist)
         self._load()
 
     def _load(self):
@@ -66,6 +73,11 @@ class SanitizationResolver:
 
             self.whitelist_indices = read_policy_indices(h5_file, "whitelist")
             self.blacklist_indices = read_policy_indices(h5_file, "blacklist")
+            self.candidate_validity_sets = read_candidate_validity_sets(
+                h5_file,
+                mode=self.target_view,
+                exclude_blacklist=self.release_exclude_blacklist,
+            )
 
             associations = read_historical_associations(h5_file)
             self.association_source_index = associations.source_index
@@ -142,14 +154,14 @@ class SanitizationResolver:
             finding = dataclasses.replace(finding, fsn=self.fsn[source_index])
 
         candidates = self._historical_candidates(source_index)
-        acceptable = [candidate for candidate in candidates if candidate.policy_acceptable]
+        acceptable = [candidate for candidate in candidates if self._is_acceptable_candidate_code(candidate.code)]
         if acceptable:
             unique_targets = {(candidate.code, candidate.association_type) for candidate in acceptable}
             if len({candidate.code for candidate in acceptable}) > 1:
                 return SanitizationSuggestion(
                     finding=finding,
                     status=SanitizationStatus.AMBIGUOUS_REPLACEMENT,
-                    reason="multiple policy-acceptable replacement targets found",
+                    reason=f"multiple {self.target_view}-acceptable replacement targets found",
                     candidate_count=len(acceptable),
                     candidates=tuple(acceptable),
                 )
@@ -167,7 +179,7 @@ class SanitizationResolver:
                 replacement_code=chosen.code,
                 replacement_fsn=chosen.fsn,
                 association_type=association_type,
-                reason="single policy-acceptable historical association replacement found",
+                reason=f"single {self.target_view}-acceptable historical association replacement found",
                 candidate_count=len(acceptable),
                 candidates=tuple(acceptable),
             )
@@ -182,7 +194,7 @@ class SanitizationResolver:
             return SanitizationSuggestion(
                 finding=finding,
                 status=SanitizationStatus.NO_POLICY_ACCEPTABLE_CANDIDATE,
-                reason="historical associations exist, but no candidate satisfies active/whitelist/blacklist policy or enabled ancestor-distance limits",
+                reason=f"historical associations exist, but no candidate satisfies {self.target_view}-view validity or enabled ancestor-distance limits",
                 candidate_count=len(combined_candidates),
                 candidates=combined_candidates,
             )
@@ -238,7 +250,7 @@ class SanitizationResolver:
                 finding,
                 active_candidates,
                 SanitizationStatus.NEAREST_TARGET_ANCESTOR,
-                "nearest active policy-acceptable ancestor found",
+                f"nearest active {self.target_view}-acceptable ancestor found",
             )
 
         historical_candidates = self._historical_ancestor_candidates(source_index)
@@ -247,7 +259,7 @@ class SanitizationResolver:
                 finding,
                 historical_candidates,
                 SanitizationStatus.NEAREST_HISTORICAL_ANCESTOR,
-                "nearest policy-acceptable ancestor found via historical/inactive is-a traversal",
+                f"nearest {self.target_view}-acceptable ancestor found via historical/inactive is-a traversal",
             )
         return None
 
@@ -268,7 +280,7 @@ class SanitizationResolver:
             return SanitizationSuggestion(
                 finding=finding,
                 status=SanitizationStatus.AMBIGUOUS_ANCESTOR,
-                reason="multiple equally near policy-acceptable ancestors found",
+                reason=f"multiple equally near {self.target_view}-acceptable ancestors found",
                 candidate_count=len(suggestion_candidates),
                 candidates=suggestion_candidates,
             )
@@ -312,7 +324,7 @@ class SanitizationResolver:
             distance = int(distance) + distance_offset
             if enforce_distance_limits and self.ancestor_max_distance is not None and distance > self.ancestor_max_distance:
                 continue
-            if self._is_policy_acceptable_ancestor(source_index, ancestor_idx) and (
+            if self._is_acceptable_ancestor(source_index, ancestor_idx) and (
                 not enforce_distance_limits
                 or self._is_within_relative_ancestor_distance(
                     source_index,
@@ -345,7 +357,7 @@ class SanitizationResolver:
                     parent_index,
                     next_distance,
                 )
-                if self._is_policy_acceptable_ancestor(source_index, parent_index) and self._is_within_relative_ancestor_distance(
+                if self._is_acceptable_ancestor(source_index, parent_index) and self._is_within_relative_ancestor_distance(
                     source_index,
                     parent_index,
                     next_distance,
@@ -366,7 +378,7 @@ class SanitizationResolver:
         return candidates
 
     def _ancestor_context_candidates(self, source_index: int) -> list[SanitizationCandidate]:
-        """Return nearest policy-acceptable ancestors rejected by distance limits.
+        """Return nearest acceptable ancestors rejected by distance limits.
 
         These are not replacement suggestions. They are preserved as context so
         that a later BM25 fallback report can show the closest structured
@@ -418,7 +430,7 @@ class SanitizationResolver:
                     parent_index,
                     next_distance,
                 )
-                if self._is_policy_acceptable_ancestor(source_index, parent_index):
+                if self._is_acceptable_ancestor(source_index, parent_index):
                     candidates.append((parent_index, next_distance, "IS_A_HISTORICAL_OUTSIDE_DISTANCE_LIMIT", effective_time))
                 candidates.extend(
                     self._active_ancestor_candidates(
@@ -434,14 +446,19 @@ class SanitizationResolver:
         candidates.sort(key=lambda candidate: (candidate[1], self.codes[candidate[0]]))
         return candidates
 
-    def _is_policy_acceptable_ancestor(self, source_index: int, ancestor_index: int) -> bool:
+    def _is_acceptable_candidate_code(self, code: str) -> bool:
+        concept_index = self.code_to_index.get(code)
+        return concept_index is not None and self._is_acceptable_candidate_index(concept_index)
+
+    def _is_acceptable_candidate_index(self, concept_index: int) -> bool:
+        return self.candidate_validity_sets.check_index(concept_index).acceptable
+
+    def _is_acceptable_ancestor(self, source_index: int, ancestor_index: int) -> bool:
         return (
             ancestor_index != source_index
             and 0 <= ancestor_index < len(self.codes)
             and self.codes[ancestor_index] != "138875005"
-            and bool(self.active[ancestor_index])
-            and ancestor_index in self.whitelist_indices
-            and ancestor_index not in self.blacklist_indices
+            and self._is_acceptable_candidate_index(ancestor_index)
         )
 
     def _is_within_relative_ancestor_distance(

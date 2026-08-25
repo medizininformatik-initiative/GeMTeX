@@ -113,6 +113,35 @@ class TestSanitizationResolver(unittest.TestCase):
         self.assertEqual(suggestion.candidate_count, 1)
         self.assertFalse(suggestion.candidates[0].policy_acceptable)
 
+    def test_release_view_accepts_active_candidate_without_whitelist(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            hdf5_path = pathlib.Path(tmpdir) / "concepts.hdf5"
+            _write_sanitization_ready_hdf5(hdf5_path, whitelist_indices=())
+
+            suggestion = suggest_sanitization(_finding(), hdf5_path, target_view="release")
+
+        self.assertEqual(suggestion.status, SanitizationStatus.HISTORICAL_ASSOCIATION_REPLACEMENT)
+        self.assertEqual(suggestion.replacement_code, "200")
+        self.assertFalse(suggestion.candidates[0].in_whitelist)
+
+    def test_release_view_optionally_excludes_blacklist(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            hdf5_path = pathlib.Path(tmpdir) / "concepts.hdf5"
+            _write_sanitization_ready_hdf5(hdf5_path, whitelist_indices=(), blacklist_indices=(1,))
+
+            excluded = suggest_sanitization(_finding(), hdf5_path, target_view="release")
+            allowed = suggest_sanitization(
+                _finding(),
+                hdf5_path,
+                target_view="release",
+                release_exclude_blacklist=False,
+            )
+
+        self.assertEqual(excluded.status, SanitizationStatus.NO_POLICY_ACCEPTABLE_CANDIDATE)
+        self.assertEqual(allowed.status, SanitizationStatus.HISTORICAL_ASSOCIATION_REPLACEMENT)
+        self.assertEqual(allowed.replacement_code, "200")
+        self.assertTrue(allowed.candidates[0].in_blacklist)
+
     def test_blacklist_overrides_whitelist_for_candidate(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             hdf5_path = pathlib.Path(tmpdir) / "concepts.hdf5"
