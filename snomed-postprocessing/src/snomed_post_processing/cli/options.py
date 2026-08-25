@@ -263,6 +263,33 @@ def suggest_sanitization_options(fnc):
     """Apply options for the suggest-sanitization command."""
     fnc = click_log_level(fnc)
     fnc = click.option(
+        "--custom-blacklist",
+        default=None,
+        type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
+        help=(
+            "Optional custom blacklist rule file for --target-view release. Uses the same format as original blacklist filters: "
+            "numeric SCTID lines exclude descendants-or-self; non-numeric lines exclude by FSN semantic tag."
+        ),
+    )(fnc)
+    fnc = click.option(
+        "--enforce-embedded-blacklist",
+        is_flag=True,
+        help=(
+            "In --target-view release mode, exclude concepts listed in the selected HDF5 embedded blacklist. "
+            "By default, release mode ignores the embedded blacklist and allows all active release concepts."
+        ),
+    )(fnc)
+    fnc = click.option(
+        "--target-view",
+        default="policy",
+        show_default=True,
+        type=click.Choice(["policy", "release"], case_sensitive=False),
+        help=(
+            "Candidate validity mode for sanitization suggestions. 'policy' requires active + whitelist - blacklist; "
+            "'release' requires active release concepts and does not require whitelist membership."
+        ),
+    )(fnc)
+    fnc = click.option(
         "--ancestor-max-relative-distance",
         default=0.35,
         show_default=True,
@@ -287,8 +314,8 @@ def suggest_sanitization_options(fnc):
         is_flag=True,
         help=(
             "After historical associations fail for whitelist findings, try nearest active "
-            "policy-acceptable ancestors first from active ancestor arrays, then through "
-            "stored inactive is-a fallback edges."
+            "acceptable ancestors first from active ancestor arrays, then through "
+            "stored inactive is-a fallback edges. Candidate validity follows --target-view."
         ),
     )(fnc)
     fnc = click.option(

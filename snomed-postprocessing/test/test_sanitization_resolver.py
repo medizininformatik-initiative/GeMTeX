@@ -129,12 +129,16 @@ class TestSanitizationResolver(unittest.TestCase):
             hdf5_path = pathlib.Path(tmpdir) / "concepts.hdf5"
             _write_sanitization_ready_hdf5(hdf5_path, whitelist_indices=(), blacklist_indices=(1,))
 
-            excluded = suggest_sanitization(_finding(), hdf5_path, target_view="release")
+            excluded = suggest_sanitization(
+                _finding(),
+                hdf5_path,
+                target_view="release",
+                release_exclude_blacklist=True,
+            )
             allowed = suggest_sanitization(
                 _finding(),
                 hdf5_path,
                 target_view="release",
-                release_exclude_blacklist=False,
             )
 
         self.assertEqual(excluded.status, SanitizationStatus.NO_POLICY_ACCEPTABLE_CANDIDATE)

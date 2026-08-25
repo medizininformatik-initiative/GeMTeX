@@ -175,6 +175,7 @@ class TestSemanticBm25Sanitization(unittest.TestCase):
                 min_score=0.1,
                 min_lexical_score=0.5,
                 target_view="release",
+                release_exclude_blacklist=True,
             )
             allowed = suggest_semantic_bm25(
                 _finding(),
@@ -182,7 +183,6 @@ class TestSemanticBm25Sanitization(unittest.TestCase):
                 min_score=0.1,
                 min_lexical_score=0.5,
                 target_view="release",
-                release_exclude_blacklist=False,
             )
 
         self.assertEqual(excluded.status, SanitizationStatus.NO_REPLACEMENT)

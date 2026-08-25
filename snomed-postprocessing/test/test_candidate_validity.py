@@ -9,6 +9,7 @@ from snomed_post_processing.hdf5_handling.policy import (
     candidate_validity_from_sets,
     read_allowed_candidate_indices,
     read_candidate_validity_sets,
+    resolve_blacklist_rule_indices,
 )
 
 
@@ -16,12 +17,26 @@ class TestCandidateValidity(unittest.TestCase):
     def _write_hdf5(self, path: pathlib.Path):
         with h5py.File(path, "w") as h5_file:
             concepts = h5_file.create_group("concepts")
+            concepts.create_dataset("codes", data=np.asarray(["100", "200", "300", "400"], dtype=object), dtype=h5py.string_dtype(encoding="utf-8"))
+            concepts.create_dataset(
+                "fsn",
+                data=np.asarray([
+                    "Root procedure (procedure)",
+                    "Child procedure (procedure)",
+                    "Inactive disorder (disorder)",
+                    "Other finding (finding)",
+                ], dtype=object),
+                dtype=h5py.string_dtype(encoding="utf-8"),
+            )
             concepts.create_dataset("active", data=np.asarray([True, True, False, True], dtype=bool))
             policy_views = h5_file.create_group("policy_views")
             whitelist = policy_views.create_group("whitelist").create_group("0")
             whitelist.create_dataset("concept_index", data=np.asarray([0], dtype=np.int64))
             blacklist = policy_views.create_group("blacklist").create_group("0")
             blacklist.create_dataset("concept_index", data=np.asarray([3], dtype=np.int64))
+            concepts.create_dataset("ancestors_index", data=np.asarray([[0, 0], [0, 1], [1, 1], [2, 0]], dtype=np.int64))
+            concepts.create_dataset("ancestor_concept_index", data=np.asarray([0, 0], dtype=np.int64))
+            concepts.create_dataset("ancestor_distance", data=np.asarray([1, 2], dtype=np.int64))
 
     def test_policy_candidate_validity_requires_whitelist_and_excludes_blacklist(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -63,6 +78,32 @@ class TestCandidateValidity(unittest.TestCase):
         self.assertFalse(blacklisted.acceptable)
         self.assertEqual(blacklisted.reason, "concept is in blacklist")
         self.assertEqual(allowed, frozenset({0, 1}))
+
+    def test_runtime_blacklist_rules_resolve_sctid_descendants_and_semantic_tags(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "concepts.hdf5"
+            self._write_hdf5(path)
+            with h5py.File(path, "r") as h5_file:
+                indices = resolve_blacklist_rule_indices(h5_file, ["100", "finding"])
+
+        self.assertEqual(indices, frozenset({0, 1, 2, 3}))
+
+    def test_runtime_blacklist_is_always_excluded_in_release_view(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "concepts.hdf5"
+            self._write_hdf5(path)
+            with h5py.File(path, "r") as h5_file:
+                sets = read_candidate_validity_sets(
+                    h5_file,
+                    mode="release",
+                    exclude_blacklist=False,
+                    runtime_blacklist_indices={1},
+                )
+                runtime_blacklisted = sets.check_index(1)
+
+        self.assertFalse(runtime_blacklisted.acceptable)
+        self.assertTrue(runtime_blacklisted.in_blacklist)
+        self.assertEqual(runtime_blacklisted.reason, "concept is in runtime blacklist")
 
     def test_release_candidate_validity_can_ignore_blacklist(self):
         with tempfile.TemporaryDirectory() as tmp:

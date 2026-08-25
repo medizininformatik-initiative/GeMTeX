@@ -158,6 +158,9 @@ def suggest_sanitization_cli(
     activate_historical_ancestor_fallback: bool,
     ancestor_max_distance: int,
     ancestor_max_relative_distance: float,
+    target_view: str,
+    enforce_embedded_blacklist: bool,
+    custom_blacklist: Optional[pathlib.Path],
     log_level: str,
 ):
     """Create sanitization suggestions from a CriticalFindings JSON artifact."""
@@ -177,6 +180,9 @@ def suggest_sanitization_cli(
         ancestor_max_relative_distance=(
             None if ancestor_max_relative_distance < 0 else ancestor_max_relative_distance
         ),
+        target_view=target_view.lower(),
+        enforce_embedded_blacklist=enforce_embedded_blacklist,
+        custom_blacklist=custom_blacklist,
         log_level=log_level,
     )
 

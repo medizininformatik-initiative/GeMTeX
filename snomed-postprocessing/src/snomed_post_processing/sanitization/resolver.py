@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import pathlib
-from typing import Sequence, Union
+from typing import Iterable, Sequence, Union
 
 import h5py
 import numpy as np
@@ -43,7 +43,8 @@ class SanitizationResolver:
         ancestor_max_distance: int | None = 3,
         ancestor_max_relative_distance: float | None = 0.35,
         target_view: str = "policy",
-        release_exclude_blacklist: bool = True,
+        release_exclude_blacklist: bool = False,
+        runtime_blacklist_indices: Iterable[int] = (),
     ):
         self.hdf5_path = pathlib.Path(hdf5_path)
         self.allowed_association_types = frozenset(allowed_association_types)
@@ -60,6 +61,7 @@ class SanitizationResolver:
             raise ValueError(f"Unsupported sanitization target view: {target_view!r}")
         self.target_view = target_view
         self.release_exclude_blacklist = bool(release_exclude_blacklist)
+        self.runtime_blacklist_indices = frozenset(int(idx) for idx in runtime_blacklist_indices)
         self._load()
 
     def _load(self):
@@ -77,6 +79,7 @@ class SanitizationResolver:
                 h5_file,
                 mode=self.target_view,
                 exclude_blacklist=self.release_exclude_blacklist,
+                runtime_blacklist_indices=self.runtime_blacklist_indices,
             )
 
             associations = read_historical_associations(h5_file)
@@ -229,7 +232,7 @@ class SanitizationResolver:
                     association_type=association_type,
                     active=bool(self.active[target_index]),
                     in_whitelist=target_index in self.whitelist_indices,
-                    in_blacklist=target_index in self.blacklist_indices,
+                    in_blacklist=target_index in self.blacklist_indices or target_index in self.runtime_blacklist_indices,
                     effective_time=self.association_effective_time[row_index] or None,
                     refset_id=self.association_refset_id[row_index] or None,
                 )
@@ -508,7 +511,7 @@ class SanitizationResolver:
             association_type=association_type,
             active=bool(self.active[ancestor_index]),
             in_whitelist=ancestor_index in self.whitelist_indices,
-            in_blacklist=ancestor_index in self.blacklist_indices,
+            in_blacklist=ancestor_index in self.blacklist_indices or ancestor_index in self.runtime_blacklist_indices,
             effective_time=effective_time,
         )
 

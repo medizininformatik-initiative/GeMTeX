@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import dataclasses
 import pathlib
-from typing import Optional, Union
+from typing import Iterable, Optional, Sequence, Union
 
 import h5py
 import numpy as np
@@ -57,8 +57,9 @@ class CandidateValiditySets:
     active: np.ndarray
     whitelist_indices: frozenset[int]
     blacklist_indices: frozenset[int]
+    runtime_blacklist_indices: frozenset[int]
     mode: str
-    exclude_blacklist: bool = True
+    exclude_blacklist: bool = False
 
     def check_index(self, concept_index: int) -> CandidateValidity:
         return candidate_validity_from_sets(self, concept_index)
@@ -252,7 +253,8 @@ def read_candidate_validity_sets(
     h5_file: h5py.File,
     *,
     mode: str,
-    exclude_blacklist: bool = True,
+    exclude_blacklist: bool = False,
+    runtime_blacklist_indices: Iterable[int] = (),
     version: str = POLICY_VIEW_VERSION,
 ) -> CandidateValiditySets:
     """Read reusable membership data for sanitization candidate checks.
@@ -267,10 +269,12 @@ def read_candidate_validity_sets(
     active = np.asarray(h5_file["concepts/active"][:], dtype=bool)
     whitelist_indices = read_policy_indices(h5_file, "whitelist", version=version)
     blacklist_indices = read_policy_indices(h5_file, "blacklist", version=version)
+    runtime_blacklist = frozenset(int(idx) for idx in runtime_blacklist_indices)
     return CandidateValiditySets(
         active=active,
         whitelist_indices=whitelist_indices,
         blacklist_indices=blacklist_indices,
+        runtime_blacklist_indices=runtime_blacklist,
         mode=mode,
         exclude_blacklist=bool(exclude_blacklist),
     )
@@ -284,7 +288,9 @@ def candidate_validity_from_sets(
     exists = 0 <= idx < len(sets.active)
     active = bool(sets.active[idx]) if exists else False
     in_whitelist = idx in sets.whitelist_indices if exists else False
-    in_blacklist = idx in sets.blacklist_indices if exists else False
+    in_embedded_blacklist = idx in sets.blacklist_indices if exists else False
+    in_runtime_blacklist = idx in sets.runtime_blacklist_indices if exists else False
+    in_blacklist = in_embedded_blacklist or in_runtime_blacklist
     if not exists:
         return CandidateValidity(False, False, None if sets.mode == "release" else False, False, False, "concept index does not exist")
     if not active:
@@ -295,7 +301,9 @@ def candidate_validity_from_sets(
         if in_blacklist:
             return CandidateValidity(True, True, True, True, False, "concept is in blacklist")
         return CandidateValidity(True, True, True, False, True, "concept is active, whitelisted, and not blacklisted")
-    if sets.exclude_blacklist and in_blacklist:
+    if in_runtime_blacklist:
+        return CandidateValidity(True, True, None, True, False, "concept is in runtime blacklist")
+    if sets.exclude_blacklist and in_embedded_blacklist:
         return CandidateValidity(True, True, None, True, False, "concept is in blacklist")
     return CandidateValidity(True, True, None, in_blacklist, True, "concept is active in release view")
 
@@ -304,7 +312,8 @@ def read_allowed_candidate_indices(
     h5_file: h5py.File,
     *,
     mode: str,
-    exclude_blacklist: bool = True,
+    exclude_blacklist: bool = False,
+    runtime_blacklist_indices: Iterable[int] = (),
     version: str = POLICY_VIEW_VERSION,
 ) -> frozenset[int]:
     """Return all concept indices acceptable as sanitization targets."""
@@ -312,16 +321,103 @@ def read_allowed_candidate_indices(
         h5_file,
         mode=mode,
         exclude_blacklist=exclude_blacklist,
+        runtime_blacklist_indices=runtime_blacklist_indices,
         version=version,
     )
     active_indices = {int(idx) for idx in np.flatnonzero(sets.active)}
     if mode == "policy":
-        return frozenset(active_indices & sets.whitelist_indices - sets.blacklist_indices)
+        return frozenset(active_indices & sets.whitelist_indices - sets.blacklist_indices - sets.runtime_blacklist_indices)
     if mode == "release":
+        excluded = set(sets.runtime_blacklist_indices)
         if exclude_blacklist:
-            return frozenset(active_indices - sets.blacklist_indices)
-        return frozenset(active_indices)
+            excluded.update(sets.blacklist_indices)
+        return frozenset(active_indices - excluded)
     raise ValueError(f"Unsupported candidate-validity mode: {mode!r}")
+
+
+def read_blacklist_rule_file(path: Union[str, pathlib.Path]) -> list[str]:
+    """Read blacklist rules in the original filter-list format.
+
+    Numeric lines are SNOMED CT roots whose descendants-or-self are excluded.
+    Non-numeric lines are FSN semantic tags, e.g. ``procedure`` or
+    ``qualifier value``.
+    """
+    return [
+        line.strip()
+        for line in pathlib.Path(path).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+
+def split_blacklist_rules(rules: Iterable[str]) -> tuple[list[str], list[str]]:
+    cleaned = [str(rule).strip() for rule in rules if str(rule).strip()]
+    return (
+        [rule for rule in cleaned if rule.isdigit()],
+        [rule for rule in cleaned if not rule.isdigit()],
+    )
+
+
+def resolve_blacklist_rule_indices(
+    h5_file: h5py.File,
+    rules: Iterable[str],
+) -> frozenset[int]:
+    """Resolve runtime blacklist rules to concept indices for a compact HDF5.
+
+    This mirrors the RF2 blacklist input format: SCTID roots blacklist the root
+    concept and all descendants; non-numeric entries blacklist concepts whose
+    FSN semantic tag equals the entry.
+    """
+    root_codes, semantic_tags = split_blacklist_rules(rules)
+    if not root_codes and not semantic_tags:
+        return frozenset()
+    concepts = read_concepts(h5_file)
+    indices: set[int] = set()
+    if semantic_tags:
+        tag_set = set(semantic_tags)
+        indices.update(
+            idx for idx, tag in enumerate(_concept_semantic_tags(h5_file, concepts.fsn))
+            if tag in tag_set
+        )
+    if root_codes:
+        indices.update(_descendant_or_self_indices(h5_file, concepts.code_to_index, root_codes))
+    return frozenset(indices)
+
+
+def _concept_semantic_tags(h5_file: h5py.File, fsn_values: Sequence[str]) -> tuple[str, ...]:
+    if "concepts/semantic_tag_id" in h5_file and "concepts/semantic_tags" in h5_file:
+        tags = tuple(decode_array(h5_file["concepts/semantic_tags"][:]))
+        return tuple(tags[int(tag_id)] for tag_id in h5_file["concepts/semantic_tag_id"][:])
+    return tuple(_semantic_tag_from_fsn(fsn) for fsn in fsn_values)
+
+
+def _semantic_tag_from_fsn(fsn: str) -> str:
+    text = str(fsn or "")
+    if "(" not in text or not text.endswith(")"):
+        return ""
+    return text.rsplit("(", 1)[1][:-1].strip()
+
+
+def _descendant_or_self_indices(
+    h5_file: h5py.File,
+    code_to_index: dict[str, int],
+    root_codes: Iterable[str],
+) -> set[int]:
+    root_indices = {code_to_index[code] for code in root_codes if code in code_to_index}
+    if not root_indices:
+        return set()
+    if not has_active_ancestor_arrays(h5_file):
+        raise ValueError(
+            "Runtime blacklist SCTID rules require compact ancestor arrays in the HDF5. "
+            "Rebuild the HDF5 with ancestor support or use semantic-tag rules only."
+        )
+    ancestors = read_active_ancestors(h5_file)
+    descendants = set(root_indices)
+    for concept_idx in range(len(ancestors.ancestor_index)):
+        start, count = ancestors.ancestor_index[concept_idx]
+        concept_ancestors = ancestors.ancestor_concept_index[int(start): int(start) + int(count)]
+        if any(int(ancestor_idx) in root_indices for ancestor_idx in concept_ancestors):
+            descendants.add(concept_idx)
+    return descendants
 
 
 def read_active_ancestors(h5_file: h5py.File) -> AncestorsData:

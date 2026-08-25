@@ -10,7 +10,7 @@ from __future__ import annotations
 import dataclasses
 import math
 import pathlib
-from typing import Callable, Optional, Sequence, Union
+from typing import Callable, Iterable, Optional, Sequence, Union
 
 import h5py
 
@@ -45,7 +45,8 @@ class SemanticBm25Resolver:
         snogit_sidecar_path: Optional[Union[str, pathlib.Path]] = None,
         use_snogit: bool = False,
         target_view: str = "policy",
-        release_exclude_blacklist: bool = True,
+        release_exclude_blacklist: bool = False,
+        runtime_blacklist_indices: Iterable[int] = (),
     ):
         self.hdf5_path = pathlib.Path(hdf5_path)
         self.min_score = float(min_score)
@@ -61,6 +62,7 @@ class SemanticBm25Resolver:
             raise ValueError(f"Unsupported BM25 target view: {target_view!r}")
         self.target_view = target_view
         self.release_exclude_blacklist = bool(release_exclude_blacklist)
+        self.runtime_blacklist_indices = frozenset(int(idx) for idx in runtime_blacklist_indices)
         self._snogit_searcher: Optional[SnogitSidecarBm25Searcher] = None
         self._snogit_query_cache = {}
         self._load()
@@ -177,6 +179,7 @@ class SemanticBm25Resolver:
                 h5_file,
                 mode=self.target_view,
                 exclude_blacklist=self.release_exclude_blacklist,
+                runtime_blacklist_indices=self.runtime_blacklist_indices,
             )
         self.snogit_source_member = None
         if self.use_snogit:
@@ -319,7 +322,7 @@ class SemanticBm25Resolver:
             semantic_tag=semantic_tag,
             active=bool(self.active[concept_idx]),
             in_whitelist=concept_idx in self.whitelist_indices,
-            in_blacklist=concept_idx in self.blacklist_indices,
+            in_blacklist=concept_idx in self.blacklist_indices or concept_idx in self.runtime_blacklist_indices,
             source=source,
             matched_term=matched_term,
             source_member=source_member,
