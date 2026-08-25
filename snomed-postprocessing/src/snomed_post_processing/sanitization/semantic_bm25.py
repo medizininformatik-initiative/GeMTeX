@@ -20,7 +20,7 @@ from .bm25_index import BM25Index
 from .models import SanitizationStatus
 from .semantic_models import SemanticBm25Candidate, SemanticBm25Suggestion
 from .semantic_text import _query_text, _semantic_tag, _tokenize
-from .snogit_sidecar import search_snogit_sidecar_bm25, validate_snogit_sidecar_compatibility
+from .snogit_sidecar import SnogitSidecarBm25Searcher, validate_snogit_sidecar_compatibility
 
 class SemanticBm25Resolver:
     """Suggest policy-acceptable replacements using BM25 over concept labels.
@@ -55,8 +55,24 @@ class SemanticBm25Resolver:
         self.allow_blacklist_findings = bool(allow_blacklist_findings)
         self.snogit_sidecar_path = pathlib.Path(snogit_sidecar_path) if snogit_sidecar_path else None
         self.use_snogit = bool(use_snogit or snogit_sidecar_path)
+        self._snogit_searcher: Optional[SnogitSidecarBm25Searcher] = None
+        self._snogit_query_cache = {}
         self._load()
         self._build_index()
+
+    def close(self) -> None:
+        if self._snogit_searcher is not None:
+            self._snogit_searcher.close()
+            self._snogit_searcher = None
+
+    def __enter__(self) -> "SemanticBm25Resolver":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.close()
+
+    def __del__(self):
+        self.close()
 
     def suggest(self, finding: CriticalFinding) -> SemanticBm25Suggestion:
         if finding.ignored:
@@ -167,6 +183,7 @@ class SemanticBm25Resolver:
                         for value in sidecar["metadata/source_members"][:]
                     )
                     self.snogit_source_member = ", ".join(source_members) if source_members else None
+            self._snogit_searcher = SnogitSidecarBm25Searcher(self.snogit_sidecar_path)
 
     def _build_index(self):
         self.document_indices = []
@@ -220,16 +237,8 @@ class SemanticBm25Resolver:
             previous = best_by_code.get(candidate.code)
             if previous is None or _candidate_rank_key(candidate) < _candidate_rank_key(previous):
                 best_by_code[candidate.code] = candidate
-        if self.snogit_sidecar_path is not None and snogit_query_terms:
-            for hit in search_snogit_sidecar_bm25(
-                self.snogit_sidecar_path,
-                snogit_query_terms,
-                hdf5_path=None,
-                strict=False,
-                k1=self.k1,
-                b=self.b,
-                max_hits=max(self.max_candidates * 20, 50),
-            ):
+        if self._snogit_searcher is not None and snogit_query_terms:
+            for hit in self._search_snogit_cached(snogit_query_terms):
                 concept_idx = int(hit.concept_index)
                 candidate = self._candidate_from_hit(
                     concept_idx=concept_idx,
@@ -250,6 +259,25 @@ class SemanticBm25Resolver:
         scored = list(best_by_code.values())
         scored.sort(key=_candidate_rank_key)
         return scored
+
+    def _search_snogit_cached(self, snogit_query_terms: Sequence[str]):
+        if self._snogit_searcher is None:
+            return ()
+        cache_key = tuple(dict.fromkeys(token for token in snogit_query_terms if token))
+        if not cache_key:
+            return ()
+        cached = self._snogit_query_cache.get(cache_key)
+        if cached is None:
+            cached = tuple(
+                self._snogit_searcher.search(
+                    cache_key,
+                    k1=self.k1,
+                    b=self.b,
+                    max_hits=max(self.max_candidates * 20, 50),
+                )
+            )
+            self._snogit_query_cache[cache_key] = cached
+        return cached
 
     def _candidate_from_hit(
         self,

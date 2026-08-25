@@ -376,6 +376,87 @@ def build_snogit_sidecar(
     )
 
 
+class SnogitSidecarBm25Searcher:
+    """Reusable BM25 searcher that keeps a processed SNOGIT cache open."""
+
+    def __init__(
+        self,
+        sidecar_path: Union[str, pathlib.Path],
+        *,
+        hdf5_path: Optional[Union[str, pathlib.Path]] = None,
+        strict: bool = True,
+    ):
+        self.sidecar_path = pathlib.Path(sidecar_path)
+        if hdf5_path is not None:
+            validate_snogit_sidecar_compatibility(self.sidecar_path, hdf5_path, strict=strict)
+        self._sidecar = h5py.File(self.sidecar_path, "r")
+        try:
+            _require_supported_schema(self._sidecar)
+            if "index" not in self._sidecar:
+                raise ValueError("Processed SNOGIT cache has no HDF5 inverted index; rebuild it with build-snogit-cache.")
+            self._index = self._sidecar["index"]
+            self._document_count = int(self._index.attrs.get("document_count", 0))
+            self._avgdl = float(self._index.attrs.get("average_document_length", 0.0)) or 1e-9
+            vocab = tuple(_decode(value) for value in self._sidecar["index/vocab/token"][:])
+            self._vocab_pos = {token: idx for idx, token in enumerate(vocab)}
+            self._postings_starts = np.asarray(self._sidecar["index/vocab/postings_start"][:], dtype=np.int64)
+            self._postings_lengths = np.asarray(self._sidecar["index/vocab/postings_length"][:], dtype=np.int64)
+            self._term_lengths_ds = self._sidecar["terms/length"]
+            self._term_row_ds = self._sidecar["index/postings/term_row"]
+            self._token_count_ds = self._sidecar["index/postings/token_count"]
+            self._concept_index_ds = self._sidecar["terms/concept_index"]
+            self._term_ds = self._sidecar["terms/term"]
+        except Exception:
+            self.close()
+            raise
+
+    def close(self) -> None:
+        sidecar = getattr(self, "_sidecar", None)
+        if sidecar is not None:
+            sidecar.close()
+            self._sidecar = None
+
+    def __enter__(self) -> "SnogitSidecarBm25Searcher":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.close()
+
+    def __del__(self):
+        self.close()
+
+    def search(
+        self,
+        query_tokens: Sequence[str],
+        *,
+        k1: float = 1.5,
+        b: float = 0.75,
+        max_hits: int = 50,
+        max_postings_per_token: int = 250_000,
+        max_candidate_rows: int = 100_000,
+    ) -> list[SnogitBm25Hit]:
+        if self._sidecar is None:
+            raise ValueError("SNOGIT BM25 searcher is closed.")
+        return _search_snogit_sidecar_bm25_cached(
+            query_tokens,
+            document_count=self._document_count,
+            avgdl=self._avgdl,
+            vocab_pos=self._vocab_pos,
+            postings_starts=self._postings_starts,
+            postings_lengths=self._postings_lengths,
+            term_lengths_ds=self._term_lengths_ds,
+            term_row_ds=self._term_row_ds,
+            token_count_ds=self._token_count_ds,
+            concept_index_ds=self._concept_index_ds,
+            term_ds=self._term_ds,
+            k1=k1,
+            b=b,
+            max_hits=max_hits,
+            max_postings_per_token=max_postings_per_token,
+            max_candidate_rows=max_candidate_rows,
+        )
+
+
 def search_snogit_sidecar_bm25(
     sidecar_path: Union[str, pathlib.Path],
     query_tokens: Sequence[str],
@@ -393,88 +474,103 @@ def search_snogit_sidecar_bm25(
     Only postings for query tokens are read. The score computation is vectorized
     with NumPy and does not construct the full Python ``BM25Index`` object graph.
     """
-    if hdf5_path is not None:
-        validate_snogit_sidecar_compatibility(sidecar_path, hdf5_path, strict=strict)
+    with SnogitSidecarBm25Searcher(sidecar_path, hdf5_path=hdf5_path, strict=strict) as searcher:
+        return searcher.search(
+            query_tokens,
+            k1=k1,
+            b=b,
+            max_hits=max_hits,
+            max_postings_per_token=max_postings_per_token,
+            max_candidate_rows=max_candidate_rows,
+        )
+
+
+def _search_snogit_sidecar_bm25_cached(
+    query_tokens: Sequence[str],
+    *,
+    document_count: int,
+    avgdl: float,
+    vocab_pos: dict[str, int],
+    postings_starts: np.ndarray,
+    postings_lengths: np.ndarray,
+    term_lengths_ds: h5py.Dataset,
+    term_row_ds: h5py.Dataset,
+    token_count_ds: h5py.Dataset,
+    concept_index_ds: h5py.Dataset,
+    term_ds: h5py.Dataset,
+    k1: float = 1.5,
+    b: float = 0.75,
+    max_hits: int = 50,
+    max_postings_per_token: int = 250_000,
+    max_candidate_rows: int = 100_000,
+) -> list[SnogitBm25Hit]:
     unique_query_tokens = tuple(dict.fromkeys(token for token in query_tokens if token))
     if not unique_query_tokens:
         return []
 
-    sidecar_path = pathlib.Path(sidecar_path)
-    with h5py.File(sidecar_path, "r") as sidecar:
-        _require_supported_schema(sidecar)
-        if "index" not in sidecar:
-            raise ValueError("Processed SNOGIT cache has no HDF5 inverted index; rebuild it with build-snogit-cache.")
-        index = sidecar["index"]
-        document_count = int(index.attrs.get("document_count", 0))
-        avgdl = float(index.attrs.get("average_document_length", 0.0)) or 1e-9
-        if document_count <= 0:
-            return []
-        vocab = tuple(_decode(value) for value in sidecar["index/vocab/token"][:])
-        vocab_pos = {token: idx for idx, token in enumerate(vocab)}
-        starts = np.asarray(sidecar["index/vocab/postings_start"][:], dtype=np.int64)
-        lengths = np.asarray(sidecar["index/vocab/postings_length"][:], dtype=np.int64)
-        term_lengths_ds = sidecar["terms/length"]
+    if document_count <= 0:
+        return []
 
-        token_infos: list[tuple[int, str, int]] = []
-        for token in unique_query_tokens:
-            vocab_idx = vocab_pos.get(token)
-            if vocab_idx is None:
-                continue
-            postings_length = int(lengths[vocab_idx])
-            if postings_length <= 0:
-                continue
-            token_infos.append((postings_length, token, vocab_idx))
-        token_infos.sort(key=lambda item: (item[0], item[1]))
+    token_infos: list[tuple[int, str, int]] = []
+    for token in unique_query_tokens:
+        vocab_idx = vocab_pos.get(token)
+        if vocab_idx is None:
+            continue
+        postings_length = int(postings_lengths[vocab_idx])
+        if postings_length <= 0:
+            continue
+        token_infos.append((postings_length, token, vocab_idx))
+    token_infos.sort(key=lambda item: (item[0], item[1]))
 
-        row_chunks: list[np.ndarray] = []
-        contribution_chunks: list[np.ndarray] = []
-        matched_tokens_by_row: dict[int, set[str]] = defaultdict(set)
-        candidate_rows_seen: set[int] = set()
-        for postings_length, token, vocab_idx in token_infos:
-            if postings_length > max_postings_per_token:
-                continue
-            start = int(starts[vocab_idx])
-            end = start + postings_length
-            rows = np.asarray(sidecar["index/postings/term_row"][start:end], dtype=np.int64)
-            if rows.size == 0:
-                continue
-            rows_set = set(int(row) for row in rows)
-            if len(candidate_rows_seen | rows_set) > max_candidate_rows:
-                # Too broad for this query. Because tokens are processed from
-                # rarest to most common, skip this broad token and keep scoring
-                # with the more selective tokens already accepted.
-                continue
-            candidate_rows_seen.update(rows_set)
-            tf = np.asarray(sidecar["index/postings/token_count"][start:end], dtype=np.float64)
-            dl = np.asarray(term_lengths_ds[rows], dtype=np.float64)
-            idf = math.log(1.0 + (document_count - postings_length + 0.5) / (postings_length + 0.5))
-            denominator = tf + float(k1) * (1.0 - float(b) + float(b) * dl / avgdl)
-            contribution = idf * tf * (float(k1) + 1.0) / denominator
-            row_chunks.append(rows)
-            contribution_chunks.append(contribution)
-            for row in rows:
-                matched_tokens_by_row[int(row)].add(token)
+    row_chunks: list[np.ndarray] = []
+    contribution_chunks: list[np.ndarray] = []
+    matched_tokens_by_row: dict[int, set[str]] = defaultdict(set)
+    candidate_rows_seen: set[int] = set()
+    for postings_length, token, vocab_idx in token_infos:
+        if postings_length > max_postings_per_token:
+            continue
+        start = int(postings_starts[vocab_idx])
+        end = start + postings_length
+        rows = np.asarray(term_row_ds[start:end], dtype=np.int64)
+        if rows.size == 0:
+            continue
+        rows_set = set(int(row) for row in rows)
+        if len(candidate_rows_seen | rows_set) > max_candidate_rows:
+            # Too broad for this query. Because tokens are processed from
+            # rarest to most common, skip this broad token and keep scoring
+            # with the more selective tokens already accepted.
+            continue
+        candidate_rows_seen.update(rows_set)
+        tf = np.asarray(token_count_ds[start:end], dtype=np.float64)
+        dl = np.asarray(term_lengths_ds[rows], dtype=np.float64)
+        idf = math.log(1.0 + (document_count - postings_length + 0.5) / (postings_length + 0.5))
+        denominator = tf + float(k1) * (1.0 - float(b) + float(b) * dl / avgdl)
+        contribution = idf * tf * (float(k1) + 1.0) / denominator
+        row_chunks.append(rows)
+        contribution_chunks.append(contribution)
+        for row in rows:
+            matched_tokens_by_row[int(row)].add(token)
 
-        if not row_chunks:
-            return []
-        all_rows = np.concatenate(row_chunks)
-        all_contributions = np.concatenate(contribution_chunks)
-        unique_rows, inverse = np.unique(all_rows, return_inverse=True)
-        scores = np.bincount(inverse, weights=all_contributions)
-        positive = scores > 0.0
-        if not np.any(positive):
-            return []
-        unique_rows = unique_rows[positive]
-        scores = scores[positive]
-        hit_count = min(int(max_hits), int(scores.size))
-        top_positions = np.argpartition(scores, -hit_count)[-hit_count:]
-        ordered_positions = sorted(top_positions, key=lambda pos: (-float(scores[pos]), int(unique_rows[pos])))
-        top_rows = np.asarray([unique_rows[pos] for pos in ordered_positions], dtype=np.int64)
-        concept_indices = _read_dataset_rows_in_requested_order(sidecar["terms/concept_index"], top_rows)
-        terms = tuple(
-            _decode(value)
-            for value in _read_dataset_rows_in_requested_order(sidecar["terms/term"], top_rows)
-        )
+    if not row_chunks:
+        return []
+    all_rows = np.concatenate(row_chunks)
+    all_contributions = np.concatenate(contribution_chunks)
+    unique_rows, inverse = np.unique(all_rows, return_inverse=True)
+    scores = np.bincount(inverse, weights=all_contributions)
+    positive = scores > 0.0
+    if not np.any(positive):
+        return []
+    unique_rows = unique_rows[positive]
+    scores = scores[positive]
+    hit_count = min(int(max_hits), int(scores.size))
+    top_positions = np.argpartition(scores, -hit_count)[-hit_count:]
+    ordered_positions = sorted(top_positions, key=lambda pos: (-float(scores[pos]), int(unique_rows[pos])))
+    top_rows = np.asarray([unique_rows[pos] for pos in ordered_positions], dtype=np.int64)
+    concept_indices = _read_dataset_rows_in_requested_order(concept_index_ds, top_rows)
+    terms = tuple(
+        _decode(value)
+        for value in _read_dataset_rows_in_requested_order(term_ds, top_rows)
+    )
 
     return [
         SnogitBm25Hit(
