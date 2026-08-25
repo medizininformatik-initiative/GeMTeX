@@ -13,6 +13,7 @@ from snomed_post_processing.sanitization import (
     apply_semantic_bm25_fallback,
     build_snogit_sidecar,
     list_snogit_zip_members,
+    search_snogit_sidecar_bm25,
     validate_snogit_sidecar_compatibility,
     write_sanitization_markdown_report,
 )
@@ -279,7 +280,105 @@ class TestSemanticBm25Sanitization(unittest.TestCase):
 
             self.assertEqual(result.selected_members, ("release/SNOGIT_20260712.dat",))
             self.assertEqual(result.rows_written, 1)
+            self.assertEqual(result.vocab_size, 1)
+            self.assertEqual(result.postings_count, 1)
             self.assertTrue(validate_snogit_sidecar_compatibility(sidecar_path, hdf5_path))
+            with h5py.File(sidecar_path, "r") as sidecar:
+                self.assertIn("length", sidecar["terms"])
+                self.assertIn("index", sidecar)
+                self.assertEqual(sidecar["schema"].attrs["version"], "2")
+                self.assertEqual(sidecar["terms/length"][:].tolist(), [1])
+                self.assertEqual([value.decode("utf-8") for value in sidecar["index/vocab/token"][:]], ["herzinfarkt"])
+
+    def test_snogit_sidecar_inverted_index_query_returns_hits(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = pathlib.Path(tmpdir)
+            hdf5_path = tmpdir / "concepts.hdf5"
+            sidecar_path = tmpdir / "snogit-sidecar.hdf5"
+            zip_path = tmpdir / "SNOGIT-release.zip"
+            _write_compact_hdf5(hdf5_path, blacklist_indices=(3,))
+            with zipfile.ZipFile(zip_path, "w") as archive:
+                archive.writestr(
+                    "release/SNOGIT_20260712.dat",
+                    "100\tt1\tAlpha therapy procedure (procedure)\tAkuter Herzinfarkt\n"
+                    "200\tt2\tBeta diagnosis disorder (disorder)\tHerzinsuffizienz\n",
+                )
+            build_snogit_sidecar(
+                hdf5_path=hdf5_path,
+                snogit_zip_path=zip_path,
+                output_path=sidecar_path,
+            )
+
+            hits = search_snogit_sidecar_bm25(
+                sidecar_path,
+                ["akuter", "herzinfarkt"],
+                hdf5_path=hdf5_path,
+            )
+
+        self.assertGreaterEqual(len(hits), 1)
+        self.assertEqual(hits[0].concept_index, 1)
+        self.assertEqual(hits[0].term, "Akuter Herzinfarkt")
+        self.assertEqual(hits[0].matched_query_tokens, ("akuter", "herzinfarkt"))
+
+    def test_snogit_sidecar_bm25_skips_tokens_exceeding_candidate_limit(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = pathlib.Path(tmpdir)
+            hdf5_path = tmpdir / "concepts.hdf5"
+            sidecar_path = tmpdir / "snogit-sidecar.hdf5"
+            zip_path = tmpdir / "SNOGIT-release.zip"
+            _write_compact_hdf5(hdf5_path, blacklist_indices=(3,))
+            with zipfile.ZipFile(zip_path, "w") as archive:
+                archive.writestr(
+                    "release/SNOGIT_20260712.dat",
+                    "100\tt1\tAlpha therapy procedure (procedure)\tAkuter gemeinsamer Begriff\n"
+                    "200\tt2\tBeta diagnostic procedure (procedure)\tAnderer gemeinsamer Begriff\n",
+                )
+            build_snogit_sidecar(
+                hdf5_path=hdf5_path,
+                snogit_zip_path=zip_path,
+                output_path=sidecar_path,
+            )
+
+            hits = search_snogit_sidecar_bm25(
+                sidecar_path,
+                ["akuter", "gemeinsamer"],
+                hdf5_path=hdf5_path,
+                max_candidate_rows=1,
+            )
+
+        self.assertEqual(len(hits), 1)
+        self.assertEqual(hits[0].concept_index, 1)
+        self.assertEqual(hits[0].matched_query_tokens, ("akuter",))
+
+    def test_snogit_sidecar_bm25_reads_ranked_rows_not_sorted_rows(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = pathlib.Path(tmpdir)
+            hdf5_path = tmpdir / "concepts.hdf5"
+            sidecar_path = tmpdir / "snogit-sidecar.hdf5"
+            zip_path = tmpdir / "SNOGIT-release.zip"
+            _write_compact_hdf5(hdf5_path, blacklist_indices=(3,))
+            with zipfile.ZipFile(zip_path, "w") as archive:
+                archive.writestr(
+                    "release/SNOGIT_20260712.dat",
+                    "200\tt1\tBeta diagnostic procedure (procedure)\tHerzinfarkt\n"
+                    "100\tt2\tAlpha therapy procedure (procedure)\tAkuter Herzinfarkt Herzinfarkt\n",
+                )
+            build_snogit_sidecar(
+                hdf5_path=hdf5_path,
+                snogit_zip_path=zip_path,
+                output_path=sidecar_path,
+            )
+
+            hits = search_snogit_sidecar_bm25(
+                sidecar_path,
+                ["akuter", "herzinfarkt"],
+                hdf5_path=hdf5_path,
+            )
+
+        self.assertGreaterEqual(len(hits), 2)
+        self.assertEqual(hits[0].term_row, 1)
+        self.assertEqual(hits[0].concept_index, 1)
+        self.assertEqual(hits[0].term, "Akuter Herzinfarkt Herzinfarkt")
 
     def test_snogit_sidecar_terms_are_used_as_bm25_candidates(self):
         with tempfile.TemporaryDirectory() as tmpdir:

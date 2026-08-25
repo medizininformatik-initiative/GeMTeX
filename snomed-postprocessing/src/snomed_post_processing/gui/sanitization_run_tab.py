@@ -28,6 +28,7 @@ from snomed_post_processing.uima_processing.io import (
     _yield_matching_files,
 )
 
+from .file_sources import render_file_source_selector
 from .files import save_uploaded_file
 from .sidebar import GuiInputs
 
@@ -39,8 +40,8 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
     st.write("Review sanitization suggestions before applying them back to CAS documents.")
 
     st.subheader("Sources")
-    _render_suggestion_source_selector()
-    _render_decision_source_selector()
+    _render_suggestion_source_selector(inputs)
+    _render_decision_source_selector(inputs)
 
     if st.session_state.get("sanitization_last_load_message"):
         st.success(st.session_state.pop("sanitization_last_load_message"))
@@ -113,7 +114,7 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
     )
 
 
-def _render_suggestion_source_selector() -> None:
+def _render_suggestion_source_selector(inputs: GuiInputs) -> None:
     session_suggestions_available = st.session_state.get("sanitization_suggestions") is not None
     if session_suggestions_available:
         source = st.segmented_control(
@@ -137,36 +138,39 @@ def _render_suggestion_source_selector() -> None:
     if source != "Upload JSON":
         return
 
-    uploaded_suggestions_file = st.file_uploader(
+    suggestions_selection = render_file_source_selector(
         "Sanitization suggestions JSON",
-        type=["json"],
-        key="sanitization_suggestions_json_uploader",
-        help="Upload suggestions saved from the sanitization-check tab.",
+        key="sanitization_suggestions_json",
+        data_dir=inputs.data_dir,
+        suffixes=(".json",),
+        upload_types=("json",),
+        default_source="Upload",
+        help="Load suggestions saved from the sanitization-check tab.",
     )
-    if uploaded_suggestions_file is None:
+    if suggestions_selection.value is None:
         return
-    upload_key = _uploaded_file_key(uploaded_suggestions_file)
+    upload_key = _selected_file_key(suggestions_selection.value)
     if st.session_state.get("loaded_sanitization_suggestions_upload_key") == upload_key:
         return
     try:
         suggestions, metadata = read_sanitization_suggestions_json_with_metadata(
-            uploaded_suggestions_file
+            suggestions_selection.value
         )
         st.session_state["sanitization_suggestions"] = suggestions
         st.session_state["sanitization_suggestions_metadata"] = metadata
         st.session_state["sanitization_suggestions_report_path"] = None
-        st.session_state["sanitization_suggestions_json_path"] = uploaded_suggestions_file.name
+        st.session_state["sanitization_suggestions_json_path"] = _selected_file_name(suggestions_selection.value)
         st.session_state["loaded_sanitization_suggestions_upload_key"] = upload_key
         _bump_review_state_revision()
         st.session_state["sanitization_last_load_message"] = (
-            f"Loaded suggestions from {uploaded_suggestions_file.name}."
+            f"Loaded suggestions from {_selected_file_name(suggestions_selection.value)}."
         )
         st.rerun()
     except Exception as exc:
         st.error(f"Could not load sanitization suggestions JSON: {exc}")
 
 
-def _render_decision_source_selector() -> None:
+def _render_decision_source_selector(inputs: GuiInputs) -> None:
     review_state = st.segmented_control(
         "Review state",
         options=["Start fresh", "Load reviewed decisions"],
@@ -178,24 +182,27 @@ def _render_decision_source_selector() -> None:
     if review_state != "Load reviewed decisions":
         return
 
-    uploaded_decisions_file = st.file_uploader(
+    decisions_selection = render_file_source_selector(
         "Reviewed sanitization decisions JSON",
-        type=["json"],
-        key="sanitization_decisions_json_uploader",
+        key="sanitization_decisions_json",
+        data_dir=inputs.data_dir,
+        suffixes=(".json",),
+        upload_types=("json",),
+        default_source="Upload",
         help="Load a previously saved review state after loading/generating matching suggestions.",
     )
-    if uploaded_decisions_file is None:
+    if decisions_selection.value is None:
         return
-    upload_key = _uploaded_file_key(uploaded_decisions_file)
+    upload_key = _selected_file_key(decisions_selection.value)
     if st.session_state.get("loaded_sanitization_decisions_upload_key") == upload_key:
         return
     try:
-        decisions, metadata = read_sanitization_decisions_json(uploaded_decisions_file)
+        decisions, metadata = read_sanitization_decisions_json(decisions_selection.value)
         _restore_decision_state(decisions, metadata)
         st.session_state["loaded_sanitization_decisions_upload_key"] = upload_key
         _bump_review_state_revision()
         st.session_state["sanitization_last_load_message"] = (
-            f"Loaded reviewed decisions from {uploaded_decisions_file.name}."
+            f"Loaded reviewed decisions from {_selected_file_name(decisions_selection.value)}."
         )
         st.rerun()
     except Exception as exc:
@@ -308,16 +315,36 @@ def _uploaded_file_key(uploaded_file: Any) -> tuple[str, int | None]:
     return (getattr(uploaded_file, "name", ""), getattr(uploaded_file, "size", None))
 
 
+def _selected_file_key(selected_file: Any) -> tuple[str, int | None]:
+    if isinstance(selected_file, pathlib.Path):
+        try:
+            return (str(selected_file.resolve()), selected_file.stat().st_size)
+        except OSError:
+            return (str(selected_file), None)
+    return _uploaded_file_key(selected_file)
+
+
+def _selected_file_name(selected_file: Any) -> str:
+    if isinstance(selected_file, pathlib.Path):
+        return selected_file.name
+    return getattr(selected_file, "name", "")
+
+
 def _project_document_text_lookup(project_source: Any) -> dict[str, str]:
     if project_source is None:
         return {}
-    upload_key = _uploaded_file_key(project_source)
+    upload_key = _selected_file_key(project_source)
     cache_key = "sanitization_project_text_lookup_key"
     if st.session_state.get(cache_key) == upload_key:
         return st.session_state.get("sanitization_project_text_lookup", {})
     try:
-        data = project_source.getvalue()
-        lookup = _extract_project_document_texts(data, getattr(project_source, "name", None))
+        if isinstance(project_source, pathlib.Path):
+            data = project_source.read_bytes()
+            source_name = project_source.name
+        else:
+            data = project_source.getvalue()
+            source_name = getattr(project_source, "name", None)
+        lookup = _extract_project_document_texts(data, source_name)
     except Exception:
         lookup = {}
     st.session_state[cache_key] = upload_key

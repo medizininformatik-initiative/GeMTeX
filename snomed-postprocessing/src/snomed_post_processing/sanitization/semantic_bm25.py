@@ -20,7 +20,7 @@ from .bm25_index import BM25Index
 from .models import SanitizationStatus
 from .semantic_models import SemanticBm25Candidate, SemanticBm25Suggestion
 from .semantic_text import _query_text, _semantic_tag, _tokenize
-from .snogit_sidecar import read_snogit_sidecar_terms
+from .snogit_sidecar import search_snogit_sidecar_bm25, validate_snogit_sidecar_compatibility
 
 class SemanticBm25Resolver:
     """Suggest policy-acceptable replacements using BM25 over concept labels.
@@ -150,15 +150,22 @@ class SemanticBm25Resolver:
             self.active = concepts.active
             self.whitelist_indices = read_policy_indices(h5_file, "whitelist")
             self.blacklist_indices = read_policy_indices(h5_file, "blacklist")
-        self.snogit_terms = None
+        self.snogit_source_member = None
         if self.use_snogit:
             if self.snogit_sidecar_path is None:
-                raise ValueError("use_snogit=True requires a SNOGIT sidecar path at BM25 resolver runtime")
-            self.snogit_terms = read_snogit_sidecar_terms(
+                raise ValueError("use_snogit=True requires a processed SNOGIT cache path at BM25 resolver runtime")
+            validate_snogit_sidecar_compatibility(
                 self.snogit_sidecar_path,
-                hdf5_path=self.hdf5_path,
+                self.hdf5_path,
                 strict=True,
             )
+            with h5py.File(self.snogit_sidecar_path, "r") as sidecar:
+                if "metadata/source_members" in sidecar:
+                    source_members = tuple(
+                        value.decode("utf-8") if isinstance(value, bytes) else str(value)
+                        for value in sidecar["metadata/source_members"][:]
+                    )
+                    self.snogit_source_member = ", ".join(source_members) if source_members else None
 
     def _build_index(self):
         self.document_indices = []
@@ -178,26 +185,6 @@ class SemanticBm25Resolver:
                 self.document_sources.append("snomed_fsn")
                 self.document_terms.append(self.fsn[idx])
                 self.document_source_members.append(None)
-        if self.snogit_terms is not None:
-            source_members = self.snogit_terms.metadata.get("source_members")
-            source_member = ", ".join(source_members) if isinstance(source_members, tuple) else None
-            for idx, term in zip(self.snogit_terms.concept_index, self.snogit_terms.term):
-                concept_idx = int(idx)
-                if (
-                    0 <= concept_idx < len(self.codes)
-                    and bool(self.active[concept_idx])
-                    and concept_idx in self.whitelist_indices
-                    and concept_idx not in self.blacklist_indices
-                    and term
-                ):
-                    tokens = _tokenize(term)
-                    if not tokens:
-                        continue
-                    self.document_indices.append(concept_idx)
-                    self.documents.append(tokens)
-                    self.document_sources.append("snogit")
-                    self.document_terms.append(term)
-                    self.document_source_members.append(source_member)
         self.bm25_index = BM25Index(self.documents, k1=self.k1, b=self.b)
 
     def _score(self, query_tokens: Sequence[str], source_code: Optional[str]) -> list[SemanticBm25Candidate]:
@@ -208,34 +195,94 @@ class SemanticBm25Resolver:
         for hit in self.bm25_index.search(query_terms):
             local_idx = hit.document_id
             concept_idx = self.document_indices[local_idx]
-            code = self.codes[concept_idx]
-            if source_code and code == source_code:
-                continue
-            doc_set = set(self.documents[local_idx])
-            lexical_score = len(query_set & doc_set) / max(len(query_set), 1)
-            semantic_tag = _semantic_tag(self.fsn[concept_idx])
-            score = hit.score
-            if self.use_semantic_tag_boost and source_tag and semantic_tag == source_tag:
-                score *= 1.1
-            candidate = SemanticBm25Candidate(
-                code=code,
-                fsn=self.fsn[concept_idx],
-                score=score,
-                lexical_score=lexical_score,
-                semantic_tag=semantic_tag,
-                active=bool(self.active[concept_idx]),
-                in_whitelist=concept_idx in self.whitelist_indices,
-                in_blacklist=concept_idx in self.blacklist_indices,
+            candidate = self._candidate_from_hit(
+                concept_idx=concept_idx,
+                source_code=source_code,
+                query_set=query_set,
+                source_tag=source_tag,
+                score=hit.score,
+                doc_tokens=self.documents[local_idx],
                 source=self.document_sources[local_idx],
                 matched_term=self.document_terms[local_idx],
                 source_member=self.document_source_members[local_idx],
             )
-            previous = best_by_code.get(code)
+            if candidate is None:
+                continue
+            previous = best_by_code.get(candidate.code)
             if previous is None or _candidate_rank_key(candidate) < _candidate_rank_key(previous):
-                best_by_code[code] = candidate
+                best_by_code[candidate.code] = candidate
+        if self.snogit_sidecar_path is not None:
+            for hit in search_snogit_sidecar_bm25(
+                self.snogit_sidecar_path,
+                query_terms,
+                hdf5_path=self.hdf5_path,
+                strict=False,
+                k1=self.k1,
+                b=self.b,
+                max_hits=max(self.max_candidates * 20, 50),
+            ):
+                concept_idx = int(hit.concept_index)
+                candidate = self._candidate_from_hit(
+                    concept_idx=concept_idx,
+                    source_code=source_code,
+                    query_set=query_set,
+                    source_tag=source_tag,
+                    score=hit.score,
+                    doc_tokens=_tokenize(hit.term),
+                    source="snogit",
+                    matched_term=hit.term,
+                    source_member=self.snogit_source_member,
+                )
+                if candidate is None:
+                    continue
+                previous = best_by_code.get(candidate.code)
+                if previous is None or _candidate_rank_key(candidate) < _candidate_rank_key(previous):
+                    best_by_code[candidate.code] = candidate
         scored = list(best_by_code.values())
         scored.sort(key=_candidate_rank_key)
         return scored
+
+    def _candidate_from_hit(
+        self,
+        *,
+        concept_idx: int,
+        source_code: Optional[str],
+        query_set: set[str],
+        source_tag: Optional[str],
+        score: float,
+        doc_tokens: Sequence[str],
+        source: str,
+        matched_term: str,
+        source_member: Optional[str],
+    ) -> Optional[SemanticBm25Candidate]:
+        if not (0 <= concept_idx < len(self.codes)):
+            return None
+        code = self.codes[concept_idx]
+        if source_code and code == source_code:
+            return None
+        if not bool(self.active[concept_idx]):
+            return None
+        if concept_idx not in self.whitelist_indices or concept_idx in self.blacklist_indices:
+            return None
+        doc_set = set(doc_tokens)
+        lexical_score = len(query_set & doc_set) / max(len(query_set), 1)
+        semantic_tag = _semantic_tag(self.fsn[concept_idx])
+        final_score = float(score)
+        if self.use_semantic_tag_boost and source_tag and semantic_tag == source_tag:
+            final_score *= 1.1
+        return SemanticBm25Candidate(
+            code=code,
+            fsn=self.fsn[concept_idx],
+            score=final_score,
+            lexical_score=lexical_score,
+            semantic_tag=semantic_tag,
+            active=bool(self.active[concept_idx]),
+            in_whitelist=concept_idx in self.whitelist_indices,
+            in_blacklist=concept_idx in self.blacklist_indices,
+            source=source,
+            matched_term=matched_term,
+            source_member=source_member,
+        )
 
     def fsn_by_code(self, code: Optional[str]) -> Optional[str]:
         if not code:

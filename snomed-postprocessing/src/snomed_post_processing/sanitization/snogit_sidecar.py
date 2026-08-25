@@ -18,18 +18,22 @@ from __future__ import annotations
 import dataclasses
 import datetime
 import hashlib
+import math
 import pathlib
 import re
 import zipfile
-from typing import Iterable, Optional, Sequence, Union
+from collections import Counter, defaultdict
+from typing import Callable, Iterable, Optional, Sequence, Union
 
 import h5py
 import numpy as np
 
 from ..hdf5_handling.policy import read_concepts, read_policy_indices, require_bm25_ready
+from .semantic_models import Bm25Hit
+from .semantic_text import _tokenize
 
 SCHEMA_NAME = "snomed-post-processing.snogit-sidecar"
-SCHEMA_VERSION = "1"
+SCHEMA_VERSION = "2"
 _STRING_DTYPE = h5py.string_dtype(encoding="utf-8")
 _DEFAULT_CHUNK_SIZE = 100_000
 
@@ -55,7 +59,7 @@ class SnogitSidecarTerms:
 
 @dataclasses.dataclass(frozen=True)
 class SnogitSidecarBuildResult:
-    """Summary of an on-demand sidecar build."""
+    """Summary of a processed SNOGIT cache build."""
 
     output_path: pathlib.Path
     selected_members: tuple[str, ...]
@@ -66,6 +70,19 @@ class SnogitSidecarBuildResult:
     rows_skipped_policy: int
     rows_skipped_empty_term: int
     duplicate_rows: int
+    vocab_size: int = 0
+    postings_count: int = 0
+
+
+@dataclasses.dataclass(frozen=True)
+class SnogitBm25Hit:
+    """A BM25 hit from the HDF5-backed SNOGIT inverted index."""
+
+    term_row: int
+    concept_index: int
+    term: str
+    score: float
+    matched_query_tokens: tuple[str, ...]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -119,6 +136,7 @@ def build_snogit_sidecar(
     members: Optional[Sequence[str]] = None,
     max_terms_per_concept: Optional[int] = None,
     chunk_size: int = _DEFAULT_CHUNK_SIZE,
+    progress_callback: Optional[Callable[[dict[str, object]], None]] = None,
 ) -> SnogitSidecarBuildResult:
     """Build a minimal filtered HDF5 sidecar from selected SNOGIT ZIP members.
 
@@ -156,6 +174,25 @@ def build_snogit_sidecar(
     missing = [member for member in selected if member not in available]
     if missing:
         raise ValueError("Selected SNOGIT member(s) not found in ZIP: " + ", ".join(missing))
+
+    selected_member_sizes: dict[str, int] = {}
+    with zipfile.ZipFile(snogit_zip_path) as archive:
+        for member in selected:
+            selected_member_sizes[member] = int(archive.getinfo(member).file_size)
+    total_selected_bytes = sum(selected_member_sizes.values())
+    processed_bytes = 0
+
+    def report_progress(**payload: object) -> None:
+        if progress_callback is not None:
+            progress_callback(payload)
+
+    report_progress(
+        phase="start",
+        selected_members=selected,
+        total_bytes=total_selected_bytes,
+        processed_bytes=processed_bytes,
+        progress=0.0,
+    )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     counters = {
@@ -197,9 +234,21 @@ def build_snogit_sidecar(
             chunks=(max(1, min(chunk_size, _DEFAULT_CHUNK_SIZE)),),
             dtype=_STRING_DTYPE,
         )
+        length_ds = terms_group.create_dataset(
+            "length",
+            shape=(0,),
+            maxshape=(None,),
+            chunks=(max(1, min(chunk_size, _DEFAULT_CHUNK_SIZE)),),
+            dtype=np.int32,
+            compression="gzip",
+            compression_opts=4,
+            shuffle=True,
+        )
 
         pending_indices: list[int] = []
         pending_terms: list[str] = []
+        pending_lengths: list[int] = []
+        postings: dict[str, list[tuple[int, int]]] = defaultdict(list)
 
         def flush() -> None:
             if not pending_indices:
@@ -208,17 +257,40 @@ def build_snogit_sidecar(
             end = start + len(pending_indices)
             concept_index_ds.resize((end,))
             term_ds.resize((end,))
+            length_ds.resize((end,))
             concept_index_ds[start:end] = np.asarray(pending_indices, dtype=np.int64)
             term_ds[start:end] = np.asarray(pending_terms, dtype=object)
+            length_ds[start:end] = np.asarray(pending_lengths, dtype=np.int32)
             counters["rows_written"] += len(pending_indices)
             pending_indices.clear()
             pending_terms.clear()
+            pending_lengths.clear()
 
         with zipfile.ZipFile(snogit_zip_path) as archive:
             for member in selected:
+                report_progress(
+                    phase="parsing",
+                    member=member,
+                    selected_members=selected,
+                    total_bytes=total_selected_bytes,
+                    processed_bytes=processed_bytes,
+                    progress=(processed_bytes / total_selected_bytes if total_selected_bytes else 0.0),
+                    **counters,
+                )
                 with archive.open(member) as raw_file:
                     for raw_line in raw_file:
                         counters["rows_read"] += 1
+                        processed_bytes += len(raw_line)
+                        if counters["rows_read"] % max(1, chunk_size) == 0:
+                            report_progress(
+                                phase="parsing",
+                                member=member,
+                                selected_members=selected,
+                                total_bytes=total_selected_bytes,
+                                processed_bytes=processed_bytes,
+                                progress=(processed_bytes / total_selected_bytes if total_selected_bytes else 0.0),
+                                **counters,
+                            )
                         parsed = _parse_dat_line(raw_line)
                         if parsed is None:
                             counters["rows_skipped_empty_term"] += 1
@@ -239,20 +311,55 @@ def build_snogit_sidecar(
                         if key in seen:
                             counters["duplicate_rows"] += 1
                             continue
+                        tokens = _tokenize(term)
+                        if not tokens:
+                            counters["rows_skipped_empty_term"] += 1
+                            continue
                         if max_terms_per_concept is not None:
                             count = per_concept_counts.get(concept_idx, 0)
                             if count >= max_terms_per_concept:
                                 counters["duplicate_rows"] += 1
                                 continue
                             per_concept_counts[concept_idx] = count + 1
+                        row_id = counters["rows_kept"]
                         seen.add(key)
                         counters["rows_kept"] += 1
+                        token_counts = Counter(tokens)
+                        for token, count in token_counts.items():
+                            postings[token].append((row_id, int(count)))
                         pending_indices.append(int(concept_idx))
                         pending_terms.append(term)
+                        pending_lengths.append(len(tokens))
                         if len(pending_indices) >= chunk_size:
                             flush()
         flush()
+        report_progress(
+            phase="writing_index",
+            selected_members=selected,
+            total_bytes=total_selected_bytes,
+            processed_bytes=processed_bytes,
+            progress=1.0,
+            **counters,
+        )
+        vocab_size, postings_count = _write_inverted_index(
+            sidecar,
+            postings=postings,
+            document_count=counters["rows_written"],
+            lengths=np.asarray(length_ds[:], dtype=np.int32),
+        )
+        sidecar["metadata"].attrs["vocab_size"] = int(vocab_size)
+        sidecar["metadata"].attrs["postings_count"] = int(postings_count)
         _store_counter_attrs(sidecar["metadata"], counters)
+        report_progress(
+            phase="complete",
+            selected_members=selected,
+            total_bytes=total_selected_bytes,
+            processed_bytes=processed_bytes,
+            progress=1.0,
+            vocab_size=vocab_size,
+            postings_count=postings_count,
+            **counters,
+        )
 
     return SnogitSidecarBuildResult(
         output_path=output_path,
@@ -264,7 +371,121 @@ def build_snogit_sidecar(
         rows_skipped_policy=counters["rows_skipped_policy"],
         rows_skipped_empty_term=counters["rows_skipped_empty_term"],
         duplicate_rows=counters["duplicate_rows"],
+        vocab_size=vocab_size,
+        postings_count=postings_count,
     )
+
+
+def search_snogit_sidecar_bm25(
+    sidecar_path: Union[str, pathlib.Path],
+    query_tokens: Sequence[str],
+    *,
+    hdf5_path: Optional[Union[str, pathlib.Path]] = None,
+    strict: bool = True,
+    k1: float = 1.5,
+    b: float = 0.75,
+    max_hits: int = 50,
+    max_postings_per_token: int = 250_000,
+    max_candidate_rows: int = 100_000,
+) -> list[SnogitBm25Hit]:
+    """Search a processed SNOGIT cache using its HDF5 inverted BM25 index.
+
+    Only postings for query tokens are read. The score computation is vectorized
+    with NumPy and does not construct the full Python ``BM25Index`` object graph.
+    """
+    if hdf5_path is not None:
+        validate_snogit_sidecar_compatibility(sidecar_path, hdf5_path, strict=strict)
+    unique_query_tokens = tuple(dict.fromkeys(token for token in query_tokens if token))
+    if not unique_query_tokens:
+        return []
+
+    sidecar_path = pathlib.Path(sidecar_path)
+    with h5py.File(sidecar_path, "r") as sidecar:
+        _require_supported_schema(sidecar)
+        if "index" not in sidecar:
+            raise ValueError("Processed SNOGIT cache has no HDF5 inverted index; rebuild it with build-snogit-cache.")
+        index = sidecar["index"]
+        document_count = int(index.attrs.get("document_count", 0))
+        avgdl = float(index.attrs.get("average_document_length", 0.0)) or 1e-9
+        if document_count <= 0:
+            return []
+        vocab = tuple(_decode(value) for value in sidecar["index/vocab/token"][:])
+        vocab_pos = {token: idx for idx, token in enumerate(vocab)}
+        starts = np.asarray(sidecar["index/vocab/postings_start"][:], dtype=np.int64)
+        lengths = np.asarray(sidecar["index/vocab/postings_length"][:], dtype=np.int64)
+        term_lengths_ds = sidecar["terms/length"]
+
+        token_infos: list[tuple[int, str, int]] = []
+        for token in unique_query_tokens:
+            vocab_idx = vocab_pos.get(token)
+            if vocab_idx is None:
+                continue
+            postings_length = int(lengths[vocab_idx])
+            if postings_length <= 0:
+                continue
+            token_infos.append((postings_length, token, vocab_idx))
+        token_infos.sort(key=lambda item: (item[0], item[1]))
+
+        row_chunks: list[np.ndarray] = []
+        contribution_chunks: list[np.ndarray] = []
+        matched_tokens_by_row: dict[int, set[str]] = defaultdict(set)
+        candidate_rows_seen: set[int] = set()
+        for postings_length, token, vocab_idx in token_infos:
+            if postings_length > max_postings_per_token:
+                continue
+            start = int(starts[vocab_idx])
+            end = start + postings_length
+            rows = np.asarray(sidecar["index/postings/term_row"][start:end], dtype=np.int64)
+            if rows.size == 0:
+                continue
+            rows_set = set(int(row) for row in rows)
+            if len(candidate_rows_seen | rows_set) > max_candidate_rows:
+                # Too broad for this query. Because tokens are processed from
+                # rarest to most common, skip this broad token and keep scoring
+                # with the more selective tokens already accepted.
+                continue
+            candidate_rows_seen.update(rows_set)
+            tf = np.asarray(sidecar["index/postings/token_count"][start:end], dtype=np.float64)
+            dl = np.asarray(term_lengths_ds[rows], dtype=np.float64)
+            idf = math.log(1.0 + (document_count - postings_length + 0.5) / (postings_length + 0.5))
+            denominator = tf + float(k1) * (1.0 - float(b) + float(b) * dl / avgdl)
+            contribution = idf * tf * (float(k1) + 1.0) / denominator
+            row_chunks.append(rows)
+            contribution_chunks.append(contribution)
+            for row in rows:
+                matched_tokens_by_row[int(row)].add(token)
+
+        if not row_chunks:
+            return []
+        all_rows = np.concatenate(row_chunks)
+        all_contributions = np.concatenate(contribution_chunks)
+        unique_rows, inverse = np.unique(all_rows, return_inverse=True)
+        scores = np.bincount(inverse, weights=all_contributions)
+        positive = scores > 0.0
+        if not np.any(positive):
+            return []
+        unique_rows = unique_rows[positive]
+        scores = scores[positive]
+        hit_count = min(int(max_hits), int(scores.size))
+        top_positions = np.argpartition(scores, -hit_count)[-hit_count:]
+        ordered_positions = sorted(top_positions, key=lambda pos: (-float(scores[pos]), int(unique_rows[pos])))
+        top_rows = np.asarray([unique_rows[pos] for pos in ordered_positions], dtype=np.int64)
+        concept_indices = _read_dataset_rows_in_requested_order(sidecar["terms/concept_index"], top_rows)
+        terms = tuple(
+            _decode(value)
+            for value in _read_dataset_rows_in_requested_order(sidecar["terms/term"], top_rows)
+        )
+
+    return [
+        SnogitBm25Hit(
+            term_row=int(row),
+            concept_index=int(concept_idx),
+            term=term,
+            score=float(scores[pos]),
+            matched_query_tokens=tuple(sorted(matched_tokens_by_row.get(int(row), set()))),
+        )
+        for pos, row, concept_idx, term in zip(ordered_positions, top_rows, concept_indices, terms)
+    ]
 
 
 def read_snogit_sidecar_terms(
@@ -276,10 +497,7 @@ def read_snogit_sidecar_terms(
     """Read terms from a SNOGIT HDF5 sidecar and optionally validate it."""
     sidecar_path = pathlib.Path(sidecar_path)
     with h5py.File(sidecar_path, "r") as sidecar:
-        if _attr(sidecar["schema"], "name") != SCHEMA_NAME:
-            raise ValueError(f"Unsupported SNOGIT sidecar schema: {_attr(sidecar['schema'], 'name')!r}")
-        if _attr(sidecar["schema"], "version") != SCHEMA_VERSION:
-            raise ValueError(f"Unsupported SNOGIT sidecar schema version: {_attr(sidecar['schema'], 'version')!r}")
+        _require_supported_schema(sidecar)
         metadata = _metadata_dict(sidecar["metadata"])
         concept_index = np.asarray(sidecar["terms/concept_index"][:], dtype=np.int64)
         term = tuple(_decode(value) for value in sidecar["terms/term"][:])
@@ -338,6 +556,75 @@ def fingerprint_main_hdf5(
         concept_codes_hash=_hash_strings(concept_codes),
         policy_candidate_hash=_hash_indices_and_codes(allowed, concept_codes),
     )
+
+
+def _read_dataset_rows_in_requested_order(dataset: h5py.Dataset, rows: np.ndarray) -> np.ndarray:
+    """Read arbitrary HDF5 rows while preserving requested order.
+
+    h5py fancy indexing requires increasing indices. BM25 hit rows are ranked by
+    score, so sort only for the disk read and restore the score order after.
+    """
+    rows = np.asarray(rows, dtype=np.int64)
+    if rows.size == 0:
+        return np.asarray([], dtype=dataset.dtype)
+    order = np.argsort(rows, kind="stable")
+    sorted_rows = rows[order]
+    sorted_values = dataset[sorted_rows]
+    restored = np.empty_like(sorted_values)
+    restored[order] = sorted_values
+    return restored
+
+
+def _write_inverted_index(
+    sidecar: h5py.File,
+    *,
+    postings: dict[str, list[tuple[int, int]]],
+    document_count: int,
+    lengths: np.ndarray,
+) -> tuple[int, int]:
+    """Write token postings arrays for HDF5-backed BM25 retrieval."""
+    index = sidecar.create_group("index")
+    index.attrs["k1"] = 1.5
+    index.attrs["b"] = 0.75
+    index.attrs["document_count"] = int(document_count)
+    index.attrs["average_document_length"] = float(np.mean(lengths)) if len(lengths) else 0.0
+    index.attrs["tokenizer"] = "snomed_post_processing.sanitization.semantic_text._tokenize"
+
+    vocab_tokens = sorted(postings)
+    starts = np.empty(len(vocab_tokens), dtype=np.int64)
+    posting_lengths = np.empty(len(vocab_tokens), dtype=np.int64)
+    total_postings = sum(len(postings[token]) for token in vocab_tokens)
+    term_rows = np.empty(total_postings, dtype=np.int64)
+    token_counts = np.empty(total_postings, dtype=np.int32)
+
+    cursor = 0
+    for token_idx, token in enumerate(vocab_tokens):
+        token_postings = sorted(postings[token], key=lambda item: item[0])
+        starts[token_idx] = cursor
+        posting_lengths[token_idx] = len(token_postings)
+        end = cursor + len(token_postings)
+        if token_postings:
+            rows, counts = zip(*token_postings)
+            term_rows[cursor:end] = np.asarray(rows, dtype=np.int64)
+            token_counts[cursor:end] = np.asarray(counts, dtype=np.int32)
+        cursor = end
+
+    vocab_group = index.create_group("vocab")
+    vocab_group.create_dataset("token", data=np.asarray(vocab_tokens, dtype=object), dtype=_STRING_DTYPE)
+    vocab_group.create_dataset("postings_start", data=starts, compression="gzip", compression_opts=4, shuffle=True)
+    vocab_group.create_dataset("postings_length", data=posting_lengths, compression="gzip", compression_opts=4, shuffle=True)
+
+    postings_group = index.create_group("postings")
+    postings_group.create_dataset("term_row", data=term_rows, compression="gzip", compression_opts=4, shuffle=True)
+    postings_group.create_dataset("token_count", data=token_counts, compression="gzip", compression_opts=4, shuffle=True)
+    return len(vocab_tokens), int(total_postings)
+
+
+def _require_supported_schema(sidecar: h5py.File) -> None:
+    if _attr(sidecar["schema"], "name") != SCHEMA_NAME:
+        raise ValueError(f"Unsupported SNOGIT sidecar schema: {_attr(sidecar['schema'], 'name')!r}")
+    if _attr(sidecar["schema"], "version") != SCHEMA_VERSION:
+        raise ValueError(f"Unsupported SNOGIT sidecar schema version: {_attr(sidecar['schema'], 'version')!r}; rebuild the processed SNOGIT cache.")
 
 
 def _write_metadata(

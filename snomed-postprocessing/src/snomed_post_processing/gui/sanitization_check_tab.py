@@ -25,6 +25,7 @@ from snomed_post_processing.sanitization import (
 )
 
 from .downloads import download_json_report, download_md_report
+from .file_sources import list_server_files, render_file_source_selector
 from .files import save_uploaded_file
 from .sidebar import GuiInputs
 
@@ -70,11 +71,16 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
         )
 
     if not use_session_findings:
-        uploaded_findings_file = st.file_uploader(
+        findings_selection = render_file_source_selector(
             "CriticalFindings JSON",
-            type=["json"],
-            help="Upload a CriticalFindings JSON file, or run the policy check in this session first.",
+            key="critical_findings_json",
+            data_dir=inputs.data_dir,
+            suffixes=(".json",),
+            upload_types=("json",),
+            default_source="Upload",
+            help="Load a CriticalFindings JSON file, or run the policy check in this session first.",
         )
+        uploaded_findings_file = findings_selection.value
 
     st.subheader("Settings")
     fallback_col1, fallback_col2 = st.columns(2)
@@ -114,6 +120,8 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
     snogit_zip_file = None
     snogit_sidecar_path_text = ""
     snogit_zip_path_text = ""
+    selected_snogit_cache_from_dir = None
+    selected_snogit_zip_from_dir = None
     selected_snogit_members = []
 
     with st.popover("Advanced suggestion settings"):
@@ -192,32 +200,36 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
             ),
         )
         if use_snogit_bm25:
-            snogit_sidecar_file = st.file_uploader(
+            snogit_cache_selection = render_file_source_selector(
                 "Processed SNOGIT cache HDF5",
-                type=["hdf5", "h5"],
-                help="Optional. This can be a compatible processed SNOGIT cache from a previous run; if provided, it is used directly.",
-                key="snogit_sidecar_upload",
+                key="snogit_cache_hdf5",
+                data_dir=inputs.data_dir,
+                suffixes=(".hdf5", ".h5"),
+                upload_types=("hdf5", "h5"),
+                default_source="Data directory",
+                name_contains=("snogit",),
+                help="Use a compatible processed SNOGIT cache. This defaults to server-side data-directory selection for large cache files.",
             )
-            snogit_sidecar_path_text = st.text_input(
-                "Or processed SNOGIT cache path on this server",
-                value="",
-                help="Use this for large cache files that are already available on the machine running Streamlit.",
-                key="snogit_sidecar_path_text",
-            )
-            snogit_zip_file = st.file_uploader(
+            selected_snogit_cache_from_dir = snogit_cache_selection.path if snogit_cache_selection.source in {"data_dir", "path"} else None
+            snogit_sidecar_file = snogit_cache_selection.value if snogit_cache_selection.source == "upload" else None
+            snogit_sidecar_path_text = str(snogit_cache_selection.path) if snogit_cache_selection.source == "path" and snogit_cache_selection.path is not None else ""
+
+            snogit_zip_selection = render_file_source_selector(
                 "SNOGIT release ZIP for processed cache creation",
-                type=["zip"],
-                help="Use this to create a processed SNOGIT cache first. Suggestion generation will not start automatically after cache creation. Default Streamlit uploads are limited to 200 MB unless server.maxUploadSize is increased.",
-                key="snogit_zip_upload",
+                key="snogit_release_zip",
+                data_dir=inputs.data_dir,
+                suffixes=(".zip",),
+                upload_types=("zip",),
+                default_source="Data directory",
+                name_contains=("snogit",),
+                help="Use this only to create a processed SNOGIT cache first. Suggestion generation will not start automatically after cache creation.",
             )
-            snogit_zip_path_text = st.text_input(
-                "Or SNOGIT release ZIP path on this server",
-                value="",
-                help="Recommended for the multi-GB SNOGIT-release.zip. The path must be readable by the Streamlit server process.",
-                key="snogit_zip_path_text",
-            )
-            snogit_sidecar_path_candidate = pathlib.Path(snogit_sidecar_path_text).expanduser() if snogit_sidecar_path_text.strip() else None
-            snogit_zip_path_candidate = pathlib.Path(snogit_zip_path_text).expanduser() if snogit_zip_path_text.strip() else None
+            selected_snogit_zip_from_dir = snogit_zip_selection.path if snogit_zip_selection.source in {"data_dir", "path"} else None
+            snogit_zip_file = snogit_zip_selection.value if snogit_zip_selection.source == "upload" else None
+            snogit_zip_path_text = str(snogit_zip_selection.path) if snogit_zip_selection.source == "path" and snogit_zip_selection.path is not None else ""
+
+            snogit_sidecar_path_candidate = selected_snogit_cache_from_dir
+            snogit_zip_path_candidate = selected_snogit_zip_from_dir
             if (snogit_zip_file is not None or snogit_zip_path_candidate is not None) and snogit_sidecar_file is None and snogit_sidecar_path_candidate is None:
                 try:
                     snogit_zip_temp_path = snogit_zip_path_candidate or save_uploaded_file(snogit_zip_file, ".zip")
@@ -240,10 +252,31 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
         st.markdown("#### Association type meanings")
         st.text(format_association_type_descriptions())
 
+    selected_snogit_cache_path = None
+    invalid_snogit_cache_path = None
+    if use_snogit_bm25 and selected_snogit_cache_from_dir is not None:
+        if selected_snogit_cache_from_dir.exists():
+            selected_snogit_cache_path = selected_snogit_cache_from_dir
+        else:
+            invalid_snogit_cache_path = selected_snogit_cache_from_dir
+            st.error(f"Selected processed SNOGIT cache no longer exists: `{selected_snogit_cache_from_dir}`")
+    elif use_snogit_bm25 and snogit_sidecar_path_text.strip():
+        typed_cache_path = pathlib.Path(snogit_sidecar_path_text).expanduser()
+        if typed_cache_path.exists():
+            selected_snogit_cache_path = typed_cache_path
+        else:
+            invalid_snogit_cache_path = typed_cache_path
+            st.error(
+                "Processed SNOGIT cache path does not exist on the Streamlit server: "
+                f"`{typed_cache_path}`. Use an absolute path if the file is outside the app working directory."
+            )
+
     created_snogit_cache_path = st.session_state.get("created_snogit_cache_path")
     if use_snogit_bm25 and created_snogit_cache_path:
         created_path = pathlib.Path(created_snogit_cache_path)
         if created_path.exists():
+            if selected_snogit_cache_path is None:
+                selected_snogit_cache_path = created_path
             st.success(f"Processed SNOGIT cache ready: {created_path}")
             st.download_button(
                 label="Download processed SNOGIT cache HDF5",
@@ -253,15 +286,15 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                 key="download_created_snogit_cache",
             )
         else:
+            st.warning(
+                "Previously created processed SNOGIT cache is no longer available: "
+                f"`{created_path}`. Please create or select the cache again."
+            )
             st.session_state.pop("created_snogit_cache_path", None)
             created_snogit_cache_path = None
 
-    snogit_cache_available = (
-        snogit_sidecar_file is not None
-        or bool(snogit_sidecar_path_text.strip())
-        or bool(created_snogit_cache_path)
-    )
-    snogit_zip_available = (snogit_zip_file is not None or bool(snogit_zip_path_text.strip())) and bool(selected_snogit_members)
+    snogit_cache_available = snogit_sidecar_file is not None or selected_snogit_cache_path is not None
+    snogit_zip_available = (snogit_zip_file is not None or selected_snogit_zip_from_dir is not None or bool(snogit_zip_path_text.strip())) and bool(selected_snogit_members)
     snogit_ready = not use_snogit_bm25 or snogit_cache_available
     if use_snogit_bm25 and not snogit_cache_available:
         st.info(
@@ -280,18 +313,53 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                     if inputs.hdf5_temp_path is None:
                         inputs.hdf5_temp_path = save_uploaded_file(inputs.hdf5_file, ".hdf5")
                     st.write("Preparing SNOGIT ZIP input...")
-                    snogit_zip_path = pathlib.Path(snogit_zip_path_text).expanduser() if snogit_zip_path_text.strip() else save_uploaded_file(snogit_zip_file, ".zip")
+                    if selected_snogit_zip_from_dir is not None:
+                        snogit_zip_path = selected_snogit_zip_from_dir
+                    elif snogit_zip_path_text.strip():
+                        snogit_zip_path = pathlib.Path(snogit_zip_path_text).expanduser()
+                    else:
+                        snogit_zip_path = save_uploaded_file(snogit_zip_file, ".zip")
                     output_dir_for_sidecar = pathlib.Path(
                         tempfile.mkdtemp(prefix="snomed_gui_snogit_cache_")
                     )
                     timestamp_for_sidecar = datetime.datetime.now().strftime('%d-%m-%Y_%H-%M')
                     snogit_sidecar_path = output_dir_for_sidecar / f"snogit_cache_{timestamp_for_sidecar}.hdf5"
                     st.write("Parsing/filtering selected SNOGIT member(s) and writing cache...")
+                    cache_progress = st.progress(0.0, text="Starting processed SNOGIT cache creation...")
+
+                    def update_cache_progress(update: dict[str, object]) -> None:
+                        phase = str(update.get("phase", "processing"))
+                        progress_value = float(update.get("progress", 0.0) or 0.0)
+                        progress_value = max(0.0, min(1.0, progress_value))
+                        rows_read = int(update.get("rows_read", 0) or 0)
+                        rows_written = int(update.get("rows_written", 0) or 0)
+                        member = update.get("member")
+                        if phase == "parsing":
+                            label = (
+                                f"Parsing {member or 'selected SNOGIT member(s)'} — "
+                                f"{progress_value:.1%} · {rows_read:,} row(s) read · "
+                                f"{rows_written:,} term row(s) written"
+                            )
+                        elif phase == "writing_index":
+                            label = (
+                                "Writing HDF5 inverted BM25 index — "
+                                f"{rows_written:,} term row(s)"
+                            )
+                        elif phase == "complete":
+                            label = (
+                                "Processed SNOGIT cache complete — "
+                                f"{rows_written:,} term row(s) written"
+                            )
+                        else:
+                            label = "Starting processed SNOGIT cache creation..."
+                        cache_progress.progress(progress_value, text=label)
+
                     build_result = build_snogit_sidecar(
                         hdf5_path=inputs.hdf5_temp_path,
                         snogit_zip_path=snogit_zip_path,
                         output_path=snogit_sidecar_path,
                         members=selected_snogit_members,
+                        progress_callback=update_cache_progress,
                     )
                     st.write(
                         "Processed SNOGIT cache built: "
@@ -303,6 +371,9 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                         expanded=False,
                     )
                 st.session_state["created_snogit_cache_path"] = str(snogit_sidecar_path)
+                selected_snogit_cache_path = snogit_sidecar_path
+                snogit_cache_available = True
+                snogit_ready = True
                 st.success("Processed SNOGIT cache created. You can download it or start suggestion generation now.")
                 st.download_button(
                     label="Download processed SNOGIT cache HDF5",
@@ -370,12 +441,14 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                     if snogit_sidecar_file is not None:
                         st.write("Using uploaded processed SNOGIT cache...")
                         snogit_sidecar_path = save_uploaded_file(snogit_sidecar_file, ".hdf5")
-                    elif snogit_sidecar_path_text.strip():
-                        st.write("Using processed SNOGIT cache from server path...")
-                        snogit_sidecar_path = pathlib.Path(snogit_sidecar_path_text).expanduser()
-                    elif st.session_state.get("created_snogit_cache_path"):
-                        st.write("Using processed SNOGIT cache created in this session...")
-                        snogit_sidecar_path = pathlib.Path(st.session_state["created_snogit_cache_path"])
+                    elif selected_snogit_cache_path is not None:
+                        st.write("Using selected processed SNOGIT cache...")
+                        snogit_sidecar_path = selected_snogit_cache_path
+                    if snogit_sidecar_path is not None and not pathlib.Path(snogit_sidecar_path).exists():
+                        raise FileNotFoundError(
+                            "Processed SNOGIT cache does not exist on the Streamlit server: "
+                            f"{snogit_sidecar_path}. Select an existing cache or create it again."
+                        )
                 if sanitize_semantic_bm25_fallback:
                     st.write("Running semantic BM25 fallback for unresolved findings...")
                     sanitization_progress.empty()

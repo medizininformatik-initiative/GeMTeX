@@ -46,12 +46,14 @@ from .semantic_bm25 import (
 )
 from .semantic_models import SemanticBm25Candidate, SemanticBm25Suggestion
 from .snogit_sidecar import (
+    SnogitBm25Hit,
     SnogitSidecarBuildResult,
     SnogitSidecarTerms,
     SnogitZipMember,
     build_snogit_sidecar,
     list_snogit_zip_members,
     read_snogit_sidecar_terms,
+    search_snogit_sidecar_bm25,
     validate_snogit_sidecar_compatibility,
 )
 
@@ -74,9 +76,11 @@ __all__ = [
     "SnogitZipMember",
     "SnogitSidecarTerms",
     "SnogitSidecarBuildResult",
+    "SnogitBm25Hit",
     "list_snogit_zip_members",
     "build_snogit_sidecar",
     "read_snogit_sidecar_terms",
+    "search_snogit_sidecar_bm25",
     "validate_snogit_sidecar_compatibility",
     "sanitization_decisions_payload",
     "sanitization_decisions_json_text",

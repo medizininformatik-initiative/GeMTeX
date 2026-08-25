@@ -11,6 +11,8 @@ import streamlit as st
 
 from snomed_post_processing.inception import get_project_zip
 
+from .file_sources import render_file_source_selector
+
 
 @dataclasses.dataclass
 class GuiInputs:
@@ -19,6 +21,7 @@ class GuiInputs:
     annotation_types_text: str
     ignore_overlap_types_text: str
     ignore_overlap_mode: str
+    data_dir: pathlib.Path
     target_view: str = "policy"
     release_blacklist_mode: str = "none"
     runtime_blacklist_file: Any = None
@@ -30,14 +33,44 @@ def render_sidebar() -> GuiInputs:
         st.header("Inputs")
         load_annotators = st.checkbox("Load annotators from ZIP", value=True)
         use_api = st.toggle("Use INCEpTION API", value=False)
+        st.header("Server-side files")
+        data_dir = pathlib.Path(
+            st.text_input(
+                "Data directory",
+                value=st.session_state.get("server_data_dir", "data"),
+                help="Directory on the Streamlit server used to list large HDF5/ZIP files without browser upload.",
+            )
+        ).expanduser()
+        st.session_state["server_data_dir"] = str(data_dir)
+        if data_dir.exists() and data_dir.is_dir():
+            st.caption(f"Using server data directory: `{data_dir.resolve()}`")
+        else:
+            st.warning(f"Server data directory not found: `{data_dir}`")
+
         if use_api:
             _render_inception_api_controls()
         else:
-            st.session_state["zip_file"] = st.file_uploader(
-                "INCEpTION project ZIP", type=["zip"]
+            project_selection = render_file_source_selector(
+                "INCEpTION project ZIP",
+                key="inception_project_zip",
+                data_dir=data_dir,
+                suffixes=(".zip",),
+                upload_types=("zip",),
+                default_source="Upload",
+                help="Project ZIPs can be large; use data-directory or server-path mode if browser upload exceeds Streamlit limits.",
             )
+            st.session_state["zip_file"] = project_selection.value
 
-        hdf5_file = st.file_uploader("SNOMED HDF5", type=["hdf5"])
+        hdf5_selection = render_file_source_selector(
+            "SNOMED HDF5",
+            key="snomed_hdf5",
+            data_dir=data_dir,
+            suffixes=(".hdf5", ".h5"),
+            upload_types=("hdf5", "h5"),
+            default_source="Upload",
+            help="Use upload by default, or select a large HDF5 already present in the server data directory.",
+        )
+        hdf5_file = hdf5_selection.value
 
         st.header("Target")
         target_view = _render_target_view_selector()
@@ -45,7 +78,7 @@ def render_sidebar() -> GuiInputs:
         runtime_blacklist_file = None
         if target_view == "release":
             release_blacklist_mode, runtime_blacklist_file = (
-                _render_release_blacklist_selector()
+                _render_release_blacklist_selector(data_dir)
             )
 
         with st.expander("Annotation layers", expanded=False):
@@ -76,6 +109,7 @@ def render_sidebar() -> GuiInputs:
         annotation_types_text=annotation_types_text,
         ignore_overlap_types_text=ignore_overlap_types_text,
         ignore_overlap_mode=ignore_overlap_mode,
+        data_dir=data_dir,
         target_view=target_view,
         release_blacklist_mode=release_blacklist_mode,
         runtime_blacklist_file=runtime_blacklist_file,
@@ -108,7 +142,7 @@ def _render_target_view_selector() -> str:
     return "policy"
 
 
-def _render_release_blacklist_selector() -> tuple[str, Any]:
+def _render_release_blacklist_selector(data_dir: pathlib.Path) -> tuple[str, Any]:
     blacklist_options = {
         "No blacklist": "Accept every active concept in the release.",
         "Embedded blacklist": (
@@ -132,14 +166,20 @@ def _render_release_blacklist_selector() -> tuple[str, Any]:
     if selected_blacklist == "Embedded blacklist":
         return "embedded", None
     if selected_blacklist == "Upload rules":
-        runtime_blacklist_file = st.file_uploader(
-            "Runtime blacklist rule file", type=["txt"]
+        runtime_blacklist_selection = render_file_source_selector(
+            "Runtime blacklist rule file",
+            key="runtime_blacklist_rule_file",
+            data_dir=data_dir,
+            suffixes=(".txt",),
+            upload_types=("txt",),
+            default_source="Upload",
+            help="Blacklist rule files are small by default, but server-side selection is available for consistency.",
         )
         st.caption(
             "Runtime blacklist calculation is planned; embedded HDF5 blacklist is "
             "the first supported release blacklist source."
         )
-        return "runtime", runtime_blacklist_file
+        return "runtime", runtime_blacklist_selection.value
     return "none", None
 
 
