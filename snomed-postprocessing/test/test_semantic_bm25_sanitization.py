@@ -411,6 +411,34 @@ class TestSemanticBm25Sanitization(unittest.TestCase):
         self.assertEqual(suggestion.candidates[0].source, "snogit")
         self.assertEqual(suggestion.candidates[0].matched_term, "Herzinfarkt")
 
+    def test_snogit_candidates_do_not_use_source_fsn_query_terms(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = pathlib.Path(tmpdir)
+            hdf5_path = tmpdir / "concepts.hdf5"
+            sidecar_path = tmpdir / "snogit-sidecar.hdf5"
+            zip_path = tmpdir / "SNOGIT-release.zip"
+            _write_compact_hdf5(hdf5_path, blacklist_indices=(3,))
+            with zipfile.ZipFile(zip_path, "w") as archive:
+                archive.writestr(
+                    "release/SNOGIT_20260712.dat",
+                    "100\tt1\tAlpha therapy procedure (procedure)\tHerzinfarkt\n",
+                )
+            build_snogit_sidecar(
+                hdf5_path=hdf5_path,
+                snogit_zip_path=zip_path,
+                output_path=sidecar_path,
+            )
+
+            suggestion = suggest_semantic_bm25(
+                _finding(code="999", covered_text="unrelated annotation text"),
+                hdf5_path,
+                min_score=0.1,
+                min_lexical_score=0.1,
+                snogit_sidecar_path=sidecar_path,
+            )
+
+        self.assertTrue(all(candidate.source != "snogit" for candidate in suggestion.candidates))
+
     def test_requires_compact_policy_views(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             hdf5_path = pathlib.Path(tmpdir) / "concepts.hdf5"

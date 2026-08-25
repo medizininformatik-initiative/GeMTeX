@@ -71,25 +71,21 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
 
     document_texts = _project_document_text_lookup(st.session_state.get("zip_file"))
     rows = _suggestions_to_review_rows(suggestions, document_texts)
-    actionable_rows = [row for row in rows if _row_has_actionable_replacement(row)]
-    non_actionable_rows = [row for row in rows if not _row_has_actionable_replacement(row)]
     _render_review_summary(rows)
-    _render_non_actionable_summary(non_actionable_rows)
 
     with st.popover("Suggestion metadata"):
         _render_suggestion_settings(st.session_state.get("sanitization_suggestions_metadata") or {})
 
     st.subheader("Review workspace")
-    reviewed_decisions = _review_rows_to_decisions(non_actionable_rows, non_actionable_rows, {})
-    if actionable_rows:
-        _render_manual_choice_bulk_actions(actionable_rows)
-        reviewed_decisions.extend(_render_document_review_sections(actionable_rows))
+    st.caption(
+        "For each finding, either apply a selected replacement or delete the matched annotation from the sanitized copy."
+    )
+    reviewed_decisions = []
+    if rows:
+        _render_manual_choice_bulk_actions([row for row in rows if _row_has_actionable_replacement(row)])
+        reviewed_decisions.extend(_render_document_review_sections(rows))
     else:
-        st.info(
-            "No actionable replacement suggestions are available. This can happen, "
-            "for example, when the findings are blacklist-only and blacklist BM25 "
-            "suggestions were not enabled."
-        )
+        st.info("No sanitization suggestions are available for review.")
     st.session_state["sanitization_review_decisions"] = reviewed_decisions
 
     decisions_metadata = _decisions_metadata(rows)
@@ -98,8 +94,13 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
     invalid_selected_rows = [
         decision for decision in reviewed_decisions if decision["apply"] and not decision["valid_choice"]
     ]
-    selected_count = sum(1 for decision in reviewed_decisions if decision["apply"] and decision["valid_choice"])
-    st.caption(f"Selected {selected_count} valid replacement(s) for the future sanitization run.")
+    replacement_count = sum(1 for decision in reviewed_decisions if decision.get("action") == "replace")
+    delete_count = sum(1 for decision in reviewed_decisions if decision.get("action") == "delete")
+    selected_count = replacement_count + delete_count
+    st.caption(
+        f"Selected {replacement_count} replacement(s) and {delete_count} deletion(s) "
+        "for the future sanitization run."
+    )
     if invalid_selected_rows:
         st.warning(
             "Some selected rows use a replacement choice that is not valid for that row. "
@@ -217,8 +218,8 @@ def _render_run_readiness(
 ) -> None:
     if project_loaded and selected_count > 0 and not has_invalid_selected_rows:
         st.success(
-            f"Ready to run: project ZIP loaded and {selected_count} valid "
-            "replacement(s) selected."
+            f"Ready to run: project ZIP loaded and {selected_count} reviewed "
+            "action(s) selected."
         )
         return
 
@@ -228,9 +229,9 @@ def _render_run_readiness(
     else:
         messages.append("❌ Upload or load an INCEpTION project ZIP in the sidebar")
     if selected_count > 0:
-        messages.append(f"✅ {selected_count} valid replacement(s) selected")
+        messages.append(f"✅ {selected_count} reviewed action(s) selected")
     else:
-        messages.append("❌ Select at least one valid replacement")
+        messages.append("❌ Select at least one replacement or deletion action")
     if has_invalid_selected_rows:
         messages.append("⚠️ Some selected rows have invalid replacement choices")
     else:
@@ -473,7 +474,7 @@ def _render_document_review_sections(rows: list[dict[str, Any]]) -> list[dict[st
                 decisions.extend(_render_manual_choice_cards(manual_rows, document))
 
             if automatic_rows:
-                st.markdown("#### Automatic suggestions")
+                st.markdown("#### Automatic/no-replacement suggestions")
                 review_df = pd.DataFrame(automatic_rows).drop(
                     columns=["Document", "_offset", "_layer", "_status_raw"],
                     errors="ignore",
@@ -499,8 +500,12 @@ def _render_document_review_sections(rows: list[dict[str, Any]]) -> list[dict[st
                     args=(document,),
                     column_config={
                         "Apply": st.column_config.CheckboxColumn(
-                            "Apply",
-                            help="Toggle whether this suggestion should be applied in the sanitization run.",
+                            "Apply replacement",
+                            help="Toggle whether this replacement should be applied in the sanitization run.",
+                        ),
+                        "Delete annotation": st.column_config.CheckboxColumn(
+                            "Delete annotation",
+                            help="Remove this matched annotation from the sanitized project copy instead of replacing its concept ID.",
                         ),
                         "Policy issue": st.column_config.TextColumn(
                             "Policy issue",
@@ -540,6 +545,7 @@ def _render_document_review_sections(rows: list[dict[str, Any]]) -> list[dict[st
 
 def _render_document_metrics(document_rows: list[dict[str, Any]]) -> None:
     selected = sum(1 for row in document_rows if _row_apply_selected(row))
+    deletes = sum(1 for row in document_rows if _row_delete_selected(row))
     manual_total = sum(1 for row in document_rows if row.get("_needs_choice"))
     manual_selected = sum(
         1 for row in document_rows if row.get("_needs_choice") and _row_apply_selected(row)
@@ -553,8 +559,8 @@ def _render_document_metrics(document_rows: list[dict[str, Any]]) -> None:
         else "0 manual-review rows"
     )
     st.caption(
-        f"{selected} replacement(s) selected · {manual_text} · "
-        f"{no_replacement} without replacement"
+        f"{selected} replacement(s) selected · {deletes} deletion(s) selected · "
+        f"{manual_text} · {no_replacement} without replacement"
     )
 
 
@@ -626,7 +632,9 @@ def _save_manual_choice_form(document: str, row_numbers: list[int]) -> None:
         choice = st.session_state.get(_choice_key(row_number), NO_REPLACEMENT_LABEL)
         previous_choice_key = _previous_choice_key(row_number)
         previous_choice = st.session_state.get(previous_choice_key)
-        if choice == NO_REPLACEMENT_LABEL:
+        if st.session_state.get(_manual_delete_key(row_number)):
+            st.session_state[_manual_apply_key(row_number)] = False
+        elif choice == NO_REPLACEMENT_LABEL:
             st.session_state[_manual_apply_key(row_number)] = False
         elif previous_choice is not None and previous_choice != choice:
             st.session_state[_manual_apply_key(row_number)] = True
@@ -673,15 +681,21 @@ def _render_manual_choice_cards(rows: list[dict[str, Any]], document: str) -> li
                 )
                 if choice_hint := choice_hints.get(choice):
                     st.caption(f"Selected candidate rationale: {choice_hint}")
+                delete_annotation = st.checkbox(
+                    "Delete this annotation",
+                    value=bool(row.get("Delete annotation")),
+                    key=_manual_delete_key(row_number),
+                    help="Remove this annotation from the sanitized project copy instead of replacing its concept ID.",
+                )
                 apply = st.checkbox(
                     "Apply this replacement",
-                    value=bool(row.get("Apply")) and choice != NO_REPLACEMENT_LABEL,
+                    value=bool(row.get("Apply")) and choice != NO_REPLACEMENT_LABEL and not delete_annotation,
                     key=_manual_apply_key(row_number),
-                    disabled=choice == NO_REPLACEMENT_LABEL,
+                    disabled=choice == NO_REPLACEMENT_LABEL or delete_annotation,
                 )
             decisions.extend(
                 _review_rows_to_decisions(
-                    [{**row, "Apply": apply, "Suggested replacement": choice}],
+                    [{**row, "Apply": apply, "Delete annotation": delete_annotation, "Suggested replacement": choice}],
                     [row],
                     {row_number: choice},
                 )
@@ -716,6 +730,7 @@ def _document_review_title(
     document: str, document_rows: list[dict[str, Any]], reviewed: bool
 ) -> str:
     selected = sum(1 for row in document_rows if _row_apply_selected(row))
+    deletes = sum(1 for row in document_rows if _row_delete_selected(row))
     manual_total = sum(1 for row in document_rows if row.get("_needs_choice"))
     manual_selected = sum(
         1 for row in document_rows if row.get("_needs_choice") and _row_apply_selected(row)
@@ -724,7 +739,7 @@ def _document_review_title(
         1 for row in document_rows if row.get("Suggested replacement") == NO_REPLACEMENT_LABEL
     )
     prefix = "✅" if reviewed else "📝"
-    details = [f"{len(document_rows)} finding(s)", f"{selected} replacement(s) selected"]
+    details = [f"{len(document_rows)} finding(s)", f"{selected} replacement(s) selected", f"{deletes} deletion(s) selected"]
     if manual_total:
         if manual_selected == manual_total:
             details.append("all manual choices selected")
@@ -747,6 +762,8 @@ def _row_has_actionable_replacement(row: dict[str, Any]) -> bool:
 
 
 def _row_apply_selected(row: dict[str, Any]) -> bool:
+    if _row_delete_selected(row):
+        return False
     if not row.get("_needs_choice"):
         return bool(row.get("Apply"))
     row_number = int(row["#"])
@@ -755,6 +772,13 @@ def _row_apply_selected(row: dict[str, Any]) -> bool:
         bool(st.session_state.get(_manual_apply_key(row_number), row.get("Apply")))
         and choice != NO_REPLACEMENT_LABEL
     )
+
+
+def _row_delete_selected(row: dict[str, Any]) -> bool:
+    row_number = int(row["#"])
+    if row.get("_needs_choice"):
+        return bool(st.session_state.get(_manual_delete_key(row_number), row.get("Delete annotation")))
+    return bool(row.get("Delete annotation"))
 
 
 def _render_non_actionable_summary(rows: list[dict[str, Any]]) -> None:
@@ -832,6 +856,7 @@ def _restore_decision_state(decisions: list[dict[str, Any]], metadata: dict[str,
         if replacement_choice:
             st.session_state[_choice_key(row_number)] = replacement_choice
         st.session_state[_manual_apply_key(row_number)] = bool(decision.get("apply"))
+        st.session_state[_manual_delete_key(row_number)] = bool(decision.get("delete_annotation"))
     reviewed_documents = metadata.get("reviewed_documents", []) if isinstance(metadata, dict) else []
     for document in reviewed_documents:
         st.session_state[_document_reviewed_key(str(document))] = True
@@ -876,7 +901,8 @@ def _suggestions_to_review_rows(
         rows.append(
             {
                 "#": row_number,
-                "Apply": bool(restored_decision.get("apply", is_automatic_replacement and not needs_choice)),
+                "Apply": bool(restored_decision.get("apply", is_automatic_replacement and not needs_choice)) and not bool(restored_decision.get("delete_annotation")),
+                "Delete annotation": bool(restored_decision.get("delete_annotation")),
                 "Document": suggestion.finding.document,
                 "Annotator": suggestion.finding.annotator,
                 "Source code": suggestion.finding.code or "",
@@ -913,10 +939,15 @@ def _review_rows_to_decisions(
         choice = ambiguous_choices.get(row_number) or edited.get("Suggested replacement") or NO_REPLACEMENT_LABEL
         valid_choices = tuple(original.get("_valid_choices", ()))
         valid_choice = choice in valid_choices
+        delete_annotation = bool(edited.get("Delete annotation"))
+        apply_replacement = bool(edited.get("Apply")) and not delete_annotation
+        action = "delete" if delete_annotation else ("replace" if apply_replacement and valid_choice else "none")
         decisions.append(
             {
                 "suggestion_index": row_number - 1,
-                "apply": bool(edited.get("Apply")),
+                "action": action,
+                "apply": apply_replacement,
+                "delete_annotation": delete_annotation,
                 "annotator": edited.get("Annotator", ""),
                 "document": original.get("Document", ""),
                 "source_code": edited.get("Source code", ""),
@@ -1089,6 +1120,10 @@ def _choice_key(row_number: int) -> str:
 
 def _manual_apply_key(row_number: int) -> str:
     return f"sanitization_manual_apply_{row_number}"
+
+
+def _manual_delete_key(row_number: int) -> str:
+    return f"sanitization_manual_delete_{row_number}"
 
 
 def _previous_choice_key(row_number: int) -> str:

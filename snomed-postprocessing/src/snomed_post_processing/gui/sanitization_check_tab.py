@@ -6,7 +6,9 @@ import datetime
 import pathlib
 import tempfile
 import time
+from typing import Any
 
+import pandas as pd
 import streamlit as st
 
 from snomed_post_processing.findings_io import read_critical_findings_json
@@ -83,174 +85,179 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
         uploaded_findings_file = findings_selection.value
 
     st.subheader("Settings")
-    fallback_col1, fallback_col2 = st.columns(2)
-    with fallback_col1:
-        activate_historical_ancestor_fallback = st.checkbox(
-            "Historical ancestor fallback",
-            value=False,
-            help=(
-                "For unresolved whitelist findings: try nearest active whitelisted "
-                "ancestor, then nearest active whitelisted ancestor reachable "
-                "through stored inactive is-a fallback edges."
-            ),
-        )
-    sanitize_blacklist_suggestions = False
-    with fallback_col2:
-        sanitize_semantic_bm25_fallback = st.checkbox(
-            "Semantic BM25 fallback",
-            value=False,
-            help="Suggest lexically similar active concepts for unresolved findings.",
-        )
-        if inputs.target_view == "policy" or inputs.release_blacklist_mode != "none":
-            sanitize_blacklist_suggestions = st.checkbox(
-                "Include blacklist findings in BM25 fallback",
+    st.caption("Change settings inside the form, then apply them. This avoids rerunning the app for every checkbox or threshold edit.")
+    with st.form("sanitization_suggestion_settings_form"):
+        fallback_col1, fallback_col2 = st.columns(2)
+        with fallback_col1:
+            activate_historical_ancestor_fallback = st.checkbox(
+                "Historical ancestor fallback",
+                value=False,
+                help=(
+                    "For unresolved whitelist findings: try nearest active whitelisted "
+                    "ancestor, then nearest active whitelisted ancestor reachable "
+                    "through stored inactive is-a fallback edges."
+                ),
+            )
+        sanitize_blacklist_suggestions = False
+        with fallback_col2:
+            sanitize_semantic_bm25_fallback = st.checkbox(
+                "Semantic BM25 fallback",
+                value=False,
+                help="Suggest lexically similar active concepts for unresolved findings.",
+            )
+            if inputs.target_view == "policy" or inputs.release_blacklist_mode != "none":
+                sanitize_blacklist_suggestions = st.checkbox(
+                    "Include blacklist findings in BM25 fallback",
+                    value=False,
+                    disabled=not sanitize_semantic_bm25_fallback,
+                    help=(
+                        "This only affects semantic BM25 fallback candidates. Enable "
+                        "'Semantic BM25 fallback' first. Historical ancestor fallback "
+                        "does not resolve blacklist findings."
+                    ),
+                )
+                if not sanitize_semantic_bm25_fallback:
+                    st.caption("Enable Semantic BM25 fallback to include blacklist findings.")
+
+        use_snogit_bm25 = False
+        snogit_sidecar_file = None
+        snogit_zip_file = None
+        snogit_sidecar_path_text = ""
+        snogit_zip_path_text = ""
+        selected_snogit_cache_from_dir = None
+        selected_snogit_zip_from_dir = None
+        selected_snogit_members = []
+
+        with st.expander("Advanced suggestion settings"):
+            st.markdown("#### Historical associations")
+            sanitization_association_types = st.multiselect(
+                "Allowed historical association types",
+                options=list(SUPPORTED_ASSOCIATION_TYPES),
+                default=list(DEFAULT_ALLOWED_ASSOCIATION_TYPES),
+                format_func=_format_association_type_option,
+                help=(
+                    "Choose which RF2 historical association types may propose "
+                    "replacement candidates. Short explanations are shown in the "
+                    "dropdown labels and listed below."
+                ),
+            )
+            st.caption("Association type explanations are listed below.")
+            st.markdown("#### Ancestor fallback limits")
+            use_absolute_ancestor_limit = st.checkbox(
+                "Use absolute ancestor distance limit",
+                value=True,
+                disabled=not activate_historical_ancestor_fallback,
+            )
+            ancestor_max_distance = st.number_input(
+                "Maximum absolute ancestor distance",
+                min_value=1,
+                max_value=20,
+                value=3,
+                step=1,
+                disabled=(
+                    not activate_historical_ancestor_fallback
+                    or not use_absolute_ancestor_limit
+                ),
+            )
+            use_relative_ancestor_limit = st.checkbox(
+                "Use relative ancestor distance limit",
+                value=True,
+                disabled=not activate_historical_ancestor_fallback,
+            )
+            ancestor_max_relative_distance = st.number_input(
+                "Maximum relative ancestor distance",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.35,
+                step=0.05,
+                disabled=(
+                    not activate_historical_ancestor_fallback
+                    or not use_relative_ancestor_limit
+                ),
+                help=(
+                    "Distance divided by source depth-to-root. Lower values reject "
+                    "broader jumps in shallow hierarchies."
+                ),
+            )
+            st.markdown("#### BM25 thresholds")
+            sanitize_bm25_min_score = st.number_input(
+                "Minimum BM25 score", min_value=0.0, value=1.5, step=0.1
+            )
+            sanitize_bm25_min_lexical_score = st.number_input(
+                "Minimum lexical overlap ratio",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.15,
+                step=0.05,
+            )
+            sanitize_bm25_max_candidates = st.number_input(
+                "Maximum retained candidates", min_value=1, max_value=50, value=5, step=1
+            )
+            st.markdown("#### Optional SNOGIT/interface terms")
+            use_snogit_bm25 = st.checkbox(
+                "Use SNOGIT/interface terms for BM25 candidates",
                 value=False,
                 disabled=not sanitize_semantic_bm25_fallback,
                 help=(
-                    "This only affects semantic BM25 fallback candidates. Enable "
-                    "'Semantic BM25 fallback' first. Historical ancestor fallback "
-                    "does not resolve blacklist findings."
+                    "Use a processed SNOGIT cache if available. This can be a cache downloaded/saved from a previous run. "
+                    "If no cache is available, create one from SNOGIT-release.zip first; suggestion generation starts only after you explicitly run it with a cache."
                 ),
             )
-            if not sanitize_semantic_bm25_fallback:
-                st.caption("Enable Semantic BM25 fallback to include blacklist findings.")
+            if use_snogit_bm25:
+                snogit_cache_selection = render_file_source_selector(
+                    "Processed SNOGIT cache HDF5",
+                    key="snogit_cache_hdf5",
+                    data_dir=inputs.data_dir,
+                    suffixes=(".hdf5", ".h5"),
+                    upload_types=("hdf5", "h5"),
+                    default_source="Data directory",
+                    name_contains=("snogit",),
+                    help="Use a compatible processed SNOGIT cache. This defaults to server-side data-directory selection for large cache files.",
+                )
+                selected_snogit_cache_from_dir = snogit_cache_selection.path if snogit_cache_selection.source in {"data_dir", "path"} else None
+                snogit_sidecar_file = snogit_cache_selection.value if snogit_cache_selection.source == "upload" else None
+                snogit_sidecar_path_text = str(snogit_cache_selection.path) if snogit_cache_selection.source == "path" and snogit_cache_selection.path is not None else ""
 
-    use_snogit_bm25 = False
-    snogit_sidecar_file = None
-    snogit_zip_file = None
-    snogit_sidecar_path_text = ""
-    snogit_zip_path_text = ""
-    selected_snogit_cache_from_dir = None
-    selected_snogit_zip_from_dir = None
-    selected_snogit_members = []
+                snogit_zip_selection = render_file_source_selector(
+                    "SNOGIT release ZIP for processed cache creation",
+                    key="snogit_release_zip",
+                    data_dir=inputs.data_dir,
+                    suffixes=(".zip",),
+                    upload_types=("zip",),
+                    default_source="Data directory",
+                    name_contains=("snogit",),
+                    help="Use this only to create a processed SNOGIT cache first. Suggestion generation will not start automatically after cache creation.",
+                )
+                selected_snogit_zip_from_dir = snogit_zip_selection.path if snogit_zip_selection.source in {"data_dir", "path"} else None
+                snogit_zip_file = snogit_zip_selection.value if snogit_zip_selection.source == "upload" else None
+                snogit_zip_path_text = str(snogit_zip_selection.path) if snogit_zip_selection.source == "path" and snogit_zip_selection.path is not None else ""
 
-    with st.popover("Advanced suggestion settings"):
-        st.markdown("#### Historical associations")
-        sanitization_association_types = st.multiselect(
-            "Allowed historical association types",
-            options=list(SUPPORTED_ASSOCIATION_TYPES),
-            default=list(DEFAULT_ALLOWED_ASSOCIATION_TYPES),
-            format_func=_format_association_type_option,
-            help=(
-                "Choose which RF2 historical association types may propose "
-                "replacement candidates. Short explanations are shown in the "
-                "dropdown labels and listed below."
-            ),
-        )
-        st.caption("Association type explanations are listed below.")
-        st.markdown("#### Ancestor fallback limits")
-        use_absolute_ancestor_limit = st.checkbox(
-            "Use absolute ancestor distance limit",
-            value=True,
-            disabled=not activate_historical_ancestor_fallback,
-        )
-        ancestor_max_distance = st.number_input(
-            "Maximum absolute ancestor distance",
-            min_value=1,
-            max_value=20,
-            value=3,
-            step=1,
-            disabled=(
-                not activate_historical_ancestor_fallback
-                or not use_absolute_ancestor_limit
-            ),
-        )
-        use_relative_ancestor_limit = st.checkbox(
-            "Use relative ancestor distance limit",
-            value=True,
-            disabled=not activate_historical_ancestor_fallback,
-        )
-        ancestor_max_relative_distance = st.number_input(
-            "Maximum relative ancestor distance",
-            min_value=0.0,
-            max_value=1.0,
-            value=0.35,
-            step=0.05,
-            disabled=(
-                not activate_historical_ancestor_fallback
-                or not use_relative_ancestor_limit
-            ),
-            help=(
-                "Distance divided by source depth-to-root. Lower values reject "
-                "broader jumps in shallow hierarchies."
-            ),
-        )
-        st.markdown("#### BM25 thresholds")
-        sanitize_bm25_min_score = st.number_input(
-            "Minimum BM25 score", min_value=0.0, value=1.5, step=0.1
-        )
-        sanitize_bm25_min_lexical_score = st.number_input(
-            "Minimum lexical overlap ratio",
-            min_value=0.0,
-            max_value=1.0,
-            value=0.15,
-            step=0.05,
-        )
-        sanitize_bm25_max_candidates = st.number_input(
-            "Maximum retained candidates", min_value=1, max_value=50, value=5, step=1
-        )
-        st.markdown("#### Optional SNOGIT/interface terms")
-        use_snogit_bm25 = st.checkbox(
-            "Use SNOGIT/interface terms for BM25 candidates",
-            value=False,
-            disabled=not sanitize_semantic_bm25_fallback,
-            help=(
-                "Use a processed SNOGIT cache if available. This can be a cache downloaded/saved from a previous run. "
-                "If no cache is available, create one from SNOGIT-release.zip first; suggestion generation starts only after you explicitly run it with a cache."
-            ),
-        )
-        if use_snogit_bm25:
-            snogit_cache_selection = render_file_source_selector(
-                "Processed SNOGIT cache HDF5",
-                key="snogit_cache_hdf5",
-                data_dir=inputs.data_dir,
-                suffixes=(".hdf5", ".h5"),
-                upload_types=("hdf5", "h5"),
-                default_source="Data directory",
-                name_contains=("snogit",),
-                help="Use a compatible processed SNOGIT cache. This defaults to server-side data-directory selection for large cache files.",
-            )
-            selected_snogit_cache_from_dir = snogit_cache_selection.path if snogit_cache_selection.source in {"data_dir", "path"} else None
-            snogit_sidecar_file = snogit_cache_selection.value if snogit_cache_selection.source == "upload" else None
-            snogit_sidecar_path_text = str(snogit_cache_selection.path) if snogit_cache_selection.source == "path" and snogit_cache_selection.path is not None else ""
-
-            snogit_zip_selection = render_file_source_selector(
-                "SNOGIT release ZIP for processed cache creation",
-                key="snogit_release_zip",
-                data_dir=inputs.data_dir,
-                suffixes=(".zip",),
-                upload_types=("zip",),
-                default_source="Data directory",
-                name_contains=("snogit",),
-                help="Use this only to create a processed SNOGIT cache first. Suggestion generation will not start automatically after cache creation.",
-            )
-            selected_snogit_zip_from_dir = snogit_zip_selection.path if snogit_zip_selection.source in {"data_dir", "path"} else None
-            snogit_zip_file = snogit_zip_selection.value if snogit_zip_selection.source == "upload" else None
-            snogit_zip_path_text = str(snogit_zip_selection.path) if snogit_zip_selection.source == "path" and snogit_zip_selection.path is not None else ""
-
-            snogit_sidecar_path_candidate = selected_snogit_cache_from_dir
-            snogit_zip_path_candidate = selected_snogit_zip_from_dir
-            if (snogit_zip_file is not None or snogit_zip_path_candidate is not None) and snogit_sidecar_file is None and snogit_sidecar_path_candidate is None:
-                try:
-                    snogit_zip_temp_path = snogit_zip_path_candidate or save_uploaded_file(snogit_zip_file, ".zip")
-                    snogit_members = list_snogit_zip_members(snogit_zip_temp_path)
-                    default_members = [member.name for member in snogit_members if member.recommended_default]
-                    selected_snogit_members = st.multiselect(
-                        "SNOGIT ZIP members",
-                        options=[member.name for member in snogit_members],
-                        default=default_members,
-                        help=(
-                            "Default is the newest general SNOGIT_*.dat member only. "
-                            "ELGA and Latin files can be selected explicitly."
-                        ),
-                    )
-                    if default_members:
-                        st.caption(f"Default general SNOGIT member: {default_members[0]}")
-                except Exception as exc:
-                    st.warning(f"Could not inspect SNOGIT ZIP members: {exc}")
-        st.divider()
-        st.markdown("#### Association type meanings")
-        st.text(format_association_type_descriptions())
+                snogit_sidecar_path_candidate = selected_snogit_cache_from_dir
+                snogit_zip_path_candidate = selected_snogit_zip_from_dir
+                if (snogit_zip_file is not None or snogit_zip_path_candidate is not None) and snogit_sidecar_file is None and snogit_sidecar_path_candidate is None:
+                    try:
+                        snogit_zip_temp_path = snogit_zip_path_candidate or save_uploaded_file(snogit_zip_file, ".zip")
+                        snogit_members = list_snogit_zip_members(snogit_zip_temp_path)
+                        default_members = [member.name for member in snogit_members if member.recommended_default]
+                        selected_snogit_members = st.multiselect(
+                            "SNOGIT ZIP members",
+                            options=[member.name for member in snogit_members],
+                            default=default_members,
+                            help=(
+                                "Default is the newest general SNOGIT_*.dat member only. "
+                                "ELGA and Latin files can be selected explicitly."
+                            ),
+                        )
+                        if default_members:
+                            st.caption(f"Default general SNOGIT member: {default_members[0]}")
+                    except Exception as exc:
+                        st.warning(f"Could not inspect SNOGIT ZIP members: {exc}")
+            st.divider()
+            st.markdown("#### Association type meanings")
+            st.text(format_association_type_descriptions())
+        settings_applied = st.form_submit_button("Apply suggestion settings")
+    if settings_applied:
+        st.success("Suggestion settings applied.")
 
     selected_snogit_cache_path = None
     invalid_snogit_cache_path = None
@@ -455,6 +462,36 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                     sanitization_progress = st.progress(
                         0.65, text="Running semantic BM25 fallback suggestions..."
                     )
+
+                    def update_bm25_progress(update: dict[str, object]) -> None:
+                        processed = int(update.get("processed", 0) or 0)
+                        total = int(update.get("total", 0) or 0)
+                        attempted = int(update.get("attempted", 0) or 0)
+                        replaced = int(update.get("replaced", 0) or 0)
+                        ambiguous = int(update.get("ambiguous", 0) or 0)
+                        progress_value = float(update.get("progress", 0.0) or 0.0)
+                        progress_value = max(0.0, min(1.0, progress_value))
+                        ui_progress = 0.65 + 0.20 * progress_value
+                        phase = str(update.get("phase", "processed"))
+                        if phase == "scoring":
+                            document = update.get("current_document") or "document"
+                            code = update.get("current_code") or "code"
+                            label = (
+                                f"BM25 scoring {attempted:,} actionable finding(s) — "
+                                f"{processed:,}/{total:,} processed · current: {document} / {code}"
+                            )
+                        elif phase == "complete":
+                            label = (
+                                f"BM25 fallback complete — {processed:,}/{total:,} processed · "
+                                f"{replaced:,} replacement(s), {ambiguous:,} ambiguous"
+                            )
+                        else:
+                            label = (
+                                f"BM25 fallback — {processed:,}/{total:,} processed · "
+                                f"{attempted:,} scored · {replaced:,} replacement(s), {ambiguous:,} ambiguous"
+                            )
+                        sanitization_progress.progress(ui_progress, text=label)
+
                     suggestions = apply_semantic_bm25_fallback(
                         suggestions,
                         inputs.hdf5_temp_path,
@@ -463,6 +500,7 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                         max_candidates=int(sanitize_bm25_max_candidates),
                         allow_blacklist_findings=sanitize_blacklist_suggestions,
                         snogit_sidecar_path=snogit_sidecar_path,
+                        progress_callback=update_bm25_progress,
                     )
                 st.write("Writing Markdown and JSON suggestion reports...")
                 sanitization_progress.empty()
@@ -533,13 +571,16 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
 
             download_json_report(sanitization_json_text, output_sanitization_json, "sanitization suggestion")
 
+            st.subheader("Suggestion overview")
+            _render_suggestion_overview(suggestions)
+
             st.subheader("Reports")
             download_md_report(
                 sanitization_report_text,
                 output_sanitization_md,
                 "sanitization suggestions markdown",
             )
-            with st.expander("Preview sanitization suggestion report", expanded=True):
+            with st.expander("Preview Markdown sanitization suggestion report", expanded=False):
                 st.markdown(sanitization_report_text)
         except Exception as exc:
             st.error(f"Sanitization suggestion generation failed: {exc}")

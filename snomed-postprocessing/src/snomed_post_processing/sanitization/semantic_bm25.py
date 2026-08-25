@@ -10,7 +10,7 @@ from __future__ import annotations
 import dataclasses
 import math
 import pathlib
-from typing import Optional, Sequence, Union
+from typing import Callable, Optional, Sequence, Union
 
 import h5py
 
@@ -84,14 +84,15 @@ class SemanticBm25Resolver:
 
         query = _query_text(finding, source_fsn)
         query_tokens = _tokenize(query)
-        if not query_tokens:
+        snogit_query_tokens = _tokenize(finding.covered_text)
+        if not query_tokens and not snogit_query_tokens:
             return SemanticBm25Suggestion(
                 finding=finding,
                 status=SanitizationStatus.NO_REPLACEMENT,
                 reason="finding has no searchable text",
             )
 
-        scored = self._score(query_tokens, source_code=finding.code)
+        scored = self._score(query_tokens, source_code=finding.code, snogit_query_tokens=snogit_query_tokens)
         candidates = tuple(scored[: self.max_candidates])
         if not candidates:
             return SemanticBm25Suggestion(
@@ -187,9 +188,17 @@ class SemanticBm25Resolver:
                 self.document_source_members.append(None)
         self.bm25_index = BM25Index(self.documents, k1=self.k1, b=self.b)
 
-    def _score(self, query_tokens: Sequence[str], source_code: Optional[str]) -> list[SemanticBm25Candidate]:
+    def _score(
+        self,
+        query_tokens: Sequence[str],
+        source_code: Optional[str],
+        *,
+        snogit_query_tokens: Sequence[str] = (),
+    ) -> list[SemanticBm25Candidate]:
         query_terms = list(dict.fromkeys(query_tokens))
         query_set = set(query_tokens)
+        snogit_query_terms = list(dict.fromkeys(snogit_query_tokens))
+        snogit_query_set = set(snogit_query_tokens)
         source_tag = _semantic_tag(self.fsn_by_code(source_code)) if source_code else None
         best_by_code: dict[str, SemanticBm25Candidate] = {}
         for hit in self.bm25_index.search(query_terms):
@@ -211,11 +220,11 @@ class SemanticBm25Resolver:
             previous = best_by_code.get(candidate.code)
             if previous is None or _candidate_rank_key(candidate) < _candidate_rank_key(previous):
                 best_by_code[candidate.code] = candidate
-        if self.snogit_sidecar_path is not None:
+        if self.snogit_sidecar_path is not None and snogit_query_terms:
             for hit in search_snogit_sidecar_bm25(
                 self.snogit_sidecar_path,
-                query_terms,
-                hdf5_path=self.hdf5_path,
+                snogit_query_terms,
+                hdf5_path=None,
                 strict=False,
                 k1=self.k1,
                 b=self.b,
@@ -225,8 +234,8 @@ class SemanticBm25Resolver:
                 candidate = self._candidate_from_hit(
                     concept_idx=concept_idx,
                     source_code=source_code,
-                    query_set=query_set,
-                    source_tag=source_tag,
+                    query_set=snogit_query_set,
+                    source_tag=None,
                     score=hit.score,
                     doc_tokens=_tokenize(hit.term),
                     source="snogit",
@@ -312,6 +321,7 @@ def apply_semantic_bm25_fallback(
     hdf5_path: Union[str, pathlib.Path],
     *,
     allow_blacklist_findings: bool = False,
+    progress_callback: Optional[Callable[[dict[str, object]], None]] = None,
     **kwargs,
 ) -> list:
     """Replace unresolved whitelist suggestions with BM25 replacements when possible.
@@ -328,18 +338,53 @@ def apply_semantic_bm25_fallback(
         allow_blacklist_findings=allow_blacklist_findings,
         **kwargs,
     )
+
+    def report_progress(**payload: object) -> None:
+        if progress_callback is not None:
+            progress_callback(payload)
+
     enhanced = []
-    for suggestion in suggestions:
+    total = len(suggestions)
+    attempted = 0
+    replaced = 0
+    ambiguous = 0
+    report_progress(
+        phase="start",
+        processed=0,
+        total=total,
+        attempted=attempted,
+        replaced=replaced,
+        ambiguous=ambiguous,
+        progress=0.0,
+    )
+    for index, suggestion in enumerate(suggestions, start=1):
         finding = suggestion.finding
-        if (
+        actionable_for_bm25 = (
             getattr(suggestion, "replacement_code", None) is None
             and not finding.ignored
             and (
                 finding.list_type == "whitelist"
                 or (allow_blacklist_findings and finding.list_type == "blacklist")
             )
-        ):
+        )
+        if actionable_for_bm25:
+            attempted += 1
+            report_progress(
+                phase="scoring",
+                processed=index - 1,
+                total=total,
+                attempted=attempted,
+                replaced=replaced,
+                ambiguous=ambiguous,
+                current_document=getattr(finding, "document", None),
+                current_code=getattr(finding, "code", None),
+                progress=((index - 1) / total if total else 1.0),
+            )
             bm25_suggestion = resolver.suggest(finding)
+            if bm25_suggestion.replacement_code is not None:
+                replaced += 1
+            elif bm25_suggestion.status == SanitizationStatus.AMBIGUOUS_REPLACEMENT:
+                ambiguous += 1
             if (
                 bm25_suggestion.replacement_code is not None
                 or bm25_suggestion.status == SanitizationStatus.AMBIGUOUS_REPLACEMENT
@@ -350,6 +395,33 @@ def apply_semantic_bm25_fallback(
                         context_candidates=tuple(getattr(suggestion, "candidates", ())),
                     )
                 )
+                report_progress(
+                    phase="processed",
+                    processed=index,
+                    total=total,
+                    attempted=attempted,
+                    replaced=replaced,
+                    ambiguous=ambiguous,
+                    progress=(index / total if total else 1.0),
+                )
                 continue
         enhanced.append(suggestion)
+        report_progress(
+            phase="processed",
+            processed=index,
+            total=total,
+            attempted=attempted,
+            replaced=replaced,
+            ambiguous=ambiguous,
+            progress=(index / total if total else 1.0),
+        )
+    report_progress(
+        phase="complete",
+        processed=total,
+        total=total,
+        attempted=attempted,
+        replaced=replaced,
+        ambiguous=ambiguous,
+        progress=1.0,
+    )
     return enhanced

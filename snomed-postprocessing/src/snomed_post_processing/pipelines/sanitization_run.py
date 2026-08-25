@@ -151,6 +151,8 @@ def run_sanitization(
 
 
 def _is_applicable_decision(decision: dict[str, Any]) -> bool:
+    if bool(decision.get("delete_annotation")) or decision.get("action") == "delete":
+        return True
     return bool(decision.get("apply")) and bool(decision.get("valid_choice")) and bool(decision.get("replacement_code"))
 
 
@@ -165,12 +167,25 @@ def _apply_decisions_to_cas(cas, decisions: list[tuple[int, dict[str, Any]]], ma
     changed = 0
     for decision_idx, decision in decisions:
         for annotation in _matching_annotations(cas, decision, id_prefix=id_prefix):
-            current_id = annotation.get("id")
-            annotation.set("id", _replacement_id(current_id, str(decision["replacement_code"]), id_prefix=id_prefix))
+            if bool(decision.get("delete_annotation")) or decision.get("action") == "delete":
+                _remove_annotation(cas, annotation)
+            else:
+                current_id = annotation.get("id")
+                annotation.set("id", _replacement_id(current_id, str(decision["replacement_code"]), id_prefix=id_prefix))
             matched_indices.add(decision_idx)
             changed += 1
             break
     return changed
+
+
+def _remove_annotation(cas, annotation) -> None:
+    if hasattr(cas, "remove"):
+        cas.remove(annotation)
+        return
+    if hasattr(cas, "_current_view") and hasattr(cas._current_view, "remove_annotation"):
+        cas._current_view.remove_annotation(annotation)
+        return
+    raise SanitizationRunError("CAS implementation does not support annotation removal.")
 
 
 def _matching_annotations(cas, decision: dict[str, Any], *, id_prefix: str):
