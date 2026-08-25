@@ -109,15 +109,12 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                 sanitize_blacklist_suggestions = st.checkbox(
                     "Include blacklist findings in BM25 fallback",
                     value=False,
-                    disabled=not sanitize_semantic_bm25_fallback,
                     help=(
-                        "This only affects semantic BM25 fallback candidates. Enable "
-                        "'Semantic BM25 fallback' first. Historical ancestor fallback "
-                        "does not resolve blacklist findings."
+                        "This only affects semantic BM25 fallback candidates. If "
+                        "Semantic BM25 fallback is off, this setting is saved but has no effect. "
+                        "Historical ancestor fallback does not resolve blacklist findings."
                     ),
                 )
-                if not sanitize_semantic_bm25_fallback:
-                    st.caption("Enable Semantic BM25 fallback to include blacklist findings.")
 
         use_snogit_bm25 = False
         snogit_sidecar_file = None
@@ -146,7 +143,7 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
             use_absolute_ancestor_limit = st.checkbox(
                 "Use absolute ancestor distance limit",
                 value=True,
-                disabled=not activate_historical_ancestor_fallback,
+                help="Used only when Historical ancestor fallback is enabled.",
             )
             ancestor_max_distance = st.number_input(
                 "Maximum absolute ancestor distance",
@@ -154,15 +151,12 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                 max_value=20,
                 value=3,
                 step=1,
-                disabled=(
-                    not activate_historical_ancestor_fallback
-                    or not use_absolute_ancestor_limit
-                ),
+                help="Used only when Historical ancestor fallback and absolute distance limiting are enabled.",
             )
             use_relative_ancestor_limit = st.checkbox(
                 "Use relative ancestor distance limit",
                 value=True,
-                disabled=not activate_historical_ancestor_fallback,
+                help="Used only when Historical ancestor fallback is enabled.",
             )
             ancestor_max_relative_distance = st.number_input(
                 "Maximum relative ancestor distance",
@@ -170,13 +164,9 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                 max_value=1.0,
                 value=0.35,
                 step=0.05,
-                disabled=(
-                    not activate_historical_ancestor_fallback
-                    or not use_relative_ancestor_limit
-                ),
                 help=(
-                    "Distance divided by source depth-to-root. Lower values reject "
-                    "broader jumps in shallow hierarchies."
+                    "Used only when Historical ancestor fallback and relative distance limiting are enabled. "
+                    "Distance divided by source depth-to-root. Lower values reject broader jumps in shallow hierarchies."
                 ),
             )
             st.markdown("#### BM25 thresholds")
@@ -197,61 +187,59 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
             use_snogit_bm25 = st.checkbox(
                 "Use SNOGIT/interface terms for BM25 candidates",
                 value=False,
-                disabled=not sanitize_semantic_bm25_fallback,
                 help=(
-                    "Use a processed SNOGIT cache if available. This can be a cache downloaded/saved from a previous run. "
+                    "Use a processed SNOGIT cache if available. This setting is used only when Semantic BM25 fallback is enabled. "
                     "If no cache is available, create one from SNOGIT-release.zip first; suggestion generation starts only after you explicitly run it with a cache."
                 ),
             )
-            if use_snogit_bm25:
-                snogit_cache_selection = render_file_source_selector(
-                    "Processed SNOGIT cache HDF5",
-                    key="snogit_cache_hdf5",
-                    data_dir=inputs.data_dir,
-                    suffixes=(".hdf5", ".h5"),
-                    upload_types=("hdf5", "h5"),
-                    default_source="Data directory",
-                    name_contains=("snogit",),
-                    help="Use a compatible processed SNOGIT cache. This defaults to server-side data-directory selection for large cache files.",
-                )
-                selected_snogit_cache_from_dir = snogit_cache_selection.path if snogit_cache_selection.source in {"data_dir", "path"} else None
-                snogit_sidecar_file = snogit_cache_selection.value if snogit_cache_selection.source == "upload" else None
-                snogit_sidecar_path_text = str(snogit_cache_selection.path) if snogit_cache_selection.source == "path" and snogit_cache_selection.path is not None else ""
+            snogit_cache_selection = render_file_source_selector(
+                "Processed SNOGIT cache HDF5",
+                key="snogit_cache_hdf5",
+                data_dir=inputs.data_dir,
+                suffixes=(".hdf5", ".h5"),
+                upload_types=("hdf5", "h5"),
+                default_source="Data directory",
+                # name_contains=("snogit",),
+                help="Use a compatible processed SNOGIT cache. This defaults to server-side data-directory selection for large cache files.",
+            )
+            selected_snogit_cache_from_dir = snogit_cache_selection.path if snogit_cache_selection.source in {"data_dir", "path"} else None
+            snogit_sidecar_file = snogit_cache_selection.value if snogit_cache_selection.source == "upload" else None
+            snogit_sidecar_path_text = str(snogit_cache_selection.path) if snogit_cache_selection.source == "path" and snogit_cache_selection.path is not None else ""
 
-                snogit_zip_selection = render_file_source_selector(
-                    "SNOGIT release ZIP for processed cache creation",
-                    key="snogit_release_zip",
-                    data_dir=inputs.data_dir,
-                    suffixes=(".zip",),
-                    upload_types=("zip",),
-                    default_source="Data directory",
-                    name_contains=("snogit",),
-                    help="Use this only to create a processed SNOGIT cache first. Suggestion generation will not start automatically after cache creation.",
-                )
-                selected_snogit_zip_from_dir = snogit_zip_selection.path if snogit_zip_selection.source in {"data_dir", "path"} else None
-                snogit_zip_file = snogit_zip_selection.value if snogit_zip_selection.source == "upload" else None
-                snogit_zip_path_text = str(snogit_zip_selection.path) if snogit_zip_selection.source == "path" and snogit_zip_selection.path is not None else ""
+            snogit_zip_selection = render_file_source_selector(
+                "SNOGIT release ZIP for processed cache creation",
+                key="snogit_release_zip",
+                data_dir=inputs.data_dir,
+                suffixes=(".zip",),
+                upload_types=("zip",),
+                default_source="Data directory",
+                # name_contains=("snogit",),
+                help="Use this only to create a processed SNOGIT cache first. Suggestion generation will not start automatically after cache creation.",
+            )
+            selected_snogit_zip_from_dir = snogit_zip_selection.path if snogit_zip_selection.source in {"data_dir", "path"} else None
+            snogit_zip_file = snogit_zip_selection.value if snogit_zip_selection.source == "upload" else None
+            snogit_zip_path_text = str(snogit_zip_selection.path) if snogit_zip_selection.source == "path" and snogit_zip_selection.path is not None else ""
 
-                snogit_sidecar_path_candidate = selected_snogit_cache_from_dir
-                snogit_zip_path_candidate = selected_snogit_zip_from_dir
-                if (snogit_zip_file is not None or snogit_zip_path_candidate is not None) and snogit_sidecar_file is None and snogit_sidecar_path_candidate is None:
-                    try:
-                        snogit_zip_temp_path = snogit_zip_path_candidate or save_uploaded_file(snogit_zip_file, ".zip")
-                        snogit_members = list_snogit_zip_members(snogit_zip_temp_path)
-                        default_members = [member.name for member in snogit_members if member.recommended_default]
-                        selected_snogit_members = st.multiselect(
-                            "SNOGIT ZIP members",
-                            options=[member.name for member in snogit_members],
-                            default=default_members,
-                            help=(
-                                "Default is the newest general SNOGIT_*.dat member only. "
-                                "ELGA and Latin files can be selected explicitly."
-                            ),
-                        )
-                        if default_members:
-                            st.caption(f"Default general SNOGIT member: {default_members[0]}")
-                    except Exception as exc:
-                        st.warning(f"Could not inspect SNOGIT ZIP members: {exc}")
+            snogit_sidecar_path_candidate = selected_snogit_cache_from_dir
+            snogit_zip_path_candidate = selected_snogit_zip_from_dir
+            if (snogit_zip_file is not None or snogit_zip_path_candidate is not None) and snogit_sidecar_file is None and snogit_sidecar_path_candidate is None:
+                try:
+                    snogit_zip_temp_path = snogit_zip_path_candidate or save_uploaded_file(snogit_zip_file, ".zip")
+                    snogit_members = list_snogit_zip_members(snogit_zip_temp_path)
+                    default_members = [member.name for member in snogit_members if member.recommended_default]
+                    selected_snogit_members = st.multiselect(
+                        "SNOGIT ZIP members",
+                        options=[member.name for member in snogit_members],
+                        default=default_members,
+                        help=(
+                            "Default is the newest general SNOGIT_*.dat member only. "
+                            "ELGA and Latin files can be selected explicitly."
+                        ),
+                    )
+                    if default_members:
+                        st.caption(f"Default general SNOGIT member: {default_members[0]}")
+                except Exception as exc:
+                    st.warning(f"Could not inspect SNOGIT ZIP members: {exc}")
             st.divider()
             st.markdown("#### Association type meanings")
             st.text(format_association_type_descriptions())
@@ -302,8 +290,8 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
 
     snogit_cache_available = snogit_sidecar_file is not None or selected_snogit_cache_path is not None
     snogit_zip_available = (snogit_zip_file is not None or selected_snogit_zip_from_dir is not None or bool(snogit_zip_path_text.strip())) and bool(selected_snogit_members)
-    snogit_ready = not use_snogit_bm25 or snogit_cache_available
-    if use_snogit_bm25 and not snogit_cache_available:
+    snogit_ready = not (sanitize_semantic_bm25_fallback and use_snogit_bm25) or snogit_cache_available
+    if sanitize_semantic_bm25_fallback and use_snogit_bm25 and not snogit_cache_available:
         st.info(
             "To use SNOGIT BM25 candidates, provide a processed SNOGIT cache or create one from a SNOGIT ZIP first. "
             "Creating the cache does not automatically start suggestion generation."
@@ -391,6 +379,20 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                 )
             except Exception as exc:
                 st.error(f"Processed SNOGIT cache creation failed: {exc}")
+
+    _render_active_settings_notice(
+        historical_ancestor_fallback=activate_historical_ancestor_fallback,
+        semantic_bm25_fallback=sanitize_semantic_bm25_fallback,
+        blacklist_bm25=sanitize_blacklist_suggestions,
+        use_snogit_bm25=use_snogit_bm25,
+        snogit_cache_available=snogit_cache_available,
+        association_types=sanitization_association_types,
+        ancestor_max_distance=(int(ancestor_max_distance) if use_absolute_ancestor_limit else None),
+        ancestor_max_relative_distance=(float(ancestor_max_relative_distance) if use_relative_ancestor_limit else None),
+        bm25_min_score=float(sanitize_bm25_min_score),
+        bm25_min_lexical_score=float(sanitize_bm25_min_lexical_score),
+        bm25_max_candidates=int(sanitize_bm25_max_candidates),
+    )
 
     if st.button(
         "Generate sanitization suggestions",
@@ -584,3 +586,116 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                 st.markdown(sanitization_report_text)
         except Exception as exc:
             st.error(f"Sanitization suggestion generation failed: {exc}")
+
+
+def _render_suggestion_overview(suggestions: list[Any]) -> None:
+    rows = [_suggestion_overview_row(index, suggestion) for index, suggestion in enumerate(suggestions, start=1)]
+    if not rows:
+        st.info("No sanitization suggestions to preview.")
+        return
+    st.caption(
+        "Interactive read-only overview. Columns are intentionally wide; use horizontal scrolling "
+        "instead of the Markdown table preview if values are truncated."
+    )
+    overview_df = pd.DataFrame(rows)
+    st.data_editor(
+        overview_df,
+        key="sanitization_suggestion_overview_editor",
+        hide_index=True,
+        width="stretch",
+        height=min(700, max(260, 38 * (len(rows) + 1))),
+        disabled=True,
+        column_config={
+            "#": st.column_config.NumberColumn("#", width="small"),
+            "Document": st.column_config.TextColumn("Document", width="medium"),
+            "Annotator": st.column_config.TextColumn("Annotator", width="small"),
+            "Source code": st.column_config.TextColumn("Source code", width="small"),
+            "Covered text": st.column_config.TextColumn("Covered text", width="medium"),
+            "Issue": st.column_config.TextColumn("Issue", width="small"),
+            "Status": st.column_config.TextColumn("Status", width="medium"),
+            "Replacement code": st.column_config.TextColumn("Replacement code", width="small"),
+            "Replacement FSN": st.column_config.TextColumn("Replacement FSN", width="large"),
+            "Reason": st.column_config.TextColumn("Reason", width="large"),
+            "Top candidates": st.column_config.TextColumn("Top candidates", width="large"),
+        },
+    )
+
+
+def _suggestion_overview_row(index: int, suggestion: Any) -> dict[str, Any]:
+    finding = suggestion.finding
+    return {
+        "#": index,
+        "Document": finding.document,
+        "Annotator": finding.annotator,
+        "Source code": finding.code or "",
+        "Covered text": finding.covered_text,
+        "Issue": getattr(finding, "list_type", ""),
+        "Status": _status_text(getattr(suggestion, "status", "")),
+        "Replacement code": getattr(suggestion, "replacement_code", None) or "",
+        "Replacement FSN": getattr(suggestion, "replacement_fsn", None) or "",
+        "Reason": getattr(suggestion, "reason", "") or "",
+        "Top candidates": _candidate_summary(getattr(suggestion, "candidates", ())),
+    }
+
+
+def _candidate_summary(candidates: Any) -> str:
+    parts = []
+    for candidate in tuple(candidates or ())[:3]:
+        code = getattr(candidate, "code", "")
+        fsn = getattr(candidate, "fsn", None) or ""
+        association = getattr(candidate, "association_type", None)
+        source = getattr(candidate, "source", None)
+        score = getattr(candidate, "score", None)
+        source_hint = source or association or "candidate"
+        score_hint = f", score {float(score):.2f}" if score is not None else ""
+        parts.append(f"{code} — {fsn} ({source_hint}{score_hint})")
+    return " | ".join(parts)
+
+
+def _status_text(status: Any) -> str:
+    return getattr(status, "value", str(status))
+
+
+def _render_active_settings_notice(
+    *,
+    historical_ancestor_fallback: bool,
+    semantic_bm25_fallback: bool,
+    blacklist_bm25: bool,
+    use_snogit_bm25: bool,
+    snogit_cache_available: bool,
+    association_types: list[str],
+    ancestor_max_distance: int | None,
+    ancestor_max_relative_distance: float | None,
+    bm25_min_score: float,
+    bm25_min_lexical_score: float,
+    bm25_max_candidates: int,
+) -> None:
+    ancestor_bits = []
+    if historical_ancestor_fallback:
+        if ancestor_max_distance is not None:
+            ancestor_bits.append(f"≤{ancestor_max_distance} edge(s)")
+        if ancestor_max_relative_distance is not None:
+            ancestor_bits.append(f"≤{ancestor_max_relative_distance:.2f} relative")
+    ancestor_text = "on" + (f" ({', '.join(ancestor_bits)})" if ancestor_bits else "") if historical_ancestor_fallback else "off"
+    bm25_text = (
+        f"on (score ≥{bm25_min_score:.2f}, lexical ≥{bm25_min_lexical_score:.2f}, "
+        f"{bm25_max_candidates} candidate(s))"
+        if semantic_bm25_fallback
+        else "off"
+    )
+    blacklist_text = "included" if semantic_bm25_fallback and blacklist_bm25 else "not included"
+    snogit_text = "off"
+    if semantic_bm25_fallback and use_snogit_bm25:
+        snogit_text = "on, cache ready" if snogit_cache_available else "on, cache missing"
+    elif use_snogit_bm25:
+        snogit_text = "selected, inactive until BM25 is on"
+    association_text = ", ".join(association_types or list(DEFAULT_ALLOWED_ASSOCIATION_TYPES))
+    st.info(
+        "Active settings: "
+        f"historical associations {association_text} · "
+        f"ancestor fallback {ancestor_text} · "
+        f"BM25 {bm25_text} · "
+        f"blacklist BM25 {blacklist_text} · "
+        f"SNOGIT {snogit_text}",
+        icon="ℹ️",
+    )
