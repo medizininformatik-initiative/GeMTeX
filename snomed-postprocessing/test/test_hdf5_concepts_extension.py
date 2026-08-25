@@ -7,11 +7,11 @@ import unittest
 import h5py
 
 from hierarchies import load_snomed_like_hierarchy
-from snomed_post_processing.utils import (
-    ListDumpType,
+from snomed_post_processing.hdf5_handling.dump import (
     _compute_compact_ancestor_arrays,
     dump_codes_to_hdf5,
 )
+from snomed_post_processing.snomed import ListDumpType
 
 
 class CompactAncestorExtensionTest(unittest.TestCase):
@@ -126,20 +126,20 @@ class CompactAncestorExtensionTest(unittest.TestCase):
                     "codes",
                     "fsn",
                     "ancestors_index",
-                    "ancestors_codes",
-                    "ancestors_distance",
+                    "ancestor_concept_index",
+                    "ancestor_distance",
                 ]:
                     self.assertIn(dataset, h5_file["concepts"])
 
                 codes = h5_file["concepts/codes"][:].astype(str).tolist()
                 index = h5_file["concepts/ancestors_index"][:]
-                ancestor_codes = h5_file["concepts/ancestors_codes"][:].astype(str)
-                distances = h5_file["concepts/ancestors_distance"][:]
+                ancestor_indices = h5_file["concepts/ancestor_concept_index"][:]
+                distances = h5_file["concepts/ancestor_distance"][:]
 
                 row = codes.index("610000")
                 start, length = index[row]
                 ancestors = {
-                    ancestor_codes[i]: int(distances[i])
+                    codes[int(ancestor_indices[i])]: int(distances[i])
                     for i in range(int(start), int(start + length))
                 }
                 self.assertEqual(ancestors["100000"], 5)

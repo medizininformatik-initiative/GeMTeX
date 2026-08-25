@@ -23,15 +23,17 @@ Defined in `pyproject.toml`:
 
 | Command | Python function | Purpose |
 |---|---|---|
-| `log-critical-documents` | `snomed_post_processing.main:log_documents` | Process an INCEpTION ZIP/local or remote project and create reports. |
-| `create-concepts-dump` | `snomed_post_processing.main:create_concept_id_dump` | Create/update HDF5 whitelist/blacklist dumps from Snowstorm. |
-| `list-branches` | `snomed_post_processing.main:list_branches` | List available Snowstorm branches. |
-| `program-entry` | `snomed_post_processing.main:help_me` | Fallback/help command. |
+| `log-critical-documents` | `snomed_post_processing.cli.app:log_documents` | Process an INCEpTION ZIP/local or remote project and create reports. |
+| `create-concepts-dump` | `snomed_post_processing.cli.app:create_concept_id_dump` | Create/update HDF5 whitelist/blacklist dumps from Snowstorm/RF2 ZIP. |
+| `summarize-hdf5` | `snomed_post_processing.cli.app:summarize_hdf5` | Print a concise metadata summary for an HDF5 file. |
+| `suggest-sanitization` | `snomed_post_processing.cli.app:suggest_sanitization_cli` | Create sanitization suggestions from a CriticalFindings JSON artifact. |
+| `list-branches` | `snomed_post_processing.cli.app:list_branches` | List available Snowstorm branches. |
+| `program-entry` | `snomed_post_processing.cli.app:help_me` | Fallback/help command. |
 
 The GUI is launched directly with Streamlit:
 
 ```bash
-uv run streamlit run src/snomed_post_processing/streamlit_app.py
+uv run streamlit run src/snomed_post_processing/gui/app.py
 ```
 
 Docker uses `entrypoint.sh` as a command dispatcher.
@@ -40,11 +42,17 @@ Docker uses `entrypoint.sh` as a command dispatcher.
 
 ```text
 src/snomed_post_processing/
-├── main.py                    # Click CLI commands
-├── streamlit_app.py           # Streamlit GUI
-├── uima_processing/__init__.py # INCEpTION ZIP/CAS parsing, filtering, report writing
-├── snowstorm_funcs/__init__.py # Snowstorm API traversal helpers
-└── utils/__init__.py          # Shared models, enums, HDF5 helpers, INCEpTION API helper
+├── main.py                    # compatibility CLI entrypoint re-exporting cli.app commands
+├── cli/                       # Click commands, options, custom types, logging setup
+├── pipelines/                 # command orchestration pipelines
+├── hdf5_handling/             # HDF5 dump, policy access, and metadata helpers
+├── gui/                       # Streamlit GUI application
+├── uima_processing/           # INCEpTION ZIP/CAS parsing, filtering, report writing
+├── snowstorm/                 # Snowstorm API client, traversal, and response mapping helpers
+├── findings_io/               # CriticalFinding JSON serialization/deserialization
+├── snomed/                    # SNOMED CT domain models and enums
+├── inception/                 # INCEpTION project access helpers
+└── utils/                     # general text/formatting utility helpers
 ```
 
 ## 4. CLI Workflow: `log-critical-documents`
@@ -81,16 +89,35 @@ Optional:
 5. Check annotators with `get_annotator_names()`.
 6. If prompts are allowed, ask user which annotators to include via `prompt_for_names()`.
 7. Process project ZIP with `process_inception_zip()`.
-8. Write:
+8. Write under the project ZIP/output directory:
    - `critical_documents_<date>_<time>.md`
    - `critical_documents_<date>_<time>.masked.md`
    - `critical_documents_<date>_<time>.json`
+   - `critical_findings_<date>_<time>.json`
 9. Optionally delete temporary API export.
 10. Log final critical document count.
 
-## 5. GUI Workflow
+## 5. CLI Workflow: `suggest-sanitization`
 
-Source: `src/snomed_post_processing/streamlit_app.py`
+Source: `src/snomed_post_processing/main.py`
+
+This command is the separate sanitization phase. It consumes the CriticalFindings JSON written by `log-critical-documents` and writes a standalone sanitization suggestion Markdown report.
+
+Example:
+
+```bash
+uv run suggest-sanitization \
+  --lists-path target-release.hdf5 \
+  --critical-findings critical_findings_04-08-2026_12-00.json \
+  --output sanitization_suggestions.md \
+  --semantic-bm25-fallback
+```
+
+Blacklist BM25 suggestions require explicit opt-in and `--semantic-bm25-fallback`.
+
+## 6. GUI Workflow
+
+Source: `src/snomed_post_processing/gui/app.py`
 
 The GUI wraps the same processing functions as the CLI.
 
@@ -110,6 +137,10 @@ The GUI wraps the same processing functions as the CLI.
 
 ### GUI processing steps
 
+The GUI is split into two tabs.
+
+Policy-check tab:
+
 1. Save uploaded/project ZIP to a temporary path.
 2. Optionally load annotator names from ZIP.
 3. Allow annotator multiselect.
@@ -117,12 +148,19 @@ The GUI wraps the same processing functions as the CLI.
 5. Call `generate_report()`:
    - calls `process_inception_zip()`;
    - calls `create_log_from_results()`;
-   - writes Markdown, masked Markdown, and JSON output.
-6. Display critical document count.
+   - writes Markdown, masked Markdown, JSON dump, and CriticalFindings JSON output.
+6. Store CriticalFindings in Streamlit session state.
 7. Provide download buttons for all outputs.
 8. Show Markdown preview.
 
-## 6. INCEpTION ZIP Processing
+Sanitization tab:
+
+1. Use CriticalFindings from current session or uploaded CriticalFindings JSON.
+2. Use the uploaded HDF5 policy/sanitization file.
+3. Resolve historical-association suggestions and optional BM25 fallback.
+4. Provide preview/download of the standalone sanitization suggestion Markdown report.
+
+## 7. INCEpTION ZIP Processing
 
 Source: `src/snomed_post_processing/uima_processing/__init__.py`
 
@@ -185,9 +223,11 @@ TemporaryCorpus
     └── documents: dict[str, DocumentAnnotations]
 ```
 
-## 7. Filtering and Report Generation
+## 8. Filtering and Report Generation
 
 Source: `create_log_from_results()` and `analyze_documents()`.
+
+Policy checking now produces structured `CriticalFinding` records first. Markdown, masked Markdown, final count tables, and the JSON dump are rendered from those findings at the end of the report generation step. This keeps reporting behavior intact while providing a stable input object for future sanitization.
 
 ### HDF5 layout expected
 
@@ -204,11 +244,17 @@ Only revision group `0` is currently read during report generation.
 
 ### Filter order
 
-Reports are generated in this order:
+Policy findings are collected in this order:
 
 1. Whitelist pass.
 2. Blacklist pass.
-3. Final count tables.
+
+Reports are then rendered from the collected `CriticalFinding` records:
+
+1. Whitelist findings.
+2. Blacklist findings.
+3. Ignored faulty concepts.
+4. Final count tables.
 
 ### Whitelist logic
 
@@ -257,9 +303,9 @@ The JSON dump stores critical concept codes with offsets and, when available, FS
 
 Note: offsets are grouped by code across the processing run.
 
-## 8. HDF5 Dump Creation: `create-concepts-dump`
+## 9. HDF5 Dump Creation: `create-concepts-dump`
 
-Source: `src/snomed_post_processing/main.py`, `snowstorm_funcs`, and `utils`.
+Source: `src/snomed_post_processing/cli/app.py`, `snowstorm`, and `utils`.
 
 This command connects to a Snowstorm server and recursively traverses SNOMED CT concepts to create HDF5 whitelist/blacklist datasets.
 
@@ -306,7 +352,23 @@ Behavior:
 - `force_overwrite=True` deletes and recreates an existing list group.
 - Revision support is noted but not implemented; existing datasets are skipped unless forced.
 
-## 9. Docker Behavior
+### HDF5 metadata summary
+
+A concise metadata summary can be printed for generated or uploaded HDF5 files:
+
+```bash
+uv run summarize-hdf5 data/gemtex_snomedct_codes_20260401.hdf5
+```
+
+Markdown output is available with:
+
+```bash
+uv run summarize-hdf5 --markdown data/gemtex_snomedct_codes_20260401.hdf5
+```
+
+The Streamlit GUI displays the same summary automatically after it reads an uploaded HDF5 file.
+
+## 10. Docker Behavior
 
 ### Dockerfile
 
@@ -330,7 +392,7 @@ Behavior:
 
 `log-inception-docs.sh` mounts local `./data` to `/app/data`.
 
-## 10. Important Data/Config Files
+## 11. Important Data/Config Files
 
 | Path | Purpose |
 |---|---|
@@ -338,7 +400,7 @@ Behavior:
 | `data/` | Expected location for large HDF5 list files and local ZIPs in Docker workflows. |
 | `test/test-export.zip` | Sample INCEpTION export. |
 
-## 11. Current Assumptions and Limitations
+## 12. Current Assumptions and Limitations
 
 - JSON CAS is the practical supported format; `.ser` is unsupported.
 - XMI is mentioned in some messages/path filters, but loading currently calls `cassis.load_cas_from_json()`.
@@ -349,7 +411,7 @@ Behavior:
 - CLI writes JSON output even when `--omit-dump` sets `dump_dictionary = None`; this can result in `null` JSON output.
 - INCEpTION API SSL verification is disabled in some calls by passing `False` from CLI/GUI.
 
-## 12. Improvement Ideas
+## 13. Improvement Ideas
 
 - Add explicit XMI support or remove XMI wording where unsupported.
 - Implement HDF5 revision selection and revision creation.

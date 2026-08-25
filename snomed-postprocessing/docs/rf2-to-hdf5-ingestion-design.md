@@ -85,7 +85,7 @@ Exact filenames vary by edition/release, so matching should be pattern-based and
 
 ### Snapshot input
 
-Snapshot files already represent the state at one release date.
+Snapshot files already represent the component/member state at one release date. They can still contain inactive rows, so active-only outputs must explicitly filter `active == 1`.
 
 Ingestion can process them directly:
 
@@ -102,7 +102,7 @@ write/collect for HDF5
 Full files contain historical rows. To reconstruct release state at target date `T`:
 
 ```text
-for each component id:
+for each component/member id:
     keep latest row where effectiveTime <= T
 ```
 
@@ -112,6 +112,8 @@ This applies to:
 - descriptions;
 - relationships;
 - historical association refset rows.
+
+Important: for `Full` files, do not filter out inactive rows before reconstructing the latest row per id. An inactive row may be the latest state and may supersede an older active row. Date filtering can happen while streaming; active filtering should happen after latest-row reconstruction.
 
 The algorithm should stream rows and keep only the latest relevant row per component.
 
@@ -161,12 +163,13 @@ concept_id -> active
 
 ### Descriptions
 
-Filter early where possible:
+Filter early where safe:
 
-- language code, e.g. `de` or `en`;
-- active descriptions only;
+- language code, e.g. `en` in the International Edition; other languages such as German require an appropriate extension/package;
 - FSNs only if only FSNs are needed;
 - synonyms only if search/indexing requires them.
+
+For `Snapshot` files, active descriptions can be filtered directly with `active == 1`. For `Full` files, reconstruct the latest row per description id first, then filter to active rows. Do not discard inactive `Full` rows before reconstruction.
 
 Useful fields:
 
@@ -190,12 +193,14 @@ Known description type IDs:
 
 ### Relationships
 
-For parent hierarchy, filter aggressively:
+For parent hierarchy, filter aggressively after choosing the correct release state:
 
 ```text
 active == 1
 typeId == 116680003  # is-a
 ```
+
+For `Snapshot`, this can be applied directly. For `Full`, first reconstruct the latest row per relationship id at the target date, then filter to active `is-a` relationships.
 
 Compact parent map:
 
@@ -207,7 +212,18 @@ Only active reconstructed relationships should contribute to the target-release 
 
 ### Historical associations
 
-Historical association rows are typically much smaller than relationship data.
+Historical association rows are typically much smaller than relationship data. In the inspected International Edition package they are present as:
+
+```text
+Refset/Content/der2_cRefset_AssociationFull_INT_<date>.txt
+Refset/Content/der2_cRefset_AssociationSnapshot_INT_<date>.txt
+```
+
+with columns:
+
+```text
+id effectiveTime active moduleId refsetId referencedComponentId targetComponentId
+```
 
 Store compact rows such as:
 
@@ -255,7 +271,44 @@ Exact IDs should be verified against the SNOMED edition being processed.
 
 ## 7. HDF5 Output Structure
 
-The generated HDF5 should preserve existing project list structure:
+The compact RF2-derived HDF5 layout stores canonical concept metadata once and represents policies as integer views into `/concepts`.
+
+Canonical concept metadata:
+
+```text
+/concepts/codes
+/concepts/fsn
+/concepts/semantic_tag_id
+/concepts/semantic_tags
+/concepts/active
+```
+
+Historical associations are also index-based:
+
+```text
+/historical_associations/source_index
+/historical_associations/target_index
+/historical_associations/association_type_id
+/historical_associations/association_types
+/historical_associations/effective_time
+/historical_associations/active
+/historical_associations/refset_id
+```
+
+Policy views:
+
+```text
+/policy_views/whitelist/0/concept_index
+/policy_views/whitelist/0/root_codes
+/policy_views/whitelist/0/filter_tags
+/policy_views/blacklist/0/concept_index
+/policy_views/blacklist/0/root_codes
+/policy_views/blacklist/0/filter_tags
+```
+
+This avoids duplicating large string datasets under whitelist/blacklist groups. `log-critical-documents` can read these compact policy views directly by resolving `concept_index` through `/concepts/codes` and `/concepts/fsn`.
+
+The existing legacy structure can still be written optionally for backward compatibility with older code:
 
 ```text
 /whitelist/0/codes
@@ -264,31 +317,12 @@ The generated HDF5 should preserve existing project list structure:
 /blacklist/0/fsn
 ```
 
-Additional concept metadata:
-
-```text
-/concepts/codes
-/concepts/fsn
-/concepts/semantic_tag
-/concepts/active
-```
-
-Historical associations:
-
-```text
-/historical_associations/source_code
-/historical_associations/target_code
-/historical_associations/association_type
-/historical_associations/effective_time
-/historical_associations/active
-```
-
 Optional hierarchy/ancestor support:
 
 ```text
 /concepts/ancestors_index
-/concepts/ancestors_codes
-/concepts/ancestors_distance
+/concepts/ancestor_concept_index
+/concepts/ancestor_distance
 ```
 
 ## 8. Ancestor Computation
@@ -314,15 +348,46 @@ Store compact flat arrays:
 
 ```text
 /concepts/ancestors_index      # per concept: [start, length]
-/concepts/ancestors_codes      # flat ancestor code array
-/concepts/ancestors_distance   # flat distance array
+/concepts/ancestor_concept_index  # flat int32 concept indices into /concepts/codes
+/concepts/ancestor_distance       # flat int16 distance array
 ```
 
 This supports nearest-whitelisted-ancestor fallback without one HDF5 group per concept.
 
-## 9. Proposed Implementation Modules
+## 9. Implementation Modules
 
-Suggested package structure:
+The first implementation is provided as a compact module:
+
+```text
+src/snomed_post_processing/rf2/__init__.py
+```
+
+It currently supports Snapshot-based ingestion from RF2 ZIP files and writes enriched HDF5 data under:
+
+```text
+/concepts
+/historical_associations
+/policy_views
+```
+
+The module exposes:
+
+```python
+discover_snapshot_members(zip_path, language="en")
+write_snapshot_hdf5_from_rf2_zip(
+    zip_path,
+    output_path,
+    language="en",
+    include_associations=True,
+    include_ancestors=False,
+    whitelist_root_codes=None,
+    blacklist_filter_tags=None,
+    write_legacy_policy_groups=False,
+    force_overwrite=False,
+)
+```
+
+A future refactor can split it into the originally proposed package structure:
 
 ```text
 src/snomed_post_processing/rf2/
@@ -363,30 +428,93 @@ Responsibilities:
 
 ## 10. CLI Shape
 
-Possible future command:
+The existing `create-concepts-dump` command now has two mutually exclusive input modes:
+
+```text
+Snowstorm mode: provide both --ip and --port
+RF2 ZIP mode:   provide --zip
+```
+
+RF2 ZIP example creating both compact whitelist and blacklist policy views in one HDF5:
 
 ```bash
 uv run create-concepts-dump \
-  --from-rf2 path/to/SnomedCT_Full.zip \
-  --release-date 20250131 \
-  --include-history \
-  --output data/lists/target-20250131.hdf5
+  --zip data/international.zip \
+  --output data/gemtex_snomedct_codes_20260401.hdf5 \
+  --dump-mode version \
+  --filter-list config/blacklist_filter_tags.txt \
+  138875005
+```
+
+In RF2 ZIP mode with `--dump-mode version`, `ROOT_CODE` creates the whitelist policy view and an optional `--filter-list` creates the blacklist policy view. The filter list follows the Snowstorm-style split:
+
+- numeric entries are treated as root concept codes and expand to the active root concept plus all active descendants via RF2 `is-a` relationships;
+- non-numeric entries are treated as semantic tags extracted from FSNs.
+
+`--dump-mode semantic` can still be used when only a blacklist policy view should be generated.
+
+When adding a blacklist to an HDF5 file that already contains `/concepts`, the existing concept table is reused. `--force-overwrite` applies to the selected policy view (`/policy_views/whitelist` or `/policy_views/blacklist`) and optional legacy policy group only. Rebuilding `/concepts` requires `--force-overwrite-concepts`.
+
+Policy views store date metadata:
+
+```text
+/policy_views/<whitelist|blacklist>/0.attrs["policy_date"]
+/policy_views/<whitelist|blacklist>/0.attrs["release_date"]
+/policy_views/<whitelist|blacklist>/0.attrs["rf2_view"]
+```
+
+In RF2 Snapshot mode, `policy_date` must equal the Snapshot `release_date`, because Snapshot files only represent one release state. To use a recent RF2 package to generate policy views for an earlier date, use `--rf2-view full`: the ingestion reconstructs the latest row per component/member at or before the requested policy date, then applies active filtering.
+
+Example:
+
+```bash
+uv run create-concepts-dump \
+  --zip data/international.zip \
+  --rf2-view full \
+  --policy-date 20240401 \
+  --dump-mode version \
+  --filter-list config/blacklist_filter_tags.txt \
+  --output data/gemtex_snomedct_codes_reconstructed_20240401_from_20260401.hdf5 \
+  138875005
+```
+
+Snapshot mode still rejects mismatching earlier policy dates rather than silently creating a misleading policy view. `/concepts` also stores `policy_date`, `release_date`, and `rf2_view`; an existing concept table with mismatching metadata is not reused unless it is rebuilt with `--force-overwrite-concepts`.
+
+Snowstorm mode still uses explicit server settings:
+
+```bash
+uv run create-concepts-dump \
+  --ip localhost \
+  --port 8080 \
+  --branch MAIN/2024-04-01 \
+  138875005
 ```
 
 Optional flags:
 
 ```bash
 --rf2-view snapshot|full
---language de
+--language en
 --include-history
 --include-ancestors
 --fsn-only
 ```
 
+The International Edition package inspected here contains English (`-en`) terminology and language refsets. German (`de`) input would require a German extension/package.
+
 For revised sanitization, the important first feature is:
 
 ```text
 --include-history
+```
+
+For compact policy-list generation, add explicit policy inputs such as whitelist root codes and blacklist semantic tags. Legacy list groups should be optional because `/policy_views` is more compact:
+
+```text
+--whitelist-root-code 138875005
+--blacklist-filter-tag attribute
+--blacklist-root-code 123456789
+--write-legacy-policy-groups
 ```
 
 Ancestor closure can be added later:
