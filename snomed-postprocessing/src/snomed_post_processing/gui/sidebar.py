@@ -124,7 +124,7 @@ def _render_target_view_selector() -> str:
         ),
         "Active release": (
             "Use active concepts from the selected SNOMED release. Whitelist is "
-            "ignored; blacklist is optional. Planned workflow."
+            "ignored; embedded and custom blacklists are optional."
         ),
     }
     selected_target = st.segmented_control(
@@ -137,49 +137,47 @@ def _render_target_view_selector() -> str:
     ) or "Policy rules"
     st.caption(target_options[selected_target])
     if selected_target == "Active release":
-        st.info("Release-view execution is scaffolded but not enabled yet.", icon="ℹ️")
         return "release"
     return "policy"
 
 
 def _render_release_blacklist_selector(data_dir: pathlib.Path) -> tuple[str, Any]:
-    blacklist_options = {
-        "No blacklist": "Accept every active concept in the release.",
-        "Embedded blacklist": (
-            "Exclude concepts already stored in the HDF5 blacklist view."
-        ),
-        "Upload rules": "Upload blacklist rules to resolve at runtime. Planned.",
-    }
-    selected_blacklist = st.pills(
-        "Release blacklist",
-        options=list(blacklist_options),
-        default="No blacklist",
-        key="release_blacklist_selector",
+    enforce_embedded = st.checkbox(
+        "Enforce embedded HDF5 blacklist",
+        value=False,
         help=(
-            "Blacklist files are line-separated: numeric lines exclude a concept and descendants; "
-            "non-numeric lines exclude by FSN semantic tag."
+            "If enabled, release-view suggestions exclude active concepts listed in the embedded HDF5 blacklist. "
+            "By default, release view ignores the embedded blacklist."
         ),
-        width="stretch",
-    ) or "No blacklist"
-    st.caption(blacklist_options[selected_blacklist])
-
-    if selected_blacklist == "Embedded blacklist":
-        return "embedded", None
-    if selected_blacklist == "Upload rules":
+    )
+    use_custom_blacklist = st.checkbox(
+        "Use custom blacklist rule file",
+        value=False,
+        help=(
+            "If enabled, release-view suggestions exclude rules from a custom blacklist file. "
+            "Numeric lines exclude a concept and descendants; non-numeric lines exclude by FSN semantic tag."
+        ),
+    )
+    runtime_blacklist_file = None
+    if use_custom_blacklist:
         runtime_blacklist_selection = render_file_source_selector(
-            "Runtime blacklist rule file",
-            key="runtime_blacklist_rule_file",
+            "Custom blacklist rule file",
+            key="custom_blacklist_rule_file",
             data_dir=data_dir,
             suffixes=(".txt",),
             upload_types=("txt",),
             default_source="Upload",
-            help="Blacklist rule files are small by default, but server-side selection is available for consistency.",
+            help="Blacklist rule files are usually small, but upload, data-directory, and server-path modes are available.",
         )
-        st.caption(
-            "Runtime blacklist calculation is planned; embedded HDF5 blacklist is "
-            "the first supported release blacklist source."
-        )
-        return "runtime", runtime_blacklist_selection.value
+        runtime_blacklist_file = runtime_blacklist_selection.value
+
+    if enforce_embedded and use_custom_blacklist:
+        return "embedded+custom", runtime_blacklist_file
+    if enforce_embedded:
+        return "embedded", runtime_blacklist_file
+    if use_custom_blacklist:
+        return "custom", runtime_blacklist_file
+    st.caption("Release view default: accept every active concept in the release.")
     return "none", None
 
 

@@ -58,13 +58,14 @@ else:
     blacklist_label = {
         "none": "no blacklist",
         "embedded": "embedded HDF5 blacklist",
-        "runtime": "runtime blacklist rules",
+        "custom": "custom blacklist",
+        "embedded+custom": "embedded HDF5 blacklist + custom blacklist",
     }.get(inputs.release_blacklist_mode, inputs.release_blacklist_mode)
     st.info(
         "**Current target: Active release** — annotations must be active concepts "
         "in the materialized release view stored in the uploaded HDF5; blacklist "
         f"mode: {blacklist_label}. To use another release snapshot, select an "
-        "HDF5 built for that snapshot. Release execution is not enabled yet.",
+        "HDF5 built for that snapshot.",
         icon="🎯",
     )
 

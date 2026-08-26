@@ -8,11 +8,16 @@ import tempfile
 import time
 from typing import Any
 
+import h5py
 import pandas as pd
 import streamlit as st
 
 from snomed_post_processing.findings_io import read_critical_findings_json
 from snomed_post_processing.hdf5_handling.metadata import inspect_hdf5_metadata
+from snomed_post_processing.hdf5_handling.policy import (
+    read_blacklist_rule_file,
+    resolve_blacklist_rule_indices,
+)
 from snomed_post_processing.sanitization import (
     ASSOCIATION_TYPE_DESCRIPTIONS,
     DEFAULT_ALLOWED_ASSOCIATION_TYPES,
@@ -39,16 +44,32 @@ def _format_association_type_option(association_type: str) -> str:
     return association_type
 
 
+def _enforce_embedded_blacklist(release_blacklist_mode: str) -> bool:
+    return release_blacklist_mode in {"embedded", "embedded+custom"}
+
+
+def _uses_custom_blacklist(release_blacklist_mode: str) -> bool:
+    return release_blacklist_mode in {"custom", "embedded+custom"}
+
+
+def _prepare_custom_blacklist_path(runtime_blacklist_file: Any) -> pathlib.Path:
+    if isinstance(runtime_blacklist_file, pathlib.Path):
+        return runtime_blacklist_file
+    if isinstance(runtime_blacklist_file, str):
+        return pathlib.Path(runtime_blacklist_file).expanduser()
+    return save_uploaded_file(runtime_blacklist_file, ".txt")
+
+
 def render_sanitization_check_tab(inputs: GuiInputs) -> None:
     if inputs.target_view == "release":
         st.info(
-            "Release-view normalization suggestions are planned next. They will reuse this review/apply workflow, "
-            "but replacement candidates will only need to be active in the release and optionally not blacklisted."
+            "Release-view normalization suggestions are enabled. Replacement candidates only need to be active "
+            "in the release, unless the embedded and/or custom release blacklist is selected."
         )
     st.write(
         "Generate sanitization suggestions from CriticalFindings JSON produced by "
         "the check step. Policy suggestions target the same materialized HDF5 "
-        "policy/view date used for checking."
+        "policy/view date used for checking; release suggestions target active release concepts."
     )
     session_findings_available = st.session_state.get("critical_findings") is not None
     uploaded_findings_file = None
@@ -105,16 +126,15 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                 value=False,
                 help="Suggest lexically similar active concepts for unresolved findings.",
             )
-            if inputs.target_view == "policy" or inputs.release_blacklist_mode != "none":
-                sanitize_blacklist_suggestions = st.checkbox(
-                    "Include blacklist findings in BM25 fallback",
-                    value=False,
-                    help=(
-                        "This only affects semantic BM25 fallback candidates. If "
-                        "Semantic BM25 fallback is off, this setting is saved but has no effect. "
-                        "Historical ancestor fallback does not resolve blacklist findings."
-                    ),
-                )
+            sanitize_blacklist_suggestions = st.checkbox(
+                "Include blacklist findings in BM25 fallback",
+                value=False,
+                help=(
+                    "This only affects semantic BM25 fallback candidates. If "
+                    "Semantic BM25 fallback is off, this setting is saved but has no effect. "
+                    "Historical ancestor fallback does not resolve blacklist findings."
+                ),
+            )
 
         use_snogit_bm25 = False
         snogit_sidecar_file = None
@@ -394,10 +414,17 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
         bm25_max_candidates=int(sanitize_bm25_max_candidates),
     )
 
+    custom_blacklist_ready = (
+        not _uses_custom_blacklist(inputs.release_blacklist_mode)
+        or inputs.runtime_blacklist_file is not None
+    )
+    if _uses_custom_blacklist(inputs.release_blacklist_mode) and inputs.runtime_blacklist_file is None:
+        st.warning("Custom blacklist mode is selected. Select or upload a custom blacklist rule file before generating suggestions.")
+
     if st.button(
         "Generate sanitization suggestions",
         type="primary",
-        disabled=inputs.target_view != "policy" or not inputs.hdf5_file or not (use_session_findings or uploaded_findings_file) or not snogit_ready,
+        disabled=not inputs.hdf5_file or not (use_session_findings or uploaded_findings_file) or not snogit_ready or not custom_blacklist_ready,
     ):
         try:
             with st.status(
@@ -413,6 +440,22 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                     f"release date {hdf5_summary.concepts_release_date or 'unknown'}, "
                     f"policy/view date {hdf5_summary.concepts_policy_date or 'unknown'}."
                 )
+                enforce_embedded_blacklist = _enforce_embedded_blacklist(inputs.release_blacklist_mode)
+                runtime_blacklist_indices = frozenset()
+                custom_blacklist_path = None
+                if inputs.target_view == "release" and _uses_custom_blacklist(inputs.release_blacklist_mode):
+                    if inputs.runtime_blacklist_file is None:
+                        raise ValueError("Custom blacklist mode is selected, but no custom blacklist rule file was provided.")
+                    st.write("Resolving custom release blacklist rules...")
+                    custom_blacklist_path = _prepare_custom_blacklist_path(inputs.runtime_blacklist_file)
+                    with h5py.File(inputs.hdf5_temp_path, "r") as h5_file:
+                        runtime_blacklist_indices = resolve_blacklist_rule_indices(
+                            h5_file,
+                            read_blacklist_rule_file(custom_blacklist_path),
+                        )
+                    st.write(
+                        f"Resolved custom blacklist to {len(runtime_blacklist_indices):,} concept(s)."
+                    )
                 if use_session_findings:
                     findings = st.session_state["critical_findings"]
                 else:
@@ -433,6 +476,9 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                         if use_relative_ancestor_limit
                         else None
                     ),
+                    target_view=inputs.target_view,
+                    release_exclude_blacklist=enforce_embedded_blacklist,
+                    runtime_blacklist_indices=runtime_blacklist_indices,
                 )
                 st.write(
                     f"Resolving historical association candidates for {len(findings)} finding(s)..."
@@ -502,6 +548,9 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                         max_candidates=int(sanitize_bm25_max_candidates),
                         allow_blacklist_findings=sanitize_blacklist_suggestions,
                         snogit_sidecar_path=snogit_sidecar_path,
+                        target_view=inputs.target_view,
+                        release_exclude_blacklist=enforce_embedded_blacklist,
+                        runtime_blacklist_indices=runtime_blacklist_indices,
                         progress_callback=update_bm25_progress,
                     )
                 st.write("Writing Markdown and JSON suggestion reports...")
@@ -518,6 +567,9 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
             sanitization_settings = {
                 "target_view": inputs.target_view,
                 "release_blacklist_mode": inputs.release_blacklist_mode,
+                "enforce_embedded_blacklist": _enforce_embedded_blacklist(inputs.release_blacklist_mode),
+                "custom_blacklist_path": str(custom_blacklist_path) if custom_blacklist_path is not None else None,
+                "custom_blacklist_concepts": len(runtime_blacklist_indices),
                 "allowed_association_types": list(
                     sanitization_association_types or DEFAULT_ALLOWED_ASSOCIATION_TYPES
                 ),
