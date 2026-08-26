@@ -333,7 +333,7 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
     if use_snogit_bm25 and not snogit_cache_available and snogit_zip_available:
         if st.button(
             "Create processed SNOGIT cache",
-            disabled=inputs.target_view != "policy" or not inputs.hdf5_file,
+            disabled=not inputs.hdf5_file,
         ):
             try:
                 with st.status("Creating processed SNOGIT cache...", expanded=True) as cache_status:

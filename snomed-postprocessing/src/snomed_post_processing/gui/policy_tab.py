@@ -15,9 +15,11 @@ from .sidebar import GuiInputs
 def render_policy_tab(inputs: GuiInputs) -> None:
     if inputs.target_view == "release":
         st.info(
-            "Release-view checking is being wired next. It will validate annotations "
-            "against active concepts in the materialized HDF5 release view and "
-            "optionally the embedded/runtime blacklist."
+            "Release view affects sanitization suggestion generation only: "
+            "replacement candidates are valid when they are active in the "
+            "materialized HDF5 release view, with optional embedded/custom "
+            "blacklist exclusions. This tab still runs the policy check that "
+            "identifies critical findings from the whitelist/blacklist policy."
         )
     else:
         st.caption(
@@ -56,9 +58,9 @@ def render_policy_tab(inputs: GuiInputs) -> None:
                 st.warning(f"Could not load annotators: {exc}")
 
     if st.button(
-        "Run policy check" if inputs.target_view == "policy" else "Run release-view check",
+        "Run policy check",
         type="primary",
-        disabled=inputs.target_view != "policy" or not (st.session_state.get("zip_file") and inputs.hdf5_file),
+        disabled=not (st.session_state.get("zip_file") and inputs.hdf5_file),
     ):
         try:
             if zip_temp_path is None:

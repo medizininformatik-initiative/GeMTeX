@@ -474,60 +474,85 @@ def _render_document_review_sections(rows: list[dict[str, Any]]) -> list[dict[st
                 decisions.extend(_render_manual_choice_cards(manual_rows, document))
 
             if automatic_rows:
-                st.markdown("#### Automatic/no-replacement suggestions")
+                st.markdown("#### Single/no-choice suggestions")
                 review_df = pd.DataFrame(automatic_rows).drop(
                     columns=["Document", "_offset", "_layer", "_status_raw"],
                     errors="ignore",
                 )
-                edited = st.data_editor(
-                    review_df,
-                    key=f"sanitization_review_editor_{_safe_key(document)}_{_review_state_revision()}",
-                    width="stretch",
-                    hide_index=True,
-                    disabled=[
-                        "#",
-                        "Annotator",
-                        "Source code",
-                        "Covered text",
-                        "Policy issue",
-                        "Finding context",
-                        "Suggested replacement",
-                        "Why suggested",
-                        "Original FSN",
-                        "Status",
-                    ],
-                    on_change=_keep_document_open,
-                    args=(document,),
-                    column_config={
-                        "Apply": st.column_config.CheckboxColumn(
-                            "Apply replacement",
-                            help="Toggle whether this replacement should be applied in the sanitization run.",
-                        ),
-                        "Delete annotation": st.column_config.CheckboxColumn(
-                            "Delete annotation",
-                            help="Remove this matched annotation from the sanitized project copy instead of replacing its concept ID.",
-                        ),
-                        "Policy issue": st.column_config.TextColumn(
+                preferred_columns = [
+                    "#",
+                    "Apply",
+                    "Delete annotation",
+                    "Covered text",
+                    "Finding context",
+                    "Suggested replacement",
+                    "Annotator",
+                    "Source code",
+                    "Policy issue",
+                    "Why suggested",
+                    "Original FSN",
+                    "Status",
+                    "_valid_choices",
+                    "_choice_hints",
+                    "_needs_choice",
+                ]
+                review_df = review_df[
+                    [column for column in preferred_columns if column in review_df.columns]
+                    + [column for column in review_df.columns if column not in preferred_columns]
+                ]
+                with st.form(f"single_choice_form_{_safe_key(document)}"):
+                    edited = st.data_editor(
+                        review_df,
+                        key=f"sanitization_review_editor_{_safe_key(document)}_{_review_state_revision()}",
+                        width="stretch",
+                        hide_index=True,
+                        disabled=[
+                            "#",
+                            "Annotator",
+                            "Source code",
+                            "Covered text",
                             "Policy issue",
-                            help="Whether the original finding came from the whitelist or blacklist policy check.",
-                        ),
-                        "Finding context": st.column_config.TextColumn(
                             "Finding context",
-                            help="Short document/location context for the original annotation.",
-                        ),
-                        "Suggested replacement": st.column_config.TextColumn(
                             "Suggested replacement",
-                            help="Single suggested replacement for this row.",
-                        ),
-                        "Why suggested": st.column_config.TextColumn(
                             "Why suggested",
-                            help="Short ranking or provenance hint for the candidate.",
-                        ),
-                        "_valid_choices": None,
-                        "_choice_hints": None,
-                        "_needs_choice": None,
-                    },
-                )
+                            "Original FSN",
+                            "Status",
+                        ],
+                        column_config={
+                            "Apply": st.column_config.CheckboxColumn(
+                                "Apply replacement",
+                                help="Toggle whether this replacement should be applied in the sanitization run.",
+                            ),
+                            "Delete annotation": st.column_config.CheckboxColumn(
+                                "Delete annotation",
+                                help="Remove this matched annotation from the sanitized project copy instead of replacing its concept ID.",
+                            ),
+                            "Policy issue": st.column_config.TextColumn(
+                                "Policy issue",
+                                help="Whether the original finding came from the whitelist or blacklist policy check.",
+                            ),
+                            "Finding context": st.column_config.TextColumn(
+                                "Finding context",
+                                help="Short document/location context for the original annotation.",
+                            ),
+                            "Suggested replacement": st.column_config.TextColumn(
+                                "Suggested replacement",
+                                help="Single suggested replacement for this row.",
+                            ),
+                            "Why suggested": st.column_config.TextColumn(
+                                "Why suggested",
+                                help="Short ranking or provenance hint for the candidate.",
+                            ),
+                            "_valid_choices": None,
+                            "_choice_hints": None,
+                            "_needs_choice": None,
+                        },
+                    )
+                    st.form_submit_button(
+                        "Save single/no-choice selections",
+                        on_click=_keep_document_open,
+                        args=(document,),
+                    )
                 decisions.extend(
                     _review_rows_to_decisions(edited.to_dict("records"), automatic_rows, {})
                 )
@@ -893,6 +918,11 @@ def _suggestions_to_review_rows(
         replacement_label = _replacement_label(suggestion)
         is_automatic_replacement = replacement_label != NO_REPLACEMENT_LABEL
         needs_choice = _needs_row_specific_choice(suggestion, replacement_options)
+        apply_by_default = (
+            is_automatic_replacement
+            and not needs_choice
+            and _status_value(suggestion.status) != SanitizationStatus.SEMANTIC_BM25_REPLACEMENT.value
+        )
         selected_label = st.session_state.get(
             _choice_key(row_number),
             restored_decision.get("replacement_choice")
@@ -901,7 +931,7 @@ def _suggestions_to_review_rows(
         rows.append(
             {
                 "#": row_number,
-                "Apply": bool(restored_decision.get("apply", is_automatic_replacement and not needs_choice)) and not bool(restored_decision.get("delete_annotation")),
+                "Apply": bool(restored_decision.get("apply", apply_by_default)) and not bool(restored_decision.get("delete_annotation")),
                 "Delete annotation": bool(restored_decision.get("delete_annotation")),
                 "Document": suggestion.finding.document,
                 "Annotator": suggestion.finding.annotator,
@@ -1103,14 +1133,12 @@ def _needs_row_specific_choice(suggestion: Any, replacement_options: list[str]) 
     return status in {
         SanitizationStatus.AMBIGUOUS_REPLACEMENT.value,
         SanitizationStatus.AMBIGUOUS_ANCESTOR.value,
-        SanitizationStatus.SEMANTIC_BM25_REPLACEMENT.value,
     } or len(replacement_options) > 1
 
 
 def _needs_top_k_choice(suggestion: Any) -> bool:
     return _status_value(suggestion.status) in {
         SanitizationStatus.AMBIGUOUS_REPLACEMENT.value,
-        SanitizationStatus.SEMANTIC_BM25_REPLACEMENT.value,
     }
 
 
@@ -1163,7 +1191,7 @@ def _fsn_from_label(label: str) -> str | None:
 def _status_label(status: Any) -> str:
     labels = {
         SanitizationStatus.HISTORICAL_ASSOCIATION_REPLACEMENT.value: "Historical association",
-        SanitizationStatus.SEMANTIC_BM25_REPLACEMENT.value: "BM25/manual review",
+        SanitizationStatus.SEMANTIC_BM25_REPLACEMENT.value: "BM25 suggestion",
         SanitizationStatus.NEAREST_TARGET_ANCESTOR.value: "Nearest active ancestor",
         SanitizationStatus.NEAREST_HISTORICAL_ANCESTOR.value: "Nearest historical ancestor",
         SanitizationStatus.AMBIGUOUS_REPLACEMENT.value: "Ambiguous replacement",
