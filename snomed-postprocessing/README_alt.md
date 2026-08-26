@@ -1,6 +1,6 @@
 # SNOMED Postprocessing
 
-SNOMED Postprocessing checks SNOMED CT annotations in INCEpTION/UIMA exports against an HDF5 policy file. The policy contains whitelist and blacklist views. The tool reports annotations that are either not whitelisted or explicitly blacklisted, and can also generate sanitization suggestions for outdated/inactive concepts.
+SNOMED Postprocessing checks SNOMED CT annotations in INCEpTION/UIMA exports against a materialized SNOMED HDF5 file. In policy mode, annotations are checked against whitelist/blacklist policy views. The tool reports non-whitelisted or blacklisted annotations, can generate sanitization suggestions, and can apply reviewed replacement/delete decisions to a copied project ZIP.
 
 The project can be used from the command line or through a Streamlit GUI.
 
@@ -38,17 +38,32 @@ The resulting HDF5 can contain:
 
 Historical associations are needed for sanitization suggestions.
 
-### 3. Sanitization suggestions
+### 3. Sanitization suggestions and reviewed export
 
 Input:
-- a sanitization-ready HDF5 policy file
-- a `critical_findings_*.json` file from the policy check
+- a sanitization-ready HDF5 file
+- a `critical_findings_*.json` file from the check step
 
 Output:
-- a markdown report with replacement suggestions, mainly based on SNOMED CT historical associations
-- optional BM25 fallback suggestions for unresolved whitelist findings
+- Markdown/JSON suggestion reports based on historical associations, optional ancestor fallback, and optional semantic BM25 fallback
+- reviewed decisions JSON
+- a copied, sanitized INCEpTION ZIP with reviewed replacements and deletions applied
 
-This step only creates suggestions. Applying reviewed suggestions back to CAS files is planned but not implemented yet.
+Suggestion generation supports two target views and several fallback levels:
+
+| Target view | Candidate rule |
+|---|---|
+| policy | active AND whitelisted AND not blacklisted |
+| release | active in the selected release; optional blacklist exclusions |
+
+| Suggestion source | Purpose |
+|---|---|
+| historical associations | preferred replacement source for inactive/outdated concepts |
+| ancestor fallback | optional broader active ancestor when historical targets are unavailable |
+| semantic BM25 | optional lexical fallback over SNOMED FSNs |
+| processed SNOGIT cache | optional extra BM25 evidence from SNOGIT terms |
+
+BM25 and SNOGIT are suggestion-only evidence. Candidates must still pass the selected target-view gates. The original INCEpTION ZIP is not modified.
 
 ## CLI usage
 
@@ -59,6 +74,7 @@ log-critical-documents
 create-concepts-dump
 summarize-hdf5
 suggest-sanitization
+build-snogit-cache
 list-branches
 ```
 
@@ -111,6 +127,10 @@ uv run log-critical-documents \
 Supported ignore modes are `overlap`, `covered-by`, `contains`, and `exact`.
 
 ### Create an HDF5 policy from an RF2 ZIP
+For the following three commands:
+if you don't supply a SNOMED CT code as starting point as the positional argument,
+it defaults to the SNOMED CT root code (``138875005``)
+
 
 ```bash
 uv run create-concepts-dump \
@@ -132,8 +152,21 @@ uv run create-concepts-dump \
   --filter-list /path/to/blacklist_filter_tags.txt
 ```
 
-### Create an HDF5 policy from Snowstorm
+Create both blacklist and whitelist policy in one run:
 
+```bash
+uv run create-concepts-dump \
+  --zip /path/to/SnomedCT_Release_INT.zip \
+  --output /path/to/gemtex_snomedct_codes.hdf5 \
+  --policy-date YYYYMMDD \
+  --include-ancestors \
+  --dump-mode version \
+  --filter-list /path/to/blacklist_filter_tags.txt
+```
+
+### Create an HDF5 policy from Snowstorm
+This will take a very long time, since it queries the API repeatedly ofr nearly all codes.
+If possible at all, please use a RELEASE zip (see above).
 ```bash
 uv run create-concepts-dump \
   --ip SNOWSTORM_HOST \
@@ -153,6 +186,8 @@ uv run summarize-hdf5 --markdown /path/to/gemtex_snomedct_codes.hdf5
 
 ### Generate sanitization suggestions
 
+Policy-view suggestions use the HDF5 whitelist/blacklist policy:
+
 ```bash
 uv run suggest-sanitization \
   --lists-path /path/to/gemtex_snomedct_codes.hdf5 \
@@ -160,7 +195,28 @@ uv run suggest-sanitization \
   --output /path/to/sanitization_suggestions.md
 ```
 
-Optional BM25 fallback:
+Release-view suggestions ignore the whitelist and allow any active concept by default:
+
+```bash
+uv run suggest-sanitization \
+  --lists-path /path/to/gemtex_snomedct_codes.hdf5 \
+  --critical-findings /path/to/critical_findings.json \
+  --output /path/to/sanitization_suggestions.md \
+  --target-view release
+```
+
+Release-view blacklist exclusions are opt-in:
+
+| Options | Effective release-view rule |
+|---|---|
+| none | active concept |
+| `--enforce-embedded-blacklist` | active AND not in embedded HDF5 blacklist |
+| `--custom-blacklist PATH` | active AND not in custom blacklist |
+| both | active AND not in either blacklist |
+
+A custom blacklist file uses the same format as RF2 blacklist ingestion: numeric SCTID lines exclude the concept and descendants; non-numeric lines exclude by FSN semantic tag.
+
+Optional semantic BM25 fallback can be combined with either target view. It ranks SNOMED FSNs lexically and only keeps candidates that pass the selected policy/release gates:
 
 ```bash
 uv run suggest-sanitization \
@@ -169,6 +225,30 @@ uv run suggest-sanitization \
   --output /path/to/sanitization_suggestions.md \
   --semantic-bm25-fallback
 ```
+
+To use SNOGIT terms as additional BM25 evidence, first build a processed SNOGIT cache from a SNOGIT ZIP and the same main HDF5:
+
+```bash
+uv run build-snogit-cache \
+  --hdf5 /path/to/gemtex_snomedct_codes.hdf5 \
+  --snogit-zip /path/to/SNOGIT.zip \
+  --output /path/to/processed_snogit_cache.hdf5
+```
+
+By default, cache creation uses the newest general `SNOGIT_*.dat` member in the ZIP. To include specific `.dat` members instead, pass `--snogit-member` one or more times, for example to add ELGA or Latin term files.
+
+Then pass that processed cache during suggestion generation:
+
+```bash
+uv run suggest-sanitization \
+  --lists-path /path/to/gemtex_snomedct_codes.hdf5 \
+  --critical-findings /path/to/critical_findings.json \
+  --output /path/to/sanitization_suggestions.md \
+  --semantic-bm25-fallback \
+  --use-snogit-cache /path/to/processed_snogit_cache.hdf5
+```
+
+`suggest-sanitization` does not parse raw SNOGIT ZIP files or create caches; use `build-snogit-cache` for that step.
 
 ## GUI usage
 
@@ -182,7 +262,7 @@ With Docker, the existing image can be started as described in the original proj
 
 ```bash
 docker run --rm -p HOST_PORT:8501 \
-  ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:1.2.5 \
+  ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:2.0.0 \
   start-gui
 ```
 
@@ -192,10 +272,10 @@ The GUI has three tabs:
    Upload an INCEpTION ZIP or fetch one through the INCEpTION API, upload the HDF5 policy file, optionally select annotators and annotation layers, then run the policy check. Reports and JSON artifacts can be downloaded.
 
 2. **Sanitization suggestions**  
-   Use the `CriticalFindings` JSON from the current session or upload one. Configure allowed historical association types and optional BM25 fallback, then download the suggestions report.
+   Use the `CriticalFindings` JSON from the current session or upload one. Select policy or active-release target view, configure optional embedded/custom blacklist handling for release view, choose fallback methods, optionally select/create a processed SNOGIT cache, then download suggestion reports.
 
 3. **Sanitization run**  
-   Placeholder for applying reviewed suggestions back to CAS files. This workflow is currently disabled.
+   Upload reviewed decisions and create a copied sanitized project ZIP. Reviewed decisions can replace annotation SCTIDs or delete annotations. `.ser` files are excluded from sanitized export.
 
 ## Notes
 

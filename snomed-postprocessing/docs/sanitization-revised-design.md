@@ -486,9 +486,9 @@ Implemented. CLI and Streamlit can generate a separate Markdown sanitization sug
 
 ### Phase 5: Optional advanced fallback
 
-Implemented for suggestion reporting. A dependency-free semantic BM25 module (`snomed_post_processing.sanitization.semantic_bm25`) can rank active, whitelisted, non-blacklisted concepts from the compact HDF5 layout as suggestion-only fallback candidates. CLI and Streamlit expose this as an opt-in fallback; accepted BM25 replacements are written to the existing standalone sanitization suggestion report with status `semantic_bm25_replacement`. Blacklist findings can be included explicitly via `--blacklist-suggestions` / the Streamlit checkbox, but remain disabled by default.
+Implemented for suggestion reporting. A dependency-free semantic BM25 module (`snomed_post_processing.sanitization.semantic_bm25`) ranks acceptable concepts from the compact HDF5 layout as suggestion-only fallback candidates. Candidate gates use the selected target view: policy mode requires active + whitelisted + not blacklisted, while release mode requires active concepts with optional embedded/custom blacklist exclusions. CLI and Streamlit expose BM25 as an opt-in fallback; accepted BM25 replacements are written to the standalone sanitization suggestion report with status `semantic_bm25_replacement`. Blacklist findings can be included explicitly via `--blacklist-suggestions` / the Streamlit checkbox, but remain disabled by default.
 
-Ancestor fallback is also implemented as an opt-in resolver step for whitelist findings. With `--activate-historical-ancestor-fallback`, the resolver tries active ancestor arrays first and then compact stored inactive `is-a` edges under `/historical_is_a`. Historical fallback candidates are either the inactive edge's active parent or an active ancestor above that parent. Candidate ancestors must still be active, whitelisted, and not blacklisted. The default limits are controlled by `--ancestor-max-distance 3` and `--ancestor-max-relative-distance 0.35`, where relative distance means `is-a` distance divided by source depth-to-root. Both limits are optional; pass a negative CLI value to disable either one. When both are enabled, candidates must satisfy both.
+Ancestor fallback is also implemented as an opt-in resolver step for whitelist findings. With `--activate-historical-ancestor-fallback`, the resolver tries active ancestor arrays first and then compact stored inactive `is-a` edges under `/historical_is_a`. Historical fallback candidates are either the inactive edge's active parent or an active ancestor above that parent. Candidate ancestors must satisfy the selected target-view gates. The default limits are controlled by `--ancestor-max-distance 3` and `--ancestor-max-relative-distance 0.35`, where relative distance means `is-a` distance divided by source depth-to-root. Both limits are optional; pass a negative CLI value to disable either one. When both are enabled, candidates must satisfy both.
 
 ## 13. Summary
 
@@ -497,8 +497,8 @@ The revised design is finding-based and conservative:
 ```text
 current checks first
 faulty findings only
-historical association replacement only if target-policy acceptable
-blacklist sanitization disabled by default
+historical association replacement only if selected target-view acceptable
+blacklist-finding sanitization disabled by default
 ```
 
 RF2 Full releases are used upstream to build enriched target-release HDF5 files. Runtime analysis should remain fast and should not need raw SNOMED release ZIPs.

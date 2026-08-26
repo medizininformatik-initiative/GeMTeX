@@ -272,17 +272,14 @@ SNOMED FSNs -> existing Python BM25Index
 SNOGIT cache -> HDF5 inverted index + NumPy scoring
 ```
 
-Candidate concept policy gates still apply in policy mode:
+Candidate concept gates still come from the selected target view:
 
 ```text
-active
-AND whitelisted
-AND not blacklisted
-AND not the source concept
-AND not SNOMED root
+policy mode  -> active AND whitelisted AND not blacklisted
+release mode -> active, plus optional embedded/custom blacklist exclusions
 ```
 
-SNOGIT must only add candidates; it must not change policy validation.
+All modes also reject the source concept and SNOMED root as replacement candidates. SNOGIT must only add suggestion evidence; it must not bypass the selected HDF5 validity gates.
 
 ## Candidate output with source evidence
 
@@ -447,7 +444,7 @@ Small fixture tests, not tests against the multi-GB archive:
 11. HDF5 inverted index contains expected vocab/postings arrays.
 12. NumPy BM25 retrieval returns a SNOGIT-backed candidate without loading all terms.
 13. Common-token limits prevent excessive postings loads.
-14. Policy gates still exclude inactive, non-whitelisted, and blacklisted concepts.
+14. Selected target-view gates still exclude invalid candidates; SNOGIT evidence does not override policy/release validity.
 15. Suggestions JSON preserves optional SNOGIT evidence fields.
 
 ## Recommended implementation order
