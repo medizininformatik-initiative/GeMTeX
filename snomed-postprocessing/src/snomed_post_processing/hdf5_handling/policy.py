@@ -366,6 +366,11 @@ def resolve_blacklist_rule_indices(
     This mirrors the RF2 blacklist input format: SCTID roots blacklist the root
     concept and all descendants; non-numeric entries blacklist concepts whose
     FSN semantic tag equals the entry.
+
+    Keep these semantics aligned with embedded blacklist creation in
+    ``snomed_post_processing.release_ingestion.hdf5_writer.write_compact_hdf5_from_rf2``.
+    The implementations use different traversal backends: runtime resolution uses
+    compact HDF5 ancestor arrays, while RF2 ingestion uses the active RF2 parent map.
     """
     root_codes, semantic_tags = split_blacklist_rules(rules)
     if not root_codes and not semantic_tags:

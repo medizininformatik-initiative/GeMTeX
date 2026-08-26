@@ -60,6 +60,19 @@ def _prepare_custom_blacklist_path(runtime_blacklist_file: Any) -> pathlib.Path:
     return save_uploaded_file(runtime_blacklist_file, ".txt")
 
 
+def _resolve_custom_blacklist_indices(
+    hdf5_path: pathlib.Path,
+    runtime_blacklist_file: Any,
+) -> tuple[pathlib.Path, frozenset[int]]:
+    custom_blacklist_path = _prepare_custom_blacklist_path(runtime_blacklist_file)
+    with h5py.File(hdf5_path, "r") as h5_file:
+        runtime_blacklist_indices = resolve_blacklist_rule_indices(
+            h5_file,
+            read_blacklist_rule_file(custom_blacklist_path),
+        )
+    return custom_blacklist_path, runtime_blacklist_indices
+
+
 def render_sanitization_check_tab(inputs: GuiInputs) -> None:
     if inputs.target_view == "release":
         st.info(
@@ -447,12 +460,10 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                     if inputs.runtime_blacklist_file is None:
                         raise ValueError("Custom blacklist mode is selected, but no custom blacklist rule file was provided.")
                     st.write("Resolving custom release blacklist rules...")
-                    custom_blacklist_path = _prepare_custom_blacklist_path(inputs.runtime_blacklist_file)
-                    with h5py.File(inputs.hdf5_temp_path, "r") as h5_file:
-                        runtime_blacklist_indices = resolve_blacklist_rule_indices(
-                            h5_file,
-                            read_blacklist_rule_file(custom_blacklist_path),
-                        )
+                    custom_blacklist_path, runtime_blacklist_indices = _resolve_custom_blacklist_indices(
+                        inputs.hdf5_temp_path,
+                        inputs.runtime_blacklist_file,
+                    )
                     st.write(
                         f"Resolved custom blacklist to {len(runtime_blacklist_indices):,} concept(s)."
                     )
