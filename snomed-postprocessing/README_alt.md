@@ -12,7 +12,11 @@ Input:
 - an INCEpTION project export ZIP, or an INCEpTION project fetched through the API
 - a whitelist/blacklist HDF5 file
 
-Supported CAS formats in the export are JSON CAS and XMI. Java serialized CAS (`.ser`) exports are not supported.
+Supported CAS formats in the export are JSON CAS and XMI. Java serialized CAS (`.ser`) exports are not supported. In INCEpTION, a suitable JSON CAS backup can be created via:
+
+```text
+Export > Export backup archive > Secondary format > UIMA CAS JSON 0.4.0
+```
 
 Output:
 - `critical_documents_<date>.md`: markdown report with critical documents and findings
@@ -96,6 +100,20 @@ uv run log-critical-documents \
   --lists-path /path/to/gemtex_snomedct_codes.hdf5 \
   /path/to/inception-export.zip
 ```
+
+Docker CLI example with local files mounted into `/app/data`:
+
+```bash
+docker run \
+  --volume ./data:/app/data \
+  --rm \
+  ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:2.0.0 \
+  log-critical-documents \
+  --lists-path /app/data/gemtex_snomedct_codes.hdf5 \
+  /app/data/inception-export.zip
+```
+
+The Docker entrypoint adds `--forbid-prompt` for `log-critical-documents`, so interactive annotator selection is not available in this Docker CLI mode.
 
 ### Run a policy check through the INCEpTION API
 
@@ -258,13 +276,22 @@ Start the Streamlit app locally:
 uv run streamlit run src/snomed_post_processing/gui/app.py
 ```
 
-With Docker, the existing image can be started as described in the original project usage:
+With Docker, the GUI can be started as:
 
 ```bash
 docker run --rm -p HOST_PORT:8501 \
   ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:2.0.0 \
   start-gui
 ```
+
+Convenience scripts are included for the common Docker commands:
+
+```bash
+bash log-inception-docs.sh inception-export.zip
+bash start-gui.sh 8501
+```
+
+If you want to run them as `./log-inception-docs.sh` or `./start-gui.sh`, mark them executable first with `chmod +x`. The logging script assumes files are in `./data` and relies on the container-visible `/app/data` paths.
 
 The GUI has three tabs:
 
