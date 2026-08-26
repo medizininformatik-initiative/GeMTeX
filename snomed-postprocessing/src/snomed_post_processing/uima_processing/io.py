@@ -224,7 +224,7 @@ def _yield_matching_files(
             ]
 
         if not matching_files:
-            logging.warning(
+            logging.debug(
                 f"No CAS found for {doc_name} in {file_name} searched in {prefixes}"
             )
             continue
