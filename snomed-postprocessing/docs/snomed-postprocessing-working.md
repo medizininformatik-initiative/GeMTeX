@@ -1,430 +1,85 @@
-# SNOMED Postprocessing — Working Notes
+# SNOMED Postprocessing — maintainer map
 
-This document summarizes how the `snomed-postprocessing` CLI/GUI works. It is intended as an implementation reference for future maintenance and improvements.
+This file is a compact code map for maintainers. User-facing usage belongs in `README_alt.md`; design details belong in the focused docs under `docs/`.
 
-## 1. Purpose
+## Entry points
 
-The project post-processes INCEpTION project exports containing SNOMED CT annotations. It identifies **critical documents** by comparing each annotated SNOMED CT code against SNOMED CT filter lists stored in an HDF5 file:
-
-- **Whitelist**: a code is critical if it is **not present** in the whitelist.
-- **Blacklist**: a code is critical if it **is present** in the blacklist.
-
-It produces:
-
-- Markdown report with critical documents and concepts.
-- Masked Markdown report where annotator/document names are replaced with random names.
-- JSON dump of critical concepts and offsets.
-
-The project also contains commands to create whitelist/blacklist HDF5 dumps from a Snowstorm server.
-
-## 2. Entry Points
-
-Defined in `pyproject.toml`:
-
-| Command | Python function | Purpose |
+| Command / UI | Module | Purpose |
 |---|---|---|
-| `log-critical-documents` | `snomed_post_processing.cli.app:log_documents` | Process an INCEpTION ZIP/local or remote project and create reports. |
-| `create-concepts-dump` | `snomed_post_processing.cli.app:create_concept_id_dump` | Create/update HDF5 whitelist/blacklist dumps from Snowstorm/RF2 ZIP. |
-| `summarize-hdf5` | `snomed_post_processing.cli.app:summarize_hdf5` | Print a concise metadata summary for an HDF5 file. |
-| `suggest-sanitization` | `snomed_post_processing.cli.app:suggest_sanitization_cli` | Create sanitization suggestions from a CriticalFindings JSON artifact. |
-| `list-branches` | `snomed_post_processing.cli.app:list_branches` | List available Snowstorm branches. |
-| `program-entry` | `snomed_post_processing.cli.app:help_me` | Fallback/help command. |
-
-The GUI is launched directly with Streamlit:
-
-```bash
-uv run streamlit run src/snomed_post_processing/gui/app.py
-```
-
-Docker uses `entrypoint.sh` as a command dispatcher.
-
-## 3. Main Modules
-
-```text
-src/snomed_post_processing/
-├── main.py                    # compatibility CLI entrypoint re-exporting cli.app commands
-├── cli/                       # Click commands, options, custom types, logging setup
-├── pipelines/                 # command orchestration pipelines
-├── hdf5_handling/             # HDF5 dump, policy access, and metadata helpers
-├── gui/                       # Streamlit GUI application
-├── uima_processing/           # INCEpTION ZIP/CAS parsing, filtering, report writing
-├── snowstorm/                 # Snowstorm API client, traversal, and response mapping helpers
-├── findings_io/               # CriticalFinding JSON serialization/deserialization
-├── snomed/                    # SNOMED CT domain models and enums
-├── inception/                 # INCEpTION project access helpers
-└── utils/                     # general text/formatting utility helpers
-```
-
-## 4. CLI Workflow: `log-critical-documents`
-
-Source: `src/snomed_post_processing/main.py`
-
-### Inputs
-
-Required:
-
-- `process_path`: either:
-  - path to a local INCEpTION project ZIP, or
-  - temporary export folder when using INCEpTION API mode.
-
-Optional:
-
-- `--lists-path`: HDF5 file containing whitelist/blacklist groups.
-- `--ip`, `--port`, `--use-secure_protocol`: INCEpTION host options.
-- `--inception-username`, `--inception-password`, `--inception-project`: enable API export mode.
-- `--keep-export`: keep downloaded temporary project ZIP.
-- `--omit-dump`: skip JSON dump creation.
-- `--forbid-prompt`: disable interactive annotator selection.
-
-### Processing steps
-
-1. Configure logging.
-2. Build INCEpTION host URL.
-3. Resolve project ZIP via `get_project_zip()`:
-   - local ZIP if credentials are missing;
-   - remote export via Pycaprio if credentials and project are provided.
-4. Resolve HDF5 lists path:
-   - use provided valid `--lists-path`, or
-   - fallback to `data/gemtex_snomedct_codes_2024-04-01.hdf5`.
-5. Check annotators with `get_annotator_names()`.
-6. If prompts are allowed, ask user which annotators to include via `prompt_for_names()`.
-7. Process project ZIP with `process_inception_zip()`.
-8. Write under the project ZIP/output directory:
-   - `critical_documents_<date>_<time>.md`
-   - `critical_documents_<date>_<time>.masked.md`
-   - `critical_documents_<date>_<time>.json`
-   - `critical_findings_<date>_<time>.json`
-9. Optionally delete temporary API export.
-10. Log final critical document count.
-
-## 5. CLI Workflow: `suggest-sanitization`
-
-Source: `src/snomed_post_processing/main.py`
-
-This command is the separate sanitization phase. It consumes the CriticalFindings JSON written by `log-critical-documents` and writes a standalone sanitization suggestion Markdown report.
-
-Example:
-
-```bash
-uv run suggest-sanitization \
-  --lists-path target-release.hdf5 \
-  --critical-findings critical_findings_04-08-2026_12-00.json \
-  --output sanitization_suggestions.md \
-  --semantic-bm25-fallback
-```
-
-Blacklist BM25 suggestions require explicit opt-in and `--semantic-bm25-fallback`.
-
-## 6. GUI Workflow
-
-Source: `src/snomed_post_processing/gui/app.py`
-
-The GUI wraps the same processing functions as the CLI.
-
-### Input modes
-
-#### Local ZIP mode
-
-- User uploads INCEpTION ZIP.
-- User uploads HDF5 whitelist/blacklist file.
-
-#### INCEpTION API mode
-
-- User enters API URL, username, and password.
-- GUI calls `get_project_zip(..., project_name=None)` to list projects.
-- User selects a project.
-- GUI exports selected project to a temporary ZIP.
-
-### GUI processing steps
-
-The GUI is split into two tabs.
-
-Policy-check tab:
-
-1. Save uploaded/project ZIP to a temporary path.
-2. Optionally load annotator names from ZIP.
-3. Allow annotator multiselect.
-4. Save uploaded HDF5 file to temporary path.
-5. Call `generate_report()`:
-   - calls `process_inception_zip()`;
-   - calls `create_log_from_results()`;
-   - writes Markdown, masked Markdown, JSON dump, and CriticalFindings JSON output.
-6. Store CriticalFindings in Streamlit session state.
-7. Provide download buttons for all outputs.
-8. Show Markdown preview.
-
-Sanitization tab:
-
-1. Use CriticalFindings from current session or uploaded CriticalFindings JSON.
-2. Use the uploaded HDF5 policy/sanitization file.
-3. Resolve historical-association suggestions and optional BM25 fallback.
-4. Provide preview/download of the standalone sanitization suggestion Markdown report.
-
-## 7. INCEpTION ZIP Processing
-
-Source: `src/snomed_post_processing/uima_processing/__init__.py`
-
-### Expected ZIP structure
-
-The processor expects `exportedproject.json` and source documents with CAS files under INCEpTION-style folders such as:
-
-```text
-curation/<document>/
-annotation/<document>/
-curation_ser/<document>/
-annotation_ser/<document>/
-```
-
-Supported actual processing is JSON CAS through `cassis.load_cas_from_json()`.
-
-`.ser` files are detected and rejected/skipped because Java Serialized CAS is unsupported by `dkpro-cassis` here.
-
-### File selection logic
-
-`_yield_matching_files()`:
-
-1. Reads source documents from `exportedproject.json`.
-2. Finds matching CAS files in curation/annotation folders.
-3. If several CAS files exist for one document, filters out `INITIAL_CAS.*` files.
-4. Yields document name and matching CAS paths.
-
-### Annotation extraction
-
-`get_annotations_from_document()` extracts annotations of type:
-
-```python
-gemtex.Concept
-```
-
-For each annotation it stores:
-
-- SNOMED code from `annotation.id`, with `http://snomed.info/id/` removed.
-- `(begin, end)` offsets.
-- covered text.
-
-Missing/empty/null IDs are represented as `nan`.
-
-The extracted data is stored in `DocumentAnnotations`:
-
-```python
-@dataclass
-class DocumentAnnotations:
-    snomed_codes: np.ndarray
-    offsets: np.ndarray
-    text: np.ndarray
-    length: int
-```
-
-Project-level result structure:
-
-```python
-TemporaryCorpus
-└── annotators: dict[str, TemporaryContainer]
-    └── documents: dict[str, DocumentAnnotations]
-```
-
-## 8. Filtering and Report Generation
-
-Source: `create_log_from_results()` and `analyze_documents()`.
-
-Policy checking now produces structured `CriticalFinding` records first. Markdown, masked Markdown, final count tables, and the JSON dump are rendered from those findings at the end of the report generation step. This keeps reporting behavior intact while providing a stable input object for future sanitization.
-
-### HDF5 layout expected
-
-The processing expects groups like:
-
-```text
-/whitelist/0/codes
-/whitelist/0/fsn
-/blacklist/0/codes
-/blacklist/0/fsn
-```
-
-Only revision group `0` is currently read during report generation.
-
-### Filter order
-
-Policy findings are collected in this order:
-
-1. Whitelist pass.
-2. Blacklist pass.
-
-Reports are then rendered from the collected `CriticalFinding` records:
-
-1. Whitelist findings.
-2. Blacklist findings.
-3. Ignored faulty concepts.
-4. Final count tables.
-
-### Whitelist logic
-
-For each annotation code:
-
-```text
-critical = code is not in whitelist
-```
-
-Additional behavior:
-
-- `nan` codes are normally ignored by `nan_filter`.
-- Numeric covered text without a valid code is filtered out in whitelist mode to avoid false positives for numeric spans.
-
-### Blacklist logic
-
-For each annotation code:
-
-```text
-critical = code is in blacklist
-```
-
-For blacklisted codes, the report also includes the FSN loaded from the HDF5 mapping array.
-
-### Masking behavior
-
-Masked reports use `randomname` to replace:
-
-- annotator names with `annotator-<random-name>`;
-- document names with `document-<random-name>`.
-
-Covered text, SNOMED IDs, offsets, and FSNs are not masked.
-
-### JSON dump behavior
-
-The JSON dump stores critical concept codes with offsets and, when available, FSN:
-
-```json
-{
-  "123456": {
-    "offset": [[10, 20]],
-    "fsn": "Example concept (finding)"
-  }
-}
-```
-
-Note: offsets are grouped by code across the processing run.
-
-## 9. HDF5 Dump Creation: `create-concepts-dump`
-
-Source: `src/snomed_post_processing/cli/app.py`, `snowstorm`, and `utils`.
-
-This command connects to a Snowstorm server and recursively traverses SNOMED CT concepts to create HDF5 whitelist/blacklist datasets.
-
-### Snowstorm helpers
-
-- `build_endpoint()`: creates an `scttsrapy.EndpointBuilder`.
-- `get_branches()`: fetches available Snowstorm branches.
-- `get_root_code()`: fetches the configured root concept.
-- `dump_concept_ids()`: recursively walks child concepts and collects concept IDs and FSNs.
-
-### Dump modes
-
-| Mode | Enum | Meaning |
-|---|---|---|
-| `version` | `DumpMode.VERSION` | Create whitelist-like dump of concepts under root. |
-| `semantic` | `DumpMode.SEMANTIC` | Create blacklist-like dump filtered by semantic tags or explicit code roots. |
-
-### Filter list behavior
-
-`--filter-list` can be:
-
-- repeated direct values;
-- a file containing one value per line.
-
-Values are split into:
-
-- numeric concept IDs;
-- semantic tags.
-
-For semantic mode:
-
-- if a concept ID is listed, its whole subtree is included;
-- if a semantic tag is listed, concepts whose FSN contains that semantic tag are included.
-
-### HDF5 writing
-
-`dump_codes_to_hdf5()` writes datasets under `whitelist` or `blacklist` groups.
-
-Behavior:
-
-- Creates a numbered child group such as `0`.
-- Stores sorted codes in `codes`.
-- Stores corresponding FSNs in `fsn`.
-- `force_overwrite=True` deletes and recreates an existing list group.
-- Revision support is noted but not implemented; existing datasets are skipped unless forced.
-
-### HDF5 metadata summary
-
-A concise metadata summary can be printed for generated or uploaded HDF5 files:
-
-```bash
-uv run summarize-hdf5 data/gemtex_snomedct_codes_20260401.hdf5
-```
-
-Markdown output is available with:
-
-```bash
-uv run summarize-hdf5 --markdown data/gemtex_snomedct_codes_20260401.hdf5
-```
-
-The Streamlit GUI displays the same summary automatically after it reads an uploaded HDF5 file.
-
-## 10. Docker Behavior
-
-### Dockerfile
-
-- Base image: `ghcr.io/astral-sh/uv:python3.12-bookworm-slim`.
-- Installs Git because `scttsrapy` is pulled from Git.
-- Uses `uv sync --locked`.
-- Adds `/app/.venv/bin` to `PATH`.
-- Uses `entrypoint.sh` as dispatcher.
-
-### `entrypoint.sh`
-
-- No args: show help.
-- `start-gui`: runs Streamlit GUI.
-- `log-critical-documents`: appends `--forbid-prompt` automatically, because Docker is non-interactive.
-- Other commands are forwarded unchanged.
-
-### Convenience scripts
-
-- `start-gui.sh [PORT] [VERSION]`
-- `log-inception-docs.sh ZIP_NAME [VERSION]`
-
-`log-inception-docs.sh` mounts local `./data` to `/app/data`.
-
-## 11. Important Data/Config Files
-
-| Path | Purpose |
+| `log-critical-documents` | `snomed_post_processing.cli.app` | Check INCEpTION/UIMA annotations against policy views and write critical reports. |
+| `create-concepts-dump` | `snomed_post_processing.cli.app` | Build/update SNOMED HDF5 files from RF2 ZIPs or Snowstorm. |
+| `summarize-hdf5` | `snomed_post_processing.cli.app` | Inspect HDF5 metadata and policy views. |
+| `suggest-sanitization` | `snomed_post_processing.cli.app` | Generate replacement suggestions from `CriticalFindings` JSON. |
+| `build-snogit-cache` | `snomed_post_processing.cli.app` | Build a processed SNOGIT cache HDF5 for BM25 evidence. |
+| Streamlit GUI | `snomed_post_processing.gui.app` | Browser UI for check, suggestion, review/apply workflows. |
+
+## Core workflow modules
+
+| Area | Main modules |
 |---|---|
-| `config/blacklist_filter_tags.txt` | Default/example blacklist semantic tags and concept roots used when creating a blacklist dump. |
-| `data/` | Expected location for large HDF5 list files and local ZIPs in Docker workflows. |
-| `test/test-export.zip` | Sample INCEpTION export. |
+| Critical finding JSON | `findings_io/json_io.py`, `findings_io/mapping.py` |
+| INCEpTION ZIP/CAS reading | `uima_processing/io.py`, `uima_processing/project.py`, `uima_processing/extraction.py` |
+| Report generation | `uima_processing/report_creation.py`, `gui/report_generation.py` |
+| RF2 ingestion | `release_ingestion/readers.py`, `release_ingestion/hdf5_writer.py` |
+| HDF5 policy/layout helpers | `hdf5_handling/policy.py`, `hdf5_handling/metadata.py`, `hdf5_handling/dump.py` |
+| Sanitization resolver | `sanitization/resolver.py`, `sanitization/models.py`, `sanitization/report.py` |
+| BM25/SNOGIT fallback | `sanitization/bm25_index.py`, `sanitization/semantic_bm25.py`, `sanitization/snogit_sidecar.py` |
+| Review/apply decisions | `sanitization/decisions_json.py`, `pipelines/sanitization_run.py` |
+| Streamlit GUI tabs | `gui/policy_tab.py`, `gui/sanitization_check_tab.py`, `gui/sanitization_run_tab.py` |
 
-## 12. Current Assumptions and Limitations
+## Data flow
 
-- JSON CAS is the practical supported format; `.ser` is unsupported.
-- XMI is mentioned in some messages/path filters, but loading currently calls `cassis.load_cas_from_json()`.
-- Report generation reads only HDF5 revision group `0`.
-- HDF5 revision creation is not implemented.
-- Docker CLI disables interactive annotator selection.
-- Masked reports do not mask covered text or offsets.
-- CLI writes JSON output even when `--omit-dump` sets `dump_dictionary = None`; this can result in `null` JSON output.
-- INCEpTION API SSL verification is disabled in some calls by passing `False` from CLI/GUI.
+```text
+INCEpTION ZIP + SNOMED HDF5
+        |
+log-critical-documents / GUI check
+        |
+CriticalFindings JSON
+        |
+suggest-sanitization / GUI suggestions
+        |
+SanitizationSuggestions Markdown + JSON
+        |
+review decisions JSON
+        |
+sanitization run -> copied sanitized INCEpTION ZIP
+```
 
-## 13. Improvement Ideas
+The original project ZIP is never modified in place. `.ser` files are excluded from sanitized exports.
 
-- Add explicit XMI support or remove XMI wording where unsupported.
-- Implement HDF5 revision selection and revision creation.
-- Make `--omit-dump` skip JSON file creation entirely.
-- Add tests for:
-  - annotator filtering;
-  - whitelist vs blacklist logic;
-  - `.ser` rejection;
-  - HDF5 reading/writing;
-  - masked report generation.
-- Add CLI option for annotation type instead of hard-coded `gemtex.Concept`.
-- Add CLI option for feature id_prefix instead if hard-coded `http://snomed.info/id/`
-- Add safer handling for missing HDF5 groups/datasets.
-- Consider masking covered text for stronger privacy guarantees.
-- Normalize and document offset serialization in JSON.
-- Reuse one implementation path for CLI and GUI report generation to avoid drift.
+## Target-view gates
+
+Policy mode remains authoritative for the current GeMTeX policy workflow:
+
+```text
+active AND whitelisted AND not blacklisted
+```
+
+Release mode is for normalization against the selected SNOMED release:
+
+```text
+active, plus optional embedded/custom blacklist exclusions
+```
+
+The helper layer in `hdf5_handling/policy.py` centralizes candidate validity so historical, ancestor, BM25, and SNOGIT paths use the same gates.
+
+## File input patterns
+
+The GUI should use the shared file source selector for large or server-side files:
+
+```text
+Upload
+Data directory
+Server path
+```
+
+This applies to INCEpTION ZIPs, HDF5 files, CriticalFindings JSON, processed SNOGIT caches, SNOGIT ZIPs, and custom blacklist rule files.
+
+## Related docs
+
+- User guide: `README_alt.md`
+- RF2 ingestion: `docs/rf2-to-hdf5-ingestion-design.md`
+- Sanitization: `docs/sanitization-revised-design.md`
+- Release view / blacklist modes: `docs/release-view-normalization-and-blacklist-metadata.md`
+- SNOGIT/BM25: `docs/snogit-bm25-candidates-design.md`
+- Follow-ups/docs review: `docs/release-view-follow-ups-and-docs-review.md`
