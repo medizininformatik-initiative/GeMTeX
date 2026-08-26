@@ -62,4 +62,4 @@ Use these documents for the maintained design:
 - `docs/sanitization-revised-design.md`
 - `docs/release-view-normalization-and-blacklist-metadata.md`
 - `docs/snogit-bm25-candidates-design.md`
-- `README_alt.md`
+- `README.md`

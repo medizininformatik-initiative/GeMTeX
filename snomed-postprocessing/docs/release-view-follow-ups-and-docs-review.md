@@ -55,7 +55,7 @@ Completed cleanup:
 
 | File | Status |
 |---|---|
-| `README_alt.md` | Main user guide; updated with release-view, blacklist, BM25, and processed SNOGIT-cache usage. |
+| `README.md` | Main user guide; updated with release-view, blacklist, BM25, and processed SNOGIT-cache usage. |
 | `docs/release-view-normalization-and-blacklist-metadata.md` | Focused release-view and blacklist semantics note. |
 | `docs/rf2-to-hdf5-ingestion-design.md` | Shortened to current ingestion behavior, HDF5 layout, CLI examples, and key decisions. |
 | `docs/sanitization-revised-design.md` | Shortened to current sanitization workflow, target-view gates, suggestion sources, and write-back behavior. |

@@ -151,7 +151,7 @@ RF2 ingestion is designed to process large releases without loading unnecessary 
 
 ## Related docs
 
-- User guide: `README_alt.md`
+- User guide: `README.md`
 - Release-view blacklist semantics: `docs/release-view-normalization-and-blacklist-metadata.md`
 - Sanitization design: `docs/sanitization-revised-design.md`
 - SNOMED/RF2 background: `okf/snomed/`

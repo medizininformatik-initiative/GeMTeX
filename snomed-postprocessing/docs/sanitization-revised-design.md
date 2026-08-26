@@ -158,4 +158,4 @@ Optional fallbacks:
 - Release-view semantics and blacklist modes: `docs/release-view-normalization-and-blacklist-metadata.md`
 - SNOGIT/BM25 details: `docs/snogit-bm25-candidates-design.md`
 - RF2/HDF5 ingestion: `docs/rf2-to-hdf5-ingestion-design.md`
-- User guide: `README_alt.md`
+- User guide: `README.md`

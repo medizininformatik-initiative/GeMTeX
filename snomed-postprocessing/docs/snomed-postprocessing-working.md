@@ -1,6 +1,6 @@
 # SNOMED Postprocessing — maintainer map
 
-This file is a compact code map for maintainers. User-facing usage belongs in `README_alt.md`; design details belong in the focused docs under `docs/`.
+This file is a compact code map for maintainers. User-facing usage belongs in `README.md`; design details belong in the focused docs under `docs/`.
 
 ## Entry points
 
@@ -77,7 +77,7 @@ This applies to INCEpTION ZIPs, HDF5 files, CriticalFindings JSON, processed SNO
 
 ## Related docs
 
-- User guide: `README_alt.md`
+- User guide: `README.md`
 - RF2 ingestion: `docs/rf2-to-hdf5-ingestion-design.md`
 - Sanitization: `docs/sanitization-revised-design.md`
 - Release view / blacklist modes: `docs/release-view-normalization-and-blacklist-metadata.md`
