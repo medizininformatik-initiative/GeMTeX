@@ -1,3 +1,7 @@
 legacy/
 __pycache__/
 *.py[cod]
+tmp-pycaprio
+tmp-inception
+okf/inception
+okf/pycaprio

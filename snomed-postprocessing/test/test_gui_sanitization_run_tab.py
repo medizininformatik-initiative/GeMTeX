@@ -104,6 +104,35 @@ def test_single_snogit_bm25_replacement_status_mentions_snogit():
     assert _status_label_for_suggestion(suggestion) == "BM25 suggestion (SNOGIT)"
 
 
+def test_context_candidates_are_not_selectable_replacement_options():
+    suggestion = SimpleNamespace(
+        status=SanitizationStatus.AMBIGUOUS_REPLACEMENT,
+        replacement_code=None,
+        replacement_fsn=None,
+        context_candidates=(
+            SimpleNamespace(
+                code="111111",
+                fsn="Rejected ancestor (finding)",
+                association_type="IS_A_HISTORICAL_OUTSIDE_DISTANCE_LIMIT",
+                effective_time="20240131",
+            ),
+        ),
+        candidates=(
+            SimpleNamespace(
+                code="222222",
+                fsn="Real candidate (finding)",
+                association_type="SAME_AS",
+            ),
+        ),
+    )
+
+    options, hints = _replacement_options_and_hints(suggestion)
+
+    assert options == ["222222 — Real candidate (finding)"]
+    assert "111111 — Rejected ancestor (finding)" not in options
+    assert all("OUTSIDE_DISTANCE_LIMIT" not in hint for hint in hints.values())
+
+
 def test_manual_choice_delete_counts_as_resolved():
     row = {
         "#": 1,

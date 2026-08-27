@@ -33,18 +33,40 @@ class TestSanitizationRun(unittest.TestCase):
         )
 
         exported_project = {
+            "name": "Example SNOMED project",
+            "slug": "example-snomed-project",
+            "description": "Original project description.",
             "source_documents": [
                 {
                     "name": "doc.txt",
                     "state": "ANNOTATION_FINISHED",
                 }
-            ]
+            ],
         }
         with zipfile.ZipFile(path, "w") as zip_file:
             zip_file.writestr("exportedproject.json", json.dumps(exported_project))
             zip_file.writestr("TypeSystem.xml", typesystem.to_xml())
             zip_file.writestr("annotation/doc.txt/annotator-a.xmi", cas.to_xmi())
             zip_file.writestr("annotation_ser/doc.txt/annotator-a.ser", b"serialized cas")
+
+    def test_sanitized_export_updates_project_name_slug_and_description(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            input_zip = tmp_path / "project.zip"
+            output_zip = tmp_path / "sanitized.zip"
+            self._write_project_zip(input_zip)
+
+            result = run_sanitization(input_zip, [], output_zip)
+
+            self.assertEqual(result.decision_count, 0)
+            with zipfile.ZipFile(output_zip, "r") as zip_file:
+                project = json.loads(zip_file.read("exportedproject.json"))
+            self.assertEqual(project["name"], "Example SNOMED project (sanitized)")
+            self.assertEqual(project["slug"], "example-snomed-project-sanitized")
+            self.assertEqual(
+                project["description"],
+                "Original project description.\n\nSanitized export (sanitized).",
+            )
 
     def test_manual_edit_decision_adds_marker_and_keeps_original_annotation(self):
         with tempfile.TemporaryDirectory() as tmp:

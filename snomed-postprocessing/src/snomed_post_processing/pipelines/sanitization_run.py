@@ -42,6 +42,7 @@ def run_sanitization(
     annotator_filter: Optional[set[str]] = None,
     id_prefix: str = "http://snomed.info/id/",
     manual_review_layer: str = "webanno.custom.ManualReview",
+    sanitized_project_suffix: str = "sanitized",
 ) -> SanitizationRunResult:
     """Apply reviewed sanitization decisions to copied INCEpTION/UIMA project ZIP.
 
@@ -57,6 +58,7 @@ def run_sanitization(
         raise SanitizationRunError("Output project must be different from input project.")
 
     manual_review_layer = str(manual_review_layer or "").strip() or "webanno.custom.ManualReview"
+    sanitized_project_suffix = str(sanitized_project_suffix or "").strip() or "sanitized"
     applicable_decisions = [decision for decision in decisions if _is_applicable_decision(decision)]
     skipped_decisions = [decision for decision in decisions if not _is_applicable_decision(decision)]
     decisions_by_key = _group_decisions_by_document_annotator(applicable_decisions)
@@ -118,11 +120,16 @@ def run_sanitization(
                     continue
                 data = in_zip.read(info.filename)
                 replacement_data = data
-                if any(_is_manual_edit_decision(decision) for decision in applicable_decisions):
-                    if info.filename == "exportedproject.json":
-                        replacement_data = _project_json_with_manual_review_layer(data, manual_review_layer)
-                    elif pathlib.PurePosixPath(info.filename).name == "TypeSystem.xml":
-                        replacement_data = _typesystem_xml_with_manual_review_layer(data, manual_review_layer)
+                has_manual_edit_decisions = any(_is_manual_edit_decision(decision) for decision in applicable_decisions)
+                if info.filename == "exportedproject.json":
+                    replacement_data = _sanitized_project_json(
+                        data,
+                        sanitized_project_suffix=sanitized_project_suffix,
+                        manual_review_layer=manual_review_layer,
+                        include_manual_review_layer=has_manual_edit_decisions,
+                    )
+                elif has_manual_edit_decisions and pathlib.PurePosixPath(info.filename).name == "TypeSystem.xml":
+                    replacement_data = _typesystem_xml_with_manual_review_layer(data, manual_review_layer)
                 if not info.is_dir() and info.filename in member_to_doc_annotator:
                     document, annotator = member_to_doc_annotator[info.filename]
                     key = (document, annotator)
@@ -186,16 +193,62 @@ def _typesystem_xml_with_manual_review_layer(data: bytes, manual_review_layer: s
         return data
 
 
-def _project_json_with_manual_review_layer(data: bytes, manual_review_layer: str) -> bytes:
+def _sanitized_project_json(
+    data: bytes,
+    *,
+    sanitized_project_suffix: str,
+    manual_review_layer: str,
+    include_manual_review_layer: bool,
+) -> bytes:
     import json
 
     try:
         project = json.loads(data.decode("utf-8"))
     except Exception:
         return data
+    _append_sanitized_project_labels(project, sanitized_project_suffix)
+    if include_manual_review_layer:
+        _ensure_manual_review_layer_in_project(project, manual_review_layer)
+    return json.dumps(project, ensure_ascii=False, indent=2).encode("utf-8")
+
+
+def _append_sanitized_project_labels(project: dict[str, Any], suffix: str) -> None:
+    project["name"] = _append_sanitized_name(project.get("name"), suffix)
+    project["slug"] = _append_sanitized_slug(project.get("slug"), suffix)
+    project["description"] = _append_sanitized_description(project.get("description"), suffix)
+
+
+def _append_sanitized_name(value: Any, suffix: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        text = "Project"
+    if suffix.lower() in text.lower():
+        return text
+    return f"{text} ({suffix})"
+
+
+def _append_sanitized_slug(value: Any, suffix: str) -> str:
+    text = str(value or "").strip() or "project"
+    suffix_slug = "".join(char.lower() if char.isalnum() else "-" for char in suffix).strip("-") or "sanitized"
+    if text.lower().endswith(f"-{suffix_slug}") or text.lower() == suffix_slug:
+        return text
+    return f"{text}-{suffix_slug}"
+
+
+def _append_sanitized_description(value: Any, suffix: str) -> str:
+    text = str(value or "").strip()
+    note = f"Sanitized export ({suffix})."
+    if "sanitized export" in text.lower():
+        return text
+    if text:
+        return f"{text}\n\n{note}"
+    return note
+
+
+def _ensure_manual_review_layer_in_project(project: dict[str, Any], manual_review_layer: str) -> None:
     layers = project.setdefault("layers", [])
     if any(layer.get("name") == manual_review_layer for layer in layers if isinstance(layer, dict)):
-        return data
+        return
     ui_name = manual_review_layer.rsplit(".", 1)[-1] or "ManualReview"
     feature_template = {
         "curatable": True,
@@ -253,7 +306,6 @@ def _project_json_with_manual_review_layer(data: bytes, manual_review_layer: str
             "validation_mode": "ALWAYS",
         }
     )
-    return json.dumps(project, ensure_ascii=False, indent=2).encode("utf-8")
 
 
 def _group_decisions_by_document_annotator(decisions: list[dict[str, Any]]) -> dict[tuple[str, str], list[tuple[int, dict[str, Any]]]]:

@@ -435,6 +435,17 @@ def _keep_document_open(document: str) -> None:
     st.session_state["sanitization_keep_document_open"] = document
 
 
+def _mark_document_reviewed(document: str) -> None:
+    st.session_state[_document_reviewed_key(document)] = True
+    st.session_state.pop("sanitization_keep_document_open", None)
+
+
+def _save_current_document_review_state(document: str, manual_row_numbers: list[int]) -> None:
+    if st.session_state.get(_document_reviewed_key(document), False):
+        _save_manual_choice_form(document, manual_row_numbers)
+        st.session_state[_document_reviewed_key(document)] = True
+
+
 def _review_state_revision() -> int:
     return int(st.session_state.get("sanitization_review_state_revision", 0))
 
@@ -572,22 +583,35 @@ def _render_document_review_sections(rows: list[dict[str, Any]]) -> list[dict[st
                             "_needs_choice": None,
                         },
                     )
-                    st.form_submit_button(
-                        "Save single/no-choice selections",
-                        on_click=_keep_document_open,
-                        args=(document,),
-                    )
+                    submit_col1, submit_col2 = st.columns(2)
+                    with submit_col1:
+                        st.form_submit_button(
+                            "Save single/no-choice selections",
+                            on_click=_keep_document_open,
+                            args=(document,),
+                            width="stretch",
+                        )
+                    with submit_col2:
+                        st.form_submit_button(
+                            "Save and mark document reviewed",
+                            on_click=_mark_document_reviewed,
+                            args=(document,),
+                            width="stretch",
+                        )
                 decisions.extend(
                     _review_rows_to_decisions(edited.to_dict("records"), automatic_rows, {})
                 )
 
+            all_manual_row_numbers = [int(row["#"]) for row in manual_rows]
             st.checkbox(
                 "Document reviewed",
                 key=reviewed_key,
                 help=(
-                    "This is separate from saving choices: it marks your review "
-                    "progress and collapses this document on the next rerun."
+                    "Marks review progress and saves current manual-choice widget state. "
+                    "If you have unsaved edits inside a form, use that form's 'Save and mark document reviewed' button."
                 ),
+                on_change=_save_current_document_review_state,
+                args=(document, all_manual_row_numbers),
             )
     return decisions
 
@@ -706,6 +730,11 @@ def _save_manual_choice_form(document: str, row_numbers: list[int]) -> None:
         st.session_state[previous_choice_key] = choice
 
 
+def _save_manual_choice_form_and_mark_reviewed(document: str, row_numbers: list[int]) -> None:
+    _save_manual_choice_form(document, row_numbers)
+    _mark_document_reviewed(document)
+
+
 def _render_manual_choice_cards(rows: list[dict[str, Any]], document: str) -> list[dict[str, Any]]:
     decisions: list[dict[str, Any]] = []
     st.caption(
@@ -772,12 +801,23 @@ def _render_manual_choice_cards(rows: list[dict[str, Any]], document: str) -> li
                     {row_number: choice},
                 )
             )
-        st.form_submit_button(
-            "Save choices",
-            help="Save dropdown and apply-checkbox edits for this document.",
-            on_click=_save_manual_choice_form,
-            args=(document, row_numbers),
-        )
+        submit_col1, submit_col2 = st.columns(2)
+        with submit_col1:
+            st.form_submit_button(
+                "Save choices",
+                help="Save dropdown and checkbox edits for this document.",
+                on_click=_save_manual_choice_form,
+                args=(document, row_numbers),
+                width="stretch",
+            )
+        with submit_col2:
+            st.form_submit_button(
+                "Save and mark document reviewed",
+                help="Save dropdown and checkbox edits, then mark this document section as reviewed.",
+                on_click=_save_manual_choice_form_and_mark_reviewed,
+                args=(document, row_numbers),
+                width="stretch",
+            )
     return decisions
 
 
@@ -1099,11 +1139,9 @@ def _replacement_options_and_hints(suggestion: Any) -> tuple[list[str], dict[str
         if not _needs_top_k_choice(suggestion):
             return labels, hints
 
-    for rank, candidate in enumerate(getattr(suggestion, "context_candidates", ()) or (), start=1):
-        add_label(
-            _code_fsn_label(getattr(candidate, "code", None), getattr(candidate, "fsn", None)),
-            _candidate_rationale(candidate, rank=rank),
-        )
+    # ``context_candidates`` are diagnostic/provenance context only, e.g.
+    # ancestors rejected because they are outside the configured distance limit.
+    # They must not be selectable replacement choices.
     for rank, candidate in enumerate(getattr(suggestion, "candidates", ()) or (), start=1):
         add_label(
             _code_fsn_label(getattr(candidate, "code", None), getattr(candidate, "fsn", None)),
