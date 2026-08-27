@@ -477,7 +477,10 @@ def _render_document_review_sections(rows: list[dict[str, Any]]) -> list[dict[st
                 decisions.extend(_render_manual_choice_cards(manual_rows, document))
 
             if automatic_rows:
-                st.markdown("#### Single/no-choice suggestions")
+                st.markdown(
+                    "#### Single/no-choice suggestions",
+                    help="Checkbox behavior: no selection keeps the annotation unchanged; deletion takes precedence if both 'Apply' and 'Delete' annotation are selected."
+                )
                 review_df = pd.DataFrame(automatic_rows).drop(
                     columns=["Document", "_offset", "_layer", "_status_raw"],
                     errors="ignore",

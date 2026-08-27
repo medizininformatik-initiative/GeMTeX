@@ -44,7 +44,7 @@ def test_finding_context_fallback_explains_missing_full_document_text():
         covered_text="covered",
     )
 
-    assert _finding_context_label(finding, {}) == "No full document context loaded: … covered …"
+    assert _finding_context_label(finding, {}) == "No full document context loaded."
 
 
 def test_single_bm25_replacement_is_not_manual_choice():
