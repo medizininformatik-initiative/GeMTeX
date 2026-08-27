@@ -70,7 +70,10 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
         st.caption(f"Suggestion report: `{report_path}`")
 
     document_texts = _project_document_text_lookup(st.session_state.get("zip_file"))
-    rows = _suggestions_to_review_rows(suggestions, document_texts)
+    metadata_contexts = _metadata_finding_context_lookup(
+        st.session_state.get("sanitization_suggestions_metadata") or {}
+    )
+    rows = _suggestions_to_review_rows(suggestions, document_texts, metadata_contexts)
     _render_review_summary(rows)
 
     with st.popover("Suggestion metadata"):
@@ -520,11 +523,11 @@ def _render_document_review_sections(rows: list[dict[str, Any]]) -> list[dict[st
                         ],
                         column_config={
                             "Apply": st.column_config.CheckboxColumn(
-                                "Apply replacement",
+                                "Apply",
                                 help="Toggle whether this replacement should be applied in the sanitization run.",
                             ),
                             "Delete annotation": st.column_config.CheckboxColumn(
-                                "Delete annotation",
+                                "Delete",
                                 help="Remove this matched annotation from the sanitized project copy instead of replacing its concept ID.",
                             ),
                             "Policy issue": st.column_config.TextColumn(
@@ -573,7 +576,7 @@ def _render_document_metrics(document_rows: list[dict[str, Any]]) -> None:
     deletes = sum(1 for row in document_rows if _row_delete_selected(row))
     manual_total = sum(1 for row in document_rows if row.get("_needs_choice"))
     manual_selected = sum(
-        1 for row in document_rows if row.get("_needs_choice") and _row_apply_selected(row)
+        1 for row in document_rows if row.get("_needs_choice") and _row_manual_choice_resolved(row)
     )
     no_replacement = sum(
         1 for row in document_rows if row.get("Suggested replacement") == NO_REPLACEMENT_LABEL
@@ -596,20 +599,25 @@ def _render_manual_choice_bulk_actions(
     if not manual_rows:
         return
     applied_count = sum(1 for row in manual_rows if _row_apply_selected(row))
+    delete_count = sum(1 for row in manual_rows if _row_delete_selected(row))
+    resolved_count = sum(1 for row in manual_rows if _row_manual_choice_resolved(row))
     if compact:
         st.caption(
             f"Bulk actions for {len(manual_rows)} manual-choice suggestion(s) in "
-            f"this document; {applied_count} currently selected."
+            f"this document; {resolved_count} currently resolved "
+            f"({applied_count} replacement(s), {delete_count} deletion(s))."
         )
-    elif applied_count == len(manual_rows):
+    elif resolved_count == len(manual_rows):
         st.success(
             f"All {len(manual_rows)} manual-choice suggestion(s) currently have "
-            "an applied replacement selected. Inspect exceptions per document before running."
+            f"a reviewed action selected ({applied_count} replacement(s), "
+            f"{delete_count} deletion(s)). Inspect exceptions per document before running."
         )
     else:
         st.warning(
             f"{len(manual_rows)} suggestion(s) need manual choices; "
-            f"{applied_count} currently have an applied replacement selected. If the first "
+            f"{resolved_count} currently have a reviewed action selected "
+            f"({applied_count} replacement(s), {delete_count} deletion(s)). If the first "
             "candidate is acceptable as a review starting point, use the bulk action "
             "below and then inspect exceptions per document."
         )
@@ -758,7 +766,7 @@ def _document_review_title(
     deletes = sum(1 for row in document_rows if _row_delete_selected(row))
     manual_total = sum(1 for row in document_rows if row.get("_needs_choice"))
     manual_selected = sum(
-        1 for row in document_rows if row.get("_needs_choice") and _row_apply_selected(row)
+        1 for row in document_rows if row.get("_needs_choice") and _row_manual_choice_resolved(row)
     )
     no_replacement = sum(
         1 for row in document_rows if row.get("Suggested replacement") == NO_REPLACEMENT_LABEL
@@ -804,6 +812,10 @@ def _row_delete_selected(row: dict[str, Any]) -> bool:
     if row.get("_needs_choice"):
         return bool(st.session_state.get(_manual_delete_key(row_number), row.get("Delete annotation")))
     return bool(row.get("Delete annotation"))
+
+
+def _row_manual_choice_resolved(row: dict[str, Any]) -> bool:
+    return _row_apply_selected(row) or _row_delete_selected(row)
 
 
 def _render_non_actionable_summary(rows: list[dict[str, Any]]) -> None:
@@ -907,7 +919,9 @@ def _render_suggestion_settings(metadata: dict[str, Any]) -> None:
 
 
 def _suggestions_to_review_rows(
-    suggestions: list[Any], document_texts: dict[str, str] | None = None
+    suggestions: list[Any],
+    document_texts: dict[str, str] | None = None,
+    metadata_contexts: dict[tuple[str, str, str, tuple[int, int]], str] | None = None,
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     restored_by_index = st.session_state.get("sanitization_restored_decisions_by_index", {})
@@ -938,13 +952,17 @@ def _suggestions_to_review_rows(
                 "Source code": suggestion.finding.code or "",
                 "Covered text": suggestion.finding.covered_text,
                 "Policy issue": _policy_issue_label(suggestion.finding),
-                "Finding context": _finding_context_label(suggestion.finding, document_texts or {}),
+                "Finding context": _finding_context_label(
+                    suggestion.finding,
+                    document_texts or {},
+                    metadata_contexts or {},
+                ),
                 "Suggested replacement": selected_label if needs_choice else replacement_label,
                 "Why suggested": replacement_hints.get(
                     selected_label if needs_choice else replacement_label, ""
                 ),
                 "Original FSN": suggestion.finding.fsn or "",
-                "Status": _status_label(suggestion.status),
+                "Status": _status_label_for_suggestion(suggestion),
                 "_status_raw": _status_value(suggestion.status),
                 "_offset": tuple(suggestion.finding.offset),
                 "_layer": suggestion.finding.layer,
@@ -1043,15 +1061,55 @@ def _policy_issue_label(finding: Any) -> str:
     return f"Reason: {reason}" if reason else "Reason: policy finding"
 
 
-def _finding_context_label(finding: Any, document_texts: dict[str, str]) -> str:
+def _finding_context_label(
+    finding: Any,
+    document_texts: dict[str, str],
+    metadata_contexts: dict[tuple[str, str, str, tuple[int, int]], str] | None = None,
+) -> str:
     document_text = _lookup_document_text(document_texts, str(getattr(finding, "document", "")))
     offset = getattr(finding, "offset", None)
     if document_text and offset and len(offset) == 2:
         return _offset_context(document_text, int(offset[0]), int(offset[1]))
+    metadata_context = (metadata_contexts or {}).get(_finding_context_key(finding))
+    if metadata_context:
+        return metadata_context
     covered_text = _compact_text(getattr(finding, "covered_text", ""), max_length=80)
     if covered_text:
-        return f"… {covered_text} …"
+        return f"No full document context loaded."
     return "No document text context available."
+
+
+def _finding_context_key(finding: Any) -> tuple[str, str, str, tuple[int, int]]:
+    offset = tuple(int(value) for value in (getattr(finding, "offset", None) or ()))
+    if len(offset) != 2:
+        offset = (-1, -1)
+    return (
+        str(getattr(finding, "document", "") or ""),
+        str(getattr(finding, "annotator", "") or ""),
+        str(getattr(finding, "code", "") or ""),
+        offset,
+    )
+
+
+def _metadata_finding_context_lookup(metadata: dict[str, Any]) -> dict[tuple[str, str, str, tuple[int, int]], str]:
+    lookup: dict[tuple[str, str, str, tuple[int, int]], str] = {}
+    for item in metadata.get("finding_contexts", ()) or ():
+        try:
+            offset = tuple(int(value) for value in item.get("offset", ()))
+            if len(offset) != 2:
+                continue
+            key = (
+                str(item.get("document", "") or ""),
+                str(item.get("annotator", "") or ""),
+                str(item.get("code", "") or ""),
+                offset,
+            )
+            context = str(item.get("context", "") or "")
+        except Exception:
+            continue
+        if context:
+            lookup[key] = context
+    return lookup
 
 
 def _lookup_document_text(document_texts: dict[str, str], document: str) -> str:
@@ -1186,6 +1244,28 @@ def _fsn_from_label(label: str) -> str | None:
     if not label or label == NO_REPLACEMENT_LABEL or " — " not in label:
         return None
     return label.split(" — ", 1)[1] or None
+
+
+def _status_label_for_suggestion(suggestion: Any) -> str:
+    label = _status_label(getattr(suggestion, "status", ""))
+    if (
+        _status_value(getattr(suggestion, "status", ""))
+        == SanitizationStatus.SEMANTIC_BM25_REPLACEMENT.value
+        and _bm25_suggestion_uses_snogit(suggestion)
+    ):
+        return f"{label} (SNOGIT)"
+    return label
+
+
+def _bm25_suggestion_uses_snogit(suggestion: Any) -> bool:
+    replacement_code = str(getattr(suggestion, "replacement_code", "") or "")
+    for candidate in getattr(suggestion, "candidates", ()) or ():
+        if getattr(candidate, "source", "snomed_fsn") != "snogit":
+            continue
+        candidate_code = str(getattr(candidate, "code", "") or "")
+        if not replacement_code or candidate_code == replacement_code:
+            return True
+    return False
 
 
 def _status_label(status: Any) -> str:

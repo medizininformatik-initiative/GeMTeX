@@ -34,6 +34,7 @@ from snomed_post_processing.sanitization import (
 from .downloads import download_json_report, download_md_report
 from .file_sources import list_server_files, render_file_source_selector
 from .files import save_uploaded_file
+from .sanitization_run_tab import _finding_context_label, _project_document_text_lookup
 from .sidebar import GuiInputs
 
 
@@ -50,6 +51,33 @@ def _enforce_embedded_blacklist(release_blacklist_mode: str) -> bool:
 
 def _uses_custom_blacklist(release_blacklist_mode: str) -> bool:
     return release_blacklist_mode in {"custom", "embedded+custom"}
+
+
+def _suggestion_context_metadata(suggestions: list[Any]) -> list[dict[str, Any]]:
+    document_texts = _project_document_text_lookup(st.session_state.get("zip_file"))
+    if not document_texts:
+        return []
+    contexts = []
+    for suggestion in suggestions:
+        finding = getattr(suggestion, "finding", None)
+        if finding is None:
+            continue
+        offset = tuple(getattr(finding, "offset", ()) or ())
+        if len(offset) != 2:
+            continue
+        context = _finding_context_label(finding, document_texts)
+        if not context or context.startswith("No full document context loaded:"):
+            continue
+        contexts.append(
+            {
+                "document": str(getattr(finding, "document", "") or ""),
+                "annotator": str(getattr(finding, "annotator", "") or ""),
+                "code": str(getattr(finding, "code", "") or ""),
+                "offset": [int(offset[0]), int(offset[1])],
+                "context": context,
+            }
+        )
+    return contexts
 
 
 def _prepare_custom_blacklist_path(runtime_blacklist_file: Any) -> pathlib.Path:
@@ -606,6 +634,7 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                 "hdf5_rf2_view": hdf5_summary.concepts_rf2_view,
                 "finding_count": len(findings),
                 "suggestion_count": len(suggestions),
+                "finding_contexts": _suggestion_context_metadata(suggestions),
                 "settings": sanitization_settings,
             }
             with output_sanitization_md.open("w", encoding="utf-8") as sanitization_fi:

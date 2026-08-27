@@ -1,11 +1,50 @@
 from types import SimpleNamespace
 
 from snomed_post_processing.gui.sanitization_run_tab import (
+    _finding_context_label,
+    _metadata_finding_context_lookup,
     _needs_row_specific_choice,
     _replacement_options_and_hints,
+    _row_manual_choice_resolved,
     _status_label,
+    _status_label_for_suggestion,
 )
 from snomed_post_processing.sanitization.models import SanitizationStatus
+
+
+def test_finding_context_uses_metadata_when_project_text_is_unavailable():
+    finding = SimpleNamespace(
+        document="doc.txt.xmi",
+        annotator="fmatthies",
+        code="123456",
+        offset=(10, 20),
+        covered_text="covered",
+    )
+    metadata = {
+        "finding_contexts": [
+            {
+                "document": "doc.txt.xmi",
+                "annotator": "fmatthies",
+                "code": "123456",
+                "offset": [10, 20],
+                "context": "… real [covered] context …",
+            }
+        ]
+    }
+
+    assert _finding_context_label(finding, {}, _metadata_finding_context_lookup(metadata)) == "… real [covered] context …"
+
+
+def test_finding_context_fallback_explains_missing_full_document_text():
+    finding = SimpleNamespace(
+        document="doc.txt.xmi",
+        annotator="fmatthies",
+        code="123456",
+        offset=(10, 20),
+        covered_text="covered",
+    )
+
+    assert _finding_context_label(finding, {}) == "No full document context loaded: … covered …"
 
 
 def test_single_bm25_replacement_is_not_manual_choice():
@@ -39,6 +78,41 @@ def test_single_bm25_replacement_is_not_manual_choice():
     assert options == ["123456 — Candidate concept (finding)"]
     assert not _needs_row_specific_choice(suggestion, options)
     assert _status_label(suggestion.status) == "BM25 suggestion"
+    assert _status_label_for_suggestion(suggestion) == "BM25 suggestion"
+
+
+def test_single_snogit_bm25_replacement_status_mentions_snogit():
+    suggestion = SimpleNamespace(
+        status=SanitizationStatus.SEMANTIC_BM25_REPLACEMENT,
+        replacement_code="123456",
+        replacement_fsn="Candidate concept (finding)",
+        candidates=(
+            SimpleNamespace(
+                code="123456",
+                fsn="Candidate concept (finding)",
+                score=7.5,
+                lexical_score=1.0,
+                semantic_tag="finding",
+                source="snogit",
+                matched_term="candidate term",
+                source_member="SNOGIT_20240131.dat",
+            ),
+        ),
+    )
+
+    assert _status_label_for_suggestion(suggestion) == "BM25 suggestion (SNOGIT)"
+
+
+def test_manual_choice_delete_counts_as_resolved():
+    row = {
+        "#": 1,
+        "_needs_choice": True,
+        "Apply": False,
+        "Delete annotation": True,
+        "Suggested replacement": "123456 — Candidate concept (finding)",
+    }
+
+    assert _row_manual_choice_resolved(row)
 
 
 def test_ambiguous_bm25_replacement_still_requires_choice():
