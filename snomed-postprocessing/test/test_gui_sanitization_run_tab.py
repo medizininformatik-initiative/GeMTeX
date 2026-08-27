@@ -5,6 +5,7 @@ from snomed_post_processing.gui.sanitization_run_tab import (
     _metadata_finding_context_lookup,
     _needs_row_specific_choice,
     _replacement_options_and_hints,
+    _review_rows_to_decisions,
     _row_manual_choice_resolved,
     _status_label,
     _status_label_for_suggestion,
@@ -113,6 +114,48 @@ def test_manual_choice_delete_counts_as_resolved():
     }
 
     assert _row_manual_choice_resolved(row)
+
+
+def test_manual_choice_manual_edit_counts_as_resolved():
+    row = {
+        "#": 1,
+        "_needs_choice": True,
+        "Apply": False,
+        "Delete annotation": False,
+        "Needs manual edit": True,
+        "Suggested replacement": "123456 — Candidate concept (finding)",
+    }
+
+    assert _row_manual_choice_resolved(row)
+
+
+def test_manual_edit_decision_takes_precedence_over_apply_and_delete():
+    original = {
+        "#": 1,
+        "Document": "doc.txt",
+        "Status": "Ambiguous replacement",
+        "Why suggested": "multiple candidates",
+        "_offset": (12, 21),
+        "_layer": "gemtex.Concept",
+        "_valid_choices": ("123456 — Candidate concept (finding)",),
+    }
+    edited = {
+        "#": 1,
+        "Apply": True,
+        "Delete annotation": True,
+        "Needs manual edit": True,
+        "Annotator": "annotator-a",
+        "Source code": "233604007",
+        "Covered text": "pneumonia",
+        "Suggested replacement": "123456 — Candidate concept (finding)",
+    }
+
+    decision = _review_rows_to_decisions([edited], [original], {})[0]
+
+    assert decision["action"] == "manual_edit"
+    assert decision["manual_edit"] is True
+    assert decision["apply"] is False
+    assert decision["delete_annotation"] is False
 
 
 def test_ambiguous_bm25_replacement_still_requires_choice():

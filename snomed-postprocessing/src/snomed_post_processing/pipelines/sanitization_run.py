@@ -41,6 +41,7 @@ def run_sanitization(
     *,
     annotator_filter: Optional[set[str]] = None,
     id_prefix: str = "http://snomed.info/id/",
+    manual_review_layer: str = "webanno.custom.ManualReview",
 ) -> SanitizationRunResult:
     """Apply reviewed sanitization decisions to copied INCEpTION/UIMA project ZIP.
 
@@ -55,6 +56,7 @@ def run_sanitization(
     if input_project.resolve() == output_project.resolve():
         raise SanitizationRunError("Output project must be different from input project.")
 
+    manual_review_layer = str(manual_review_layer or "").strip() or "webanno.custom.ManualReview"
     applicable_decisions = [decision for decision in decisions if _is_applicable_decision(decision)]
     skipped_decisions = [decision for decision in decisions if not _is_applicable_decision(decision)]
     decisions_by_key = _group_decisions_by_document_annotator(applicable_decisions)
@@ -116,6 +118,11 @@ def run_sanitization(
                     continue
                 data = in_zip.read(info.filename)
                 replacement_data = data
+                if any(_is_manual_edit_decision(decision) for decision in applicable_decisions):
+                    if info.filename == "exportedproject.json":
+                        replacement_data = _project_json_with_manual_review_layer(data, manual_review_layer)
+                    elif pathlib.PurePosixPath(info.filename).name == "TypeSystem.xml":
+                        replacement_data = _typesystem_xml_with_manual_review_layer(data, manual_review_layer)
                 if not info.is_dir() and info.filename in member_to_doc_annotator:
                     document, annotator = member_to_doc_annotator[info.filename]
                     key = (document, annotator)
@@ -127,7 +134,13 @@ def run_sanitization(
                             cas_typesystem = _load_typesystem_from_zip(in_zip, info.filename) or typesystem
                             typesystem_by_parent[parent] = cas_typesystem
                         cas = _load_cas_from_zip_member(in_zip, info.filename, typesystem=cas_typesystem)
-                        changed = _apply_decisions_to_cas(cas, member_decisions, matched_decision_indices, id_prefix=id_prefix)
+                        changed = _apply_decisions_to_cas(
+                            cas,
+                            member_decisions,
+                            matched_decision_indices,
+                            id_prefix=id_prefix,
+                            manual_review_layer=manual_review_layer,
+                        )
                         if changed:
                             replacement_data = _serialize_cas_for_member(cas, info.filename)
                             changed_member_count += 1
@@ -151,9 +164,96 @@ def run_sanitization(
 
 
 def _is_applicable_decision(decision: dict[str, Any]) -> bool:
+    if _is_manual_edit_decision(decision):
+        return True
     if bool(decision.get("delete_annotation")) or decision.get("action") == "delete":
         return True
     return bool(decision.get("apply")) and bool(decision.get("valid_choice")) and bool(decision.get("replacement_code"))
+
+
+def _is_manual_edit_decision(decision: dict[str, Any]) -> bool:
+    return bool(decision.get("manual_edit")) or decision.get("action") == "manual_edit"
+
+
+def _typesystem_xml_with_manual_review_layer(data: bytes, manual_review_layer: str) -> bytes:
+    import cassis
+
+    try:
+        typesystem = cassis.load_typesystem(io.BytesIO(data))
+        _ensure_manual_review_type_on_typesystem(typesystem, manual_review_layer)
+        return typesystem.to_xml().encode("utf-8")
+    except Exception:
+        return data
+
+
+def _project_json_with_manual_review_layer(data: bytes, manual_review_layer: str) -> bytes:
+    import json
+
+    try:
+        project = json.loads(data.decode("utf-8"))
+    except Exception:
+        return data
+    layers = project.setdefault("layers", [])
+    if any(layer.get("name") == manual_review_layer for layer in layers if isinstance(layer, dict)):
+        return data
+    ui_name = manual_review_layer.rsplit(".", 1)[-1] or "ManualReview"
+    feature_template = {
+        "curatable": True,
+        "description": None,
+        "enabled": True,
+        "hideUnconstraintFeature": False,
+        "include_in_hover": True,
+        "link_mode": "NONE",
+        "link_type_name": None,
+        "link_type_role_feature_name": None,
+        "link_type_target_feature_name": None,
+        "multi_value_mode": "NONE",
+        "rank": 0,
+        "remember": False,
+        "required": False,
+        "tag_set": None,
+        "traits": '{"multipleRows":false,"dynamicSize":false,"collapsedRows":1,"expandedRows":1,"editorType":"AUTO","keyBindings":[]}',
+        "type": "uima.cas.String",
+        "visible": True,
+    }
+    features = []
+    for name, ui_name_feature in (
+        ("source_code", "Source code"),
+        ("covered_text", "Covered text"),
+        ("suggestion_status", "Suggestion status"),
+        ("suggested_replacement", "Suggested replacement"),
+        ("review_note", "Review note"),
+    ):
+        feature = dict(feature_template)
+        feature["name"] = name
+        feature["uiName"] = ui_name_feature
+        features.append(feature)
+    layers.append(
+        {
+            "allow_stacking": True,
+            "anchoring_mode": "CHARACTERS",
+            "attach_feature": None,
+            "attach_type": None,
+            "built_in": False,
+            "cross_sentence": True,
+            "description": "Markers for SNOMED annotations requiring manual editing after sanitization.",
+            "enabled": True,
+            "features": features,
+            "linked_list_behavior": False,
+            "lock_to_token_offset": False,
+            "multiple_tokens": True,
+            "name": manual_review_layer,
+            "on_click_javascript_action": None,
+            "overlap_mode": "ANY_OVERLAP",
+            "readonly": False,
+            "show_hover": True,
+            "traits": '{"coloringRules":{"rules":[]}}',
+            "type": "span",
+            "uiName": ui_name,
+            "validation_mode": "ALWAYS",
+        }
+    )
+    return json.dumps(project, ensure_ascii=False, indent=2).encode("utf-8")
 
 
 def _group_decisions_by_document_annotator(decisions: list[dict[str, Any]]) -> dict[tuple[str, str], list[tuple[int, dict[str, Any]]]]:
@@ -163,11 +263,20 @@ def _group_decisions_by_document_annotator(decisions: list[dict[str, Any]]) -> d
     return grouped
 
 
-def _apply_decisions_to_cas(cas, decisions: list[tuple[int, dict[str, Any]]], matched_indices: set[int], *, id_prefix: str) -> int:
+def _apply_decisions_to_cas(
+    cas,
+    decisions: list[tuple[int, dict[str, Any]]],
+    matched_indices: set[int],
+    *,
+    id_prefix: str,
+    manual_review_layer: str,
+) -> int:
     changed = 0
     for decision_idx, decision in decisions:
         for annotation in _matching_annotations(cas, decision, id_prefix=id_prefix):
-            if bool(decision.get("delete_annotation")) or decision.get("action") == "delete":
+            if bool(decision.get("manual_edit")) or decision.get("action") == "manual_edit":
+                _add_manual_review_marker(cas, annotation, decision, manual_review_layer=manual_review_layer)
+            elif bool(decision.get("delete_annotation")) or decision.get("action") == "delete":
                 _remove_annotation(cas, annotation)
             else:
                 current_id = annotation.get("id")
@@ -176,6 +285,60 @@ def _apply_decisions_to_cas(cas, decisions: list[tuple[int, dict[str, Any]]], ma
             changed += 1
             break
     return changed
+
+
+def _add_manual_review_marker(cas, source_annotation, decision: dict[str, Any], *, manual_review_layer: str) -> None:
+    marker_type = _ensure_manual_review_type(cas, manual_review_layer)
+    replacement = decision.get("replacement_code") or ""
+    replacement_fsn = decision.get("replacement_fsn") or ""
+    if replacement and replacement_fsn:
+        suggested_replacement = f"{replacement} — {replacement_fsn}"
+    else:
+        suggested_replacement = str(replacement or replacement_fsn or "")
+    marker = marker_type(
+        begin=int(source_annotation.begin),
+        end=int(source_annotation.end),
+        source_code=str(decision.get("source_code", "") or ""),
+        covered_text=str(decision.get("covered_text", "") or ""),
+        suggestion_status=str(decision.get("suggestion_status", "") or ""),
+        suggested_replacement=suggested_replacement,
+        review_note=str(decision.get("review_note", "") or ""),
+    )
+    cas.add(marker)
+
+
+def _ensure_manual_review_type(cas, manual_review_layer: str):
+    typesystem = getattr(cas, "typesystem", None)
+    if typesystem is None:
+        raise SanitizationRunError("CAS implementation does not expose a type system.")
+    return _ensure_manual_review_type_on_typesystem(typesystem, manual_review_layer)
+
+
+def _ensure_manual_review_type_on_typesystem(typesystem, manual_review_layer: str):
+    if not typesystem.contains_type(manual_review_layer):
+        marker_type = typesystem.create_type(manual_review_layer, supertypeName="uima.tcas.Annotation")
+    else:
+        marker_type = typesystem.get_type(manual_review_layer)
+    for feature_name in (
+        "source_code",
+        "covered_text",
+        "suggestion_status",
+        "suggested_replacement",
+        "review_note",
+    ):
+        _ensure_string_feature(typesystem, marker_type, feature_name)
+    return marker_type
+
+
+def _ensure_string_feature(typesystem, type_, feature_name: str) -> None:
+    if any(getattr(feature, "name", "") == feature_name for feature in getattr(type_, "features", ())):
+        return
+    try:
+        typesystem.create_feature(type_, feature_name, "uima.cas.String")
+    except Exception:
+        # If another CAS implementation reports existing features differently,
+        # tolerate duplicate-feature errors and let annotation creation validate.
+        pass
 
 
 def _remove_annotation(cas, annotation) -> None:
