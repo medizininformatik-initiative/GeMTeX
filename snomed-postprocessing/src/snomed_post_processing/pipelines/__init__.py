@@ -8,7 +8,13 @@ from .inception_shell_project import (
     InceptionShellProjectResult,
     build_inception_shell_project,
 )
-from .sanitization_run import SanitizationRunError, SanitizationRunResult, run_sanitization
+from .sanitization_run import (
+    SanitizationRunError,
+    SanitizationRunResult,
+    SanitizedCasBytesResult,
+    run_sanitization,
+    sanitize_cas_bytes,
+)
 
 __all__ = [
     "run_log_documents",
@@ -17,6 +23,8 @@ __all__ = [
     "run_sanitization",
     "SanitizationRunError",
     "SanitizationRunResult",
+    "SanitizedCasBytesResult",
+    "sanitize_cas_bytes",
     "build_inception_shell_project",
     "InceptionShellProjectError",
     "InceptionShellProjectResult",

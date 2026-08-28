@@ -9,12 +9,16 @@ import zipfile
 from typing import Any
 
 from .sanitization_run import (
-    _append_sanitized_project_labels,
+    _append_sanitized_description,
+    _append_sanitized_name,
+    _append_sanitized_slug,
     _ensure_manual_review_layer_in_project,
 )
 
 
 DEFAULT_MANUAL_REVIEW_LAYER = "webanno.custom.ManualReview"
+MIN_PROJECT_SLUG_LENGTH = 3
+MAX_PROJECT_SLUG_LENGTH = 40
 
 
 @dataclasses.dataclass(frozen=True)
@@ -136,13 +140,23 @@ def _prepare_shell_project_json(
 ) -> None:
     if project_name:
         project["name"] = project_name
+    else:
+        project["name"] = _append_sanitized_name(project.get("name"), sanitized_project_suffix)
+
     if project_slug:
+        _validate_project_slug(project_slug)
         project["slug"] = project_slug
+    else:
+        project["slug"] = _coerce_project_slug(
+            _append_sanitized_slug(project.get("slug"), sanitized_project_suffix)
+        )
+
     if project_description is not None:
         project["description"] = project_description
-
-    if not project_name or not project_slug or project_description is None:
-        _append_sanitized_project_labels(project, sanitized_project_suffix)
+    else:
+        project["description"] = _append_sanitized_description(
+            project.get("description"), sanitized_project_suffix
+        )
 
     project.setdefault("layers", [])
     _ensure_manual_review_layer_in_project(project, manual_review_layer)
@@ -161,6 +175,38 @@ def _prepare_shell_project_json(
     for key in ("curated_documents", "curation_documents"):
         if key in project:
             project[key] = []
+
+
+def _validate_project_slug(slug: str) -> None:
+    if not _is_valid_project_slug(slug):
+        raise InceptionShellProjectError(
+            "Invalid INCEpTION project slug. Slugs must be 3-40 characters, start "
+            "with a lowercase letter [a-z], and contain only lowercase letters, "
+            "numbers, '-' or '_'."
+        )
+
+
+def _is_valid_project_slug(slug: str) -> bool:
+    if not MIN_PROJECT_SLUG_LENGTH <= len(slug) <= MAX_PROJECT_SLUG_LENGTH:
+        return False
+    if not "a" <= slug[0] <= "z":
+        return False
+    return all(char.isdigit() or "a" <= char <= "z" or char in "-_" for char in slug)
+
+
+def _coerce_project_slug(slug: str) -> str:
+    text = "".join(
+        char if char.isdigit() or "a" <= char <= "z" or char in "-_" else "-"
+        for char in str(slug or "").lower()
+    ).strip("-_")
+    if not text or not ("a" <= text[0] <= "z"):
+        text = f"project-{text}".strip("-_")
+    text = text[:MAX_PROJECT_SLUG_LENGTH].rstrip("-_")
+    if len(text) < MIN_PROJECT_SLUG_LENGTH:
+        text = (text + "-project")[:MIN_PROJECT_SLUG_LENGTH]
+    if not _is_valid_project_slug(text):
+        raise InceptionShellProjectError(f"Could not derive a valid INCEpTION project slug from: {slug!r}")
+    return text
 
 
 def _is_annotation_or_curation_content(name: str) -> bool:

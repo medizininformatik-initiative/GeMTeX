@@ -20,6 +20,16 @@ from ..uima_processing.io import (
 
 
 @dataclasses.dataclass(frozen=True)
+class SanitizedCasBytesResult:
+    cas_bytes: bytes
+    decision_count: int
+    applied_decision_count: int
+    changed_annotation_count: int
+    unmatched_decisions: tuple[dict[str, Any], ...]
+    skipped_decisions: tuple[dict[str, Any], ...]
+
+
+@dataclasses.dataclass(frozen=True)
 class SanitizationRunResult:
     output_project: pathlib.Path
     decision_count: int
@@ -32,6 +42,53 @@ class SanitizationRunResult:
 
 class SanitizationRunError(RuntimeError):
     """Raised when the sanitization run cannot be completed."""
+
+
+def sanitize_cas_bytes(
+    cas_bytes: bytes,
+    decisions: list[dict[str, Any]],
+    *,
+    cas_format: str,
+    typesystem=None,
+    document: Optional[str] = None,
+    annotator: Optional[str] = None,
+    id_prefix: str = "http://snomed.info/id/",
+    manual_review_layer: str = "webanno.custom.ManualReview",
+) -> SanitizedCasBytesResult:
+    """Apply reviewed sanitization decisions to one JSONCAS/XMI CAS byte payload.
+
+    Decisions are optionally filtered to the supplied ``document``/``annotator``.
+    Action precedence is unchanged: manual-edit marker, then deletion, then
+    replacement. Unsupported/non-action decisions are reported as skipped.
+    """
+    manual_review_layer = str(manual_review_layer or "").strip() or "webanno.custom.ManualReview"
+    relevant_decisions = [
+        decision
+        for decision in decisions
+        if _decision_targets_cas(decision, document=document, annotator=annotator)
+    ]
+    applicable_decisions = [decision for decision in relevant_decisions if _is_applicable_decision(decision)]
+    skipped_decisions = [decision for decision in relevant_decisions if not _is_applicable_decision(decision)]
+    matched_decision_indices: set[int] = set()
+
+    cas = _load_cas_from_bytes(cas_bytes, cas_format=cas_format, typesystem=typesystem)
+    changed_annotation_count = _apply_decisions_to_cas(
+        cas,
+        list(enumerate(applicable_decisions)),
+        matched_decision_indices,
+        id_prefix=id_prefix,
+        manual_review_layer=manual_review_layer,
+    )
+    return SanitizedCasBytesResult(
+        cas_bytes=_serialize_cas_to_bytes(cas, cas_format=cas_format),
+        decision_count=len(relevant_decisions),
+        applied_decision_count=len(applicable_decisions),
+        changed_annotation_count=changed_annotation_count,
+        unmatched_decisions=tuple(
+            decision for idx, decision in enumerate(applicable_decisions) if idx not in matched_decision_indices
+        ),
+        skipped_decisions=tuple(skipped_decisions),
+    )
 
 
 def run_sanitization(
@@ -170,6 +227,46 @@ def run_sanitization(
     )
 
 
+def _decision_targets_cas(
+    decision: dict[str, Any], *, document: Optional[str], annotator: Optional[str]
+) -> bool:
+    if document is not None and str(decision.get("document", "")) != str(document):
+        return False
+    if annotator is not None and str(decision.get("annotator", "")) != str(annotator):
+        return False
+    return True
+
+
+def _load_cas_from_bytes(cas_bytes: bytes, *, cas_format: str, typesystem=None):
+    import cassis
+
+    normalized_format = _normalize_cas_format(cas_format)
+    buffer = io.BytesIO(cas_bytes)
+    if normalized_format == "jsoncas":
+        return cassis.load_cas_from_json(buffer, typesystem=typesystem)
+    if normalized_format == "xmi":
+        return cassis.load_cas_from_xmi(buffer, typesystem=typesystem, lenient=True)
+    raise SanitizationRunError(f"Unsupported CAS format: {cas_format}")
+
+
+def _serialize_cas_to_bytes(cas, *, cas_format: str) -> bytes:
+    normalized_format = _normalize_cas_format(cas_format)
+    if normalized_format == "jsoncas":
+        return cas.to_json().encode("utf-8")
+    if normalized_format == "xmi":
+        return cas.to_xmi().encode("utf-8")
+    raise SanitizationRunError(f"Unsupported CAS format: {cas_format}")
+
+
+def _normalize_cas_format(cas_format: str) -> str:
+    value = str(cas_format or "").strip().lower().lstrip(".")
+    if value in {"json", "jsoncas", "uima-json"}:
+        return "jsoncas"
+    if value in {"xmi", "xml"}:
+        return "xmi"
+    raise SanitizationRunError(f"Unsupported CAS format: {cas_format}")
+
+
 def _is_applicable_decision(decision: dict[str, Any]) -> bool:
     if _is_manual_edit_decision(decision):
         return True
@@ -247,8 +344,11 @@ def _append_sanitized_description(value: Any, suffix: str) -> str:
 
 def _ensure_manual_review_layer_in_project(project: dict[str, Any], manual_review_layer: str) -> None:
     layers = project.setdefault("layers", [])
-    if any(layer.get("name") == manual_review_layer for layer in layers if isinstance(layer, dict)):
-        return
+    concept_layer = _find_concept_project_layer(layers)
+    existing_layer = next(
+        (layer for layer in layers if isinstance(layer, dict) and layer.get("name") == manual_review_layer),
+        None,
+    )
     ui_name = manual_review_layer.rsplit(".", 1)[-1] or "ManualReview"
     feature_template = {
         "curatable": True,
@@ -281,31 +381,72 @@ def _ensure_manual_review_layer_in_project(project: dict[str, Any], manual_revie
         feature["name"] = name
         feature["uiName"] = ui_name_feature
         features.append(feature)
-    layers.append(
-        {
-            "allow_stacking": True,
-            "anchoring_mode": "CHARACTERS",
-            "attach_feature": None,
-            "attach_type": None,
-            "built_in": False,
-            "cross_sentence": True,
-            "description": "Markers for SNOMED annotations requiring manual editing after sanitization.",
-            "enabled": True,
-            "features": features,
-            "linked_list_behavior": False,
-            "lock_to_token_offset": False,
-            "multiple_tokens": True,
-            "name": manual_review_layer,
-            "on_click_javascript_action": None,
-            "overlap_mode": "ANY_OVERLAP",
-            "readonly": False,
-            "show_hover": True,
-            "traits": '{"coloringRules":{"rules":[]}}',
-            "type": "span",
-            "uiName": ui_name,
-            "validation_mode": "ALWAYS",
-        }
-    )
+    manual_layer = {
+        "allow_stacking": True,
+        "anchoring_mode": "CHARACTERS",
+        "attach_feature": None,
+        "attach_type": None,
+        "built_in": False,
+        "cross_sentence": True,
+        "description": "Markers for SNOMED annotations requiring manual editing after sanitization.",
+        "enabled": True,
+        "features": features,
+        "linked_list_behavior": False,
+        "lock_to_token_offset": False,
+        "multiple_tokens": True,
+        "name": manual_review_layer,
+        "on_click_javascript_action": None,
+        "overlap_mode": "ANY_OVERLAP",
+        "readonly": False,
+        "show_hover": True,
+        "traits": '{"coloringRules":{"rules":[]}}',
+        "type": "span",
+        "uiName": ui_name,
+        "validation_mode": "ALWAYS",
+    }
+    _copy_concept_layer_behavior(manual_layer, concept_layer)
+    if existing_layer is not None:
+        existing_layer.update({key: value for key, value in manual_layer.items() if key != "features"})
+        _merge_manual_review_features(existing_layer, features)
+        return
+    layers.append(manual_layer)
+
+
+def _find_concept_project_layer(layers: list[Any]) -> Optional[dict[str, Any]]:
+    preferred_names = ("webanno.custom.Concept", "gemtex.Concept")
+    for preferred_name in preferred_names:
+        for layer in layers:
+            if isinstance(layer, dict) and layer.get("name") == preferred_name:
+                return layer
+    for layer in layers:
+        if isinstance(layer, dict) and str(layer.get("uiName", "")).lower() == "concept":
+            return layer
+    return None
+
+
+def _copy_concept_layer_behavior(manual_layer: dict[str, Any], concept_layer: Optional[dict[str, Any]]) -> None:
+    if not concept_layer:
+        return
+    for key in (
+        "allow_stacking",
+        "anchoring_mode",
+        "cross_sentence",
+        "linked_list_behavior",
+        "lock_to_token_offset",
+        "multiple_tokens",
+        "overlap_mode",
+        "validation_mode",
+    ):
+        if key in concept_layer:
+            manual_layer[key] = concept_layer[key]
+
+
+def _merge_manual_review_features(layer: dict[str, Any], features: list[dict[str, Any]]) -> None:
+    existing_features = layer.setdefault("features", [])
+    existing_names = {feature.get("name") for feature in existing_features if isinstance(feature, dict)}
+    for feature in features:
+        if feature.get("name") not in existing_names:
+            existing_features.append(feature)
 
 
 def _group_decisions_by_document_annotator(decisions: list[dict[str, Any]]) -> dict[tuple[str, str], list[tuple[int, dict[str, Any]]]]:

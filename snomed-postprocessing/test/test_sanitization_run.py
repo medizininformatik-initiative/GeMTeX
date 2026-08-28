@@ -1,3 +1,4 @@
+import io
 import json
 import pathlib
 import tempfile
@@ -7,7 +8,7 @@ import zipfile
 import cassis
 from cassis import Cas, TypeSystem
 
-from snomed_post_processing.pipelines.sanitization_run import run_sanitization
+from snomed_post_processing.pipelines.sanitization_run import run_sanitization, sanitize_cas_bytes
 from snomed_post_processing.uima_processing import process_inception_zip
 
 
@@ -117,6 +118,179 @@ class TestSanitizationRun(unittest.TestCase):
             self.assertEqual(markers[0].get("source_code"), "233604007")
             self.assertEqual(markers[0].get("suggested_replacement"), "999999 — Replacement concept (finding)")
             self.assertIn("webanno.custom.ManualReview", {layer.get("name") for layer in project.get("layers", [])})
+
+    def test_sanitize_cas_bytes_applies_replacement_to_jsoncas(self):
+        typesystem = TypeSystem()
+        concept_type = typesystem.create_type(
+            "gemtex.Concept", supertypeName="uima.tcas.Annotation"
+        )
+        typesystem.create_feature(concept_type, "id", "uima.cas.String")
+        cas = Cas(typesystem=typesystem, sofa_string="patient has pneumonia", sofa_mime="text/plain")
+        Concept = typesystem.get_type("gemtex.Concept")
+        cas.add(Concept(begin=12, end=21, id="http://snomed.info/id/233604007"))
+
+        result = sanitize_cas_bytes(
+            cas.to_json().encode("utf-8"),
+            [
+                {
+                    "action": "replace",
+                    "apply": True,
+                    "valid_choice": True,
+                    "document": "doc.txt",
+                    "annotator": "annotator-a",
+                    "source_code": "233604007",
+                    "covered_text": "pneumonia",
+                    "offset": [12, 21],
+                    "layer": "gemtex.Concept",
+                    "replacement_code": "999999",
+                }
+            ],
+            cas_format="jsoncas",
+            typesystem=typesystem,
+            document="doc.txt",
+            annotator="annotator-a",
+        )
+
+        sanitized = cassis.load_cas_from_json(io.BytesIO(result.cas_bytes), typesystem=typesystem)
+        concepts = list(sanitized.select("gemtex.Concept"))
+        self.assertEqual(result.changed_annotation_count, 1)
+        self.assertEqual(result.unmatched_decisions, ())
+        self.assertEqual(concepts[0].get("id"), "http://snomed.info/id/999999")
+
+    def test_sanitize_cas_bytes_deletes_annotation_from_xmi(self):
+        typesystem = TypeSystem()
+        concept_type = typesystem.create_type(
+            "gemtex.Concept", supertypeName="uima.tcas.Annotation"
+        )
+        typesystem.create_feature(concept_type, "id", "uima.cas.String")
+        cas = Cas(typesystem=typesystem, sofa_string="patient has pneumonia", sofa_mime="text/plain")
+        Concept = typesystem.get_type("gemtex.Concept")
+        cas.add(Concept(begin=12, end=21, id="http://snomed.info/id/233604007"))
+
+        result = sanitize_cas_bytes(
+            cas.to_xmi().encode("utf-8"),
+            [
+                {
+                    "action": "delete",
+                    "delete_annotation": True,
+                    "document": "doc.txt",
+                    "annotator": "annotator-a",
+                    "source_code": "233604007",
+                    "covered_text": "pneumonia",
+                    "offset": [12, 21],
+                    "layer": "gemtex.Concept",
+                }
+            ],
+            cas_format="xmi",
+            typesystem=typesystem,
+            document="doc.txt",
+            annotator="annotator-a",
+        )
+
+        sanitized = cassis.load_cas_from_xmi(io.BytesIO(result.cas_bytes), typesystem=typesystem, lenient=True)
+        self.assertEqual(result.changed_annotation_count, 1)
+        self.assertEqual(list(sanitized.select("gemtex.Concept")), [])
+
+    def test_sanitize_cas_bytes_manual_edit_adds_marker_and_filters_other_annotator(self):
+        typesystem = TypeSystem()
+        concept_type = typesystem.create_type(
+            "gemtex.Concept", supertypeName="uima.tcas.Annotation"
+        )
+        typesystem.create_feature(concept_type, "id", "uima.cas.String")
+        cas = Cas(typesystem=typesystem, sofa_string="patient has pneumonia", sofa_mime="text/plain")
+        Concept = typesystem.get_type("gemtex.Concept")
+        cas.add(Concept(begin=12, end=21, id="http://snomed.info/id/233604007"))
+
+        result = sanitize_cas_bytes(
+            cas.to_xmi().encode("utf-8"),
+            [
+                {
+                    "action": "manual_edit",
+                    "manual_edit": True,
+                    "document": "doc.txt",
+                    "annotator": "annotator-a",
+                    "source_code": "233604007",
+                    "covered_text": "pneumonia",
+                    "offset": [12, 21],
+                    "layer": "gemtex.Concept",
+                    "replacement_code": "999999",
+                    "replacement_fsn": "Replacement concept",
+                    "suggestion_status": "BM25 suggestion",
+                    "review_note": "check morphology",
+                },
+                {
+                    "action": "delete",
+                    "delete_annotation": True,
+                    "document": "doc.txt",
+                    "annotator": "other-annotator",
+                    "source_code": "233604007",
+                    "covered_text": "pneumonia",
+                    "offset": [12, 21],
+                    "layer": "gemtex.Concept",
+                },
+            ],
+            cas_format="xmi",
+            typesystem=typesystem,
+            document="doc.txt",
+            annotator="annotator-a",
+        )
+
+        sanitized = cassis.load_cas_from_xmi(
+            io.BytesIO(result.cas_bytes), typesystem=typesystem, lenient=True
+        )
+        concepts = list(sanitized.select("gemtex.Concept"))
+        markers = list(sanitized.select("webanno.custom.ManualReview"))
+        self.assertEqual(result.decision_count, 1)
+        self.assertEqual(result.changed_annotation_count, 1)
+        self.assertEqual(len(concepts), 1)
+        self.assertEqual(len(markers), 1)
+        self.assertEqual(markers[0].get("suggested_replacement"), "999999 — Replacement concept")
+        self.assertEqual(markers[0].get("review_note"), "check morphology")
+
+    def test_sanitize_cas_bytes_reports_unmatched_and_skipped_decisions(self):
+        typesystem = TypeSystem()
+        concept_type = typesystem.create_type(
+            "gemtex.Concept", supertypeName="uima.tcas.Annotation"
+        )
+        typesystem.create_feature(concept_type, "id", "uima.cas.String")
+        cas = Cas(typesystem=typesystem, sofa_string="patient has pneumonia", sofa_mime="text/plain")
+
+        decisions = [
+            {
+                "action": "delete",
+                "delete_annotation": True,
+                "document": "doc.txt",
+                "annotator": "annotator-a",
+                "source_code": "233604007",
+                "covered_text": "pneumonia",
+                "offset": [12, 21],
+                "layer": "gemtex.Concept",
+            },
+            {
+                "action": "keep_unchanged",
+                "document": "doc.txt",
+                "annotator": "annotator-a",
+                "source_code": "233604007",
+                "covered_text": "pneumonia",
+                "offset": [12, 21],
+                "layer": "gemtex.Concept",
+            },
+        ]
+
+        result = sanitize_cas_bytes(
+            cas.to_json().encode("utf-8"),
+            decisions,
+            cas_format="jsoncas",
+            typesystem=typesystem,
+            document="doc.txt",
+            annotator="annotator-a",
+        )
+
+        self.assertEqual(result.decision_count, 2)
+        self.assertEqual(result.applied_decision_count, 1)
+        self.assertEqual(result.changed_annotation_count, 0)
+        self.assertEqual(result.unmatched_decisions, (decisions[0],))
+        self.assertEqual(result.skipped_decisions, (decisions[1],))
 
     def test_delete_annotation_decision_removes_matching_annotation(self):
         with tempfile.TemporaryDirectory() as tmp:
