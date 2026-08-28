@@ -18,6 +18,7 @@ from .options import (
 )
 from ..sanitization import build_snogit_sidecar
 from ..pipelines import (
+    build_inception_shell_project,
     run_create_concept_id_dump,
     run_log_documents,
     run_sanitization_check,
@@ -186,6 +187,73 @@ def suggest_sanitization_cli(
         log_level=log_level,
     )
 
+@click.command(name="build-inception-shell-project")
+@click.option(
+    "--source-project",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
+    help="Original INCEpTION full project ZIP to derive the shell from.",
+)
+@click.option(
+    "--output-project-shell",
+    required=True,
+    type=click.Path(dir_okay=False, path_type=pathlib.Path),
+    help="Output path for the generated shell project ZIP.",
+)
+@click.option("--project-name", default=None, help="Name for the sanitized shell project.")
+@click.option("--project-slug", default=None, help="Slug for the sanitized shell project.")
+@click.option("--project-description", default=None, help="Description for the sanitized shell project.")
+@click.option(
+    "--manual-review-layer",
+    default="webanno.custom.ManualReview",
+    show_default=True,
+    help="Custom span layer added for manual-review markers.",
+)
+@click.option(
+    "--sanitized-project-suffix",
+    default="sanitized",
+    show_default=True,
+    help="Suffix appended to project metadata when explicit values are not supplied.",
+)
+@click.option(
+    "--keep-source-documents",
+    is_flag=True,
+    help="Keep source document metadata/files in the shell ZIP. By default the shell contains schema only.",
+)
+@click.option("--force", is_flag=True, help="Overwrite an existing output shell ZIP.")
+def build_inception_shell_project_cli(
+    source_project: pathlib.Path,
+    output_project_shell: pathlib.Path,
+    project_name: Optional[str],
+    project_slug: Optional[str],
+    project_description: Optional[str],
+    manual_review_layer: str,
+    sanitized_project_suffix: str,
+    keep_source_documents: bool,
+    force: bool,
+):
+    """Build a bare-bones INCEpTION project ZIP carrying schema/layers."""
+    result = build_inception_shell_project(
+        source_project=source_project,
+        output_project=output_project_shell,
+        project_name=project_name,
+        project_slug=project_slug,
+        project_description=project_description,
+        sanitized_project_suffix=sanitized_project_suffix,
+        manual_review_layer=manual_review_layer,
+        clear_source_documents=not keep_source_documents,
+        include_source_files=keep_source_documents,
+        force=force,
+    )
+    click.echo(f"Shell project written to: {result.output_project.resolve()}")
+    click.echo(f"Project name: {result.project_name}")
+    click.echo(f"Project slug: {result.project_slug}")
+    click.echo(f"Layers: {result.layer_count}")
+    click.echo(f"Source documents: {result.source_document_count}")
+    click.echo(f"Annotation documents: {result.annotation_document_count}")
+    click.echo(f"Omitted ZIP members: {result.omitted_member_count}")
+
+
 @click.command()
 @click.argument(
     "hdf5_path",
@@ -227,6 +295,7 @@ def help_me():
      * summarize-hdf5
      * build-snogit-cache
      * suggest-sanitization
+     * build-inception-shell-project
      * list-branches
 
     Each command has a '--help' option that provides further information, e.g. 'log-critical-documents --help'
@@ -238,6 +307,7 @@ def help_me():
         "\n * summarize-hdf5"
         "\n * build-snogit-cache"
         "\n * suggest-sanitization"
+        "\n * build-inception-shell-project"
         "\n * list-branches"
         "\n\nEach command has a '--help' option that provides further information, e.g. 'log-critical-documents --help'"
     )
