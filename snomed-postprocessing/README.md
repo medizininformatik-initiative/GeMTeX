@@ -79,6 +79,10 @@ create-concepts-dump
 summarize-hdf5
 suggest-sanitization
 build-snogit-cache
+build-inception-shell-project
+build-inception-upload-artifacts
+deploy-inception-sanitized-project
+apply-decisions-to-inception
 list-branches
 ```
 
@@ -268,6 +272,70 @@ uv run suggest-sanitization \
 
 `suggest-sanitization` does not parse raw SNOGIT ZIP files or create caches; use `build-snogit-cache` for that step.
 
+### Apply reviewed decisions and deploy to INCEpTION
+
+The recommended deployment workflow is the one-step command:
+
+```bash
+uv run apply-decisions-to-inception \
+  --source-project /path/to/original-inception-project.zip \
+  --decisions /path/to/reviewed_sanitization_decisions.json \
+  --output-dir /path/to/sanitized-inception-output
+```
+
+This is a dry-run/offline preparation by default. It does not contact or modify INCEpTION unless connection options and `--apply` are supplied.
+
+It creates:
+
+```text
+/path/to/sanitized-inception-output/
+  <source-name>-sanitized-shell.zip
+  inception-upload-artifacts/
+    *.json / *.xmi
+    inception-upload-artifacts-report.json
+  inception-sanitized-deployment-report.json
+  inception-apply-decisions-upload-report.json
+```
+
+The original project ZIP is not modified. Reviewed decisions are applied to the original project ZIP, producing flattened sanitized CAS upload artifacts. These artifacts are repaired for INCEpTION remote-upload compatibility, including complete non-overlapping `Sentence` coverage of non-whitespace text so the sentence-based editor can load them.
+
+To actually import the shell project and upload the sanitized CAS artifacts, pass INCEpTION credentials and explicit `--apply`:
+
+```bash
+export INCEPTION_PASSWORD='...'
+uv run apply-decisions-to-inception \
+  --source-project /path/to/original-inception-project.zip \
+  --decisions /path/to/reviewed_sanitization_decisions.json \
+  --output-dir /path/to/sanitized-inception-output \
+  --inception-url http://localhost:8080 \
+  --username USER \
+  --password-env INCEPTION_PASSWORD \
+  --annotation-user USER \
+  --apply
+```
+
+Use `--check-connection` without `--apply` to authenticate and verify that the INCEpTION instance is reachable while still avoiding remote writes.  
+Instead of `--password-env` you can use plain `--password` without an environment file, as well.
+
+The lower-level commands are also available if you want to run the workflow step by step:
+
+```bash
+uv run build-inception-shell-project \
+  --source-project /path/to/original-inception-project.zip \
+  --output-project-shell /path/to/sanitized-shell.zip
+
+uv run build-inception-upload-artifacts \
+  --source-project /path/to/original-inception-project.zip \
+  --decisions /path/to/reviewed_sanitization_decisions.json \
+  --output-dir /path/to/inception-upload-artifacts
+
+uv run deploy-inception-sanitized-project \
+  --shell-project /path/to/sanitized-shell.zip \
+  --upload-artifacts-dir /path/to/inception-upload-artifacts
+```
+
+`deploy-inception-sanitized-project` is also dry-run by default and requires `--apply` for remote writes.
+
 ## GUI usage
 
 Start the Streamlit app locally:
@@ -301,8 +369,12 @@ The GUI has three tabs:
 2. **Sanitization suggestions**  
    Use the `CriticalFindings` JSON from the current session or upload one. Select policy or active-release target view, configure optional embedded/custom blacklist handling for release view, choose fallback methods, optionally select/create a processed SNOGIT cache, then download suggestion reports.
 
-3. **Sanitization run**  
-   Upload reviewed decisions and create a copied sanitized project ZIP. Reviewed decisions can replace annotation SCTIDs or delete annotations. `.ser` files are excluded from sanitized export.
+3. **Review & apply / Sanitization run**  
+   Review suggestions, save/load reviewed decisions, and either:
+   - run the legacy local sanitization ZIP export, or
+   - run the INCEpTION deployment pipeline.
+
+   The INCEpTION deployment section mirrors `apply-decisions-to-inception`: it builds a schema shell ZIP, builds repaired flattened upload artifacts, and then performs a dry-run or, only if explicitly selected, uploads to INCEpTION. Download buttons are provided for the shell ZIP, repaired upload artifacts ZIP, and pipeline report.
 
 ## Notes
 
