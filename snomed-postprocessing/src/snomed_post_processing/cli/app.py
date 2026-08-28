@@ -19,10 +19,13 @@ from .options import (
 from ..sanitization import build_snogit_sidecar
 from ..pipelines import (
     build_inception_shell_project,
+    build_inception_upload_artifacts,
+    deploy_inception_sanitized_project,
     run_create_concept_id_dump,
     run_log_documents,
     run_sanitization_check,
 )
+from ..sanitization.decisions_json import read_sanitization_decisions_json
 
 
 @click.command()
@@ -254,6 +257,143 @@ def build_inception_shell_project_cli(
     click.echo(f"Omitted ZIP members: {result.omitted_member_count}")
 
 
+@click.command(name="build-inception-upload-artifacts")
+@click.option(
+    "--source-project",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
+    help="INCEpTION project ZIP containing JSONCAS/XMI annotation content to sanitize.",
+)
+@click.option(
+    "--decisions",
+    "decisions_path",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
+    help="Reviewed sanitization decisions JSON.",
+)
+@click.option(
+    "--output-dir",
+    required=True,
+    type=click.Path(file_okay=False, path_type=pathlib.Path),
+    help="Directory where flattened sanitized CAS files and report are written.",
+)
+@click.option(
+    "--manual-review-layer",
+    default="webanno.custom.ManualReview",
+    show_default=True,
+    help="Manual-review marker layer name.",
+)
+@click.option(
+    "--id-prefix",
+    default="http://snomed.info/id/",
+    show_default=True,
+    help="SNOMED URI prefix used in CAS annotation IDs.",
+)
+@click.option("--force", is_flag=True, help="Allow writing into a non-empty output directory.")
+def build_inception_upload_artifacts_cli(
+    source_project: pathlib.Path,
+    decisions_path: pathlib.Path,
+    output_dir: pathlib.Path,
+    manual_review_layer: str,
+    id_prefix: str,
+    force: bool,
+):
+    """Build offline flattened sanitized CAS upload artifacts."""
+    decisions, _ = read_sanitization_decisions_json(decisions_path)
+    result = build_inception_upload_artifacts(
+        source_project=source_project,
+        decisions=decisions,
+        output_dir=output_dir,
+        id_prefix=id_prefix,
+        manual_review_layer=manual_review_layer,
+        force=force,
+    )
+    click.echo(f"Artifacts written to: {result.output_dir.resolve()}")
+    click.echo(f"Report written to: {result.report_path.resolve()}")
+    click.echo(f"Artifacts: {result.artifact_count}")
+    click.echo(f"Unmatched decisions: {len(result.unmatched_decisions)}")
+    click.echo(f"Skipped decisions: {len(result.skipped_decisions)}")
+
+
+@click.command(name="deploy-inception-sanitized-project")
+@click.option(
+    "--shell-project",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
+    help="Sanitized INCEpTION shell project ZIP to import when --apply is used.",
+)
+@click.option(
+    "--upload-artifacts-dir",
+    required=True,
+    type=click.Path(exists=True, file_okay=False, path_type=pathlib.Path),
+    help="Directory created by build-inception-upload-artifacts.",
+)
+@click.option(
+    "--deployment-report",
+    default=None,
+    type=click.Path(dir_okay=False, path_type=pathlib.Path),
+    help="Output JSON deployment report. Defaults inside --upload-artifacts-dir.",
+)
+@click.option("--inception-url", default=None, help="INCEpTION base URL, e.g. http://localhost:8080.")
+@click.option("--username", default=None, help="INCEpTION username for connection check/apply.")
+@click.option("--password", default=None, help="INCEpTION password. Prefer --password-env to avoid shell history.")
+@click.option("--password-env", default=None, help="Environment variable containing the INCEpTION password.")
+@click.option(
+    "--annotation-user",
+    default=None,
+    help="User receiving flattened uploaded annotations. Defaults to --username.",
+)
+@click.option(
+    "--check-connection",
+    is_flag=True,
+    help="In dry-run mode, authenticate and list projects but do not write anything.",
+)
+@click.option("--no-verify-tls", is_flag=True, help="Disable TLS certificate verification.")
+@click.option(
+    "--apply",
+    "apply_changes",
+    is_flag=True,
+    help="Actually import the shell project and upload artifacts. Omit for dry-run.",
+)
+def deploy_inception_sanitized_project_cli(
+    shell_project: pathlib.Path,
+    upload_artifacts_dir: pathlib.Path,
+    deployment_report: Optional[pathlib.Path],
+    inception_url: Optional[str],
+    username: Optional[str],
+    password: Optional[str],
+    password_env: Optional[str],
+    annotation_user: Optional[str],
+    check_connection: bool,
+    no_verify_tls: bool,
+    apply_changes: bool,
+):
+    """Deploy or dry-run a sanitized INCEpTION shell + flattened artifact set."""
+    result = deploy_inception_sanitized_project(
+        shell_project=shell_project,
+        upload_artifacts_dir=upload_artifacts_dir,
+        deployment_report=deployment_report,
+        inception_url=inception_url,
+        username=username,
+        password=password,
+        password_env=password_env,
+        annotation_user=annotation_user,
+        apply=apply_changes,
+        check_connection=check_connection,
+        verify_tls=not no_verify_tls,
+    )
+    click.echo(f"Deployment report written to: {result.deployment_report_path.resolve()}")
+    click.echo(f"Dry run: {result.dry_run}")
+    click.echo(f"Applied: {result.applied}")
+    click.echo(f"Planned uploads: {result.planned_upload_count}")
+    click.echo(f"Warnings: {len(result.warnings)}")
+    click.echo(f"Errors: {len(result.errors)}")
+    if result.imported_project_id is not None:
+        click.echo(f"Imported project id: {result.imported_project_id}")
+    if result.errors:
+        raise click.ClickException("Deployment validation/apply failed; see report for details.")
+
+
 @click.command()
 @click.argument(
     "hdf5_path",
@@ -296,6 +436,8 @@ def help_me():
      * build-snogit-cache
      * suggest-sanitization
      * build-inception-shell-project
+     * build-inception-upload-artifacts
+     * deploy-inception-sanitized-project
      * list-branches
 
     Each command has a '--help' option that provides further information, e.g. 'log-critical-documents --help'
@@ -308,6 +450,8 @@ def help_me():
         "\n * build-snogit-cache"
         "\n * suggest-sanitization"
         "\n * build-inception-shell-project"
+        "\n * build-inception-upload-artifacts"
+        "\n * deploy-inception-sanitized-project"
         "\n * list-branches"
         "\n\nEach command has a '--help' option that provides further information, e.g. 'log-critical-documents --help'"
     )

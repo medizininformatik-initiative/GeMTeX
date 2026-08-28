@@ -3,6 +3,18 @@
 from .document_logging import run_log_documents
 from .hdf5_dump_creation import run_create_concept_id_dump
 from .sanitization_check import run_sanitization_check
+from .inception_deployment import (
+    InceptionDeploymentError,
+    InceptionDeploymentPlanItem,
+    InceptionDeploymentResult,
+    deploy_inception_sanitized_project,
+)
+from .inception_upload_artifacts import (
+    InceptionUploadArtifact,
+    InceptionUploadArtifactsError,
+    InceptionUploadArtifactsResult,
+    build_inception_upload_artifacts,
+)
 from .inception_shell_project import (
     InceptionShellProjectError,
     InceptionShellProjectResult,
@@ -28,4 +40,12 @@ __all__ = [
     "build_inception_shell_project",
     "InceptionShellProjectError",
     "InceptionShellProjectResult",
+    "build_inception_upload_artifacts",
+    "InceptionUploadArtifact",
+    "InceptionUploadArtifactsError",
+    "InceptionUploadArtifactsResult",
+    "deploy_inception_sanitized_project",
+    "InceptionDeploymentError",
+    "InceptionDeploymentPlanItem",
+    "InceptionDeploymentResult",
 ]
