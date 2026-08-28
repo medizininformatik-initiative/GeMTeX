@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import datetime
+import inspect
 import io
 import json
 import os
@@ -16,6 +17,26 @@ import cassis
 SUPPORTED_UPLOAD_FORMATS = {"jsoncas", "xmi"}
 DEFAULT_ARTIFACT_REPORT_NAME = "inception-upload-artifacts-report.json"
 DEFAULT_DEPLOYMENT_REPORT_NAME = "inception-sanitized-deployment-report.json"
+
+
+@dataclasses.dataclass(frozen=True)
+class InceptionCasCompatibilityReport:
+    sentence_count: int
+    sentence_overlap_count: int
+    sentence_whitespace_count: int
+    outside_sentence_annotation_count: int
+    cas_metadata_count: int
+    document_metadata_count: int
+
+    @property
+    def issue_count(self) -> int:
+        return (
+            self.sentence_overlap_count
+            + self.sentence_whitespace_count
+            + self.outside_sentence_annotation_count
+            + (0 if self.cas_metadata_count else 1)
+            + self.document_metadata_count
+        )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -175,18 +196,26 @@ def deploy_inception_sanitized_project(
             imported_project_id = getattr(project, "project_id", None)
             imported_project_name = getattr(project, "project_name", None)
             for item in plan:
-                document_text = _extract_sofa_text(item.artifact_path, item.cas_format)
                 document_name = _document_name_without_cas_suffix(item.remote_document_name)
-                with io.BytesIO(document_text.encode("utf-8")) as source_content:
-                    source_content.name = f"{document_name}.txt"
-                    document = client.api.create_document(
-                        project,
-                        document_name,
-                        source_content,
-                        document_format="text",
-                        filename=f"{document_name}.txt",
-                    )
-                with item.artifact_path.open("rb") as annotation_content:
+                artifact_bytes = item.artifact_path.read_bytes()
+                repaired_cas_bytes = (
+                    prepare_remote_upload_cas_bytes(artifact_bytes, item.cas_format)
+                    if item.cas_format == "jsoncas"
+                    else artifact_bytes
+                )
+                with io.BytesIO(repaired_cas_bytes) as source_content:
+                    source_content.name = item.remote_document_name
+                    document_kwargs: dict[str, Any] = {
+                        "project": project,
+                        "document_name": document_name,
+                        "content": source_content,
+                        "document_format": item.cas_format,
+                    }
+                    if "filename" in inspect.signature(client.api.create_document).parameters:
+                        document_kwargs["filename"] = item.remote_document_name
+                    document = client.api.create_document(**document_kwargs)
+                with io.BytesIO(repaired_cas_bytes) as annotation_content:
+                    annotation_content.name = item.remote_document_name
                     annotation = client.api.create_annotation(
                         project,
                         document,
@@ -372,7 +401,302 @@ def _resolve_password(*, password: Optional[str], password_env: Optional[str]) -
 def _pycaprio_client(inception_url: str, username: str, password: str, *, verify_tls: bool):
     from pycaprio import Pycaprio
 
-    return Pycaprio(inception_host=inception_url, authentication=(username, password), verify=verify_tls)
+    kwargs: dict[str, Any] = {
+        "inception_host": inception_url,
+        "authentication": (username, password),
+    }
+    signature = inspect.signature(Pycaprio)
+    if "verify" in signature.parameters:
+        kwargs["verify"] = verify_tls
+    return Pycaprio(**kwargs)
+
+
+def prepare_remote_upload_cas_bytes(cas_bytes: bytes, cas_format: str, typesystem=None) -> bytes:
+    cas = _load_deployment_cas(cas_bytes, cas_format, typesystem=typesystem)
+    _remove_document_metadata(cas)
+    _ensure_cas_metadata(cas)
+    _normalize_sentence_boundaries(cas)
+    _ensure_non_whitespace_text_sentence_coverage(cas)
+    _ensure_annotation_sentence_coverage(cas)
+    if cas_format == "jsoncas":
+        return cas.to_json().encode("utf-8")
+    if cas_format == "xmi":
+        return cas.to_xmi().encode("utf-8")
+    raise InceptionDeploymentError(f"Unsupported CAS format: {cas_format}")
+
+
+def inspect_remote_upload_cas_compatibility(cas_bytes: bytes, cas_format: str, typesystem=None) -> InceptionCasCompatibilityReport:
+    cas = _load_deployment_cas(cas_bytes, cas_format, typesystem=typesystem)
+    sentence_type_name = "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Sentence"
+    sentences = []
+    if cas.typesystem.contains_type(sentence_type_name):
+        sentences = sorted((int(s.begin or 0), int(s.end or 0)) for s in cas.select(sentence_type_name))
+    text = cas.sofa_string or ""
+    overlaps = sum(1 for previous, current in zip(sentences, sentences[1:]) if current[0] < previous[1])
+    whitespace = sum(
+        1
+        for begin, end in sentences
+        if begin >= end
+        or begin < 0
+        or end > len(text)
+        or text[begin].isspace()
+        or text[end - 1].isspace()
+    )
+    outside = 0
+    sentence_spans = set(sentences)
+    for ann in list(_project_layer_annotations(cas)):
+        if ann.begin is None or ann.end is None or ann.begin >= ann.end:
+            continue
+        if not _span_boundaries_inside_sentences(int(ann.begin), int(ann.end), sentence_spans):
+            outside += 1
+    cas_metadata_type = "de.tudarmstadt.ukp.clarin.webanno.api.type.CASMetadata"
+    document_metadata_type = "de.tudarmstadt.ukp.dkpro.core.api.metadata.type.DocumentMetaData"
+    cas_metadata_count = (
+        len(list(cas.select(cas_metadata_type))) if cas.typesystem.contains_type(cas_metadata_type) else 0
+    )
+    document_metadata_count = (
+        len(list(cas.select(document_metadata_type)))
+        if cas.typesystem.contains_type(document_metadata_type)
+        else 0
+    )
+    return InceptionCasCompatibilityReport(
+        sentence_count=len(sentences),
+        sentence_overlap_count=overlaps,
+        sentence_whitespace_count=whitespace,
+        outside_sentence_annotation_count=outside,
+        cas_metadata_count=cas_metadata_count,
+        document_metadata_count=document_metadata_count,
+    )
+
+
+_prepare_remote_upload_cas_bytes = prepare_remote_upload_cas_bytes
+
+
+def _load_deployment_cas(cas_bytes: bytes, cas_format: str, typesystem=None):
+    with io.BytesIO(cas_bytes) as fi:
+        if cas_format == "jsoncas":
+            return cassis.load_cas_from_json(fi, typesystem=typesystem)
+        if cas_format == "xmi":
+            return cassis.load_cas_from_xmi(fi, typesystem=typesystem, lenient=True)
+    raise InceptionDeploymentError(f"Unsupported CAS format: {cas_format}")
+
+
+def _remove_document_metadata(cas) -> None:
+    type_name = "de.tudarmstadt.ukp.dkpro.core.api.metadata.type.DocumentMetaData"
+    if not cas.typesystem.contains_type(type_name):
+        return
+    for fs in list(cas.select(type_name)):
+        cas.remove(fs)
+
+
+def _ensure_cas_metadata(cas) -> None:
+    type_name = "de.tudarmstadt.ukp.clarin.webanno.api.type.CASMetadata"
+    if not cas.typesystem.contains_type(type_name):
+        metadata_type = cas.typesystem.create_type(type_name, supertypeName="uima.tcas.Annotation")
+        for feature_name, range_type in (
+            ("projectId", "uima.cas.Long"),
+            ("projectName", "uima.cas.String"),
+            ("sourceDocumentId", "uima.cas.Long"),
+            ("sourceDocumentName", "uima.cas.String"),
+            ("username", "uima.cas.String"),
+            ("lastChangedOnDisk", "uima.cas.Long"),
+        ):
+            try:
+                cas.typesystem.create_feature(metadata_type, feature_name, range_type)
+            except ValueError:
+                pass
+    if list(cas.select(type_name)):
+        return
+    CASMetadata = cas.typesystem.get_type(type_name)
+    marker = CASMetadata(begin=0, end=0)
+    for feature_name, value in (
+        ("projectId", 0),
+        ("projectName", ""),
+        ("sourceDocumentId", 0),
+        ("sourceDocumentName", ""),
+        ("username", ""),
+        ("lastChangedOnDisk", -1),
+    ):
+        try:
+            marker.set(feature_name, value)
+        except Exception:
+            pass
+    cas.add(marker)
+
+
+def _normalize_sentence_boundaries(cas) -> None:
+    sentence_type_name = "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Sentence"
+    if not cas.typesystem.contains_type(sentence_type_name):
+        return
+    text = cas.sofa_string or ""
+    for sentence in list(cas.select(sentence_type_name)):
+        begin = int(sentence.begin or 0)
+        end = int(sentence.end or 0)
+        while begin < end and text[begin].isspace():
+            begin += 1
+        while end > begin and text[end - 1].isspace():
+            end -= 1
+        if begin >= end:
+            cas.remove(sentence)
+            continue
+        sentence.begin = begin
+        sentence.end = end
+
+
+def _ensure_non_whitespace_text_sentence_coverage(cas) -> None:
+    sentence_type_name = "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Sentence"
+    if not cas.typesystem.contains_type(sentence_type_name):
+        sentence_type = cas.typesystem.create_type(
+            sentence_type_name, supertypeName="uima.tcas.Annotation"
+        )
+    else:
+        sentence_type = cas.typesystem.get_type(sentence_type_name)
+    text = cas.sofa_string or ""
+    existing_spans = sorted((int(s.begin or 0), int(s.end or 0)) for s in cas.select(sentence_type_name))
+    supplemental_spans: list[tuple[int, int]] = []
+    cursor = 0
+    for begin, end in existing_spans:
+        supplemental_spans.extend(_non_whitespace_gap_spans(text, cursor, begin))
+        cursor = max(cursor, end)
+    supplemental_spans.extend(_non_whitespace_gap_spans(text, cursor, len(text)))
+    for span in _merge_non_overlapping_sentence_spans(set(existing_spans), supplemental_spans):
+        if span not in set(existing_spans):
+            cas.add(sentence_type(begin=span[0], end=span[1]))
+            existing_spans.append(span)
+
+
+def _non_whitespace_gap_spans(text: str, begin: int, end: int) -> list[tuple[int, int]]:
+    spans: list[tuple[int, int]] = []
+    cursor = max(0, begin)
+    end = min(len(text), end)
+    while cursor < end:
+        while cursor < end and text[cursor].isspace():
+            cursor += 1
+        span_begin = cursor
+        while cursor < end and not text[cursor].isspace():
+            cursor += 1
+        # Keep adjacent words in the same uncovered heading/line segment until a
+        # blank-line/newline boundary. This creates visible rows for headings
+        # without extending over surrounding whitespace.
+        while cursor < end:
+            whitespace_begin = cursor
+            while cursor < end and text[cursor].isspace() and text[cursor] not in "\n\r":
+                cursor += 1
+            if cursor >= end or text[cursor] in "\n\r":
+                cursor = whitespace_begin
+                break
+            while cursor < end and not text[cursor].isspace():
+                cursor += 1
+        span_end = cursor
+        while span_end > span_begin and text[span_end - 1].isspace():
+            span_end -= 1
+        if span_begin < span_end:
+            spans.append((span_begin, span_end))
+        while cursor < end and text[cursor].isspace():
+            cursor += 1
+    return spans
+
+
+def _ensure_annotation_sentence_coverage(cas) -> None:
+    sentence_type_name = "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Sentence"
+    if not cas.typesystem.contains_type(sentence_type_name):
+        sentence_type = cas.typesystem.create_type(
+            sentence_type_name, supertypeName="uima.tcas.Annotation"
+        )
+    else:
+        sentence_type = cas.typesystem.get_type(sentence_type_name)
+    sentence_spans = {(s.begin, s.end) for s in cas.select(sentence_type_name)}
+    supplemental_spans: list[tuple[int, int]] = []
+    for ann in list(_project_layer_annotations(cas)):
+        if ann.begin is None or ann.end is None or ann.begin >= ann.end:
+            continue
+        known_spans = sentence_spans | set(supplemental_spans)
+        if _span_boundaries_inside_sentences(ann.begin, ann.end, known_spans):
+            continue
+        supplemental_spans.append(_expand_to_sentence_like_span(cas.sofa_string or "", ann.begin, ann.end))
+    for span in _merge_non_overlapping_sentence_spans(sentence_spans, supplemental_spans):
+        if span not in sentence_spans:
+            cas.add(sentence_type(begin=span[0], end=span[1]))
+            sentence_spans.add(span)
+
+
+def _merge_non_overlapping_sentence_spans(
+    existing_spans: set[tuple[int, int]], supplemental_spans: list[tuple[int, int]]
+) -> list[tuple[int, int]]:
+    if not supplemental_spans:
+        return []
+    existing = sorted(existing_spans)
+    merged: list[tuple[int, int]] = []
+    for begin, end in sorted(supplemental_spans):
+        if begin >= end:
+            continue
+        # Clip against existing sentence spans. Supplemental spans should only
+        # fill gaps; they must not overlap existing segmentation.
+        clipped_parts = [(begin, end)]
+        for ex_begin, ex_end in existing:
+            next_parts: list[tuple[int, int]] = []
+            for part_begin, part_end in clipped_parts:
+                if ex_end <= part_begin or ex_begin >= part_end:
+                    next_parts.append((part_begin, part_end))
+                    continue
+                if part_begin < ex_begin:
+                    next_parts.append((part_begin, ex_begin))
+                if ex_end < part_end:
+                    next_parts.append((ex_end, part_end))
+            clipped_parts = next_parts
+            if not clipped_parts:
+                break
+        for part in clipped_parts:
+            if merged and part[0] <= merged[-1][1]:
+                merged[-1] = (merged[-1][0], max(merged[-1][1], part[1]))
+            else:
+                merged.append(part)
+    return merged
+
+
+def _project_layer_annotations(cas):
+    for type_ in cas.typesystem.get_types():
+        type_name = type_.name
+        if type_name in {
+            "uima.tcas.Annotation",
+            "uima.tcas.DocumentAnnotation",
+            "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Sentence",
+            "de.tudarmstadt.ukp.dkpro.core.api.segmentation.type.Token",
+            "de.tudarmstadt.ukp.clarin.webanno.api.type.CASMetadata",
+        }:
+            continue
+        if not (
+            type_name.startswith("webanno.custom.")
+            or type_name.startswith("webanno.")
+            or type_name.startswith("de.tudarmstadt.ukp.dkpro.core.api.ner.")
+        ):
+            continue
+        try:
+            yield from cas.select(type_name)
+        except Exception:
+            continue
+
+
+def _span_boundaries_inside_sentences(begin: int, end: int, sentence_spans: set[tuple[int, int]]) -> bool:
+    return any(s_begin <= begin <= s_end for s_begin, s_end in sentence_spans) and any(
+        s_begin <= end <= s_end for s_begin, s_end in sentence_spans
+    )
+
+
+def _expand_to_sentence_like_span(text: str, begin: int, end: int) -> tuple[int, int]:
+    left = max(0, begin)
+    right = min(len(text), end)
+    while left > 0 and text[left - 1] not in "\n\r.!?":
+        left -= 1
+    while right < len(text) and text[right] not in "\n\r.!?":
+        right += 1
+    while left < right and text[left].isspace():
+        left += 1
+    while right > left and text[right - 1].isspace():
+        right -= 1
+    if left >= right:
+        return max(0, begin), min(len(text), end)
+    return left, right
 
 
 def _extract_sofa_text(artifact_path: pathlib.Path, cas_format: str) -> str:

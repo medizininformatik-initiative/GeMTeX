@@ -372,7 +372,6 @@ def _ensure_manual_review_layer_in_project(project: dict[str, Any], manual_revie
     features = []
     for name, ui_name_feature in (
         ("source_code", "Source code"),
-        ("covered_text", "Covered text"),
         ("suggestion_status", "Suggestion status"),
         ("suggested_replacement", "Suggested replacement"),
         ("review_note", "Review note"),
@@ -443,6 +442,11 @@ def _copy_concept_layer_behavior(manual_layer: dict[str, Any], concept_layer: Op
 
 def _merge_manual_review_features(layer: dict[str, Any], features: list[dict[str, Any]]) -> None:
     existing_features = layer.setdefault("features", [])
+    existing_features[:] = [
+        feature
+        for feature in existing_features
+        if not (isinstance(feature, dict) and feature.get("name") == "covered_text")
+    ]
     existing_names = {feature.get("name") for feature in existing_features if isinstance(feature, dict)}
     for feature in features:
         if feature.get("name") not in existing_names:
@@ -492,7 +496,6 @@ def _add_manual_review_marker(cas, source_annotation, decision: dict[str, Any], 
         begin=int(source_annotation.begin),
         end=int(source_annotation.end),
         source_code=str(decision.get("source_code", "") or ""),
-        covered_text=str(decision.get("covered_text", "") or ""),
         suggestion_status=str(decision.get("suggestion_status", "") or ""),
         suggested_replacement=suggested_replacement,
         review_note=str(decision.get("review_note", "") or ""),
@@ -514,7 +517,6 @@ def _ensure_manual_review_type_on_typesystem(typesystem, manual_review_layer: st
         marker_type = typesystem.get_type(manual_review_layer)
     for feature_name in (
         "source_code",
-        "covered_text",
         "suggestion_status",
         "suggested_replacement",
         "review_note",

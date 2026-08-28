@@ -3,6 +3,11 @@
 from .document_logging import run_log_documents
 from .hdf5_dump_creation import run_create_concept_id_dump
 from .sanitization_check import run_sanitization_check
+from .inception_apply_upload import (
+    InceptionApplyUploadError,
+    InceptionApplyUploadResult,
+    apply_decisions_and_upload_to_inception,
+)
 from .inception_deployment import (
     InceptionDeploymentError,
     InceptionDeploymentPlanItem,
@@ -44,6 +49,9 @@ __all__ = [
     "InceptionUploadArtifact",
     "InceptionUploadArtifactsError",
     "InceptionUploadArtifactsResult",
+    "apply_decisions_and_upload_to_inception",
+    "InceptionApplyUploadError",
+    "InceptionApplyUploadResult",
     "deploy_inception_sanitized_project",
     "InceptionDeploymentError",
     "InceptionDeploymentPlanItem",

@@ -18,6 +18,7 @@ from .options import (
 )
 from ..sanitization import build_snogit_sidecar
 from ..pipelines import (
+    apply_decisions_and_upload_to_inception,
     build_inception_shell_project,
     build_inception_upload_artifacts,
     deploy_inception_sanitized_project,
@@ -290,6 +291,11 @@ def build_inception_shell_project_cli(
     help="SNOMED URI prefix used in CAS annotation IDs.",
 )
 @click.option("--force", is_flag=True, help="Allow writing into a non-empty output directory.")
+@click.option(
+    "--no-repair-for-remote-upload",
+    is_flag=True,
+    help="Write raw sanitized CAS artifacts without INCEpTION remote-upload compatibility repair.",
+)
 def build_inception_upload_artifacts_cli(
     source_project: pathlib.Path,
     decisions_path: pathlib.Path,
@@ -297,6 +303,7 @@ def build_inception_upload_artifacts_cli(
     manual_review_layer: str,
     id_prefix: str,
     force: bool,
+    no_repair_for_remote_upload: bool,
 ):
     """Build offline flattened sanitized CAS upload artifacts."""
     decisions, _ = read_sanitization_decisions_json(decisions_path)
@@ -307,12 +314,118 @@ def build_inception_upload_artifacts_cli(
         id_prefix=id_prefix,
         manual_review_layer=manual_review_layer,
         force=force,
+        repair_for_remote_upload=not no_repair_for_remote_upload,
     )
     click.echo(f"Artifacts written to: {result.output_dir.resolve()}")
     click.echo(f"Report written to: {result.report_path.resolve()}")
     click.echo(f"Artifacts: {result.artifact_count}")
     click.echo(f"Unmatched decisions: {len(result.unmatched_decisions)}")
     click.echo(f"Skipped decisions: {len(result.skipped_decisions)}")
+    repaired_count = sum(1 for artifact in result.artifacts if artifact.remote_upload_repaired)
+    issue_count = sum(artifact.remote_upload_issue_count for artifact in result.artifacts)
+    click.echo(f"Remote-upload repaired artifacts: {repaired_count}")
+    click.echo(f"Remaining remote-upload compatibility issues: {issue_count}")
+
+
+@click.command(name="apply-decisions-to-inception")
+@click.option(
+    "--source-project",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
+    help="Original INCEpTION full project ZIP. The file is not modified.",
+)
+@click.option(
+    "--decisions",
+    "decisions_path",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
+    help="Reviewed sanitization decisions JSON.",
+)
+@click.option(
+    "--output-dir",
+    required=True,
+    type=click.Path(file_okay=False, path_type=pathlib.Path),
+    help="Directory for shell ZIP, repaired upload artifacts, and reports.",
+)
+@click.option("--project-name", default=None, help="Name for the sanitized INCEpTION project.")
+@click.option("--project-slug", default=None, help="Slug for the sanitized INCEpTION project.")
+@click.option("--project-description", default=None, help="Description for the sanitized project.")
+@click.option(
+    "--manual-review-layer",
+    default="webanno.custom.ManualReview",
+    show_default=True,
+    help="Manual-review marker layer name.",
+)
+@click.option(
+    "--id-prefix",
+    default="http://snomed.info/id/",
+    show_default=True,
+    help="SNOMED URI prefix used in CAS annotation IDs.",
+)
+@click.option("--inception-url", default=None, help="INCEpTION base URL, e.g. http://localhost:8080.")
+@click.option("--username", default=None, help="INCEpTION username for connection check/apply.")
+@click.option("--password", default=None, help="INCEpTION password. Prefer --password-env to avoid shell history.")
+@click.option("--password-env", default=None, help="Environment variable containing the INCEpTION password.")
+@click.option("--annotation-user", default=None, help="User receiving flattened uploaded annotations. Defaults to --username.")
+@click.option("--check-connection", is_flag=True, help="Authenticate and list projects in dry-run mode.")
+@click.option("--no-verify-tls", is_flag=True, help="Disable TLS certificate verification.")
+@click.option("--no-repair-for-remote-upload", is_flag=True, help="Do not persist remote-upload sentence/CAS repairs.")
+@click.option("--force", is_flag=True, help="Allow writing into a non-empty output directory / overwrite shell ZIP.")
+@click.option("--apply", "apply_changes", is_flag=True, help="Actually import/upload to INCEpTION. Omit for dry-run.")
+def apply_decisions_to_inception_cli(
+    source_project: pathlib.Path,
+    decisions_path: pathlib.Path,
+    output_dir: pathlib.Path,
+    project_name: Optional[str],
+    project_slug: Optional[str],
+    project_description: Optional[str],
+    manual_review_layer: str,
+    id_prefix: str,
+    inception_url: Optional[str],
+    username: Optional[str],
+    password: Optional[str],
+    password_env: Optional[str],
+    annotation_user: Optional[str],
+    check_connection: bool,
+    no_verify_tls: bool,
+    no_repair_for_remote_upload: bool,
+    force: bool,
+    apply_changes: bool,
+):
+    """Run the full reviewed-decisions -> INCEpTION deployment workflow."""
+    result = apply_decisions_and_upload_to_inception(
+        source_project=source_project,
+        decisions_path=decisions_path,
+        output_dir=output_dir,
+        project_name=project_name,
+        project_slug=project_slug,
+        project_description=project_description,
+        manual_review_layer=manual_review_layer,
+        id_prefix=id_prefix,
+        repair_for_remote_upload=not no_repair_for_remote_upload,
+        inception_url=inception_url,
+        username=username,
+        password=password,
+        password_env=password_env,
+        annotation_user=annotation_user,
+        apply=apply_changes,
+        check_connection=check_connection,
+        verify_tls=not no_verify_tls,
+        force=force,
+    )
+    click.echo(f"Pipeline report written to: {result.pipeline_report_path.resolve()}")
+    click.echo(f"Shell project: {result.shell_project.resolve()}")
+    click.echo(f"Upload artifacts: {result.upload_artifacts_dir.resolve()}")
+    click.echo(f"Deployment report: {result.deployment_result.deployment_report_path.resolve()}")
+    click.echo(f"Decisions: {result.decision_count}")
+    click.echo(f"Artifacts: {result.artifacts_result.artifact_count}")
+    click.echo(f"Remote-upload compatibility issues: {sum(a.remote_upload_issue_count for a in result.artifacts_result.artifacts)}")
+    click.echo(f"Dry run: {result.dry_run}")
+    click.echo(f"Applied: {result.applied}")
+    click.echo(f"Planned uploads: {result.deployment_result.planned_upload_count}")
+    click.echo(f"Errors: {len(result.deployment_result.errors)}")
+    if result.deployment_result.errors:
+        raise click.ClickException("Pipeline failed; see reports for details.")
 
 
 @click.command(name="deploy-inception-sanitized-project")
@@ -437,6 +550,7 @@ def help_me():
      * suggest-sanitization
      * build-inception-shell-project
      * build-inception-upload-artifacts
+     * apply-decisions-to-inception
      * deploy-inception-sanitized-project
      * list-branches
 
@@ -451,6 +565,7 @@ def help_me():
         "\n * suggest-sanitization"
         "\n * build-inception-shell-project"
         "\n * build-inception-upload-artifacts"
+        "\n * apply-decisions-to-inception"
         "\n * deploy-inception-sanitized-project"
         "\n * list-branches"
         "\n\nEach command has a '--help' option that provides further information, e.g. 'log-critical-documents --help'"

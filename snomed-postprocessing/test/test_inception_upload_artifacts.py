@@ -82,7 +82,9 @@ class TestInceptionUploadArtifacts(unittest.TestCase):
                 },
             ]
 
-            result = build_inception_upload_artifacts(source_zip, decisions, output_dir)
+            result = build_inception_upload_artifacts(
+                source_zip, decisions, output_dir, repair_for_remote_upload=False
+            )
 
             self.assertEqual(result.artifact_count, 2)
             remote_names = {artifact.remote_document_name for artifact in result.artifacts}
@@ -115,6 +117,21 @@ class TestInceptionUploadArtifacts(unittest.TestCase):
                 {upload["remote_document_name"] for upload in report["uploads"]},
                 {"doc__ann-anna.xmi", "doc__curation.xmi"},
             )
+
+    def test_default_artifacts_are_repaired_for_remote_upload(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            source_zip = tmp_path / "project.zip"
+            output_dir = tmp_path / "artifacts"
+            self._write_project_zip(source_zip)
+
+            result = build_inception_upload_artifacts(source_zip, [], output_dir)
+
+            self.assertTrue(all(artifact.remote_upload_repaired for artifact in result.artifacts))
+            self.assertTrue(all(artifact.remote_upload_issue_count == 0 for artifact in result.artifacts))
+            report = json.loads(result.report_path.read_text(encoding="utf-8"))
+            self.assertTrue(all(upload["remote_upload_repaired"] for upload in report["uploads"]))
+            self.assertTrue(all(upload["remote_upload_issue_count"] == 0 for upload in report["uploads"]))
 
     def test_initial_cas_and_ser_files_are_not_artifacts(self):
         with tempfile.TemporaryDirectory() as tmp:

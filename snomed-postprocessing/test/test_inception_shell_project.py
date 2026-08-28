@@ -115,7 +115,6 @@ class TestInceptionShellProject(unittest.TestCase):
                 {feature.get("name") for feature in manual_layer.get("features", [])},
                 {
                     "source_code",
-                    "covered_text",
                     "suggestion_status",
                     "suggested_replacement",
                     "review_note",

@@ -2,7 +2,7 @@
 
 ## Status
 
-Planning document. Current preferred strategy: use a **bare-bones full project ZIP** to initialize a new sanitized INCEpTION project with the required schema/layers, then upload sanitized JSONCAS/XMI content through the remote API/pycaprio.
+Implemented workflow. Current preferred strategy: use a **bare-bones full project ZIP** to initialize a new sanitized INCEpTION project with the required schema/layers, then upload repaired sanitized JSONCAS/XMI content through the remote API/pycaprio. The one-step CLI and GUI pipeline run this full workflow dry-run by default.
 
 This replaces earlier ideas of direct `.ser` generation, relying on document import to create layers, or requiring manual `TypeSystem.xml` import as the main workflow.
 
@@ -43,6 +43,43 @@ Relevant OKF notes:
 - `okf/pycaprio/remote-project-api.md`
 - `okf/pycaprio/remote-annotation-curation-api.md`
 - `okf/pycaprio/formats-and-payloads.md`
+
+## One-step workflow
+
+Preferred CLI:
+
+```bash
+apply-decisions-to-inception \
+  --source-project original-project.zip \
+  --decisions reviewed-sanitization-decisions.json \
+  --output-dir sanitized-inception-output
+```
+
+This writes:
+
+```text
+sanitized-inception-output/*-sanitized-shell.zip
+sanitized-inception-output/inception-upload-artifacts/*.json|*.xmi
+sanitized-inception-output/inception-upload-artifacts/inception-upload-artifacts-report.json
+sanitized-inception-output/inception-sanitized-deployment-report.json
+sanitized-inception-output/inception-apply-decisions-upload-report.json
+```
+
+By default it is a dry-run and performs no remote writes. To import/upload into INCEpTION, pass connection settings and explicit `--apply`:
+
+```bash
+apply-decisions-to-inception \
+  --source-project original-project.zip \
+  --decisions reviewed-sanitization-decisions.json \
+  --output-dir sanitized-inception-output \
+  --inception-url http://localhost:8080 \
+  --username USER \
+  --password-env INCEPTION_PASSWORD \
+  --annotation-user USER \
+  --apply
+```
+
+The GUI exposes the same workflow in **3. Review & apply → Apply decisions and upload to INCEpTION**. It also defaults to dry-run/offline preparation; remote writes require checking the explicit apply checkbox.
 
 ## Preferred deployment strategy
 
@@ -88,7 +125,6 @@ with features:
 
 ```text
 source_code
-covered_text
 suggestion_status
 suggested_replacement
 review_note

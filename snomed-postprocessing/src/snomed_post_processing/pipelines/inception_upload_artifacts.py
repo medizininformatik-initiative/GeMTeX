@@ -16,6 +16,10 @@ from ..uima_processing.io import (
     _yield_flat_archive_files,
     _yield_matching_files,
 )
+from .inception_deployment import (
+    inspect_remote_upload_cas_compatibility,
+    prepare_remote_upload_cas_bytes,
+)
 from .sanitization_run import sanitize_cas_bytes
 
 
@@ -35,6 +39,8 @@ class InceptionUploadArtifact:
     changed_annotation_count: int
     unmatched_decisions: tuple[dict[str, Any], ...]
     skipped_decisions: tuple[dict[str, Any], ...]
+    remote_upload_repaired: bool
+    remote_upload_issue_count: int
 
 
 @dataclasses.dataclass(frozen=True)
@@ -59,13 +65,16 @@ def build_inception_upload_artifacts(
     id_prefix: str = "http://snomed.info/id/",
     manual_review_layer: str = "webanno.custom.ManualReview",
     force: bool = False,
+    repair_for_remote_upload: bool = True,
 ) -> InceptionUploadArtifactsResult:
     """Create flattened sanitized JSONCAS/XMI files and a deployment report.
 
     This is an offline preparation step for INCEpTION deployment. It extracts
     real annotator/curation CAS files from an INCEpTION project ZIP, skips
     ``INITIAL_CAS`` and ``.ser`` contents, applies reviewed decisions in memory,
-    and writes one uploadable file per original document/annotator CAS.
+    and writes one uploadable file per original document/annotator CAS. By default,
+    persisted artifacts are repaired for INCEpTION remote-upload compatibility
+    so sentence-based editor rows remain usable after deployment.
     """
 
     source_project = pathlib.Path(source_project)
@@ -137,7 +146,15 @@ def build_inception_upload_artifacts(
                     used_remote_names,
                 )
                 output_path = output_dir / remote_name
-                output_path.write_bytes(sanitized.cas_bytes)
+                output_bytes = sanitized.cas_bytes
+                if repair_for_remote_upload:
+                    output_bytes = prepare_remote_upload_cas_bytes(
+                        output_bytes, cas_format, typesystem=cas_typesystem
+                    )
+                compatibility = inspect_remote_upload_cas_compatibility(
+                    output_bytes, cas_format, typesystem=cas_typesystem
+                )
+                output_path.write_bytes(output_bytes)
                 artifacts.append(
                     InceptionUploadArtifact(
                         source_member=member_name,
@@ -151,6 +168,8 @@ def build_inception_upload_artifacts(
                         changed_annotation_count=sanitized.changed_annotation_count,
                         unmatched_decisions=sanitized.unmatched_decisions,
                         skipped_decisions=sanitized.skipped_decisions,
+                        remote_upload_repaired=bool(repair_for_remote_upload),
+                        remote_upload_issue_count=compatibility.issue_count,
                     )
                 )
 
@@ -266,6 +285,8 @@ def _artifacts_report(
                 "changed_annotation_count": artifact.changed_annotation_count,
                 "unmatched_decision_count": len(artifact.unmatched_decisions),
                 "skipped_decision_count": len(artifact.skipped_decisions),
+                "remote_upload_repaired": artifact.remote_upload_repaired,
+                "remote_upload_issue_count": artifact.remote_upload_issue_count,
             }
             for artifact in artifacts
         ],

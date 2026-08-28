@@ -20,6 +20,7 @@ from snomed_post_processing.sanitization import (
 
 from .downloads import download_json_report
 from snomed_post_processing.sanitization.models import SanitizationStatus
+from snomed_post_processing.pipelines import apply_decisions_and_upload_to_inception
 from snomed_post_processing.pipelines.sanitization_run import run_sanitization
 from snomed_post_processing.uima_processing.io import (
     _load_cas_from_zip_member,
@@ -290,6 +291,15 @@ def _render_sanitization_run_controls(
                 "reviewed sanitization decisions",
             )
             st.caption("Save this JSON to restore the current review state later.")
+    _render_inception_apply_upload_controls(
+        project_source=project_source,
+        reviewed_decisions=reviewed_decisions,
+        decisions_text=decisions_text,
+        selected_count=selected_count,
+        has_invalid_selected_rows=has_invalid_selected_rows,
+        manual_review_layer=manual_review_layer,
+    )
+
     if not run_clicked:
         return
 
@@ -326,6 +336,154 @@ def _render_sanitization_run_controls(
         )
     except Exception as exc:
         st.error(f"Sanitization run failed: {exc}")
+
+
+def _render_inception_apply_upload_controls(
+    *,
+    project_source: Any,
+    reviewed_decisions: list[dict[str, Any]],
+    decisions_text: str,
+    selected_count: int,
+    has_invalid_selected_rows: bool,
+    manual_review_layer: str,
+) -> None:
+    st.subheader("Apply decisions and upload to INCEpTION")
+    st.caption(
+        "One-step deployment workflow: original project ZIP + reviewed decisions → schema shell ZIP "
+        "→ repaired flattened CAS artifacts → INCEpTION dry-run or upload. The original ZIP is not modified."
+    )
+    disabled = project_source is None or selected_count == 0 or has_invalid_selected_rows
+    with st.expander("INCEpTION deployment settings", expanded=False):
+        with st.form("inception_pipeline_form"):
+            project_name = st.text_input(
+                "Sanitized project name",
+                value="",
+                key="inception_pipeline_project_name",
+                help="Optional. Leave empty to derive a sanitized name from the source project metadata.",
+            )
+            project_slug = st.text_input(
+                "Sanitized project slug",
+                value="",
+                key="inception_pipeline_project_slug",
+                help="Optional. Leave empty to derive a valid sanitized slug.",
+            )
+            inception_url = st.text_input(
+                "INCEpTION URL",
+                value=st.session_state.get("inception_pipeline_url", ""),
+                key="inception_pipeline_url",
+                placeholder="http://localhost:8080",
+            )
+            col1, col2 = st.columns(2)
+            with col1:
+                username = st.text_input("Username", key="inception_pipeline_username")
+            with col2:
+                password = st.text_input("Password", type="password", key="inception_pipeline_password")
+            annotation_user = st.text_input(
+                "Annotation user",
+                value=st.session_state.get("inception_pipeline_annotation_user", ""),
+                key="inception_pipeline_annotation_user",
+                help="Optional. Defaults to the username. Flattened uploads are assigned to this user.",
+            )
+            check_connection = st.checkbox(
+                "Check connection during dry-run",
+                value=False,
+                key="inception_pipeline_check_connection",
+            )
+            no_verify_tls = st.checkbox(
+                "Disable TLS verification",
+                value=False,
+                key="inception_pipeline_no_verify_tls",
+            )
+            apply_remote = st.checkbox(
+                "Apply to INCEpTION now (imports project and uploads artifacts)",
+                value=False,
+                key="inception_pipeline_apply_remote",
+                help="Leave unchecked for offline preparation / dry-run. Check only when you are ready to write to INCEpTION.",
+            )
+            force = st.checkbox(
+                "Overwrite temporary pipeline outputs if needed",
+                value=True,
+                key="inception_pipeline_force",
+            )
+            clicked = st.form_submit_button(
+                "Run INCEpTION deployment pipeline",
+                disabled=disabled,
+                type="primary",
+                width="stretch",
+            )
+    if disabled:
+        st.info("Load a project ZIP, select valid reviewed actions, then run the INCEpTION deployment pipeline.")
+    if not clicked:
+        return
+    try:
+        with st.status("Running INCEpTION deployment pipeline...", expanded=True) as status:
+            st.write("Saving original project ZIP and reviewed decisions JSON...")
+            input_project = save_uploaded_file(project_source, ".zip")
+            output_dir = pathlib.Path(tempfile.mkdtemp(prefix="snomed_gui_inception_pipeline_"))
+            decisions_path = output_dir / "reviewed_sanitization_decisions.json"
+            decisions_path.write_text(decisions_text, encoding="utf-8")
+            st.write("Building shell project ZIP and repaired upload artifacts...")
+            result = apply_decisions_and_upload_to_inception(
+                source_project=input_project,
+                decisions_path=decisions_path,
+                output_dir=output_dir,
+                project_name=project_name.strip() or None,
+                project_slug=project_slug.strip() or None,
+                manual_review_layer=manual_review_layer.strip() or "webanno.custom.ManualReview",
+                inception_url=inception_url.strip() or None,
+                username=username.strip() or None,
+                password=password or None,
+                annotation_user=annotation_user.strip() or None,
+                apply=bool(apply_remote),
+                check_connection=bool(check_connection),
+                verify_tls=not no_verify_tls,
+                force=force,
+            )
+            status.update(label="INCEpTION deployment pipeline finished.", state="complete", expanded=False)
+        issue_count = sum(artifact.remote_upload_issue_count for artifact in result.artifacts_result.artifacts)
+        if result.deployment_result.errors:
+            st.error(f"Pipeline finished with {len(result.deployment_result.errors)} error(s). See report below.")
+        elif result.applied:
+            st.success(f"Uploaded {result.deployment_result.planned_upload_count} artifact(s) to INCEpTION.")
+        else:
+            st.success(f"Dry-run complete. Planned uploads: {result.deployment_result.planned_upload_count}.")
+        st.caption(f"Remote-upload compatibility issues remaining: {issue_count}")
+        if result.deployment_result.warnings:
+            st.warning("\n".join(f"- {warning}" for warning in result.deployment_result.warnings))
+        _render_inception_pipeline_downloads(result)
+    except Exception as exc:
+        st.error(f"INCEpTION deployment pipeline failed: {exc}")
+
+
+def _render_inception_pipeline_downloads(result: Any) -> None:
+    st.download_button(
+        "Download shell project ZIP",
+        data=result.shell_project.read_bytes(),
+        file_name=result.shell_project.name,
+        mime="application/zip",
+    )
+    artifacts_zip = _zip_directory_bytes(result.upload_artifacts_dir)
+    st.download_button(
+        "Download repaired upload artifacts ZIP",
+        data=artifacts_zip,
+        file_name="inception-upload-artifacts.zip",
+        mime="application/zip",
+    )
+    st.download_button(
+        "Download pipeline report JSON",
+        data=result.pipeline_report_path.read_bytes(),
+        file_name=result.pipeline_report_path.name,
+        mime="application/json",
+    )
+
+
+def _zip_directory_bytes(directory: pathlib.Path) -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as zip_file:
+        for path in sorted(pathlib.Path(directory).rglob("*")):
+            if path.is_file():
+                zip_file.writestr(path.relative_to(directory).as_posix(), path.read_bytes())
+    return buffer.getvalue()
 
 
 def _uploaded_file_key(uploaded_file: Any) -> tuple[str, int | None]:
