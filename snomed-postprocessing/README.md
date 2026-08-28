@@ -1,208 +1,383 @@
 # SNOMED Postprocessing
 
-This script logs all critical documents in the given inception dump (supported export formats: ``json`` ***[1]***).
-Critical are documents when they contain SNOMED CT codes that are either on the blacklist or are not on the whitelist.
-Whitelist and blacklist are both defined in a ``hdf5`` file, that must be provided.  
-The resulting log file (a markdown document) also contains intra-document links for better traversal. So you should view it with an appropriate markdown viewer. 
+SNOMED Postprocessing checks SNOMED CT annotations in INCEpTION/UIMA exports against a materialized SNOMED HDF5 file. In policy mode, annotations are checked against whitelist/blacklist policy views. The tool reports non-whitelisted or blacklisted annotations, can generate sanitization suggestions, and can apply reviewed replacement/delete decisions to a copied project ZIP.
 
-* __since version 1.1.0__, a masked md file is created alongside the original one (in case of GUI usage, a separate download button is available).
-The former replaces all annotator and document names with random but eligible strings.
-That enables sharing the log file without privacy concerns.
+The project can be used from the command line or through a Streamlit GUI.
 
-## Usage
-The script can be run either via the command line (if so, the most simple way and the one used in the examples here would be an
-[uv](https://docs.astral.sh/uv/getting-started/installation/) environment) or via docker.
-In both cases you need a hdf5 file ([gemtex_snomedct_codes_2024-04-01.hdf5](https://confluence.imi.med.fau.de/spaces/GEM/pages/317216732/SNOMED+CT+Semantic+Tag+Dashboard?preview=/317216732/359075603/gemtex_snomedct_codes_2024-04-01.hdf5); should be around 50MB)
-containing the whitelist/blacklist and a zip file containing the inception dump.  
-The hdf5 file could also be created with this script itself if you ever need it for a different whitelist/blacklist. You would need a running SNOWSTORM instance though.
-See ``uv run create-concepts-dump --help`` or 
-``docker run ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:1.2.5 create-concepts-dump --help`` for further information. ***[2]***  
-The simple usage for the use case in GeMTex is described in the following, however:
+## Main workflows
 
-### CLI
-#### uv
-You can run the logging script from within an [uv](https://docs.astral.sh/uv/getting-started/installation/) environment.
-(__since version 0.9.7__ it allows you to select specific annotators to log via prompts.)
+### 1. Policy check / critical document logging
 
-For a local dump of an INCEpTION project (you need to specify the paths to the hdf5-file and the inception-json-dump, respectively):
+Input:
+- an INCEpTION project export ZIP, or an INCEpTION project fetched through the API
+- a whitelist/blacklist HDF5 file
+
+Supported CAS formats in the export are JSON CAS and XMI. Java serialized CAS (`.ser`) exports are not supported. In INCEpTION, a suitable JSON CAS backup can be created via:
+
+```text
+Export > Export backup archive > Secondary format > UIMA CAS JSON 0.4.0
 ```
+
+Output:
+- `critical_documents_<date>.md`: markdown report with critical documents and findings
+- `critical_documents_<date>.masked.md`: privacy-friendlier report with masked annotator/document names
+- `critical_documents_<date>.json`: JSON dump of found concepts and offsets
+- `critical_findings_<date>.json`: structured findings artifact used by the sanitization workflow
+
+By default, findings are checked on the `gemtex.Concept` annotation layer. Faulty findings overlapping `webanno.custom.No_Human` are ignored for the critical-document count and reported separately. Both layer choices are configurable.
+
+### 2. HDF5 policy creation
+
+The HDF5 policy file can be created in two modes:
+
+- **RF2 ZIP mode**: ingest a SNOMED CT RF2 release ZIP directly.
+- **Snowstorm mode**: query concepts from a running Snowstorm instance.
+
+The resulting HDF5 can contain:
+- compact whitelist/blacklist policy views
+- full concept metadata
+- semantic tags
+- historical associations
+- optional ancestor data
+
+Historical associations are needed for sanitization suggestions.
+
+### 3. Sanitization suggestions and reviewed export
+
+Input:
+- a sanitization-ready HDF5 file
+- a `critical_findings_*.json` file from the check step
+
+Output:
+- Markdown/JSON suggestion reports based on historical associations, optional ancestor fallback, and optional semantic BM25 fallback
+- reviewed decisions JSON
+- a copied, sanitized INCEpTION ZIP with reviewed replacements and deletions applied
+
+Suggestion generation supports two target views and several fallback levels:
+
+| Target view | Candidate rule |
+|---|---|
+| policy | active AND whitelisted AND not blacklisted |
+| release | active in the selected release; optional blacklist exclusions |
+
+| Suggestion source | Purpose |
+|---|---|
+| historical associations | preferred replacement source for inactive/outdated concepts |
+| ancestor fallback | optional broader active ancestor when historical targets are unavailable |
+| semantic BM25 | optional lexical fallback over SNOMED FSNs |
+| processed SNOGIT cache | optional extra BM25 evidence from SNOGIT terms |
+
+BM25 and SNOGIT are suggestion-only evidence. Candidates must still pass the selected target-view gates. The original INCEpTION ZIP is not modified.
+
+## CLI usage
+
+The installed console commands are:
+
+```bash
+log-critical-documents
+create-concepts-dump
+summarize-hdf5
+suggest-sanitization
+build-snogit-cache
+build-inception-shell-project
+build-inception-upload-artifacts
+deploy-inception-sanitized-project
+apply-decisions-to-inception
+list-branches
+```
+
+Use `--help` on any command for the complete option list.
+
+### Run a local policy check
+
+```bash
 uv run log-critical-documents \
-  --lists-path /path/to/hdf5-file \
-  /path/to/inception-json-dump.zip
+  --lists-path /path/to/gemtex_snomedct_codes.hdf5 \
+  /path/to/inception-export.zip
 ```
-or for a remote connection to the INCEpTION instance (you need to specify the respective INCEPTION_IP, INCEPTION_PORT, INCEPTION_USERNAME, INCEPTION_PASSWORD, INCEPTION_PROJECT_URL_SLUG, as well as a path to where INCEpTION can perform a temporary export and the path to the hdf5-file):
-```
-uv run log-critical-documents \
-  --lists-path /path/to/hdf5-file --ip INCEPTION_IP --port INCEPTION_PORT \
-  --inception-username INCEPTION_USERNAME \
-  --inception-password INCEPTION_PASSWORD \
-  --inception-project INCEPTION_PROJECT_URL_SLUG
-  /path/to/temp/export
-```
-__since version 1.2.5__ `target` and `ignore` layers can be provided.  
-By default, faulty-code checks run on the `gemtex.Concept` layer. This can be configured from the CLI:
 
-```
+Non-interactive use, for example in Docker or CI:
+
+```bash
 uv run log-critical-documents \
-  --lists-path /path/to/hdf5-file \
+  --forbid-prompt \
+  --lists-path /path/to/gemtex_snomedct_codes.hdf5 \
+  /path/to/inception-export.zip
+```
+
+Docker CLI example with local files mounted into `/app/data`:
+
+```bash
+docker run \
+  --volume ./data:/app/data \
+  --rm \
+  ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:2.0.0 \
+  log-critical-documents \
+  --lists-path /app/data/gemtex_snomedct_codes.hdf5 \
+  /app/data/inception-export.zip
+```
+
+The Docker entrypoint adds `--forbid-prompt` for `log-critical-documents`, so interactive annotator selection is not available in this Docker CLI mode.
+
+### Run a policy check through the INCEpTION API
+
+The INCEpTION user must have the `REMOTE` role. In this mode, `PROCESS_PATH` is a temporary export directory.
+
+```bash
+uv run log-critical-documents \
+  --lists-path /path/to/gemtex_snomedct_codes.hdf5 \
+  --ip INCEPTION_HOST \
+  --port 8080 \
+  --inception-username USER \
+  --inception-password PASSWORD \
+  --inception-project PROJECT_URL_SLUG \
+  /path/to/temp/export-dir
+```
+
+### Configure checked and ignored annotation layers
+
+```bash
+uv run log-critical-documents \
+  --lists-path /path/to/gemtex_snomedct_codes.hdf5 \
   --annotation-type gemtex.Concept \
   --annotation-type another.Layer \
-  /path/to/inception-json-dump.zip
-```
-
-Faulty concepts can be ignored when they overlap configured layers. By default, the layer `webanno.custom.No_Human` is used as an ignore-overlap layer. Ignored faulty concepts are excluded from the critical document count but still reported in a separate markdown section:
-
-```
-uv run log-critical-documents \
-  --lists-path /path/to/hdf5-file \
   --ignore-overlap-type webanno.custom.No_Human \
-  --ignore-overlap-type gemtex.FalsePositive \
   --ignore-overlap-mode overlap \
-  /path/to/inception-json-dump.zip
+  /path/to/inception-export.zip
 ```
 
-Available overlap modes are `overlap`, `covered-by`, `contains`, and `exact`:
+Supported ignore modes are `overlap`, `covered-by`, `contains`, and `exact`.
 
-| Mode | Meaning |
-| --- | --- |
-| `overlap` | Ignore the target annotation if its span has any intersection with an ignore-layer annotation. This is the default and most permissive mode. |
-| `covered-by` | Ignore the target annotation only if the target span is fully contained inside an ignore-layer span. |
-| `contains` | Ignore the target annotation only if the target span fully contains an ignore-layer span. |
-| `exact` | Ignore the target annotation only if target and ignore-layer spans have identical begin and end offsets. |
-
-Example for target span `[10, 20]`:
-
-| Ignore span | `overlap` | `covered-by` | `contains` | `exact` |
-| --- | --- | --- | --- | --- |
-| `[15, 25]` | yes | no | no | no |
-| `[5, 25]` | yes | yes | no | no |
-| `[12, 18]` | yes | no | yes | no |
-| `[10, 20]` | yes | yes | yes | yes |
+### Create an HDF5 policy from an RF2 ZIP
+For the following three commands:
+if you don't supply a SNOMED CT code as starting point as the positional argument,
+it defaults to the SNOMED CT root code (``138875005``)
 
 
-#### Docker
-There is also a docker image available:
-```
-docker run
- --volume ./data:/app/data
- --rm
- ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:1.2.5
- log-critical-documents /app/data/inception-json-dump.zip
-```
-- log file will be in the `./data` folder (the script will show the final path as well).
-- `inception-json-dump.zip` (_can be generated from INCEpTION (Settings > Export > *UIMA CAS JSON 0.4.0* )_) has to be located in `./data`. ***[3]***
-- [gemtex_snomedct_codes_2024-04-01.hdf5](https://confluence.imi.med.fau.de/spaces/GEM/pages/317216732/SNOMED+CT+Semantic+Tag+Dashboard?preview=/317216732/359075603/gemtex_snomedct_codes_2024-04-01.hdf5) has to be in `./data`, too.
-
-If you use ``docker``, however, you won't be able to select specific annotators to log.
-This is only available in when starting the script within an uv environment (or similar; see above). 
-
-###### Convenience Script
-There is a convenience script with `./log-inception-docs.sh` that runs the above docker command with the given arguments:
-* _arg1_ (mandatory): name of the inception dump zip (in the ``data`` folder)
-* _arg2_ (optional): version of the docker image 
-
-e.g.:  
-````
-# make sure to make it executable:
-# > chmod +x log-inception-docs.sh
-
-./log-inception-docs.sh data/inception-dump.zip
-````
-
-### CLI Output:
-```
--- Whitelist --
-INITIAL_CAS: Done.    0 critical document(s) found.
-[...]
--- Blacklist --
-INITIAL_CAS: Done.   13 critical document(s) found - with  19 concept(s) on 'blacklist'.
-[...]
--- Result --
-WARNING:root:  13 critical document(s) found. See '[...]/critical_documents_24-02-2026_08-46.md' for details.
+```bash
+uv run create-concepts-dump \
+  --zip /path/to/SnomedCT_Release_INT.zip \
+  --output /path/to/gemtex_snomedct_codes.hdf5 \
+  --policy-date YYYYMMDD \
+  --include-ancestors \
+  --dump-mode version
 ```
 
-### GUI
-* __since version 0.9.9__, the gui handles connection via credentials to an INCEpTION instance and is not restricted to local files anymore (except for the ``hdf5`` file)
-* __since version 0.9.8__, a gui can be invoked for the logging process.  
+Create a blacklist policy by semantic tags or root codes:
 
-#### uv
+```bash
+uv run create-concepts-dump \
+  --zip /path/to/SnomedCT_Release_INT.zip \
+  --output /path/to/gemtex_snomedct_codes.hdf5 \
+  --policy-date YYYYMMDD \
+  --dump-mode semantic \
+  --filter-list /path/to/blacklist_filter_tags.txt
 ```
-uv run streamlit run .\src\snomed_post_processing\gui\app.py
+
+Create both blacklist and whitelist policy in one run:
+
+```bash
+uv run create-concepts-dump \
+  --zip /path/to/SnomedCT_Release_INT.zip \
+  --output /path/to/gemtex_snomedct_codes.hdf5 \
+  --policy-date YYYYMMDD \
+  --include-ancestors \
+  --dump-mode version \
+  --filter-list /path/to/blacklist_filter_tags.txt
 ```
-#### Docker
+
+### Create an HDF5 policy from Snowstorm
+This will take a very long time, since it queries the API repeatedly ofr nearly all codes.
+If possible at all, please use a RELEASE zip (see above).
+```bash
+uv run create-concepts-dump \
+  --ip SNOWSTORM_HOST \
+  --port 8080 \
+  --branch MAIN/YYYY-MM-DD \
+  --dump-mode version
 ```
-docker run --rm -p HOST_PORT:8501 ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:1.2.5 start-gui
+
+For semantic/blacklist dumps, provide one or more `--filter-list` values or a filter-list file.
+
+### Inspect an HDF5 file
+
+```bash
+uv run summarize-hdf5 /path/to/gemtex_snomedct_codes.hdf5
+uv run summarize-hdf5 --markdown /path/to/gemtex_snomedct_codes.hdf5
 ```
-* ``HOST_PORT`` needs to be set to the port you want to use for the GUI.
 
-###### Convenience Script
-There is a convenience script with `./start-gui.sh` that runs the above docker command with the given arguments:
-* _arg1_ (optional): Port to use for the GUI (default: 8501)
-* _arg2_ (optional): Version of the docker image
+### Generate sanitization suggestions
 
-e.g.:
-````
-# make sure to make it executable:
-# > chmod +x start-gui.sh
+Policy-view suggestions use the HDF5 whitelist/blacklist policy:
 
-./start-gui.sh 8080
-````
+```bash
+uv run suggest-sanitization \
+  --lists-path /path/to/gemtex_snomedct_codes.hdf5 \
+  --critical-findings /path/to/critical_findings.json \
+  --output /path/to/sanitization_suggestions.md
+```
 
-## Additional Information / Footnotes
-* Since the script needs to compare every document and its SNOMED CT codes (three digits in most documents) against the whitelist/blacklist, it might take a while to complete.
-The script will show the progress in the console, and on the bright side, if it completed the whitelist (appr. 367 000 concepts), the comparison against the blacklist should be much faster, since it contains fewer concepts (only appr. 15 700). 
+Release-view suggestions ignore the whitelist and allow any active concept by default:
 
-[1] Export > Export backup archive > Secondary format > UIMA CAS JSON 0.4.0  
+```bash
+uv run suggest-sanitization \
+  --lists-path /path/to/gemtex_snomedct_codes.hdf5 \
+  --critical-findings /path/to/critical_findings.json \
+  --output /path/to/sanitization_suggestions.md \
+  --target-view release
+```
 
-[2] The available dump `gemtex_snomedct_codes_2024-04-01.hdf5` was created with the following two commands respectively:  
-* `uv run create-concepts-dump --ip SNOWSTORM_IP --port SNOWSTORM_PORT --branch MAIN/2024-04-01 --dump-mode version` (whitelist)  
-* `uv run create-concepts-dump --ip SNOWSTORM_IP --port SNOWSTORM_PORT --branch MAIN/2024-04-01 --filter-list ./config/blacklist_filter_tags.txt --dump-mode semantic` (blacklist)  
+Release-view blacklist exclusions are opt-in:
 
-[3] the discrepancy between `/app/data/...` in the docker command and `./data/...` for the requirements is no error,
-because the local `./data` will be mounted into the containers `/app/data` and the script that runs in the container will need the location relative to its filesystem.
+| Options | Effective release-view rule |
+|---|---|
+| none | active concept |
+| `--enforce-embedded-blacklist` | active AND not in embedded HDF5 blacklist |
+| `--custom-blacklist PATH` | active AND not in custom blacklist |
+| both | active AND not in either blacklist |
 
-## Resulting LOG File Example:
-### Whitelist
-[...]
-### Blacklist
-#### INITIAL_CAS
-##### Albers.txt.xmi
-| Snomed CT Code |    Covered Text | Offset in Document |                                 FSN |
-|---------------:|----------------:|-------------------:|------------------------------------:|
-|      257915005 | Entnahmestellen |       (3188, 3203) | Sampling - action (qualifier value) |
-|      257915005 |  Entnahmeareale |       (8916, 8930) | Sampling - action (qualifier value) |
+A custom blacklist file uses the same format as RF2 blacklist ingestion: numeric SCTID lines exclude the concept and descendants; non-numeric lines exclude by FSN semantic tag.
 
-[...]
+Optional semantic BM25 fallback can be combined with either target view. It ranks SNOMED FSNs lexically and only keeps candidates that pass the selected policy/release gates:
 
-##### Fleischmann.txt.xmi
-| Snomed CT Code |           Covered Text | Offset in Document |                                        FSN |
-|---------------:|-----------------------:|-------------------:|-------------------------------------------:|
-|      160780003 | Beschäftigungstherapie |       (4415, 4437) | Domiciliary occupational therapy (finding) |
+```bash
+uv run suggest-sanitization \
+  --lists-path /path/to/gemtex_snomedct_codes.hdf5 \
+  --critical-findings /path/to/critical_findings.json \
+  --output /path/to/sanitization_suggestions.md \
+  --semantic-bm25-fallback
+```
 
-[...]
+To use SNOGIT terms as additional BM25 evidence, first build a processed SNOGIT cache from a SNOGIT ZIP and the same main HDF5:
 
-##### Waldenstroem.txt.xmi
-| Snomed CT Code |                                                                                               Covered Text | Offset in Document |                                                       FSN |
-|---------------:|-----------------------------------------------------------------------------------------------------------:|-------------------:|----------------------------------------------------------:|
-|      162467007 |                                                                                                symptomfrei |       (1064, 1075) |                              Free of symptoms (situation) |
-|      251893009 |                                                                                                Symptomatik |       (1088, 1099) |                           Symptom ratings (staging scale) |
-|       42752001 |                                                                                             im Sinne einer |       (2464, 2478) |                                        Due to (attribute) |
-|      367409002 |                                                                                                    gefolgt |       (3088, 3095) |                                   Followed by (attribute) |
-|      246106000 |                                                                                                  Kontrolle |       (3401, 3410) |                                       Control (attribute) |
-|      720378001 | allerdings sollte er dabei vorsichtig sein mit Autofahren, da diese Medikamente bekanntlich sedierend sind |       (3498, 3604) | Patient advised medication may affect driving (situation) |
+```bash
+uv run build-snogit-cache \
+  --hdf5 /path/to/gemtex_snomedct_codes.hdf5 \
+  --snogit-zip /path/to/SNOGIT.zip \
+  --output /path/to/processed_snogit_cache.hdf5
+```
 
-### Final Count
-#### SNOMED CT Codes
-| SNOMED CT Codes | Count |
-|----------------:|------:|
-|           33333 |     2 |
-|         1234567 |    10 |
-|           [...] | [...] |
+By default, cache creation uses the newest general `SNOGIT_*.dat` member in the ZIP. To include specific `.dat` members instead, pass `--snogit-member` one or more times, for example to add ELGA or Latin term files.
 
-#### Semantic Tags
-| Semantic Tag | Count |
-|-------------:|------:|
-|    attribute |    65 |
-|    situation |    12 |
-|        [...] | [...] |
-|  environment |     4 |
+Then pass that processed cache during suggestion generation:
+
+```bash
+uv run suggest-sanitization \
+  --lists-path /path/to/gemtex_snomedct_codes.hdf5 \
+  --critical-findings /path/to/critical_findings.json \
+  --output /path/to/sanitization_suggestions.md \
+  --semantic-bm25-fallback \
+  --use-snogit-cache /path/to/processed_snogit_cache.hdf5
+```
+
+`suggest-sanitization` does not parse raw SNOGIT ZIP files or create caches; use `build-snogit-cache` for that step.
+
+### Apply reviewed decisions and deploy to INCEpTION
+
+The recommended deployment workflow is the one-step command:
+
+```bash
+uv run apply-decisions-to-inception \
+  --source-project /path/to/original-inception-project.zip \
+  --decisions /path/to/reviewed_sanitization_decisions.json \
+  --output-dir /path/to/sanitized-inception-output
+```
+
+This is a dry-run/offline preparation by default. It does not contact or modify INCEpTION unless connection options and `--apply` are supplied.
+
+It creates:
+
+```text
+/path/to/sanitized-inception-output/
+  <source-name>-sanitized-shell.zip
+  inception-upload-artifacts/
+    *.json / *.xmi
+    inception-upload-artifacts-report.json
+  inception-sanitized-deployment-report.json
+  inception-apply-decisions-upload-report.json
+```
+
+The original project ZIP is not modified. Reviewed decisions are applied to the original project ZIP, producing flattened sanitized CAS upload artifacts. These artifacts are repaired for INCEpTION remote-upload compatibility, including complete non-overlapping `Sentence` coverage of non-whitespace text so the sentence-based editor can load them.
+
+To actually import the shell project and upload the sanitized CAS artifacts, pass INCEpTION credentials and explicit `--apply`:
+
+```bash
+export INCEPTION_PASSWORD='...'
+uv run apply-decisions-to-inception \
+  --source-project /path/to/original-inception-project.zip \
+  --decisions /path/to/reviewed_sanitization_decisions.json \
+  --output-dir /path/to/sanitized-inception-output \
+  --inception-url http://localhost:8080 \
+  --username USER \
+  --password-env INCEPTION_PASSWORD \
+  --annotation-user USER \
+  --apply
+```
+
+Use `--check-connection` without `--apply` to authenticate and verify that the INCEpTION instance is reachable while still avoiding remote writes.  
+Instead of `--password-env` you can use plain `--password` without an environment file, as well.
+
+The lower-level commands are also available if you want to run the workflow step by step:
+
+```bash
+uv run build-inception-shell-project \
+  --source-project /path/to/original-inception-project.zip \
+  --output-project-shell /path/to/sanitized-shell.zip
+
+uv run build-inception-upload-artifacts \
+  --source-project /path/to/original-inception-project.zip \
+  --decisions /path/to/reviewed_sanitization_decisions.json \
+  --output-dir /path/to/inception-upload-artifacts
+
+uv run deploy-inception-sanitized-project \
+  --shell-project /path/to/sanitized-shell.zip \
+  --upload-artifacts-dir /path/to/inception-upload-artifacts
+```
+
+`deploy-inception-sanitized-project` is also dry-run by default and requires `--apply` for remote writes.
+
+## GUI usage
+
+Start the Streamlit app locally:
+
+```bash
+uv run streamlit run src/snomed_post_processing/gui/app.py
+```
+
+With Docker, the GUI can be started as:
+
+```bash
+docker run --rm -p HOST_PORT:8501 \
+  ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:2.0.0 \
+  start-gui
+```
+
+Convenience scripts are included for the common Docker commands:
+
+```bash
+bash log-inception-docs.sh inception-export.zip
+bash start-gui.sh 8501
+```
+
+If you want to run them as `./log-inception-docs.sh` or `./start-gui.sh`, mark them executable first with `chmod +x`. The logging script assumes files are in `./data` and relies on the container-visible `/app/data` paths.
+
+The GUI has three tabs:
+
+1. **Check whitelist/blacklist**  
+   Upload an INCEpTION ZIP or fetch one through the INCEpTION API, upload the HDF5 policy file, optionally select annotators and annotation layers, then run the policy check. Reports and JSON artifacts can be downloaded.
+
+2. **Sanitization suggestions**  
+   Use the `CriticalFindings` JSON from the current session or upload one. Select policy or active-release target view, configure optional embedded/custom blacklist handling for release view, choose fallback methods, optionally select/create a processed SNOGIT cache, then download suggestion reports.
+
+3. **Review & apply / Sanitization run**  
+   Review suggestions, save/load reviewed decisions, and either:
+   - run the legacy local sanitization ZIP export, or
+   - run the INCEpTION deployment pipeline.
+
+   The INCEpTION deployment section mirrors `apply-decisions-to-inception`: it builds a schema shell ZIP, builds repaired flattened upload artifacts, and then performs a dry-run or, only if explicitly selected, uploads to INCEpTION. Download buttons are provided for the shell ZIP, repaired upload artifacts ZIP, and pipeline report.
+
+## Notes
+
+- The policy check can take a while on large projects or large policy files.
+- A default HDF5 path is attempted when `--lists-path` is omitted, but providing the policy file explicitly is recommended.
+- Use masked markdown reports when sharing results outside a protected environment.

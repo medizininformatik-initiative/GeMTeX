@@ -135,6 +135,61 @@ class TestSemanticBm25Sanitization(unittest.TestCase):
         self.assertGreater(suggestion.score, 0.0)
         self.assertTrue(suggestion.candidates[0].policy_acceptable)
 
+    def test_release_view_bm25_accepts_active_candidate_without_whitelist(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            hdf5_path = pathlib.Path(tmpdir) / "concepts.hdf5"
+            _write_compact_hdf5(hdf5_path, whitelist_indices=(), active=(False, True, True, False))
+
+            policy_suggestion = suggest_semantic_bm25(
+                _finding(),
+                hdf5_path,
+                min_score=0.1,
+                min_lexical_score=0.2,
+            )
+            release_suggestion = suggest_semantic_bm25(
+                _finding(),
+                hdf5_path,
+                min_score=0.1,
+                min_lexical_score=0.2,
+                target_view="release",
+            )
+
+        self.assertEqual(policy_suggestion.status, SanitizationStatus.NO_REPLACEMENT)
+        self.assertEqual(release_suggestion.status, SanitizationStatus.SEMANTIC_BM25_REPLACEMENT)
+        self.assertEqual(release_suggestion.replacement_code, "100")
+        self.assertFalse(release_suggestion.candidates[0].in_whitelist)
+
+    def test_release_view_bm25_optionally_excludes_blacklist(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            hdf5_path = pathlib.Path(tmpdir) / "concepts.hdf5"
+            _write_compact_hdf5(
+                hdf5_path,
+                whitelist_indices=(),
+                blacklist_indices=(1,),
+                active=(False, True, True, False),
+            )
+
+            excluded = suggest_semantic_bm25(
+                _finding(),
+                hdf5_path,
+                min_score=0.1,
+                min_lexical_score=0.5,
+                target_view="release",
+                release_exclude_blacklist=True,
+            )
+            allowed = suggest_semantic_bm25(
+                _finding(),
+                hdf5_path,
+                min_score=0.1,
+                min_lexical_score=0.5,
+                target_view="release",
+            )
+
+        self.assertEqual(excluded.status, SanitizationStatus.NO_REPLACEMENT)
+        self.assertEqual(allowed.status, SanitizationStatus.SEMANTIC_BM25_REPLACEMENT)
+        self.assertEqual(allowed.replacement_code, "100")
+        self.assertTrue(allowed.candidates[0].in_blacklist)
+
     def test_thresholds_can_reject_weak_candidate(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             hdf5_path = pathlib.Path(tmpdir) / "concepts.hdf5"

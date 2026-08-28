@@ -152,11 +152,17 @@ def _yield_flat_archive_files(
             continue
         if not _is_supported_cas_path(info.filename, allowed_extensions):
             continue
+        if _is_initial_cas_member(info.filename):
+            continue
         doc_name = _doc_name_from_flat_cas_path(info.filename)
         document_files.setdefault(doc_name, []).append(info.filename)
 
     for doc_name in sorted(document_files):
         yield doc_name, sorted(document_files[doc_name])
+
+
+def _is_initial_cas_member(path: str) -> bool:
+    return pathlib.PurePosixPath(path).name.startswith("INITIAL_CAS.")
 
 
 def _prefer_non_ser_files(
@@ -204,27 +210,10 @@ def _yield_matching_files(
             and _is_supported_cas_path(info.filename, allowed_extensions)
         ]
 
-        if len(matching_files) > 1:
-            matching_files = [
-                p
-                for p in matching_files
-                if not any(
-                    p.endswith(ext)
-                    for ext in (
-                        [f"INITIAL_CAS{ext}" for ext in allowed_extensions]
-                        if allowed_extensions is not None
-                        else [
-                            "INITIAL_CAS.json",
-                            "INITIAL_CAS.xmi",
-                            "INITIAL_CAS.zip",
-                            "INITIAL_CAS.ser",
-                        ]
-                    )
-                )
-            ]
+        matching_files = [p for p in matching_files if not _is_initial_cas_member(p)]
 
         if not matching_files:
-            logging.warning(
+            logging.debug(
                 f"No CAS found for {doc_name} in {file_name} searched in {prefixes}"
             )
             continue

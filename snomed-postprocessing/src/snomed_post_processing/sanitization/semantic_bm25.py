@@ -10,12 +10,12 @@ from __future__ import annotations
 import dataclasses
 import math
 import pathlib
-from typing import Callable, Optional, Sequence, Union
+from typing import Callable, Iterable, Optional, Sequence, Union
 
 import h5py
 
 from ..uima_processing import CriticalFinding
-from ..hdf5_handling.policy import read_concepts, read_policy_indices, require_bm25_ready
+from ..hdf5_handling.policy import read_candidate_validity_sets, read_concepts, read_policy_indices, require_bm25_ready
 from .bm25_index import BM25Index
 from .models import SanitizationStatus
 from .semantic_models import SemanticBm25Candidate, SemanticBm25Suggestion
@@ -44,6 +44,9 @@ class SemanticBm25Resolver:
         allow_blacklist_findings: bool = False,
         snogit_sidecar_path: Optional[Union[str, pathlib.Path]] = None,
         use_snogit: bool = False,
+        target_view: str = "policy",
+        release_exclude_blacklist: bool = False,
+        runtime_blacklist_indices: Iterable[int] = (),
     ):
         self.hdf5_path = pathlib.Path(hdf5_path)
         self.min_score = float(min_score)
@@ -55,6 +58,11 @@ class SemanticBm25Resolver:
         self.allow_blacklist_findings = bool(allow_blacklist_findings)
         self.snogit_sidecar_path = pathlib.Path(snogit_sidecar_path) if snogit_sidecar_path else None
         self.use_snogit = bool(use_snogit or snogit_sidecar_path)
+        if target_view not in {"policy", "release"}:
+            raise ValueError(f"Unsupported BM25 target view: {target_view!r}")
+        self.target_view = target_view
+        self.release_exclude_blacklist = bool(release_exclude_blacklist)
+        self.runtime_blacklist_indices = frozenset(int(idx) for idx in runtime_blacklist_indices)
         self._snogit_searcher: Optional[SnogitSidecarBm25Searcher] = None
         self._snogit_query_cache = {}
         self._load()
@@ -114,7 +122,7 @@ class SemanticBm25Resolver:
             return SemanticBm25Suggestion(
                 finding=finding,
                 status=SanitizationStatus.NO_REPLACEMENT,
-                reason="no policy-acceptable BM25 candidate found",
+                reason=f"no {self.target_view}-acceptable BM25 candidate found",
             )
 
         best = candidates[0]
@@ -148,7 +156,7 @@ class SemanticBm25Resolver:
             replacement_code=best.code,
             replacement_fsn=best.fsn,
             association_type="BM25",
-            reason="single policy-acceptable BM25 replacement candidate found",
+            reason=f"single {self.target_view}-acceptable BM25 replacement candidate found",
             score=best.score,
             candidate_count=len(candidates),
             candidates=candidates,
@@ -167,6 +175,12 @@ class SemanticBm25Resolver:
             self.active = concepts.active
             self.whitelist_indices = read_policy_indices(h5_file, "whitelist")
             self.blacklist_indices = read_policy_indices(h5_file, "blacklist")
+            self.candidate_validity_sets = read_candidate_validity_sets(
+                h5_file,
+                mode=self.target_view,
+                exclude_blacklist=self.release_exclude_blacklist,
+                runtime_blacklist_indices=self.runtime_blacklist_indices,
+            )
         self.snogit_source_member = None
         if self.use_snogit:
             if self.snogit_sidecar_path is None:
@@ -191,13 +205,8 @@ class SemanticBm25Resolver:
         self.document_sources = []
         self.document_terms = []
         self.document_source_members = []
-        for idx in sorted(self.whitelist_indices):
-            if (
-                0 <= idx < len(self.codes)
-                and bool(self.active[idx])
-                and idx not in self.blacklist_indices
-                and self.fsn[idx]
-            ):
+        for idx in range(len(self.codes)):
+            if self.candidate_validity_sets.check_index(idx).acceptable and self.fsn[idx]:
                 self.document_indices.append(idx)
                 self.documents.append(_tokenize(self.fsn[idx]))
                 self.document_sources.append("snomed_fsn")
@@ -297,9 +306,7 @@ class SemanticBm25Resolver:
         code = self.codes[concept_idx]
         if source_code and code == source_code:
             return None
-        if not bool(self.active[concept_idx]):
-            return None
-        if concept_idx not in self.whitelist_indices or concept_idx in self.blacklist_indices:
+        if not self.candidate_validity_sets.check_index(concept_idx).acceptable:
             return None
         doc_set = set(doc_tokens)
         lexical_score = len(query_set & doc_set) / max(len(query_set), 1)
@@ -315,7 +322,7 @@ class SemanticBm25Resolver:
             semantic_tag=semantic_tag,
             active=bool(self.active[concept_idx]),
             in_whitelist=concept_idx in self.whitelist_indices,
-            in_blacklist=concept_idx in self.blacklist_indices,
+            in_blacklist=concept_idx in self.blacklist_indices or concept_idx in self.runtime_blacklist_indices,
             source=source,
             matched_term=matched_term,
             source_member=source_member,
@@ -340,7 +347,7 @@ def suggest_semantic_bm25(
     hdf5_path: Union[str, pathlib.Path],
     **kwargs,
 ) -> SemanticBm25Suggestion:
-    """Suggest a policy-acceptable replacement using the BM25 fallback."""
+    """Suggest an acceptable replacement using the BM25 fallback."""
     return SemanticBm25Resolver(hdf5_path, **kwargs).suggest(finding)
 
 
@@ -358,7 +365,7 @@ def apply_semantic_bm25_fallback(
     only for actionable whitelist findings that do not already have a
     replacement. If ``allow_blacklist_findings`` is true, BM25 is also consulted
     for actionable blacklist findings; candidates must still be active,
-    whitelisted, and not blacklisted. If BM25 does not pass thresholds, the
+    acceptable in the selected target view. If BM25 does not pass thresholds, the
     original suggestion is kept so its original failure reason remains visible.
     """
     resolver = SemanticBm25Resolver(

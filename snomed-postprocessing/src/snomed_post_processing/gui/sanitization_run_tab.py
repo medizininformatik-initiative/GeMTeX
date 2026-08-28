@@ -20,6 +20,7 @@ from snomed_post_processing.sanitization import (
 
 from .downloads import download_json_report
 from snomed_post_processing.sanitization.models import SanitizationStatus
+from snomed_post_processing.pipelines import apply_decisions_and_upload_to_inception
 from snomed_post_processing.pipelines.sanitization_run import run_sanitization
 from snomed_post_processing.uima_processing.io import (
     _load_cas_from_zip_member,
@@ -70,7 +71,10 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
         st.caption(f"Suggestion report: `{report_path}`")
 
     document_texts = _project_document_text_lookup(st.session_state.get("zip_file"))
-    rows = _suggestions_to_review_rows(suggestions, document_texts)
+    metadata_contexts = _metadata_finding_context_lookup(
+        st.session_state.get("sanitization_suggestions_metadata") or {}
+    )
+    rows = _suggestions_to_review_rows(suggestions, document_texts, metadata_contexts)
     _render_review_summary(rows)
 
     with st.popover("Suggestion metadata"):
@@ -78,7 +82,16 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
 
     st.subheader("Review workspace")
     st.caption(
-        "For each finding, either apply a selected replacement or delete the matched annotation from the sanitized copy."
+        "For each finding, apply a selected replacement, delete the matched annotation, or mark it for manual editing in the sanitized copy."
+    )
+    st.caption(
+        "Checkbox behavior: no selection keeps the annotation unchanged; Needs manual edit takes precedence over Apply/Delete; deletion takes precedence over Apply."
+    )
+    manual_review_layer = st.text_input(
+        "Manual-review marker layer",
+        value=st.session_state.get("manual_review_layer", "webanno.custom.ManualReview"),
+        key="manual_review_layer",
+        help="Layer added to the sanitized project for rows marked 'Needs manual edit'.",
     )
     reviewed_decisions = []
     if rows:
@@ -96,10 +109,11 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
     ]
     replacement_count = sum(1 for decision in reviewed_decisions if decision.get("action") == "replace")
     delete_count = sum(1 for decision in reviewed_decisions if decision.get("action") == "delete")
-    selected_count = replacement_count + delete_count
+    manual_edit_count = sum(1 for decision in reviewed_decisions if decision.get("action") == "manual_edit")
+    selected_count = replacement_count + delete_count + manual_edit_count
     st.caption(
-        f"Selected {replacement_count} replacement(s) and {delete_count} deletion(s) "
-        "for the future sanitization run."
+        f"Selected {replacement_count} replacement(s), {delete_count} deletion(s), "
+        f"and {manual_edit_count} manual-edit marker(s) for the future sanitization run."
     )
     if invalid_selected_rows:
         st.warning(
@@ -112,6 +126,7 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
         decisions_text,
         selected_count=selected_count,
         has_invalid_selected_rows=bool(invalid_selected_rows),
+        manual_review_layer=manual_review_layer,
     )
 
 
@@ -245,6 +260,7 @@ def _render_sanitization_run_controls(
     *,
     selected_count: int,
     has_invalid_selected_rows: bool,
+    manual_review_layer: str = "webanno.custom.ManualReview",
 ) -> None:
     st.subheader("Run")
     project_source = st.session_state.get("zip_file")
@@ -275,6 +291,15 @@ def _render_sanitization_run_controls(
                 "reviewed sanitization decisions",
             )
             st.caption("Save this JSON to restore the current review state later.")
+    _render_inception_apply_upload_controls(
+        project_source=project_source,
+        reviewed_decisions=reviewed_decisions,
+        decisions_text=decisions_text,
+        selected_count=selected_count,
+        has_invalid_selected_rows=has_invalid_selected_rows,
+        manual_review_layer=manual_review_layer,
+    )
+
     if not run_clicked:
         return
 
@@ -289,6 +314,7 @@ def _render_sanitization_run_controls(
                 input_project,
                 reviewed_decisions,
                 output_project,
+                manual_review_layer=manual_review_layer.strip() or "webanno.custom.ManualReview",
             )
             st.write("Preparing sanitized project ZIP for download...")
             status.update(
@@ -310,6 +336,154 @@ def _render_sanitization_run_controls(
         )
     except Exception as exc:
         st.error(f"Sanitization run failed: {exc}")
+
+
+def _render_inception_apply_upload_controls(
+    *,
+    project_source: Any,
+    reviewed_decisions: list[dict[str, Any]],
+    decisions_text: str,
+    selected_count: int,
+    has_invalid_selected_rows: bool,
+    manual_review_layer: str,
+) -> None:
+    st.subheader("Apply decisions and upload to INCEpTION")
+    st.caption(
+        "One-step deployment workflow: original project ZIP + reviewed decisions → schema shell ZIP "
+        "→ repaired flattened CAS artifacts → INCEpTION dry-run or upload. The original ZIP is not modified."
+    )
+    disabled = project_source is None or selected_count == 0 or has_invalid_selected_rows
+    with st.expander("INCEpTION deployment settings", expanded=False):
+        with st.form("inception_pipeline_form"):
+            project_name = st.text_input(
+                "Sanitized project name",
+                value="",
+                key="inception_pipeline_project_name",
+                help="Optional. Leave empty to derive a sanitized name from the source project metadata.",
+            )
+            project_slug = st.text_input(
+                "Sanitized project slug",
+                value="",
+                key="inception_pipeline_project_slug",
+                help="Optional. Leave empty to derive a valid sanitized slug.",
+            )
+            inception_url = st.text_input(
+                "INCEpTION URL",
+                value=st.session_state.get("inception_pipeline_url", ""),
+                key="inception_pipeline_url",
+                placeholder="http://localhost:8080",
+            )
+            col1, col2 = st.columns(2)
+            with col1:
+                username = st.text_input("Username", key="inception_pipeline_username")
+            with col2:
+                password = st.text_input("Password", type="password", key="inception_pipeline_password")
+            annotation_user = st.text_input(
+                "Annotation user",
+                value=st.session_state.get("inception_pipeline_annotation_user", ""),
+                key="inception_pipeline_annotation_user",
+                help="Optional. Defaults to the username. Flattened uploads are assigned to this user.",
+            )
+            check_connection = st.checkbox(
+                "Check connection during dry-run",
+                value=False,
+                key="inception_pipeline_check_connection",
+            )
+            no_verify_tls = st.checkbox(
+                "Disable TLS verification",
+                value=False,
+                key="inception_pipeline_no_verify_tls",
+            )
+            apply_remote = st.checkbox(
+                "Apply to INCEpTION now (imports project and uploads artifacts)",
+                value=False,
+                key="inception_pipeline_apply_remote",
+                help="Leave unchecked for offline preparation / dry-run. Check only when you are ready to write to INCEpTION.",
+            )
+            force = st.checkbox(
+                "Overwrite temporary pipeline outputs if needed",
+                value=True,
+                key="inception_pipeline_force",
+            )
+            clicked = st.form_submit_button(
+                "Run INCEpTION deployment pipeline",
+                disabled=disabled,
+                type="primary",
+                width="stretch",
+            )
+    if disabled:
+        st.info("Load a project ZIP, select valid reviewed actions, then run the INCEpTION deployment pipeline.")
+    if not clicked:
+        return
+    try:
+        with st.status("Running INCEpTION deployment pipeline...", expanded=True) as status:
+            st.write("Saving original project ZIP and reviewed decisions JSON...")
+            input_project = save_uploaded_file(project_source, ".zip")
+            output_dir = pathlib.Path(tempfile.mkdtemp(prefix="snomed_gui_inception_pipeline_"))
+            decisions_path = output_dir / "reviewed_sanitization_decisions.json"
+            decisions_path.write_text(decisions_text, encoding="utf-8")
+            st.write("Building shell project ZIP and repaired upload artifacts...")
+            result = apply_decisions_and_upload_to_inception(
+                source_project=input_project,
+                decisions_path=decisions_path,
+                output_dir=output_dir,
+                project_name=project_name.strip() or None,
+                project_slug=project_slug.strip() or None,
+                manual_review_layer=manual_review_layer.strip() or "webanno.custom.ManualReview",
+                inception_url=inception_url.strip() or None,
+                username=username.strip() or None,
+                password=password or None,
+                annotation_user=annotation_user.strip() or None,
+                apply=bool(apply_remote),
+                check_connection=bool(check_connection),
+                verify_tls=not no_verify_tls,
+                force=force,
+            )
+            status.update(label="INCEpTION deployment pipeline finished.", state="complete", expanded=False)
+        issue_count = sum(artifact.remote_upload_issue_count for artifact in result.artifacts_result.artifacts)
+        if result.deployment_result.errors:
+            st.error(f"Pipeline finished with {len(result.deployment_result.errors)} error(s). See report below.")
+        elif result.applied:
+            st.success(f"Uploaded {result.deployment_result.planned_upload_count} artifact(s) to INCEpTION.")
+        else:
+            st.success(f"Dry-run complete. Planned uploads: {result.deployment_result.planned_upload_count}.")
+        st.caption(f"Remote-upload compatibility issues remaining: {issue_count}")
+        if result.deployment_result.warnings:
+            st.warning("\n".join(f"- {warning}" for warning in result.deployment_result.warnings))
+        _render_inception_pipeline_downloads(result)
+    except Exception as exc:
+        st.error(f"INCEpTION deployment pipeline failed: {exc}")
+
+
+def _render_inception_pipeline_downloads(result: Any) -> None:
+    st.download_button(
+        "Download shell project ZIP",
+        data=result.shell_project.read_bytes(),
+        file_name=result.shell_project.name,
+        mime="application/zip",
+    )
+    artifacts_zip = _zip_directory_bytes(result.upload_artifacts_dir)
+    st.download_button(
+        "Download repaired upload artifacts ZIP",
+        data=artifacts_zip,
+        file_name="inception-upload-artifacts.zip",
+        mime="application/zip",
+    )
+    st.download_button(
+        "Download pipeline report JSON",
+        data=result.pipeline_report_path.read_bytes(),
+        file_name=result.pipeline_report_path.name,
+        mime="application/json",
+    )
+
+
+def _zip_directory_bytes(directory: pathlib.Path) -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as zip_file:
+        for path in sorted(pathlib.Path(directory).rglob("*")):
+            if path.is_file():
+                zip_file.writestr(path.relative_to(directory).as_posix(), path.read_bytes())
+    return buffer.getvalue()
 
 
 def _uploaded_file_key(uploaded_file: Any) -> tuple[str, int | None]:
@@ -419,6 +593,17 @@ def _keep_document_open(document: str) -> None:
     st.session_state["sanitization_keep_document_open"] = document
 
 
+def _mark_document_reviewed(document: str) -> None:
+    st.session_state[_document_reviewed_key(document)] = True
+    st.session_state.pop("sanitization_keep_document_open", None)
+
+
+def _save_current_document_review_state(document: str, manual_row_numbers: list[int]) -> None:
+    if st.session_state.get(_document_reviewed_key(document), False):
+        _save_manual_choice_form(document, manual_row_numbers)
+        st.session_state[_document_reviewed_key(document)] = True
+
+
 def _review_state_revision() -> int:
     return int(st.session_state.get("sanitization_review_state_revision", 0))
 
@@ -474,71 +659,117 @@ def _render_document_review_sections(rows: list[dict[str, Any]]) -> list[dict[st
                 decisions.extend(_render_manual_choice_cards(manual_rows, document))
 
             if automatic_rows:
-                st.markdown("#### Automatic/no-replacement suggestions")
+                st.markdown(
+                    "#### Single/no-choice suggestions",
+                    help="Checkbox behavior: no selection keeps the annotation unchanged; 'Needs manual edit' takes precedence over Apply/Delete; deletion takes precedence over Apply."
+                )
                 review_df = pd.DataFrame(automatic_rows).drop(
                     columns=["Document", "_offset", "_layer", "_status_raw"],
                     errors="ignore",
                 )
-                edited = st.data_editor(
-                    review_df,
-                    key=f"sanitization_review_editor_{_safe_key(document)}_{_review_state_revision()}",
-                    width="stretch",
-                    hide_index=True,
-                    disabled=[
-                        "#",
-                        "Annotator",
-                        "Source code",
-                        "Covered text",
-                        "Policy issue",
-                        "Finding context",
-                        "Suggested replacement",
-                        "Why suggested",
-                        "Original FSN",
-                        "Status",
-                    ],
-                    on_change=_keep_document_open,
-                    args=(document,),
-                    column_config={
-                        "Apply": st.column_config.CheckboxColumn(
-                            "Apply replacement",
-                            help="Toggle whether this replacement should be applied in the sanitization run.",
-                        ),
-                        "Delete annotation": st.column_config.CheckboxColumn(
-                            "Delete annotation",
-                            help="Remove this matched annotation from the sanitized project copy instead of replacing its concept ID.",
-                        ),
-                        "Policy issue": st.column_config.TextColumn(
+                preferred_columns = [
+                    "#",
+                    "Apply",
+                    "Delete annotation",
+                    "Needs manual edit",
+                    "Covered text",
+                    "Finding context",
+                    "Suggested replacement",
+                    "Annotator",
+                    "Source code",
+                    "Policy issue",
+                    "Why suggested",
+                    "Original FSN",
+                    "Status",
+                    "_valid_choices",
+                    "_choice_hints",
+                    "_needs_choice",
+                ]
+                review_df = review_df[
+                    [column for column in preferred_columns if column in review_df.columns]
+                    + [column for column in review_df.columns if column not in preferred_columns]
+                ]
+                with st.form(f"single_choice_form_{_safe_key(document)}"):
+                    edited = st.data_editor(
+                        review_df,
+                        key=f"sanitization_review_editor_{_safe_key(document)}_{_review_state_revision()}",
+                        width="stretch",
+                        hide_index=True,
+                        disabled=[
+                            "#",
+                            "Annotator",
+                            "Source code",
+                            "Covered text",
                             "Policy issue",
-                            help="Whether the original finding came from the whitelist or blacklist policy check.",
-                        ),
-                        "Finding context": st.column_config.TextColumn(
                             "Finding context",
-                            help="Short document/location context for the original annotation.",
-                        ),
-                        "Suggested replacement": st.column_config.TextColumn(
                             "Suggested replacement",
-                            help="Single suggested replacement for this row.",
-                        ),
-                        "Why suggested": st.column_config.TextColumn(
                             "Why suggested",
-                            help="Short ranking or provenance hint for the candidate.",
-                        ),
-                        "_valid_choices": None,
-                        "_choice_hints": None,
-                        "_needs_choice": None,
-                    },
-                )
+                            "Original FSN",
+                            "Status",
+                        ],
+                        column_config={
+                            "Apply": st.column_config.CheckboxColumn(
+                                "Apply",
+                                help="Toggle whether this replacement should be applied in the sanitization run.",
+                            ),
+                            "Delete annotation": st.column_config.CheckboxColumn(
+                                "Delete",
+                                help="Remove this matched annotation from the sanitized project copy instead of replacing its concept ID.",
+                            ),
+                            "Needs manual edit": st.column_config.CheckboxColumn(
+                                "Manual edit",
+                                help="Keep the original annotation and add a marker on the manual-review layer in the sanitized project.",
+                            ),
+                            "Policy issue": st.column_config.TextColumn(
+                                "Policy issue",
+                                help="Whether the original finding came from the whitelist or blacklist policy check.",
+                            ),
+                            "Finding context": st.column_config.TextColumn(
+                                "Finding context",
+                                help="Short document/location context for the original annotation.",
+                            ),
+                            "Suggested replacement": st.column_config.TextColumn(
+                                "Suggested replacement",
+                                help="Single suggested replacement for this row.",
+                            ),
+                            "Why suggested": st.column_config.TextColumn(
+                                "Why suggested",
+                                help="Short ranking or provenance hint for the candidate.",
+                            ),
+                            "_valid_choices": None,
+                            "_choice_hints": None,
+                            "_needs_choice": None,
+                        },
+                    )
+                    submit_col1, submit_col2 = st.columns(2)
+                    with submit_col1:
+                        st.form_submit_button(
+                            "Save single/no-choice selections",
+                            on_click=_keep_document_open,
+                            args=(document,),
+                            width="stretch",
+                        )
+                    with submit_col2:
+                        st.form_submit_button(
+                            "Save and mark document reviewed",
+                            on_click=_mark_document_reviewed,
+                            args=(document,),
+                            width="stretch",
+                        )
                 decisions.extend(
                     _review_rows_to_decisions(edited.to_dict("records"), automatic_rows, {})
                 )
 
+            all_manual_row_numbers = [int(row["#"]) for row in manual_rows]
             st.checkbox(
                 "Document reviewed",
                 key=reviewed_key,
                 help=(
-                    "This is separate from saving choices: it marks your review "
-                    "progress and collapses this document on the next rerun."
+                    "Marks review progress and saves current manual-choice widget state. "
+                    "If you have unsaved edits inside a form, use that form's 'Save and mark document reviewed' button."
                 ),
+                on_change=_save_current_document_review_state,
+                args=(document, all_manual_row_numbers),
             )
     return decisions
 
@@ -546,9 +777,10 @@ def _render_document_review_sections(rows: list[dict[str, Any]]) -> list[dict[st
 def _render_document_metrics(document_rows: list[dict[str, Any]]) -> None:
     selected = sum(1 for row in document_rows if _row_apply_selected(row))
     deletes = sum(1 for row in document_rows if _row_delete_selected(row))
+    manual_edits = sum(1 for row in document_rows if _row_manual_edit_selected(row))
     manual_total = sum(1 for row in document_rows if row.get("_needs_choice"))
     manual_selected = sum(
-        1 for row in document_rows if row.get("_needs_choice") and _row_apply_selected(row)
+        1 for row in document_rows if row.get("_needs_choice") and _row_manual_choice_resolved(row)
     )
     no_replacement = sum(
         1 for row in document_rows if row.get("Suggested replacement") == NO_REPLACEMENT_LABEL
@@ -560,7 +792,8 @@ def _render_document_metrics(document_rows: list[dict[str, Any]]) -> None:
     )
     st.caption(
         f"{selected} replacement(s) selected · {deletes} deletion(s) selected · "
-        f"{manual_text} · {no_replacement} without replacement"
+        f"{manual_edits} manual-edit marker(s) selected · {manual_text} · "
+        f"{no_replacement} without replacement"
     )
 
 
@@ -571,20 +804,29 @@ def _render_manual_choice_bulk_actions(
     if not manual_rows:
         return
     applied_count = sum(1 for row in manual_rows if _row_apply_selected(row))
+    delete_count = sum(1 for row in manual_rows if _row_delete_selected(row))
+    manual_edit_count = sum(1 for row in manual_rows if _row_manual_edit_selected(row))
+    resolved_count = sum(1 for row in manual_rows if _row_manual_choice_resolved(row))
     if compact:
         st.caption(
             f"Bulk actions for {len(manual_rows)} manual-choice suggestion(s) in "
-            f"this document; {applied_count} currently selected."
+            f"this document; {resolved_count} currently resolved "
+            f"({applied_count} replacement(s), {delete_count} deletion(s), "
+            f"{manual_edit_count} manual-edit marker(s))."
         )
-    elif applied_count == len(manual_rows):
+    elif resolved_count == len(manual_rows):
         st.success(
             f"All {len(manual_rows)} manual-choice suggestion(s) currently have "
-            "an applied replacement selected. Inspect exceptions per document before running."
+            f"a reviewed action selected ({applied_count} replacement(s), "
+            f"{delete_count} deletion(s), {manual_edit_count} manual-edit marker(s)). "
+            "Inspect exceptions per document before running."
         )
     else:
         st.warning(
             f"{len(manual_rows)} suggestion(s) need manual choices; "
-            f"{applied_count} currently have an applied replacement selected. If the first "
+            f"{resolved_count} currently have a reviewed action selected "
+            f"({applied_count} replacement(s), {delete_count} deletion(s), "
+            f"{manual_edit_count} manual-edit marker(s)). If the first "
             "candidate is acceptable as a review starting point, use the bulk action "
             "below and then inspect exceptions per document."
         )
@@ -622,6 +864,8 @@ def _set_manual_choice_defaults(rows: list[dict[str, Any]], *, apply: bool) -> N
             st.session_state[_choice_key(row_number)] = choice
             st.session_state[_previous_choice_key(row_number)] = choice
             st.session_state[_manual_apply_key(row_number)] = True
+            st.session_state[_manual_delete_key(row_number)] = False
+            st.session_state[_manual_edit_key(row_number)] = False
         else:
             st.session_state[_manual_apply_key(row_number)] = False
 
@@ -632,13 +876,21 @@ def _save_manual_choice_form(document: str, row_numbers: list[int]) -> None:
         choice = st.session_state.get(_choice_key(row_number), NO_REPLACEMENT_LABEL)
         previous_choice_key = _previous_choice_key(row_number)
         previous_choice = st.session_state.get(previous_choice_key)
-        if st.session_state.get(_manual_delete_key(row_number)):
+        if st.session_state.get(_manual_edit_key(row_number)):
+            st.session_state[_manual_apply_key(row_number)] = False
+            st.session_state[_manual_delete_key(row_number)] = False
+        elif st.session_state.get(_manual_delete_key(row_number)):
             st.session_state[_manual_apply_key(row_number)] = False
         elif choice == NO_REPLACEMENT_LABEL:
             st.session_state[_manual_apply_key(row_number)] = False
         elif previous_choice is not None and previous_choice != choice:
             st.session_state[_manual_apply_key(row_number)] = True
         st.session_state[previous_choice_key] = choice
+
+
+def _save_manual_choice_form_and_mark_reviewed(document: str, row_numbers: list[int]) -> None:
+    _save_manual_choice_form(document, row_numbers)
+    _mark_document_reviewed(document)
 
 
 def _render_manual_choice_cards(rows: list[dict[str, Any]], document: str) -> list[dict[str, Any]]:
@@ -681,31 +933,49 @@ def _render_manual_choice_cards(rows: list[dict[str, Any]], document: str) -> li
                 )
                 if choice_hint := choice_hints.get(choice):
                     st.caption(f"Selected candidate rationale: {choice_hint}")
+                manual_edit = st.checkbox(
+                    "Needs manual edit",
+                    value=bool(row.get("Needs manual edit")),
+                    key=_manual_edit_key(row_number),
+                    help="Keep the original annotation and add a marker on the manual-review layer in the sanitized project.",
+                )
                 delete_annotation = st.checkbox(
                     "Delete this annotation",
-                    value=bool(row.get("Delete annotation")),
+                    value=bool(row.get("Delete annotation")) and not manual_edit,
                     key=_manual_delete_key(row_number),
+                    disabled=manual_edit,
                     help="Remove this annotation from the sanitized project copy instead of replacing its concept ID.",
                 )
                 apply = st.checkbox(
                     "Apply this replacement",
-                    value=bool(row.get("Apply")) and choice != NO_REPLACEMENT_LABEL and not delete_annotation,
+                    value=bool(row.get("Apply")) and choice != NO_REPLACEMENT_LABEL and not delete_annotation and not manual_edit,
                     key=_manual_apply_key(row_number),
-                    disabled=choice == NO_REPLACEMENT_LABEL or delete_annotation,
+                    disabled=choice == NO_REPLACEMENT_LABEL or delete_annotation or manual_edit,
                 )
             decisions.extend(
                 _review_rows_to_decisions(
-                    [{**row, "Apply": apply, "Delete annotation": delete_annotation, "Suggested replacement": choice}],
+                    [{**row, "Apply": apply, "Delete annotation": delete_annotation, "Needs manual edit": manual_edit, "Suggested replacement": choice}],
                     [row],
                     {row_number: choice},
                 )
             )
-        st.form_submit_button(
-            "Save choices",
-            help="Save dropdown and apply-checkbox edits for this document.",
-            on_click=_save_manual_choice_form,
-            args=(document, row_numbers),
-        )
+        submit_col1, submit_col2 = st.columns(2)
+        with submit_col1:
+            st.form_submit_button(
+                "Save choices",
+                help="Save dropdown and checkbox edits for this document.",
+                on_click=_save_manual_choice_form,
+                args=(document, row_numbers),
+                width="stretch",
+            )
+        with submit_col2:
+            st.form_submit_button(
+                "Save and mark document reviewed",
+                help="Save dropdown and checkbox edits, then mark this document section as reviewed.",
+                on_click=_save_manual_choice_form_and_mark_reviewed,
+                args=(document, row_numbers),
+                width="stretch",
+            )
     return decisions
 
 
@@ -731,15 +1001,21 @@ def _document_review_title(
 ) -> str:
     selected = sum(1 for row in document_rows if _row_apply_selected(row))
     deletes = sum(1 for row in document_rows if _row_delete_selected(row))
+    manual_edits = sum(1 for row in document_rows if _row_manual_edit_selected(row))
     manual_total = sum(1 for row in document_rows if row.get("_needs_choice"))
     manual_selected = sum(
-        1 for row in document_rows if row.get("_needs_choice") and _row_apply_selected(row)
+        1 for row in document_rows if row.get("_needs_choice") and _row_manual_choice_resolved(row)
     )
     no_replacement = sum(
         1 for row in document_rows if row.get("Suggested replacement") == NO_REPLACEMENT_LABEL
     )
     prefix = "✅" if reviewed else "📝"
-    details = [f"{len(document_rows)} finding(s)", f"{selected} replacement(s) selected", f"{deletes} deletion(s) selected"]
+    details = [
+        f"{len(document_rows)} finding(s)",
+        f"{selected} replacement(s) selected",
+        f"{deletes} deletion(s) selected",
+        f"{manual_edits} manual-edit marker(s) selected",
+    ]
     if manual_total:
         if manual_selected == manual_total:
             details.append("all manual choices selected")
@@ -762,7 +1038,7 @@ def _row_has_actionable_replacement(row: dict[str, Any]) -> bool:
 
 
 def _row_apply_selected(row: dict[str, Any]) -> bool:
-    if _row_delete_selected(row):
+    if _row_manual_edit_selected(row) or _row_delete_selected(row):
         return False
     if not row.get("_needs_choice"):
         return bool(row.get("Apply"))
@@ -775,10 +1051,23 @@ def _row_apply_selected(row: dict[str, Any]) -> bool:
 
 
 def _row_delete_selected(row: dict[str, Any]) -> bool:
+    if _row_manual_edit_selected(row):
+        return False
     row_number = int(row["#"])
     if row.get("_needs_choice"):
         return bool(st.session_state.get(_manual_delete_key(row_number), row.get("Delete annotation")))
     return bool(row.get("Delete annotation"))
+
+
+def _row_manual_edit_selected(row: dict[str, Any]) -> bool:
+    row_number = int(row["#"])
+    if row.get("_needs_choice"):
+        return bool(st.session_state.get(_manual_edit_key(row_number), row.get("Needs manual edit")))
+    return bool(row.get("Needs manual edit"))
+
+
+def _row_manual_choice_resolved(row: dict[str, Any]) -> bool:
+    return _row_manual_edit_selected(row) or _row_apply_selected(row) or _row_delete_selected(row)
 
 
 def _render_non_actionable_summary(rows: list[dict[str, Any]]) -> None:
@@ -837,6 +1126,7 @@ def _decisions_metadata(rows: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "suggestions_json_path": st.session_state.get("sanitization_suggestions_json_path"),
         "suggestions_report_path": st.session_state.get("sanitization_suggestions_report_path"),
+        "manual_review_layer": st.session_state.get("manual_review_layer", "webanno.custom.ManualReview"),
         "document_count": len(documents),
         "reviewed_documents": reviewed_documents,
     }
@@ -855,8 +1145,12 @@ def _restore_decision_state(decisions: list[dict[str, Any]], metadata: dict[str,
         replacement_choice = decision.get("replacement_choice")
         if replacement_choice:
             st.session_state[_choice_key(row_number)] = replacement_choice
-        st.session_state[_manual_apply_key(row_number)] = bool(decision.get("apply"))
-        st.session_state[_manual_delete_key(row_number)] = bool(decision.get("delete_annotation"))
+        manual_edit = bool(decision.get("manual_edit")) or decision.get("action") == "manual_edit"
+        st.session_state[_manual_apply_key(row_number)] = bool(decision.get("apply")) and not manual_edit
+        st.session_state[_manual_delete_key(row_number)] = bool(decision.get("delete_annotation")) and not manual_edit
+        st.session_state[_manual_edit_key(row_number)] = manual_edit
+    if isinstance(metadata, dict) and metadata.get("manual_review_layer"):
+        st.session_state["manual_review_layer"] = str(metadata["manual_review_layer"])
     reviewed_documents = metadata.get("reviewed_documents", []) if isinstance(metadata, dict) else []
     for document in reviewed_documents:
         st.session_state[_document_reviewed_key(str(document))] = True
@@ -882,7 +1176,9 @@ def _render_suggestion_settings(metadata: dict[str, Any]) -> None:
 
 
 def _suggestions_to_review_rows(
-    suggestions: list[Any], document_texts: dict[str, str] | None = None
+    suggestions: list[Any],
+    document_texts: dict[str, str] | None = None,
+    metadata_contexts: dict[tuple[str, str, str, tuple[int, int]], str] | None = None,
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     restored_by_index = st.session_state.get("sanitization_restored_decisions_by_index", {})
@@ -893,6 +1189,11 @@ def _suggestions_to_review_rows(
         replacement_label = _replacement_label(suggestion)
         is_automatic_replacement = replacement_label != NO_REPLACEMENT_LABEL
         needs_choice = _needs_row_specific_choice(suggestion, replacement_options)
+        apply_by_default = (
+            is_automatic_replacement
+            and not needs_choice
+            and _status_value(suggestion.status) != SanitizationStatus.SEMANTIC_BM25_REPLACEMENT.value
+        )
         selected_label = st.session_state.get(
             _choice_key(row_number),
             restored_decision.get("replacement_choice")
@@ -901,20 +1202,29 @@ def _suggestions_to_review_rows(
         rows.append(
             {
                 "#": row_number,
-                "Apply": bool(restored_decision.get("apply", is_automatic_replacement and not needs_choice)) and not bool(restored_decision.get("delete_annotation")),
-                "Delete annotation": bool(restored_decision.get("delete_annotation")),
+                "Apply": bool(restored_decision.get("apply", apply_by_default))
+                    and not bool(restored_decision.get("delete_annotation"))
+                    and not bool(restored_decision.get("manual_edit")),
+                "Delete annotation": bool(restored_decision.get("delete_annotation"))
+                    and not bool(restored_decision.get("manual_edit")),
+                "Needs manual edit": bool(restored_decision.get("manual_edit"))
+                    or restored_decision.get("action") == "manual_edit",
                 "Document": suggestion.finding.document,
                 "Annotator": suggestion.finding.annotator,
                 "Source code": suggestion.finding.code or "",
                 "Covered text": suggestion.finding.covered_text,
                 "Policy issue": _policy_issue_label(suggestion.finding),
-                "Finding context": _finding_context_label(suggestion.finding, document_texts or {}),
+                "Finding context": _finding_context_label(
+                    suggestion.finding,
+                    document_texts or {},
+                    metadata_contexts or {},
+                ),
                 "Suggested replacement": selected_label if needs_choice else replacement_label,
                 "Why suggested": replacement_hints.get(
                     selected_label if needs_choice else replacement_label, ""
                 ),
                 "Original FSN": suggestion.finding.fsn or "",
-                "Status": _status_label(suggestion.status),
+                "Status": _status_label_for_suggestion(suggestion),
                 "_status_raw": _status_value(suggestion.status),
                 "_offset": tuple(suggestion.finding.offset),
                 "_layer": suggestion.finding.layer,
@@ -939,15 +1249,17 @@ def _review_rows_to_decisions(
         choice = ambiguous_choices.get(row_number) or edited.get("Suggested replacement") or NO_REPLACEMENT_LABEL
         valid_choices = tuple(original.get("_valid_choices", ()))
         valid_choice = choice in valid_choices
-        delete_annotation = bool(edited.get("Delete annotation"))
-        apply_replacement = bool(edited.get("Apply")) and not delete_annotation
-        action = "delete" if delete_annotation else ("replace" if apply_replacement and valid_choice else "none")
+        manual_edit = bool(edited.get("Needs manual edit"))
+        delete_annotation = bool(edited.get("Delete annotation")) and not manual_edit
+        apply_replacement = bool(edited.get("Apply")) and not delete_annotation and not manual_edit
+        action = "manual_edit" if manual_edit else ("delete" if delete_annotation else ("replace" if apply_replacement and valid_choice else "none"))
         decisions.append(
             {
                 "suggestion_index": row_number - 1,
                 "action": action,
                 "apply": apply_replacement,
                 "delete_annotation": delete_annotation,
+                "manual_edit": manual_edit,
                 "annotator": edited.get("Annotator", ""),
                 "document": original.get("Document", ""),
                 "source_code": edited.get("Source code", ""),
@@ -957,6 +1269,8 @@ def _review_rows_to_decisions(
                 "replacement_choice": choice,
                 "replacement_code": _code_from_label(choice) if valid_choice else None,
                 "replacement_fsn": _fsn_from_label(choice) if valid_choice else None,
+                "suggestion_status": original.get("Status", ""),
+                "review_note": original.get("Why suggested", ""),
                 "valid_choice": valid_choice,
             }
         )
@@ -983,11 +1297,9 @@ def _replacement_options_and_hints(suggestion: Any) -> tuple[list[str], dict[str
         if not _needs_top_k_choice(suggestion):
             return labels, hints
 
-    for rank, candidate in enumerate(getattr(suggestion, "context_candidates", ()) or (), start=1):
-        add_label(
-            _code_fsn_label(getattr(candidate, "code", None), getattr(candidate, "fsn", None)),
-            _candidate_rationale(candidate, rank=rank),
-        )
+    # ``context_candidates`` are diagnostic/provenance context only, e.g.
+    # ancestors rejected because they are outside the configured distance limit.
+    # They must not be selectable replacement choices.
     for rank, candidate in enumerate(getattr(suggestion, "candidates", ()) or (), start=1):
         add_label(
             _code_fsn_label(getattr(candidate, "code", None), getattr(candidate, "fsn", None)),
@@ -1013,15 +1325,55 @@ def _policy_issue_label(finding: Any) -> str:
     return f"Reason: {reason}" if reason else "Reason: policy finding"
 
 
-def _finding_context_label(finding: Any, document_texts: dict[str, str]) -> str:
+def _finding_context_label(
+    finding: Any,
+    document_texts: dict[str, str],
+    metadata_contexts: dict[tuple[str, str, str, tuple[int, int]], str] | None = None,
+) -> str:
     document_text = _lookup_document_text(document_texts, str(getattr(finding, "document", "")))
     offset = getattr(finding, "offset", None)
     if document_text and offset and len(offset) == 2:
         return _offset_context(document_text, int(offset[0]), int(offset[1]))
+    metadata_context = (metadata_contexts or {}).get(_finding_context_key(finding))
+    if metadata_context:
+        return metadata_context
     covered_text = _compact_text(getattr(finding, "covered_text", ""), max_length=80)
     if covered_text:
-        return f"… {covered_text} …"
+        return f"No full document context loaded."
     return "No document text context available."
+
+
+def _finding_context_key(finding: Any) -> tuple[str, str, str, tuple[int, int]]:
+    offset = tuple(int(value) for value in (getattr(finding, "offset", None) or ()))
+    if len(offset) != 2:
+        offset = (-1, -1)
+    return (
+        str(getattr(finding, "document", "") or ""),
+        str(getattr(finding, "annotator", "") or ""),
+        str(getattr(finding, "code", "") or ""),
+        offset,
+    )
+
+
+def _metadata_finding_context_lookup(metadata: dict[str, Any]) -> dict[tuple[str, str, str, tuple[int, int]], str]:
+    lookup: dict[tuple[str, str, str, tuple[int, int]], str] = {}
+    for item in metadata.get("finding_contexts", ()) or ():
+        try:
+            offset = tuple(int(value) for value in item.get("offset", ()))
+            if len(offset) != 2:
+                continue
+            key = (
+                str(item.get("document", "") or ""),
+                str(item.get("annotator", "") or ""),
+                str(item.get("code", "") or ""),
+                offset,
+            )
+            context = str(item.get("context", "") or "")
+        except Exception:
+            continue
+        if context:
+            lookup[key] = context
+    return lookup
 
 
 def _lookup_document_text(document_texts: dict[str, str], document: str) -> str:
@@ -1103,14 +1455,12 @@ def _needs_row_specific_choice(suggestion: Any, replacement_options: list[str]) 
     return status in {
         SanitizationStatus.AMBIGUOUS_REPLACEMENT.value,
         SanitizationStatus.AMBIGUOUS_ANCESTOR.value,
-        SanitizationStatus.SEMANTIC_BM25_REPLACEMENT.value,
     } or len(replacement_options) > 1
 
 
 def _needs_top_k_choice(suggestion: Any) -> bool:
     return _status_value(suggestion.status) in {
         SanitizationStatus.AMBIGUOUS_REPLACEMENT.value,
-        SanitizationStatus.SEMANTIC_BM25_REPLACEMENT.value,
     }
 
 
@@ -1124,6 +1474,10 @@ def _manual_apply_key(row_number: int) -> str:
 
 def _manual_delete_key(row_number: int) -> str:
     return f"sanitization_manual_delete_{row_number}"
+
+
+def _manual_edit_key(row_number: int) -> str:
+    return f"sanitization_manual_edit_{row_number}"
 
 
 def _previous_choice_key(row_number: int) -> str:
@@ -1160,10 +1514,32 @@ def _fsn_from_label(label: str) -> str | None:
     return label.split(" — ", 1)[1] or None
 
 
+def _status_label_for_suggestion(suggestion: Any) -> str:
+    label = _status_label(getattr(suggestion, "status", ""))
+    if (
+        _status_value(getattr(suggestion, "status", ""))
+        == SanitizationStatus.SEMANTIC_BM25_REPLACEMENT.value
+        and _bm25_suggestion_uses_snogit(suggestion)
+    ):
+        return f"{label} (SNOGIT)"
+    return label
+
+
+def _bm25_suggestion_uses_snogit(suggestion: Any) -> bool:
+    replacement_code = str(getattr(suggestion, "replacement_code", "") or "")
+    for candidate in getattr(suggestion, "candidates", ()) or ():
+        if getattr(candidate, "source", "snomed_fsn") != "snogit":
+            continue
+        candidate_code = str(getattr(candidate, "code", "") or "")
+        if not replacement_code or candidate_code == replacement_code:
+            return True
+    return False
+
+
 def _status_label(status: Any) -> str:
     labels = {
         SanitizationStatus.HISTORICAL_ASSOCIATION_REPLACEMENT.value: "Historical association",
-        SanitizationStatus.SEMANTIC_BM25_REPLACEMENT.value: "BM25/manual review",
+        SanitizationStatus.SEMANTIC_BM25_REPLACEMENT.value: "BM25 suggestion",
         SanitizationStatus.NEAREST_TARGET_ANCESTOR.value: "Nearest active ancestor",
         SanitizationStatus.NEAREST_HISTORICAL_ANCESTOR.value: "Nearest historical ancestor",
         SanitizationStatus.AMBIGUOUS_REPLACEMENT.value: "Ambiguous replacement",

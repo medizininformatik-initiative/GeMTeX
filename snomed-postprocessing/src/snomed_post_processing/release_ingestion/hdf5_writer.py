@@ -476,6 +476,10 @@ def write_snapshot_hdf5_from_rf2_zip(
                         h5_file, "whitelist", whitelist_codes, fsn_by_code, force_overwrite
                     )
             if blacklist_filter_tags or blacklist_root_codes:
+                # Embedded blacklist semantics: SCTID rules exclude active descendants-or-self;
+                # semantic-tag rules exclude active concepts with a matching FSN semantic tag.
+                # Keep aligned with runtime custom blacklist resolution in
+                # snomed_post_processing.hdf5_handling.policy.resolve_blacklist_rule_indices.
                 blacklist_filter_tags_set = set(blacklist_filter_tags)
                 blacklist_code_set = {
                     code

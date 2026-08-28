@@ -2,95 +2,73 @@
 
 ## Goal
 
-The GUI should support two closely related sanitization workflows over INCEpTION/UIMA exports:
+The GUI/CLI support two sanitization target views over INCEpTION/UIMA SNOMED CT annotations:
 
-1. **Policy sanitization**: validate and sanitize annotations against a policy view.
-2. **Release-view normalization**: transform arbitrary annotations to concepts that are valid in a selected SNOMED CT release view, without requiring whitelist membership.
+1. **Policy view**: candidates must satisfy the materialized whitelist/blacklist policy.
+2. **Release view**: candidates only need to be active concepts in the selected SNOMED CT release, with optional blacklist exclusions.
 
-Both workflows can reuse the same phases:
+Both workflows use the same high-level phases:
 
 ```text
 INCEpTION export + HDF5
         |
-Check annotations
+Check annotations / load CriticalFindings
         |
 Suggest replacements
         |
 Review suggestions
         |
-Apply reviewed replacements to a copied export
+Apply reviewed decisions to a copied export
 ```
 
-## Target views
+The selected HDF5 is the materialized SNOMED view. Runtime checking and sanitization do not reconstruct arbitrary earlier snapshots from one HDF5. To target another policy date or release snapshot, create/select an HDF5 built for that date.
 
-Target dates are selected by selecting an HDF5 built for that view. Runtime
-checking and sanitization do not reconstruct arbitrary earlier SNOMED snapshots
-from a single HDF5 file. In other words, the HDF5 is a materialized view:
-
-```text
-RF2 source release + chosen policy/view date
-        -> enriched HDF5
-        -> check and sanitize against that same baked-in view
-```
-
-To check or sanitize for another policy date or release snapshot, create or
-select another HDF5 materialized for that date.
+## Candidate validity
 
 ### Policy view
 
-Current behavior.
-
-An annotation is valid when its code is:
+Policy mode remains the strict GeMTeX policy workflow. An annotation or replacement candidate is acceptable when its concept is:
 
 ```text
-active at policy date
+active
 AND in whitelist policy view
 AND not in blacklist policy view
 ```
 
-A replacement candidate is acceptable when it is:
+Replacement candidates must also not be the SNOMED CT root.
+
+### Release view
+
+Release mode deliberately has no whitelist requirement. By default, a replacement candidate is acceptable when its concept is:
 
 ```text
-active at policy date
-AND in whitelist policy view
-AND not in blacklist policy view
-AND not SNOMED CT root
+active in the selected release
 ```
 
-### Release active-concept view
+Replacement candidates must also not be the SNOMED CT root. Blacklist exclusions are opt-in.
 
-New mode.
+## Release-view blacklist modes
 
-An annotation is valid when its code is:
+Release mode can use the embedded HDF5 blacklist, a custom runtime blacklist, both, or neither:
+
+| CLI flags / GUI choices | Embedded HDF5 blacklist | Custom blacklist | Effective release-view rule |
+|---|---:|---:|---|
+| none / no blacklist | ignored | none | active concept |
+| `--enforce-embedded-blacklist` | enforced | none | active AND not embedded-blacklisted |
+| `--custom-blacklist PATH` | ignored | enforced | active AND not custom-blacklisted |
+| both | enforced | enforced | active AND not embedded-blacklisted AND not custom-blacklisted |
+
+The embedded blacklist is read from:
 
 ```text
-known in the HDF5/release
-AND active in the release view
-AND, optionally, not blacklisted
+/policy_views/blacklist/0/concept_index
 ```
 
-A replacement candidate is acceptable when it is:
+A custom blacklist file uses the same rule format as RF2 blacklist ingestion:
 
 ```text
-active in the release view
-AND, optionally, not blacklisted
-AND not SNOMED CT root
-```
-
-There is no whitelist requirement in this mode.
-
-## Optional blacklist in release view
-
-Release-view normalization may use no blacklist, or one of two blacklist sources:
-
-1. **Embedded HDF5 blacklist**: use `/policy_views/blacklist/0` already stored in the HDF5.
-2. **Runtime blacklist**: upload a blacklist rule file and resolve it at runtime, if the HDF5 contains enough concept/FSN and ancestor data.
-
-The blacklist rule file is line-separated:
-
-```text
-non-numeric line -> exclude by FSN semantic tag
-numeric line     -> exclude that concept and its descendants
+numeric SCTID line -> exclude that concept and descendants
+non-numeric line   -> exclude concepts by FSN semantic tag
 ```
 
 Example:
@@ -101,11 +79,18 @@ substance
 organism
 ```
 
-## Minimal HDF5 blacklist metadata
+Embedded blacklist creation and runtime custom-blacklist resolution intentionally use different traversal backends because they run at different times:
 
-The HDF5 should not duplicate resolved blacklist concepts, because those are already derivable from `/policy_views/blacklist/0` or legacy `/blacklist/0`.
+| Path | Descendant backend |
+|---|---|
+| RF2/HDF5 ingestion | active RF2 parent map |
+| runtime custom blacklist | compact HDF5 ancestor arrays |
 
-Store only compact provenance/rule metadata:
+The blacklist semantics should stay aligned between these two paths.
+
+## Blacklist metadata in HDF5
+
+HDF5 files store compact blacklist provenance/rule metadata, not expanded per-rule descendant lists:
 
 ```text
 /metadata/blacklists/0/format_version
@@ -114,62 +99,33 @@ Store only compact provenance/rule metadata:
 /metadata/blacklists/0/rules_kind
 ```
 
-Where `rules_kind` contains:
+`rules_kind` contains:
 
 ```text
 fsn_tag
 concept_descendants
 ```
 
-No resolved SCTIDs, FSNs, descendant lists, or per-rule counts should be stored.
-
-The GUI can display the resolved blacklist count from the existing blacklist view and show the rules from metadata. Numeric rule FSNs may be looked up dynamically from `/concepts` for display, but should not be stored redundantly.
-
-## GUI refactor direction
-
-Refactor the GUI around a shared target-view workflow:
-
-```text
-Sidebar:
-  INCEpTION project ZIP
-  HDF5 file
-  Target view:
-    - Policy view
-    - Release active-concept view
-  Release blacklist options:
-    - no blacklist
-    - embedded HDF5 blacklist
-    - runtime blacklist file
-  Annotation layers
-  Ignore-overlap layers
-
-Tabs:
-  1. Check annotations
-  2. Suggest replacements
-  3. Review & apply
-```
-
-The review/apply tab should stay shared. Suggestions JSON should include target-view metadata so reviewed decisions can be interpreted correctly later.
+Resolved blacklist concepts are stored in the policy view (`/policy_views/blacklist/0/concept_index`). Numeric rule FSNs can be looked up dynamically from `/concepts` for GUI display.
 
 ## Implementation status
 
-Implemented so far:
+Implemented:
 
-- HDF5 blacklist rule metadata is written for RF2 ZIP blacklist creation.
-- HDF5 metadata summaries display embedded blacklist rule metadata.
-- The GUI sidebar has a target-view selector:
-  - Policy view: whitelist/blacklist
-  - Release view: active concepts
-- Release-view GUI exposes blacklist-source choices:
+- Policy-mode checking and sanitization keep strict whitelist/blacklist semantics.
+- Release-view suggestion generation is available in CLI and GUI.
+- Historical association, ancestor fallback, semantic BM25, and processed SNOGIT-cache candidates all use the selected target-view validity gates.
+- CLI release-view options:
+  - `--target-view release`
+  - `--enforce-embedded-blacklist`
+  - `--custom-blacklist PATH`
+- GUI release-view options:
   - no blacklist
-  - embedded HDF5 blacklist
-  - runtime blacklist file
-- The GUI tab names and helper text now reflect the selected target view.
-- Existing policy check/suggestion/run behavior remains functional and is still the only executable validation mode.
+  - enforce embedded HDF5 blacklist
+  - use custom blacklist rule file via Upload / Data directory / Server path
+- HDF5 blacklist rule metadata is written and displayed in metadata summaries.
 
-Still to implement:
+Still separate/future work:
 
-- Release-view check pipeline.
-- Release-view replacement resolver semantics.
-- Runtime blacklist resolution from an uploaded rule file.
-- CLI commands/options for release-view checking and suggestion generation.
+- Release-view check pipeline for producing CriticalFindings directly from active-release validity.
+- Large-dataset smoke/performance testing for custom blacklist resolution, BM25, and processed SNOGIT-cache workflows.

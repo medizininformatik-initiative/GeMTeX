@@ -8,6 +8,7 @@ This module intentionally re-exports them so older references such as
 from __future__ import annotations
 
 from .cli.app import (  # noqa: F401
+    apply_decisions_to_inception_cli,
     build_snogit_cache_cli,
     create_concept_id_dump,
     help_me,
@@ -21,6 +22,7 @@ __all__ = [
     "log_documents",
     "create_concept_id_dump",
     "summarize_hdf5",
+    "apply_decisions_to_inception_cli",
     "build_snogit_cache_cli",
     "suggest_sanitization_cli",
     "list_branches",
