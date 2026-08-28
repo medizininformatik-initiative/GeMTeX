@@ -1,3 +1,18 @@
+---
+type: Imported Documentation
+title: "Release-view follow-ups and documentation review"
+description: Lossless OKF import of /snomed-post-processing/source-former documentation folder/release-view-follow-ups-and-docs-review.md.
+resource: /snomed-post-processing/source-/snomed-post-processing/source-former documentation folder/release-view-follow-ups-and-docs-review.md
+tags: [snomed-post-processing, imported-docs, legacy-docs]
+status: stable
+generated: { by: pi-coding-agent/gpt-5, at: 2026-08-28T15:03:31Z }
+sources:
+  - id: original-doc
+    resource: /snomed-post-processing/source-/snomed-post-processing/source-former documentation folder/release-view-follow-ups-and-docs-review.md
+    title: "Original /snomed-post-processing/source-former documentation folder/release-view-follow-ups-and-docs-review.md"
+    author: team:project-maintainers
+---
+
 # Release-view follow-ups and documentation review
 
 ## Open follow-up work
@@ -56,12 +71,12 @@ Completed cleanup:
 | File | Status |
 |---|---|
 | `README.md` | Main user guide; updated with release-view, blacklist, BM25, and processed SNOGIT-cache usage. |
-| `docs/release-view-normalization-and-blacklist-metadata.md` | Focused release-view and blacklist semantics note. |
-| `docs/rf2-to-hdf5-ingestion-design.md` | Shortened to current ingestion behavior, HDF5 layout, CLI examples, and key decisions. |
-| `docs/sanitization-revised-design.md` | Shortened to current sanitization workflow, target-view gates, suggestion sources, and write-back behavior. |
-| `docs/snogit-bm25-candidates-design.md` | Shortened to current processed-cache workflow, member selection, runtime usage, layout, and guardrails. |
-| `docs/snomed-postprocessing-working.md` | Reduced to a maintainer entrypoint/module map. |
-| `docs/rf2-release-zip-structure.md` | Reduced to project-relevant RF2 ZIP notes with OKF references. |
-| `docs/sanitization-source-target-design-old.md` | Replaced with an archived superseded-design summary and retained lessons. |
+| `/snomed-post-processing/source-former documentation folder/release-view-normalization-and-blacklist-metadata.md` | Focused release-view and blacklist semantics note. |
+| `/snomed-post-processing/source-former documentation folder/rf2-to-hdf5-ingestion-design.md` | Shortened to current ingestion behavior, HDF5 layout, CLI examples, and key decisions. |
+| `/snomed-post-processing/source-former documentation folder/sanitization-revised-design.md` | Shortened to current sanitization workflow, target-view gates, suggestion sources, and write-back behavior. |
+| `/snomed-post-processing/source-former documentation folder/snogit-bm25-candidates-design.md` | Shortened to current processed-cache workflow, member selection, runtime usage, layout, and guardrails. |
+| `/snomed-post-processing/source-former documentation folder/snomed-postprocessing-working.md` | Reduced to a maintainer entrypoint/module map. |
+| `/snomed-post-processing/source-former documentation folder/rf2-release-zip-structure.md` | Reduced to project-relevant RF2 ZIP notes with OKF references. |
+| `/snomed-post-processing/source-former documentation folder/sanitization-source-target-design-old.md` | Replaced with an archived superseded-design summary and retained lessons. |
 
 Keep historical rationale in Git history; avoid re-expanding docs unless behavior changes materially.

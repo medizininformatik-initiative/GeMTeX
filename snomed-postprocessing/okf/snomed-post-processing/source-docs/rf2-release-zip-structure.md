@@ -1,3 +1,18 @@
+---
+type: Imported Documentation
+title: "RF2 ZIP structure notes for this project"
+description: Lossless OKF import of /snomed-post-processing/source-former documentation folder/rf2-release-zip-structure.md.
+resource: /snomed-post-processing/source-/snomed-post-processing/source-former documentation folder/rf2-release-zip-structure.md
+tags: [snomed-post-processing, imported-docs, legacy-docs]
+status: stable
+generated: { by: pi-coding-agent/gpt-5, at: 2026-08-28T15:03:31Z }
+sources:
+  - id: original-doc
+    resource: /snomed-post-processing/source-/snomed-post-processing/source-former documentation folder/rf2-release-zip-structure.md
+    title: "Original /snomed-post-processing/source-former documentation folder/rf2-release-zip-structure.md"
+    author: team:project-maintainers
+---
+
 # RF2 ZIP structure notes for this project
 
 This document summarizes the RF2 ZIP parts relevant to SNOMED Postprocessing. For general RF2 background, prefer the local OKF notes under `okf/snomed/`.
@@ -72,7 +87,7 @@ Only active association rows whose source and target concepts are known in the H
 
 ## Related docs
 
-- Ingestion design: `docs/rf2-to-hdf5-ingestion-design.md`
-- Sanitization design: `docs/sanitization-revised-design.md`
+- Ingestion design: `/snomed-post-processing/source-former documentation folder/rf2-to-hdf5-ingestion-design.md`
+- Sanitization design: `/snomed-post-processing/source-former documentation folder/sanitization-revised-design.md`
 - Local RF2 background: `okf/snomed/release-format-rf2.md`
 - Component notes: `okf/snomed/component-files/`

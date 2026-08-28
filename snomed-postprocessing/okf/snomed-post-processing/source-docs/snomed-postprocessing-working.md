@@ -1,6 +1,21 @@
+---
+type: Imported Documentation
+title: "SNOMED Postprocessing — maintainer map"
+description: Lossless OKF import of /snomed-post-processing/source-former documentation folder/snomed-postprocessing-working.md.
+resource: /snomed-post-processing/source-/snomed-post-processing/source-former documentation folder/snomed-postprocessing-working.md
+tags: [snomed-post-processing, imported-docs, legacy-docs]
+status: stable
+generated: { by: pi-coding-agent/gpt-5, at: 2026-08-28T15:03:31Z }
+sources:
+  - id: original-doc
+    resource: /snomed-post-processing/source-/snomed-post-processing/source-former documentation folder/snomed-postprocessing-working.md
+    title: "Original /snomed-post-processing/source-former documentation folder/snomed-postprocessing-working.md"
+    author: team:project-maintainers
+---
+
 # SNOMED Postprocessing — maintainer map
 
-This file is a compact code map for maintainers. User-facing usage belongs in `README.md`; design details belong in the focused docs under `docs/`.
+This file is a compact code map for maintainers. User-facing usage belongs in `README.md`; design details belong in the focused docs under the former documentation folder.
 
 ## Entry points
 
@@ -78,8 +93,8 @@ This applies to INCEpTION ZIPs, HDF5 files, CriticalFindings JSON, processed SNO
 ## Related docs
 
 - User guide: `README.md`
-- RF2 ingestion: `docs/rf2-to-hdf5-ingestion-design.md`
-- Sanitization: `docs/sanitization-revised-design.md`
-- Release view / blacklist modes: `docs/release-view-normalization-and-blacklist-metadata.md`
-- SNOGIT/BM25: `docs/snogit-bm25-candidates-design.md`
-- Follow-ups/docs review: `docs/release-view-follow-ups-and-docs-review.md`
+- RF2 ingestion: `/snomed-post-processing/source-former documentation folder/rf2-to-hdf5-ingestion-design.md`
+- Sanitization: `/snomed-post-processing/source-former documentation folder/sanitization-revised-design.md`
+- Release view / blacklist modes: `/snomed-post-processing/source-former documentation folder/release-view-normalization-and-blacklist-metadata.md`
+- SNOGIT/BM25: `/snomed-post-processing/source-former documentation folder/snogit-bm25-candidates-design.md`
+- Follow-ups/documentation review: `/snomed-post-processing/source-former documentation folder/release-view-follow-ups-and-docs-review.md`

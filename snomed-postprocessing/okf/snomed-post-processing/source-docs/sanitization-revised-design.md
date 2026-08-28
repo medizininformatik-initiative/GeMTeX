@@ -1,3 +1,18 @@
+---
+type: Imported Documentation
+title: "SNOMED sanitization design"
+description: Lossless OKF import of /snomed-post-processing/source-former documentation folder/sanitization-revised-design.md.
+resource: /snomed-post-processing/source-/snomed-post-processing/source-former documentation folder/sanitization-revised-design.md
+tags: [snomed-post-processing, imported-docs, legacy-docs]
+status: stable
+generated: { by: pi-coding-agent/gpt-5, at: 2026-08-28T15:03:31Z }
+sources:
+  - id: original-doc
+    resource: /snomed-post-processing/source-/snomed-post-processing/source-former documentation folder/sanitization-revised-design.md
+    title: "Original /snomed-post-processing/source-former documentation folder/sanitization-revised-design.md"
+    author: team:project-maintainers
+---
+
 # SNOMED sanitization design
 
 ## Goal
@@ -155,7 +170,7 @@ Optional fallbacks:
 
 ## Related docs
 
-- Release-view semantics and blacklist modes: `docs/release-view-normalization-and-blacklist-metadata.md`
-- SNOGIT/BM25 details: `docs/snogit-bm25-candidates-design.md`
-- RF2/HDF5 ingestion: `docs/rf2-to-hdf5-ingestion-design.md`
+- Release-view semantics and blacklist modes: `/snomed-post-processing/source-former documentation folder/release-view-normalization-and-blacklist-metadata.md`
+- SNOGIT/BM25 details: `/snomed-post-processing/source-former documentation folder/snogit-bm25-candidates-design.md`
+- RF2/HDF5 ingestion: `/snomed-post-processing/source-former documentation folder/rf2-to-hdf5-ingestion-design.md`
 - User guide: `README.md`

@@ -1,3 +1,18 @@
+---
+type: Imported Documentation
+title: "Release-view normalization and blacklist metadata"
+description: Lossless OKF import of /snomed-post-processing/source-former documentation folder/release-view-normalization-and-blacklist-metadata.md.
+resource: /snomed-post-processing/source-/snomed-post-processing/source-former documentation folder/release-view-normalization-and-blacklist-metadata.md
+tags: [snomed-post-processing, imported-docs, legacy-docs]
+status: stable
+generated: { by: pi-coding-agent/gpt-5, at: 2026-08-28T15:03:31Z }
+sources:
+  - id: original-doc
+    resource: /snomed-post-processing/source-/snomed-post-processing/source-former documentation folder/release-view-normalization-and-blacklist-metadata.md
+    title: "Original /snomed-post-processing/source-former documentation folder/release-view-normalization-and-blacklist-metadata.md"
+    author: team:project-maintainers
+---
+
 # Release-view normalization and blacklist metadata
 
 ## Goal

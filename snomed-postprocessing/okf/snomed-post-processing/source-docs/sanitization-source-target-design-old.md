@@ -1,6 +1,21 @@
+---
+type: Imported Documentation
+title: "Archived design note: source-to-target sanitization"
+description: Lossless OKF import of /snomed-post-processing/source-former documentation folder/sanitization-source-target-design-old.md.
+resource: /snomed-post-processing/source-/snomed-post-processing/source-former documentation folder/sanitization-source-target-design-old.md
+tags: [snomed-post-processing, imported-docs, legacy-docs]
+status: stable
+generated: { by: pi-coding-agent/gpt-5, at: 2026-08-28T15:03:31Z }
+sources:
+  - id: original-doc
+    resource: /snomed-post-processing/source-/snomed-post-processing/source-former documentation folder/sanitization-source-target-design-old.md
+    title: "Original /snomed-post-processing/source-former documentation folder/sanitization-source-target-design-old.md"
+    author: team:project-maintainers
+---
+
 # Archived design note: source-to-target sanitization
 
-Status: **superseded** by `docs/sanitization-revised-design.md`.
+Status: **superseded** by `/snomed-post-processing/source-former documentation folder/sanitization-revised-design.md`.
 
 This document preserves the main lessons from the earlier source-to-target sanitization proposal. The current implementation is finding-based: first produce structured `CriticalFinding` records, then generate suggestions only for those findings, then apply reviewed decisions to a copied project ZIP.
 
@@ -59,7 +74,7 @@ Blacklisted annotations often represent intentional policy exclusions, not merel
 
 Use these documents for the maintained design:
 
-- `docs/sanitization-revised-design.md`
-- `docs/release-view-normalization-and-blacklist-metadata.md`
-- `docs/snogit-bm25-candidates-design.md`
+- `/snomed-post-processing/source-former documentation folder/sanitization-revised-design.md`
+- `/snomed-post-processing/source-former documentation folder/release-view-normalization-and-blacklist-metadata.md`
+- `/snomed-post-processing/source-former documentation folder/snogit-bm25-candidates-design.md`
 - `README.md`

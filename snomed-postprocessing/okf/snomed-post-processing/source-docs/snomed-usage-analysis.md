@@ -1,3 +1,18 @@
+---
+type: Imported Documentation
+title: "SNOMED CT usage in this project"
+description: Lossless OKF import of /snomed-post-processing/source-former documentation folder/snomed-usage-analysis.md.
+resource: /snomed-post-processing/source-/snomed-post-processing/source-former documentation folder/snomed-usage-analysis.md
+tags: [snomed-post-processing, imported-docs, legacy-docs]
+status: stable
+generated: { by: pi-coding-agent/gpt-5, at: 2026-08-28T15:03:31Z }
+sources:
+  - id: original-doc
+    resource: /snomed-post-processing/source-/snomed-post-processing/source-former documentation folder/snomed-usage-analysis.md
+    title: "Original /snomed-post-processing/source-former documentation folder/snomed-usage-analysis.md"
+    author: team:project-maintainers
+---
+
 # SNOMED CT usage in this project
 
 This note summarizes how SNOMED CT is used by the code under `src/`, with terminology context from the local OKF bundle.

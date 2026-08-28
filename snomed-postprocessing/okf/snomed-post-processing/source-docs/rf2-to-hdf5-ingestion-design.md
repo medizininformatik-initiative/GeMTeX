@@ -1,3 +1,18 @@
+---
+type: Imported Documentation
+title: "RF2 release ZIP to HDF5 ingestion"
+description: Lossless OKF import of /snomed-post-processing/source-former documentation folder/rf2-to-hdf5-ingestion-design.md.
+resource: /snomed-post-processing/source-/snomed-post-processing/source-former documentation folder/rf2-to-hdf5-ingestion-design.md
+tags: [snomed-post-processing, imported-docs, legacy-docs]
+status: stable
+generated: { by: pi-coding-agent/gpt-5, at: 2026-08-28T15:03:31Z }
+sources:
+  - id: original-doc
+    resource: /snomed-post-processing/source-/snomed-post-processing/source-former documentation folder/rf2-to-hdf5-ingestion-design.md
+    title: "Original /snomed-post-processing/source-former documentation folder/rf2-to-hdf5-ingestion-design.md"
+    author: team:project-maintainers
+---
+
 # RF2 release ZIP to HDF5 ingestion
 
 ## Goal
@@ -22,7 +37,7 @@ The selected HDF5 is a materialized view. Runtime checking/sanitization do not r
 | Relationship | active `is-a` hierarchy and ancestor arrays |
 | Association refsets | historical replacement suggestions |
 
-See `docs/rf2-release-zip-structure.md` and `okf/snomed/` for release-format background.
+See `/snomed-post-processing/source-former documentation folder/rf2-release-zip-structure.md` and `okf/snomed/` for release-format background.
 
 ## HDF5 layout
 
@@ -152,6 +167,6 @@ RF2 ingestion is designed to process large releases without loading unnecessary 
 ## Related docs
 
 - User guide: `README.md`
-- Release-view blacklist semantics: `docs/release-view-normalization-and-blacklist-metadata.md`
-- Sanitization design: `docs/sanitization-revised-design.md`
+- Release-view blacklist semantics: `/snomed-post-processing/source-former documentation folder/release-view-normalization-and-blacklist-metadata.md`
+- Sanitization design: `/snomed-post-processing/source-former documentation folder/sanitization-revised-design.md`
 - SNOMED/RF2 background: `okf/snomed/`

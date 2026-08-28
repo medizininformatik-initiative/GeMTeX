@@ -1,3 +1,18 @@
+---
+type: Imported Documentation
+title: "Deploying sanitized documents back to INCEpTION"
+description: Lossless OKF import of /snomed-post-processing/source-former documentation folder/inception-sanitized-deployment-workflow.md.
+resource: /snomed-post-processing/source-/snomed-post-processing/source-former documentation folder/inception-sanitized-deployment-workflow.md
+tags: [snomed-post-processing, imported-docs, legacy-docs]
+status: stable
+generated: { by: pi-coding-agent/gpt-5, at: 2026-08-28T15:03:31Z }
+sources:
+  - id: original-doc
+    resource: /snomed-post-processing/source-/snomed-post-processing/source-former documentation folder/inception-sanitized-deployment-workflow.md
+    title: "Original /snomed-post-processing/source-former documentation folder/inception-sanitized-deployment-workflow.md"
+    author: team:project-maintainers
+---
+
 # Deploying sanitized documents back to INCEpTION
 
 ## Status
@@ -33,16 +48,12 @@ However, full project import creates project schema from `exportedproject.json`,
 3. let INCEpTION store the uploaded CAS internally
 ```
 
-Relevant OKF notes:
+Relevant integrated OKF notes in this bundle:
 
-- `okf/inception/project-archive-import.md`
-- `okf/inception/project-metadata.md`
-- `okf/inception/cas-storage-and-archive-contents.md`
-- `okf/inception/users-and-permissions.md`
-- `okf/inception/remote-annotation-upload.md`
-- `okf/pycaprio/remote-project-api.md`
-- `okf/pycaprio/remote-annotation-curation-api.md`
-- `okf/pycaprio/formats-and-payloads.md`
+- `okf/snomed-post-processing/data/inception-cas-and-zip.md`
+- `okf/snomed-post-processing/workflows/inception-deployment.md`
+- `okf/snomed-post-processing/interfaces/cli.md`
+- `okf/snomed-post-processing/interfaces/gui.md`
 
 ## One-step workflow
 

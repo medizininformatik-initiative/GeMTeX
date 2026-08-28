@@ -1,3 +1,18 @@
+---
+type: Imported Documentation
+title: "Processed SNOGIT cache and BM25 sanitization candidates"
+description: Lossless OKF import of /snomed-post-processing/source-former documentation folder/snogit-bm25-candidates-design.md.
+resource: /snomed-post-processing/source-/snomed-post-processing/source-former documentation folder/snogit-bm25-candidates-design.md
+tags: [snomed-post-processing, imported-docs, legacy-docs]
+status: stable
+generated: { by: pi-coding-agent/gpt-5, at: 2026-08-28T15:03:31Z }
+sources:
+  - id: original-doc
+    resource: /snomed-post-processing/source-/snomed-post-processing/source-former documentation folder/snogit-bm25-candidates-design.md
+    title: "Original /snomed-post-processing/source-former documentation folder/snogit-bm25-candidates-design.md"
+    author: team:project-maintainers
+---
+
 # Processed SNOGIT cache and BM25 sanitization candidates
 
 ## Purpose
