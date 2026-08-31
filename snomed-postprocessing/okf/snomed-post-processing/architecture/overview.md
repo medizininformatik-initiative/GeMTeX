@@ -66,7 +66,7 @@ The original INCEpTION project ZIP is never modified in place.
 - Exact policy mode remains authoritative: active + whitelist - blacklist.
 - Release mode allows active concepts by default and only enforces blacklist exclusions when explicitly configured.
 - Suggestions are evidence for review, not automatic correction.
-- Reviewed decisions are applied to the original project ZIP, not an already sanitized ZIP.
+- Reviewed decisions are applied by reading the original project ZIP as the source input and writing a separate sanitized output ZIP/artifact set; the original ZIP is not modified.
 - Real INCEpTION writes are dry-run by default and require explicit `--apply`.
 - `.ser` CAS generation is intentionally avoided.
 

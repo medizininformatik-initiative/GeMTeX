@@ -19,17 +19,17 @@ sources:
 
 - Policy mode is authoritative for the GeMTeX policy workflow: active + whitelist - blacklist.
 - Release mode allows all active concepts by default; embedded blacklist is ignored unless explicitly enabled.
-- Runtime custom release blacklist rules can be added and are enforced in release mode only.
+- In release-view suggestion generation, users may optionally add a runtime custom blacklist; policy mode instead uses the materialized embedded whitelist/blacklist policy views in the HDF5.
 - All suggestion sources use the same selected target-view gates.
 - Blacklist findings are not automatically sanitized by default.
 - Suggestions are review evidence, not authority.
 - BM25 and SNOGIT evidence are fallback/review assistance and cannot bypass HDF5 validity gates.
 - Historical associations are tried before ancestor fallback and BM25.
 - Ancestor fallback is optional and bounded by absolute and relative distance limits by default.
-- Reviewed decisions must be applied to the original project ZIP, not to an already sanitized ZIP.
+- Reviewed decisions should be evaluated against the original project ZIP as the source input and written to a separate sanitized ZIP/artifact set; using an already sanitized ZIP as input can cause double-application or duplicate markers.
 - The original project ZIP is not modified in place.
 - Delete decisions remove matching CAS annotations.
-- Manual edit decisions keep the original annotation and add a ManualReview marker.
+- Manual edit decisions keep the original annotation and add a ManualReview marker (UIMA layer).
 - Decision precedence is `manual_edit > delete > apply > keep unchanged`.
 - No selection means keep unchanged.
 - Sanitized ZIP export excludes `.ser` files.

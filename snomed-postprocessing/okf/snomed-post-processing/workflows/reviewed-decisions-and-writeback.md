@@ -17,7 +17,7 @@ sources:
 
 # Purpose
 
-Reviewed decisions JSON is the bridge between suggestion generation and write-back. Decisions are produced or edited after human review, then applied to a copied project ZIP or in-memory CAS bytes. The original project ZIP is not modified.
+Reviewed decisions JSON is the bridge between suggestion generation and write-back. Decisions are produced or edited after human review, then evaluated against the original project ZIP as source input and written to a separate sanitized ZIP/artifact set, or applied to in-memory CAS bytes. The original project ZIP is not modified.
 
 # Supported actions
 

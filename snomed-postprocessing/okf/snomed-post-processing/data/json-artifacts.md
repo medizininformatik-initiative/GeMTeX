@@ -74,7 +74,7 @@ Older boolean-compatible fields are also recognized by the apply layer:
 - `delete_annotation` means delete;
 - `manual_edit` means manual-review marker.
 
-Decisions should be applied to the original project ZIP. Applying decisions to an already sanitized ZIP can cause double-application or duplicate markers.
+Decisions should be evaluated against the original project ZIP as the source input and written to a separate sanitized ZIP/artifact set. Using an already sanitized ZIP as input can cause double-application or duplicate markers.
 
 # Upload artifact report
 
