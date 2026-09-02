@@ -31,6 +31,7 @@ This bundle is the agent-readable knowledge layer for the Python app under [`/sr
 - [Maintainer module map](/snomed-post-processing/modules/module-map.md) - source modules and responsibilities.
 - [CLI commands](/snomed-post-processing/interfaces/cli.md) - command entry points and public workflows.
 - [Streamlit GUI](/snomed-post-processing/interfaces/gui.md) - UI tabs, file sources, and deployment form.
+- [Query cookbook](/snomed-post-processing/queries/index.md) - reusable SQL files and the Python query runner.
 
 ## Main workflows
 
@@ -48,6 +49,10 @@ This bundle is the agent-readable knowledge layer for the Python app under [`/sr
 - [JSON artifacts](/snomed-post-processing/data/json-artifacts.md)
 - [INCEpTION project ZIP and CAS handling](/snomed-post-processing/data/inception-cas-and-zip.md)
 - [Annotation store SQLite schema](/snomed-post-processing/data/annotation-store-sqlite.md)
+
+## Queries
+
+- [Annotation-store reusable queries](/snomed-post-processing/queries/annotation-store.md)
 
 ## Decisions and operational notes
 
