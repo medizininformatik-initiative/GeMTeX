@@ -594,6 +594,7 @@ def build_annotation_store_cli(
             fail_fast=fail_fast,
             report=report,
             log_level=log_level,
+            log_summary=False,
         )
     except Exception as exc:
         raise click.ClickException(str(exc)) from exc
@@ -603,8 +604,14 @@ def build_annotation_store_cli(
     click.echo(f"Documents: {summary.documents}")
     click.echo(f"Annotation views: {summary.annotation_views}")
     click.echo(f"Annotations: {summary.annotations}")
-    click.echo(f"Unknown SCTIDs: {len(summary.unknown_sctids)}")
-    click.echo(f"Failed CAS members: {len(summary.failed_cas_members)}")
+    click.echo(
+        f"Unknown SCTIDs: {len(summary.unknown_sctids)} "
+        f"({summary.missing_sctid_occurrences} missing/empty/null-like ids)"
+    )
+    click.echo(
+        f"Failed CAS members: {len(summary.failed_cas_members)} "
+        f"(of which serialized CAS: {summary.serialized_cas_members})"
+    )
     for item in summary.missing_batches:
         click.echo(
             f"Missing batches for {item['site']}: "

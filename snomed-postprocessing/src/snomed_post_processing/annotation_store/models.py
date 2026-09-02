@@ -70,6 +70,12 @@ class AnnotationStoreSummary:
     annotation_views: int = 0
     annotations: int = 0
     known_sctids: int = 0
+    missing_sctid_occurrences: int = 0
     unknown_sctids: set[str] = dataclasses.field(default_factory=set)
     failed_cas_members: list[dict] = dataclasses.field(default_factory=list)
     missing_batches: list[dict] = dataclasses.field(default_factory=list)
+
+    @property
+    def serialized_cas_members(self) -> int:
+        """Number of failed CAS members that are unsupported Java serialized CAS files."""
+        return sum(1 for item in self.failed_cas_members if item.get("reason") == "serialized_cas")

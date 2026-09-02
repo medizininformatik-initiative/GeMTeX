@@ -90,6 +90,7 @@ def iter_cas_views(
                             export_path,
                             cas_path,
                             ValueError("Unsupported .ser CAS member"),
+                            reason="serialized_cas",
                         )
                         logging.warning(
                             "Skipping %s from %s: UIMA Java Serialized CAS (.ser) is not supported.",
@@ -144,6 +145,8 @@ def _record_failure(
     export_path: pathlib.Path,
     cas_path: Optional[str],
     error,
+    *,
+    reason: str = "load_error",
 ) -> None:
     if on_failure is None:
         return
@@ -153,5 +156,6 @@ def _record_failure(
             "cas_path": cas_path,
             "error": str(error),
             "error_type": type(error).__name__,
+            "reason": reason,
         }
     )
