@@ -37,6 +37,7 @@ def run_build_annotation_store(
     fail_fast: bool,
     report: Optional[Union[str, pathlib.Path]],
     log_level: str,
+    log_summary: bool = True,
 ) -> AnnotationStoreSummary:
     """Run the annotation-store import pipeline."""
     set_log_level(log_level)
@@ -146,6 +147,9 @@ def run_build_annotation_store(
                 "select distinct sctid from annotations where sctid is not null and fsn is null order by sctid"
             )
         }
+        summary.missing_sctid_occurrences = int(
+            writer.connection.execute("select count(*) as n from annotations where sctid is null").fetchone()["n"]
+        )
         summary.missing_batches = _missing_batches_from_db(writer)
         writer.commit()
     finally:
@@ -154,7 +158,8 @@ def run_build_annotation_store(
     if report is not None:
         _write_report(pathlib.Path(report), summary)
 
-    _log_summary(summary, output)
+    if log_summary:
+        _log_summary(summary, output)
     return summary
 
 
@@ -213,8 +218,11 @@ def _summary_as_dict(summary: AnnotationStoreSummary) -> dict:
         "annotation_views": summary.annotation_views,
         "annotations": summary.annotations,
         "known_sctids": summary.known_sctids,
+        "missing_sctid_occurrences": summary.missing_sctid_occurrences,
         "unknown_sctids": sorted(summary.unknown_sctids),
         "failed_cas_members": summary.failed_cas_members,
+        "failed_cas_members_count": len(summary.failed_cas_members),
+        "serialized_cas_members_count": summary.serialized_cas_members,
         "missing_batches": summary.missing_batches,
     }
 
@@ -231,8 +239,16 @@ def _log_summary(summary: AnnotationStoreSummary, output: pathlib.Path) -> None:
     logging.info("Annotation views: %s", summary.annotation_views)
     logging.info("Annotations: %s", summary.annotations)
     logging.info("Known SCTID occurrences: %s", summary.known_sctids)
-    logging.info("Unknown SCTIDs: %s", len(summary.unknown_sctids))
-    logging.info("Failed CAS members: %s", len(summary.failed_cas_members))
+    logging.info(
+        "Unknown SCTIDs: %s (%s missing/empty/null-like ids)",
+        len(summary.unknown_sctids),
+        summary.missing_sctid_occurrences,
+    )
+    logging.info(
+        "Failed CAS members: %s (of which serialized CAS: %s)",
+        len(summary.failed_cas_members),
+        summary.serialized_cas_members,
+    )
     for item in summary.missing_batches:
         logging.warning(
             "Site %s: found batches %s of expected %s; missing %s.",

@@ -41,6 +41,43 @@ The importer includes:
 
 UIMA Java serialized CAS files (`.ser`) are not supported by the Python CAS stack and are skipped/reported.
 
+# Failure reporting
+
+The build summary reports unknown SCTIDs together with missing/empty/null-like annotation ids:
+
+```text
+Unknown SCTIDs: 0 (17 missing/empty/null-like ids)
+```
+
+The first number counts distinct non-empty SCTIDs that were not found in the HDF5 concept lookup. The parenthesized number counts annotation occurrences where the annotation `id` feature could not be normalized to any SCTID at all.
+
+The build summary also reports failed CAS members:
+
+```text
+Failed CAS members: 21 (of which serialized CAS: 21)
+```
+
+A CAS member is a candidate CAS file inside the export ZIP, for example an annotation or curation XMI/JSON/nested ZIP member. A failed CAS member is skipped unless `--fail-fast` is used.
+
+Common reasons are:
+
+- unsupported Java serialized CAS members (`.ser`), reported with reason `serialized_cas`;
+- malformed or unreadable XMI/JSON/nested CAS ZIP members;
+- missing or incompatible type systems;
+- an unreadable export ZIP.
+
+When `--report report.json` is used, each failed member is listed with:
+
+```json
+{
+  "export": "/path/to/export.zip",
+  "cas_path": "annotation/document/annotator.zip",
+  "error": "...",
+  "error_type": "...",
+  "reason": "serialized_cas"
+}
+```
+
 # Export ZIP naming convention
 
 The importer can process any valid INCEpTION export ZIP, but site/batch metadata is inferred only from a small filename convention.

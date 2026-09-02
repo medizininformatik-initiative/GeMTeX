@@ -124,6 +124,14 @@ Known SCTIDs encountered during import, enriched from the SNOMED HDF5 concept st
 
 Unknown SCTIDs are retained in `annotations` with null metadata and are not necessarily present in this table.
 
+`semantic_tag` can be null even when the build summary says `Unknown SCTIDs: 0`. The summary's unknown-SCTID counter only counts non-empty normalized SCTIDs that were not found in the HDF5 lookup. The summary therefore also prints the number of annotation occurrences where the annotation id itself is absent/empty/null-like and therefore `sctid` is null, e.g. `Unknown SCTIDs: 0 (17 missing/empty/null-like ids)`.
+
+Semantic tag nullability rules:
+
+- `sctid` is null when the annotation `id` feature is missing, empty, or a null-like string such as `null`, `none`, or `nan`; then `fsn`, `semantic_tag`, and `active` are null.
+- `sctid` is non-null but not found in HDF5; then the SCTID appears in the unknown-SCTID set and `fsn`, `semantic_tag`, and `active` are null.
+- The SCTID is found but its HDF5 `semantic_tag_id` does not resolve to an entry in `concepts/semantic_tags`; then `semantic_tag` is null, while other metadata may still be present.
+
 ## `annotations`
 
 One row per annotation occurrence.
