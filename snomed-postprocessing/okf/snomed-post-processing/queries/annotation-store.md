@@ -165,6 +165,10 @@ uv run python queries/run_sql.py \
   queries/annotation-store/semantic_tag_counts.sql
 ```
 
+Parameters:
+
+```This query has no parameters.```
+
 Main columns:
 
 - `semantic_tag`
@@ -188,6 +192,12 @@ uv run python queries/run_sql.py \
   DB.sqlite \
   queries/annotation-store/top_sctids.sql
 ```
+
+Parameters:
+
+| Parameter | Default | Required | Description |
+|---|---:|---:|---|
+| `n` | `50` | no | Maximum number of SCTID rows to return. |
 
 Main columns:
 
@@ -227,6 +237,15 @@ uv run python queries/run_sql.py \
   DB.sqlite \
   queries/annotation-store/texts_for_st.sql
 ```
+
+Parameters:
+
+| Parameter | Default | Required | Description |
+|---|---:|---:|---|
+| `semantic_tag` | empty string | no | Exact case-insensitive semantic-tag filter. If non-empty, this takes precedence over `semantic_tag_part`. |
+| `semantic_tag_part` | empty string | no | Case-insensitive substring filter used when `semantic_tag` is empty. |
+| `partial_binning` | `false` | no | When true, applies Python-side boundary-aware containment binning to `covered_text_bin`. |
+| `n` | `20` | no | Maximum number of rows after optional Python post-processing. |
 
 Main columns:
 
