@@ -83,19 +83,11 @@ def run_build_annotation_store(
                 text = cas_document_text(view.cas)
                 if text is not None:
                     text_hash = document_text_hash(text)
-                    document_hash_id = writer.insert_document_hash(
-                        document_id,
-                        export_id,
-                        text_hash,
-                        view.cas_path,
-                    )
+                    document_hash_id = writer.insert_document_hash(text_hash)
                     if store_document_text:
                         document_text_id = writer.insert_document_text(
-                            document_id,
-                            export_id,
+                            document_hash_id,
                             text,
-                            text_hash,
-                            view.cas_path,
                         )
 
                 view_id = writer.insert_annotation_view(

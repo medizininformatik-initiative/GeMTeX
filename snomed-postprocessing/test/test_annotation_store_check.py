@@ -19,10 +19,7 @@ def test_check_annotation_store_document_matches_by_hash_only(tmp_path):
         )
         document_id = writer.insert_document("Albers.txt")
         document_hash_id = writer.insert_document_hash(
-            document_id,
-            export_id,
-            "f953bbd204bb867e48a6ff774cffa3dcffd02c6580e8f1d00c37dbbaa743d6c8",
-            "cas/path.zip",
+            "f953bbd204bb867e48a6ff774cffa3dcffd02c6580e8f1d00c37dbbaa743d6c8"
         )
         writer.insert_annotation_view(export_id, document_id, document_hash_id, None, "curation", "CURATION_USER", "cas/path.zip")
         writer.commit()

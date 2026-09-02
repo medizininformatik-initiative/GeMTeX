@@ -26,6 +26,8 @@ Console scripts are declared in `/pyproject.toml` and implemented in `/src/snome
 | `summarize-hdf5` | Inspect HDF5 metadata and policy views. |
 | `suggest-sanitization` | Generate sanitization suggestions from CriticalFindings JSON. |
 | `build-snogit-cache` | Build processed SNOGIT cache HDF5 for BM25/interface-term evidence. |
+| `build-annotation-store` | Build a merged SQLite store of SNOMED annotations from INCEpTION export ZIPs. |
+| `check-annotation-store-document` | Check an external plain-text document against stored document content hashes. |
 | `build-inception-shell-project` | Build schema-shell ZIP for sanitized INCEpTION deployment. |
 | `build-inception-upload-artifacts` | Build flattened sanitized JSONCAS/XMI upload artifacts. |
 | `apply-decisions-to-inception` | One-step shell + repaired artifacts + dry-run/apply deployment workflow. |
@@ -44,6 +46,7 @@ Console scripts are declared in `/pyproject.toml` and implemented in `/src/snome
 | `snomed/` | Pydantic/domain models and enums for SNOMED/Snowstorm concepts and dump modes. |
 | `snowstorm/` | Snowstorm endpoint construction, branch listing, traversal and response mapping. |
 | `uima_processing/` | INCEpTION ZIP/CAS loading, annotation extraction, policy analysis, reports. |
+| `annotation_store/` | SQLite annotation-store models, filename parsing, CAS view iteration, SNOMED lookup, extraction, and writer helpers. |
 | `sanitization/` | Suggestion models, resolver, JSON/Markdown reports, BM25, semantic text handling, SNOGIT cache. |
 | `pipelines/` | End-to-end reusable workflow functions behind CLI/GUI. |
 | `inception/` | INCEpTION remote project export helpers and annotator prompting. |
@@ -57,6 +60,8 @@ Console scripts are declared in `/pyproject.toml` and implemented in `/src/snome
 - `/src/snomed_post_processing/pipelines/sanitization_run.py` applies reviewed decisions to CAS members and local sanitized ZIPs.
 - `/src/snomed_post_processing/pipelines/inception_apply_upload.py` is the main one-step deployment pipeline.
 - `/src/snomed_post_processing/pipelines/inception_deployment.py` performs dry-run/apply remote deployment and CAS repair.
+- `/src/snomed_post_processing/pipelines/annotation_store.py` builds the merged SQLite annotation store.
+- `/src/snomed_post_processing/pipelines/annotation_store_check.py` checks external documents by content hash against the store.
 
 # Related concepts
 
