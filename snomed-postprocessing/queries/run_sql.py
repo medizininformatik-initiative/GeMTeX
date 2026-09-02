@@ -13,6 +13,7 @@ CLI --param values override these defaults.
 
 SQL files can also request optional Python post-processing, e.g.:
   -- @partial_bin covered_text_bin
+  -- @sort_by order
   -- @post_limit n
 """
 
@@ -30,6 +31,7 @@ from typing import Iterable
 _PARAM_DEFAULT_RE = re.compile(r"^\s*--\s*@param\s+([^=\s]+)=(.*)$")
 _PARTIAL_BIN_RE = re.compile(r"^\s*--\s*@partial_bin\s+(.*)$")
 _POST_LIMIT_RE = re.compile(r"^\s*--\s*@post_limit\s+([^\s]+)\s*$")
+_SORT_BY_RE = re.compile(r"^\s*--\s*@sort_by\s+([^\s]+)\s*$")
 
 
 def _parse_args() -> argparse.Namespace:
@@ -48,6 +50,11 @@ def _parse_args() -> argparse.Namespace:
         default=[],
         metavar="NAME=VALUE",
         help="Bind a named SQL parameter. Can be repeated. Example: --param n=20 for SQL 'limit :n'.",
+    )
+    parser.add_argument(
+        "--no-info",
+        action="store_true",
+        help="Do not print query metadata. By default table metadata goes to stdout; JSON/CSV metadata goes to stderr.",
     )
     return parser.parse_args()
 
@@ -151,6 +158,14 @@ def _post_limit_param(sql: str) -> str | None:
     return None
 
 
+def _sort_by_param(sql: str) -> str | None:
+    for line in sql.splitlines():
+        match = _SORT_BY_RE.match(line)
+        if match:
+            return match.group(1)
+    return None
+
+
 def _apply_post_processing(rows: list[dict], sql: str, params: dict[str, object]) -> list[dict]:
     for directive in _partial_bin_directives(sql):
         enabled_param = directive.get("enabled_param")
@@ -174,6 +189,10 @@ def _apply_post_processing(rows: list[dict], sql: str, params: dict[str, object]
             count_column=count_column,
             match_mode=directive.get("match", "boundary"),
         )
+    sort_param = _sort_by_param(sql)
+    if sort_param is not None:
+        rows = _sort_rows(rows, params.get(sort_param, "count"))
+
     limit_param = _post_limit_param(sql)
     if limit_param is not None:
         limit = params.get(limit_param)
@@ -218,6 +237,40 @@ def _partial_bin_rows(
     return sorted(merged_rows, key=lambda row: (-int(row.get(count_column) or 0), *(str(row.get(col) or "") for col in row.keys())))
 
 
+def _sort_rows(rows: list[dict], order_value: object) -> list[dict]:
+    if not rows:
+        return rows
+    order = str(order_value or "count").strip().lower()
+    alias_specs = {
+        "count": "-annotation_count,semantic_tag,sctid,covered_text_bin",
+        "annotation_count": "-annotation_count,semantic_tag,sctid,covered_text_bin",
+        "semantic_tag": "semantic_tag,-annotation_count,sctid,covered_text_bin",
+        "covered_text": "covered_text_bin,-annotation_count,semantic_tag,sctid",
+        "covered_text_bin": "covered_text_bin,-annotation_count,semantic_tag,sctid",
+        "semantic_tag_covered_text": "semantic_tag,covered_text_bin,-annotation_count,sctid",
+        "sctid": "sctid,-annotation_count,semantic_tag,covered_text_bin",
+        "fsn": "fsn,-annotation_count,semantic_tag,sctid,covered_text_bin",
+    }
+    spec = alias_specs.get(order, order)
+    terms = [term.strip() for term in spec.split(",") if term.strip()]
+    sorted_rows = list(rows)
+    for term in reversed(terms):
+        descending = term.startswith("-")
+        column = term[1:] if descending else term.lstrip("+")
+        if column not in rows[0]:
+            continue
+        sorted_rows.sort(key=lambda row, col=column: _sort_value(row.get(col)), reverse=descending)
+    return sorted_rows
+
+
+def _sort_value(value: object) -> tuple[int, object]:
+    if value is None:
+        return (1, "")
+    if isinstance(value, (int, float)):
+        return (0, value)
+    return (0, str(value).lower())
+
+
 def _partial_bin_target(source: str, candidates: list[object], *, match_mode: str) -> str:
     matches = [
         str(candidate)
@@ -246,7 +299,28 @@ def _add_variants(variants: set[str], value: object) -> None:
 
 
 def _format_table_value(value) -> str:
-    return "<null>" if value is None else str(value)
+    if value is None:
+        return "<null>"
+    return str(value).replace("\\", "\\\\").replace("\r", "\\r").replace("\n", "\\n").replace("\t", "\\t")
+
+
+def _info_lines(sql_file: Path, rows: list[dict], sql: str, params: dict[str, object]) -> list[str]:
+    lines = [
+        f"Query: {sql_file}",
+        f"Rows shown: {len(rows)}",
+    ]
+    if "n" in params:
+        limit_kind = "post-processing limit" if _post_limit_param(sql) == "n" else "SQL/query limit"
+        lines.append(f"Limit n: {params['n']} ({limit_kind})")
+    if params:
+        rendered = ", ".join(f"{key}={_format_table_value(value)}" for key, value in sorted(params.items()))
+        lines.append(f"Parameters: {rendered}")
+    return lines
+
+
+def _print_info(lines: list[str], *, stream) -> None:
+    for line in lines:
+        print(f"# {line}", file=stream)
 
 
 def _print_table(rows: list[dict]) -> None:
@@ -306,6 +380,10 @@ def main() -> int:
     except (KeyError, ValueError) as exc:
         print(f"Post-processing error: {exc}", file=sys.stderr)
         return 1
+
+    if not args.no_info:
+        info = _info_lines(args.sql_file, rows, sql, params)
+        _print_info(info, stream=sys.stdout if args.format == "table" else sys.stderr)
 
     if args.format == "json":
         print(json.dumps(rows, ensure_ascii=False, indent=2))

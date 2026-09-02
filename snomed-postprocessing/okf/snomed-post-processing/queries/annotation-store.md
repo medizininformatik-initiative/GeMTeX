@@ -19,6 +19,12 @@ sources:
   - id: texts-for-st
     resource: /queries/annotation-store/texts_for_st.sql
     title: Covered-text bins by semantic tag query
+  - id: fsn-for-text
+    resource: /queries/annotation-store/fsn_for_text.sql
+    title: FSN counts by covered text query
+  - id: text-variants-for-text
+    resource: /queries/annotation-store/text_variants_for_text.sql
+    title: Covered-text variants for text search query
   - id: schema
     resource: /okf/snomed-post-processing/data/annotation-store-sqlite.md
     title: Annotation store SQLite schema
@@ -53,6 +59,8 @@ uv run python queries/run_sql.py --format table DB.sqlite query.sql
 uv run python queries/run_sql.py --format json DB.sqlite query.sql
 uv run python queries/run_sql.py --format csv DB.sqlite query.sql > result.csv
 ```
+
+By default the runner prints a small metadata block containing the query path, row count, limit parameter `n` when present, and effective parameters. For table output this metadata is printed above the table on stdout. For JSON and CSV output it is printed to stderr so stdout remains valid JSON/CSV. Suppress it with `--no-info`.
 
 In table output, SQL `NULL` values are rendered as:
 
@@ -111,6 +119,25 @@ Multiple defaults are allowed:
 
 The query runner can apply optional post-processing requested by SQL comments.
 
+## Sort by parameter
+
+A SQL file can request Python-side sorting with:
+
+```sql
+-- @sort_by order
+```
+
+The named parameter contains either a known alias or a comma-separated column list. Prefix a column with `-` for descending order:
+
+```bash
+--param order=count
+--param order=semantic_tag
+--param order=semantic_tag,covered_text_bin
+--param order=-annotation_count,semantic_tag
+```
+
+Known aliases include `count`, `semantic_tag`, `covered_text`, `covered_text_bin`, `semantic_tag_covered_text`, `sctid`, and `fsn`. Unknown columns in a sort specification are ignored.
+
 ## Partial binning
 
 Shorthand:
@@ -167,7 +194,9 @@ uv run python queries/run_sql.py \
 
 Parameters:
 
-```This query has no parameters.```
+| Parameter | Default | Required | Description |
+|---|---:|---:|---|
+| `order` | `count` | no | Sort mode. Use `count` for annotation count descending or `semantic_tag` for alphabetical semantic-tag order. Custom column lists such as `semantic_tag,-annotation_count` are also accepted. |
 
 Main columns:
 
@@ -246,6 +275,7 @@ Parameters:
 | `semantic_tag_part` | empty string | no | Case-insensitive substring filter used when `semantic_tag` is empty. |
 | `partial_binning` | `false` | no | When true, applies Python-side boundary-aware containment binning to `covered_text_bin`. |
 | `bin_by_sctid` | `false` | no | When true, keeps covered-text bins separated by SCTID/FSN. When false, `sctid` and `fsn` output columns are null and bins are across the selected semantic tag(s). |
+| `order` | `count` | no | Sort mode. Use `count`, `semantic_tag`, `covered_text`, `semantic_tag_covered_text`, `sctid`, `fsn`, or a custom column list such as `semantic_tag,covered_text_bin,-annotation_count`. |
 | `n` | `20` | no | Maximum number of rows after optional Python post-processing. |
 
 Main columns:
@@ -258,6 +288,82 @@ Main columns:
 - `annotation_count`: total occurrences in the bin.
 
 Partial binning is intentionally conservative. It handles textual containment, not synonymy or alias resolution. Non-containment relationships require concept-aware grouping, an alias table, or review-oriented fuzzy matching.
+
+## `fsn_for_text.sql`
+
+Reports FSN/SCTID counts for a covered text. It supports either exact covered-text lookup or partial covered-text lookup. This is the preferred concept-oriented view for answering “what was this text annotated as?”.
+
+Exact covered text:
+
+```bash
+uv run python queries/run_sql.py \
+  --param covered_text="ASS" \
+  DB.sqlite \
+  queries/annotation-store/fsn_for_text.sql
+```
+
+Partial covered-text lookup:
+
+```bash
+uv run python queries/run_sql.py \
+  --param covered_text_part=ass \
+  DB.sqlite \
+  queries/annotation-store/fsn_for_text.sql
+```
+
+Parameters:
+
+| Parameter | Default | Required | Description |
+|---|---:|---:|---|
+| `covered_text` | empty string | no | Exact case-insensitive covered-text filter. If non-empty, this takes precedence over `covered_text_part`. |
+| `covered_text_part` | empty string | no | Case-insensitive substring filter used when `covered_text` is empty. |
+| `order` | `count` | no | Sort mode. Use `count`, `fsn`, `semantic_tag`, `sctid`, or a custom column list such as `fsn,-annotation_count`. |
+| `n` | `20` | no | Maximum number of rows after Python-side sorting. |
+
+Main columns:
+
+- `sctid`;
+- `fsn`;
+- `semantic_tag`;
+- `annotation_count`: total occurrences matching the selected covered text.
+
+## `text_variants_for_text.sql`
+
+Reports actual covered-text variants matching a covered-text search, grouped by lowercase covered text and semantic tag. This is useful after `fsn_for_text.sql` shows that a searched text spans multiple semantic tags or FSNs.
+
+Partial covered-text lookup:
+
+```bash
+uv run python queries/run_sql.py \
+  --param covered_text_part=folfox \
+  DB.sqlite \
+  queries/annotation-store/text_variants_for_text.sql
+```
+
+Exact covered-text lookup:
+
+```bash
+uv run python queries/run_sql.py \
+  --param covered_text="FOLFOX" \
+  DB.sqlite \
+  queries/annotation-store/text_variants_for_text.sql
+```
+
+Parameters:
+
+| Parameter | Default | Required | Description |
+|---|---:|---:|---|
+| `covered_text` | empty string | no | Exact case-insensitive covered-text filter. If non-empty, this takes precedence over `covered_text_part`. |
+| `covered_text_part` | empty string | no | Case-insensitive substring filter used when `covered_text` is empty. |
+| `order` | `count` | no | Sort mode. Use `count`, `semantic_tag`, `covered_text`, or a custom column list. |
+| `n` | `50` | no | Maximum number of rows after Python-side sorting. |
+
+Main columns:
+
+- `covered_text_bin`: lowercase covered-text bin;
+- `covered_text_variants`: distinct original covered texts in the bin;
+- `semantic_tag`;
+- `annotation_count`.
 
 # Related concepts
 
