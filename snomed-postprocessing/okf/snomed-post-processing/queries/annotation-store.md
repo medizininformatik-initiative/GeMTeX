@@ -245,11 +245,14 @@ Parameters:
 | `semantic_tag` | empty string | no | Exact case-insensitive semantic-tag filter. If non-empty, this takes precedence over `semantic_tag_part`. |
 | `semantic_tag_part` | empty string | no | Case-insensitive substring filter used when `semantic_tag` is empty. |
 | `partial_binning` | `false` | no | When true, applies Python-side boundary-aware containment binning to `covered_text_bin`. |
+| `bin_by_sctid` | `false` | no | When true, keeps covered-text bins separated by SCTID/FSN. When false, `sctid` and `fsn` output columns are null and bins are across the selected semantic tag(s). |
 | `n` | `20` | no | Maximum number of rows after optional Python post-processing. |
 
 Main columns:
 
 - `semantic_tag`
+- `sctid`: populated only when `bin_by_sctid=true`;
+- `fsn`: populated only when `bin_by_sctid=true`;
 - `covered_text_bin`: lowercase bin key;
 - `covered_text_variants`: distinct original covered texts in the bin;
 - `annotation_count`: total occurrences in the bin.
