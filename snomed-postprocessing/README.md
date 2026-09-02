@@ -79,6 +79,8 @@ create-concepts-dump
 summarize-hdf5
 suggest-sanitization
 build-snogit-cache
+build-annotation-store
+check-annotation-store-document
 build-inception-shell-project
 build-inception-upload-artifacts
 deploy-inception-sanitized-project
@@ -147,6 +149,30 @@ uv run log-critical-documents \
 ```
 
 Supported ignore modes are `overlap`, `covered-by`, `contains`, and `exact`.
+
+### Build a SQLite annotation store
+
+Create one merged SQLite database from one or more INCEpTION export ZIPs or a directory of ZIPs. Both annotation and curation views are imported. Site and batch metadata are inferred from filenames such as `berlin_XMI_1-3.zip`; missing batches are reported and can be appended later.
+
+```bash
+uv run build-annotation-store \
+  --input /path/to/inception-exports \
+  --snomed-hdf5 /path/to/gemtex_snomedct_codes.hdf5 \
+  --output semantic_snomed_annotations.sqlite \
+  --replace
+```
+
+By default, annotation provenance, offsets, covered text, SCTID, FSN, semantic tag, active status, and a SHA-256 hash of the complete CAS document text are stored. Full CAS document text can be stored explicitly with `--store-document-text`.
+
+Check whether an external plain-text document is represented in the store by content hash. This deliberately does not rely on document names.
+
+```bash
+uv run check-annotation-store-document \
+  --store semantic_snomed_annotations.sqlite \
+  --document /path/to/document.txt
+```
+
+If the SHA-256 hash matches a stored `document_text_hash`, annotation offsets are applicable to that exact text content.
 
 ### Create an HDF5 policy from an RF2 ZIP
 For the following three commands:

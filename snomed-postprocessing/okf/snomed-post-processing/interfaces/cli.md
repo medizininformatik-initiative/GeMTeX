@@ -29,6 +29,8 @@ sources:
 | `summarize-hdf5` | `cli.app:summarize_hdf5` | Print HDF5 metadata summary. |
 | `build-snogit-cache` | `cli.app:build_snogit_cache_cli` | Create processed SNOGIT cache for BM25 evidence. |
 | `suggest-sanitization` | `cli.app:suggest_sanitization_cli` | Generate Markdown/JSON sanitization suggestions. |
+| `build-annotation-store` | `cli.app:build_annotation_store_cli` | Build a merged SQLite store of SNOMED annotation occurrences from INCEpTION export ZIPs. |
+| `check-annotation-store-document` | `cli.app:check_annotation_store_document_cli` | Check whether an external plain-text document content hash exists in an annotation store. |
 | `build-inception-shell-project` | `cli.app:build_inception_shell_project_cli` | Lower-level shell ZIP builder. |
 | `build-inception-upload-artifacts` | `cli.app:build_inception_upload_artifacts_cli` | Lower-level repaired flattened CAS artifact builder. |
 | `apply-decisions-to-inception` | `cli.app:apply_decisions_to_inception_cli` | Preferred one-step reviewed-decisions-to-INCEpTION workflow. |
@@ -72,6 +74,28 @@ Important options:
 - `--semantic-bm25-fallback`
 - `--use-snogit-cache processed_snogit_cache.hdf5`
 - `--blacklist-suggestions` only with BM25 fallback
+
+## Build annotation store
+
+```bash
+uv run build-annotation-store \
+  --input /path/to/inception-export-zips-or-directory \
+  --snomed-hdf5 concepts.hdf5 \
+  --output semantic_snomed_annotations.sqlite \
+  --replace
+```
+
+The command imports annotation, curation, and flat CAS views into one SQLite file. It normalizes document names, infers site and batch metadata from names such as `berlin_XMI_1-3.zip`, enriches known SCTIDs with FSN/semantic tag/active status from `/concepts`, keeps unknown SCTIDs with null metadata, stores a SHA-256 hash of each complete CAS document text for reproducibility, and reports missing batches. Full CAS document text is only stored with `--store-document-text`; covered text is always stored per annotation occurrence.
+
+Check an external plain-text document by content hash, without relying on document names:
+
+```bash
+uv run check-annotation-store-document \
+  --store semantic_snomed_annotations.sqlite \
+  --document /path/to/document.txt
+```
+
+A hash match means stored annotation offsets are applicable to that exact document text.
 
 ## One-step INCEpTION deployment
 

@@ -22,6 +22,8 @@ from ..pipelines import (
     build_inception_shell_project,
     build_inception_upload_artifacts,
     deploy_inception_sanitized_project,
+    run_build_annotation_store,
+    run_check_annotation_store_document,
     run_create_concept_id_dump,
     run_log_documents,
     run_sanitization_check,
@@ -507,6 +509,161 @@ def deploy_inception_sanitized_project_cli(
         raise click.ClickException("Deployment validation/apply failed; see report for details.")
 
 
+@click.command(name="build-annotation-store")
+@click.option(
+    "--input",
+    "input_paths",
+    required=True,
+    multiple=True,
+    type=click.Path(exists=True, path_type=pathlib.Path),
+    help="INCEpTION export ZIP or directory containing export ZIPs. Can be repeated.",
+)
+@click.option(
+    "--snomed-hdf5",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
+    help="HDF5 concept metadata source.",
+)
+@click.option(
+    "--output",
+    required=True,
+    type=click.Path(dir_okay=False, path_type=pathlib.Path),
+    help="Output SQLite annotation-store path.",
+)
+@click.option(
+    "--annotation-type",
+    multiple=True,
+    default=("gemtex.Concept",),
+    show_default=True,
+    help="CAS annotation layer to extract. Can be repeated.",
+)
+@click.option(
+    "--id-prefix",
+    default="http://snomed.info/id/",
+    show_default=True,
+    help="SNOMED URI prefix stripped from annotation IDs.",
+)
+@click.option("--replace", is_flag=True, help="Replace an existing output DB.")
+@click.option("--append", "append", is_flag=True, help="Append to an existing output DB or create it if missing.")
+@click.option(
+    "--store-document-text",
+    is_flag=True,
+    help="Store full CAS document text in the optional document_texts table.",
+)
+@click.option("--site", default=None, help="Override inferred site name for all input ZIPs.")
+@click.option("--fail-fast", is_flag=True, help="Stop on the first malformed/unsupported CAS error.")
+@click.option(
+    "--report",
+    default=None,
+    type=click.Path(dir_okay=False, path_type=pathlib.Path),
+    help="Optional JSON import summary path.",
+)
+@click_log_level
+def build_annotation_store_cli(
+    input_paths: tuple[pathlib.Path, ...],
+    snomed_hdf5: pathlib.Path,
+    output: pathlib.Path,
+    annotation_type: tuple[str, ...],
+    id_prefix: str,
+    replace: bool,
+    append: bool,
+    store_document_text: bool,
+    site: Optional[str],
+    fail_fast: bool,
+    report: Optional[pathlib.Path],
+    log_level: str,
+):
+    """Build a SQLite store of SNOMED annotations from INCEpTION export ZIPs."""
+    try:
+        summary = run_build_annotation_store(
+            input_paths=input_paths,
+            snomed_hdf5=snomed_hdf5,
+            output=output,
+            annotation_type=annotation_type,
+            id_prefix=id_prefix,
+            replace=replace,
+            append=append,
+            store_document_text=store_document_text,
+            site=site,
+            fail_fast=fail_fast,
+            report=report,
+            log_level=log_level,
+        )
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    click.echo(f"Annotation store written to: {output.resolve()}")
+    click.echo(f"Exports processed: {summary.exports_processed}")
+    click.echo(f"Documents: {summary.documents}")
+    click.echo(f"Annotation views: {summary.annotation_views}")
+    click.echo(f"Annotations: {summary.annotations}")
+    click.echo(f"Unknown SCTIDs: {len(summary.unknown_sctids)}")
+    click.echo(f"Failed CAS members: {len(summary.failed_cas_members)}")
+    for item in summary.missing_batches:
+        click.echo(
+            f"Missing batches for {item['site']}: "
+            f"found {','.join(str(v) for v in item['found'])} of {item['total']}; "
+            f"missing {','.join(str(v) for v in item['missing'])}"
+        )
+
+
+@click.command(name="check-annotation-store-document")
+@click.option(
+    "--store",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
+    help="SQLite annotation store created by build-annotation-store.",
+)
+@click.option(
+    "--document",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
+    help="External plain-text document to hash and look up.",
+)
+@click.option("--encoding", default="utf-8", show_default=True, help="Document text encoding.")
+@click.option(
+    "--report",
+    default=None,
+    type=click.Path(dir_okay=False, path_type=pathlib.Path),
+    help="Optional JSON check report path.",
+)
+@click_log_level
+def check_annotation_store_document_cli(
+    store: pathlib.Path,
+    document: pathlib.Path,
+    encoding: str,
+    report: Optional[pathlib.Path],
+    log_level: str,
+):
+    """Check whether a document's full-text hash exists in an annotation store."""
+    try:
+        result = run_check_annotation_store_document(
+            store=store,
+            document=document,
+            encoding=encoding,
+            report=report,
+            log_level=log_level,
+        )
+    except Exception as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    click.echo(f"Document: {document}")
+    click.echo(f"SHA-256: {result.text_hash}")
+    click.echo(f"In annotation store: {'yes' if result.matched else 'no'}")
+    if result.matches:
+        click.echo("Matches:")
+        for match in result.matches:
+            batch = (
+                f" batch {match.batch_index}-{match.batch_total}"
+                if match.batch_index is not None and match.batch_total is not None
+                else ""
+            )
+            click.echo(
+                f"- {match.site}{batch}, {match.export_file}, {match.view_kind}, "
+                f"{match.annotator}: {match.annotations} annotation(s)"
+            )
+
+
 @click.command()
 @click.argument(
     "hdf5_path",
@@ -548,6 +705,8 @@ def help_me():
      * summarize-hdf5
      * build-snogit-cache
      * suggest-sanitization
+     * build-annotation-store
+     * check-annotation-store-document
      * build-inception-shell-project
      * build-inception-upload-artifacts
      * apply-decisions-to-inception
@@ -563,6 +722,8 @@ def help_me():
         "\n * summarize-hdf5"
         "\n * build-snogit-cache"
         "\n * suggest-sanitization"
+        "\n * build-annotation-store"
+        "\n * check-annotation-store-document"
         "\n * build-inception-shell-project"
         "\n * build-inception-upload-artifacts"
         "\n * apply-decisions-to-inception"
