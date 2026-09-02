@@ -32,6 +32,8 @@ def run_build_annotation_store(
     append: bool,
     store_document_text: bool,
     site: Optional[str],
+    batch_index: Optional[int],
+    batch_total: Optional[int],
     fail_fast: bool,
     report: Optional[Union[str, pathlib.Path]],
     log_level: str,
@@ -54,6 +56,10 @@ def run_build_annotation_store(
         raise ValueError("No ZIP files found in input path(s).")
     if site is not None and len(zip_paths) > 1:
         logging.warning("--site applies to all input ZIPs; inferred filename sites are overridden.")
+    if (batch_index is None) != (batch_total is None):
+        raise ValueError("--batch-index and --batch-total must be supplied together.")
+    if batch_index is not None and len(zip_paths) > 1:
+        logging.warning("--batch-index/--batch-total apply to all input ZIPs; inferred filename batches are overridden.")
 
     annotation_types = list(annotation_type) if annotation_type else ["gemtex.Concept"]
     logging.info("Loading SNOMED metadata from %s", snomed_hdf5)
@@ -65,7 +71,12 @@ def run_build_annotation_store(
     try:
         writer.initialize()
         for export_path in zip_paths:
-            export_meta = parse_export_filename(export_path, site_override=site)
+            export_meta = parse_export_filename(
+                export_path,
+                site_override=site,
+                batch_index_override=batch_index,
+                batch_total_override=batch_total,
+            )
             logging.info("Processing export %s", export_path)
             export_id = writer.insert_export(export_meta, export_path, imported_at)
             summary.exports_processed += 1
@@ -74,6 +85,8 @@ def run_build_annotation_store(
             for view in iter_cas_views(
                 export_path,
                 site_override=site,
+                batch_index_override=batch_index,
+                batch_total_override=batch_total,
                 fail_fast=fail_fast,
                 on_failure=summary.failed_cas_members.append,
             ):

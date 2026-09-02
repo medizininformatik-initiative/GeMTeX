@@ -41,15 +41,52 @@ The importer includes:
 
 UIMA Java serialized CAS files (`.ser`) are not supported by the Python CAS stack and are skipped/reported.
 
-# Site and batch handling
+# Export ZIP naming convention
 
-Filenames such as `berlin_XMI_1-3.zip` are parsed as:
+The importer can process any valid INCEpTION export ZIP, but site/batch metadata is inferred only from a small filename convention.
 
-| Field | Example |
-|---|---|
-| site | `berlin` |
-| batch_index | `1` |
-| batch_total | `3` |
+Preferred forms:
+
+```text
+<SITE>_XMI_<BATCH_INDEX>-<BATCH_TOTAL>.zip
+<SITE>_JSON_<BATCH_INDEX>-<BATCH_TOTAL>.zip
+<SITE>_flat_XMI_<BATCH_INDEX>-<BATCH_TOTAL>.zip
+<SITE>_flat_JSON_<BATCH_INDEX>-<BATCH_TOTAL>.zip
+```
+
+A descriptive suffix after the batch marker is tolerated:
+
+```text
+<SITE>_XMI_<BATCH_INDEX>-<BATCH_TOTAL>_<LABEL>.zip
+<SITE>_JSON_<BATCH_INDEX>-<BATCH_TOTAL>_<LABEL>.zip
+<SITE>_flat_XMI_<BATCH_INDEX>-<BATCH_TOTAL>_<LABEL>.zip
+<SITE>_flat_JSON_<BATCH_INDEX>-<BATCH_TOTAL>_<LABEL>.zip
+```
+
+If the export is not split into batches, this form is also accepted:
+
+```text
+<SITE>_XMI.zip
+<SITE>_JSON.zip
+<SITE>_flat_XMI.zip
+<SITE>_flat_JSON.zip
+```
+
+Examples:
+
+| Filename | site | batch_index | batch_total |
+|---|---:|---:|---:|
+| `berlin_XMI_1-3.zip` | `berlin` | `1` | `3` |
+| `berlin_XMI_1-3_reviewed.zip` | `berlin` | `1` | `3` |
+| `essen_flat_XMI_1-1.zip` | `essen` | `1` | `1` |
+| `dresden_JSON_2-4.zip` | `dresden` | `2` | `4` |
+| `dresden_XMI.zip` | `dresden` | null | null |
+
+Fallback behavior:
+
+- If the filename does not match, the filename stem is used as `site` and batch fields are null.
+- `--site` overrides inferred site.
+- `--batch-index` and `--batch-total` override inferred batch metadata and must be supplied together.
 
 The database can contain incomplete batch sets. Missing batches are reported in the command summary and can be appended later with `--append`.
 
