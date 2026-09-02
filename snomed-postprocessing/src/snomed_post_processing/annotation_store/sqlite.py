@@ -30,25 +30,14 @@ create table if not exists documents(
 
 create table if not exists document_hashes(
   id integer primary key,
-  document_id integer not null,
-  export_id integer,
-  text_hash text not null,
-  source_path text,
-  unique(document_id, export_id, text_hash),
-  foreign key(document_id) references documents(id),
-  foreign key(export_id) references exports(id)
+  text_hash text not null unique
 );
 
 create table if not exists document_texts(
   id integer primary key,
-  document_id integer not null,
-  export_id integer,
+  document_hash_id integer not null unique,
   text text not null,
-  text_hash text not null,
-  source_path text,
-  unique(document_id, text_hash),
-  foreign key(document_id) references documents(id),
-  foreign key(export_id) references exports(id)
+  foreign key(document_hash_id) references document_hashes(id)
 );
 
 create table if not exists annotation_views(
@@ -145,8 +134,13 @@ class AnnotationStoreWriter:
         self.connection.close()
 
     def initialize(self) -> None:
+        self.connection.execute("drop view if exists annotation_occurrences")
         self.connection.executescript(SCHEMA_SQL)
+        self.connection.commit()
+        self.connection.execute("pragma foreign_keys = off")
         self._migrate_existing_schema()
+        self.connection.commit()
+        self.connection.execute("pragma foreign_keys = on")
         self.connection.executescript(VIEW_SQL)
         self.connection.commit()
 
@@ -177,47 +171,28 @@ class AnnotationStoreWriter:
         )
         return self._id_for("documents", "document_name", document_name)
 
-    def insert_document_hash(
-        self,
-        document_id: int,
-        export_id: int,
-        text_hash: str,
-        source_path: str,
-    ) -> int:
+    def insert_document_hash(self, text_hash: str) -> int:
         self.connection.execute(
-            """
-            insert or ignore into document_hashes(document_id, export_id, text_hash, source_path)
-            values (?, ?, ?, ?)
-            """,
-            (document_id, export_id, text_hash, source_path),
+            "insert or ignore into document_hashes(text_hash) values (?)",
+            (text_hash,),
         )
         row = self.connection.execute(
             """
             select id from document_hashes
-            where document_id = ? and export_id = ? and text_hash = ?
+            where text_hash = ?
             """,
-            (document_id, export_id, text_hash),
+            (text_hash,),
         ).fetchone()
         return int(row["id"])
 
-    def insert_document_text(
-        self,
-        document_id: int,
-        export_id: int,
-        text: str,
-        text_hash: str,
-        source_path: str,
-    ) -> int:
+    def insert_document_text(self, document_hash_id: int, text: str) -> int:
         self.connection.execute(
-            """
-            insert or ignore into document_texts(document_id, export_id, text, text_hash, source_path)
-            values (?, ?, ?, ?, ?)
-            """,
-            (document_id, export_id, text, text_hash, source_path),
+            "insert or ignore into document_texts(document_hash_id, text) values (?, ?)",
+            (document_hash_id, text),
         )
         row = self.connection.execute(
-            "select id from document_texts where document_id = ? and text_hash = ?",
-            (document_id, text_hash),
+            "select id from document_texts where document_hash_id = ?",
+            (document_hash_id,),
         ).fetchone()
         return int(row["id"])
 
@@ -307,13 +282,112 @@ class AnnotationStoreWriter:
         return int(row["n"])
 
     def _migrate_existing_schema(self) -> None:
-        """Add columns introduced after the first annotation-store schema."""
-        columns = {
+        """Migrate early annotation-store schemas in-place.
+
+        Development builds initially stored provenance fields on
+        `document_hashes`. Applicability is content-hash based, while provenance
+        belongs to `annotation_views -> exports`, so this method rebuilds
+        `document_hashes` to `(id, text_hash)` and rewrites optional raw text
+        storage to reference the canonical hash row.
+        """
+        view_columns = {
             row["name"]
             for row in self.connection.execute("pragma table_info(annotation_views)")
         }
-        if "document_hash_id" not in columns:
+        if "document_hash_id" not in view_columns:
             self.connection.execute("alter table annotation_views add column document_hash_id integer")
+
+        hash_columns = {
+            row["name"]
+            for row in self.connection.execute("pragma table_info(document_hashes)")
+        }
+        if hash_columns and hash_columns != {"id", "text_hash"}:
+            self._rebuild_document_hashes_table()
+
+        text_columns = {
+            row["name"]
+            for row in self.connection.execute("pragma table_info(document_texts)")
+        }
+        if text_columns and text_columns != {"id", "document_hash_id", "text"}:
+            self._rebuild_document_texts_table()
+
+        self.connection.execute(
+            "create unique index if not exists idx_document_hashes_text_hash_unique on document_hashes(text_hash)"
+        )
+
+    def _rebuild_document_hashes_table(self) -> None:
+        self.connection.execute(
+            """
+            update annotation_views
+            set document_hash_id = (
+              select min(canonical.id)
+              from document_hashes current
+              join document_hashes canonical on canonical.text_hash = current.text_hash
+              where current.id = annotation_views.document_hash_id
+            )
+            where document_hash_id is not null
+            """
+        )
+        self.connection.execute("alter table document_hashes rename to document_hashes_old")
+        self.connection.execute(
+            """
+            create table document_hashes(
+              id integer primary key,
+              text_hash text not null unique
+            )
+            """
+        )
+        self.connection.execute(
+            """
+            insert into document_hashes(id, text_hash)
+            select min(id), text_hash
+            from document_hashes_old
+            group by text_hash
+            """
+        )
+        self.connection.execute("drop table document_hashes_old")
+
+    def _rebuild_document_texts_table(self) -> None:
+        old_columns = {
+            row["name"]
+            for row in self.connection.execute("pragma table_info(document_texts)")
+        }
+        if "text_hash" not in old_columns:
+            return
+        self.connection.execute("alter table document_texts rename to document_texts_old")
+        self.connection.execute(
+            """
+            create table document_texts(
+              id integer primary key,
+              document_hash_id integer not null unique,
+              text text not null,
+              foreign key(document_hash_id) references document_hashes(id)
+            )
+            """
+        )
+        self.connection.execute(
+            """
+            insert or ignore into document_texts(id, document_hash_id, text)
+            select min(dt.id), dh.id, dt.text
+            from document_texts_old dt
+            join document_hashes dh on dh.text_hash = dt.text_hash
+            group by dt.text_hash
+            """
+        )
+        self.connection.execute(
+            """
+            update annotation_views
+            set document_text_id = (
+              select min(new_dt.id)
+              from document_texts_old old_dt
+              join document_hashes dh on dh.text_hash = old_dt.text_hash
+              join document_texts new_dt on new_dt.document_hash_id = dh.id
+              where old_dt.id = annotation_views.document_text_id
+            )
+            where document_text_id is not null
+            """
+        )
+        self.connection.execute("drop table document_texts_old")
 
     def _id_for(self, table: str, column: str, value) -> int:
         row = self.connection.execute(

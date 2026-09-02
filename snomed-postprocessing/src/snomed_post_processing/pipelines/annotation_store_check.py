@@ -62,9 +62,9 @@ def run_check_annotation_store_document(
               count(distinct av.id) as annotation_views,
               count(a.id) as annotations
             from document_hashes dh
-            join documents d on d.id = dh.document_id
-            join exports e on e.id = dh.export_id
-            left join annotation_views av on av.document_hash_id = dh.id
+            join annotation_views av on av.document_hash_id = dh.id
+            join documents d on d.id = av.document_id
+            join exports e on e.id = av.export_id
             left join annotations a on a.view_id = av.id
             where dh.text_hash = ?
             group by

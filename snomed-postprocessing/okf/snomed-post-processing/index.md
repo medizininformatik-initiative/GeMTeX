@@ -40,6 +40,7 @@ This bundle is the agent-readable knowledge layer for the Python app under [`/sr
 - [Reviewed decisions and local ZIP write-back](/snomed-post-processing/workflows/reviewed-decisions-and-writeback.md)
 - [One-step sanitized INCEpTION deployment](/snomed-post-processing/workflows/inception-deployment.md)
 - [Processed SNOGIT cache and BM25 fallback](/snomed-post-processing/workflows/snogit-bm25.md)
+- [Build and query annotation store](/snomed-post-processing/workflows/annotation-store.md)
 
 ## Data and formats
 
@@ -49,6 +50,7 @@ This bundle is the agent-readable knowledge layer for the Python app under [`/sr
 - [JSON artifact formats](/snomed-post-processing/data/json-artifact-formats.md)
 - [INCEpTION project ZIP and CAS handling](/snomed-post-processing/data/inception-cas-and-zip.md)
 - [SQLite annotation store as project input](data/annotation-store-input.md)
+- [Annotation store SQLite schema](/snomed-post-processing/data/annotation-store-sqlite.md)
 
 ## Decisions and operational notes
 

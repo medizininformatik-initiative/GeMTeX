@@ -13,12 +13,7 @@ def test_sqlite_writer_inserts_and_flattens_rows(tmp_path):
             "2026-01-01T00:00:00Z",
         )
         document_id = writer.insert_document("Albers.txt")
-        document_hash_id = writer.insert_document_hash(
-            document_id,
-            export_id,
-            "doc-hash",
-            "curation/Albers.txt.xmi/CURATION_USER.zip",
-        )
+        document_hash_id = writer.insert_document_hash("doc-hash")
         view_id = writer.insert_annotation_view(
             export_id,
             document_id,
