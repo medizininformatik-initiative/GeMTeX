@@ -551,6 +551,8 @@ def deploy_inception_sanitized_project_cli(
     help="Store full CAS document text in the optional document_texts table.",
 )
 @click.option("--site", default=None, help="Override inferred site name for all input ZIPs.")
+@click.option("--batch-index", default=None, type=int, help="Override inferred batch index for all input ZIPs. Use with --batch-total.")
+@click.option("--batch-total", default=None, type=int, help="Override inferred total batch count for all input ZIPs. Use with --batch-index.")
 @click.option("--fail-fast", is_flag=True, help="Stop on the first malformed/unsupported CAS error.")
 @click.option(
     "--report",
@@ -569,6 +571,8 @@ def build_annotation_store_cli(
     append: bool,
     store_document_text: bool,
     site: Optional[str],
+    batch_index: Optional[int],
+    batch_total: Optional[int],
     fail_fast: bool,
     report: Optional[pathlib.Path],
     log_level: str,
@@ -585,6 +589,8 @@ def build_annotation_store_cli(
             append=append,
             store_document_text=store_document_text,
             site=site,
+            batch_index=batch_index,
+            batch_total=batch_total,
             fail_fast=fail_fast,
             report=report,
             log_level=log_level,

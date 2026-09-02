@@ -5,3 +5,4 @@ tmp-pycaprio
 tmp-inception
 okf/inception
 okf/pycaprio
+*.sqlite

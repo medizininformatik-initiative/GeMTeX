@@ -28,13 +28,20 @@ def iter_cas_views(
     export_path: pathlib.Path,
     *,
     site_override: Optional[str] = None,
+    batch_index_override: Optional[int] = None,
+    batch_total_override: Optional[int] = None,
     allowed_extensions: Optional[list[str]] = None,
     fail_fast: bool = False,
     on_failure: Optional[FailureCallback] = None,
 ) -> Iterator[CasView]:
     """Yield loadable non-`.ser` CAS views from an INCEpTION export ZIP."""
     export_path = pathlib.Path(export_path)
-    export_meta = parse_export_filename(export_path, site_override=site_override)
+    export_meta = parse_export_filename(
+        export_path,
+        site_override=site_override,
+        batch_index_override=batch_index_override,
+        batch_total_override=batch_total_override,
+    )
     file_name = export_path.name
 
     try:
