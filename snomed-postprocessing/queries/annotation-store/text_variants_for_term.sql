@@ -1,5 +1,5 @@
--- @param covered_text=
--- @param covered_text_part=
+-- @param term=
+-- @param term_part=
 -- @param order=count
 -- @param n=50
 -- @sort_by order
@@ -12,13 +12,13 @@ select
 from annotation_occurrences
 where
   (
-    :covered_text != ''
-    and lower(covered_text) = lower(:covered_text)
+    :term != ''
+    and lower(covered_text) = lower(:term)
   )
   or
   (
-    :covered_text = ''
-    and lower(covered_text) like '%' || lower(:covered_text_part) || '%'
+    :term = ''
+    and lower(covered_text) like '%' || lower(:term_part) || '%'
   )
 group by
   lower(covered_text),

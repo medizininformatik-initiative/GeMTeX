@@ -14,7 +14,7 @@ generated: { by: pi-coding-agent/gpt-5, at: 2026-08-28T15:03:31Z }
 - **Addition**: Documented the annotation-store workflow and SQLite schema, including content-hash-based applicability checks.
 - **Update**: Added `build-annotation-store` and `check-annotation-store-document` to CLI/module OKF pages.
 - **Schema note**: `document_hashes` is canonical by `text_hash` only; provenance remains on `annotation_views -> exports`.
-- **Queries**: Added query-cookbook OKF pages for `queries/run_sql.py` and reusable annotation-store SQL files.
+- **Queries**: Added query-cookbook OKF pages for the `sql-query` query runner and reusable annotation-store SQL files.
 
 ## 2026-08-28
 

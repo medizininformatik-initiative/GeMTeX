@@ -8,8 +8,8 @@ status: draft
 generated: { by: pi-coding-agent/gpt-5, at: 2026-09-02T00:00:00Z }
 sources:
   - id: runner
-    resource: /queries/run_sql.py
-    title: Python SQLite query runner
+    resource: /src/snomed_post_processing/cli/query_runner.py
+    title: Click-based Python SQLite query runner
   - id: semantic-tag-counts
     resource: /queries/annotation-store/semantic_tag_counts.sql
     title: Semantic tag counts query
@@ -17,13 +17,13 @@ sources:
     resource: /queries/annotation-store/top_sctids.sql
     title: Top SCTIDs query
   - id: texts-for-st
-    resource: /queries/annotation-store/texts_for_st.sql
+    resource: /queries/annotation-store/terms_for_semantic_tag.sql
     title: Covered-text bins by semantic tag query
   - id: fsn-for-text
-    resource: /queries/annotation-store/fsn_for_text.sql
+    resource: /queries/annotation-store/fsn_for_term.sql
     title: FSN counts by covered text query
   - id: text-variants-for-text
-    resource: /queries/annotation-store/text_variants_for_text.sql
+    resource: /queries/annotation-store/text_variants_for_term.sql
     title: Covered-text variants for text search query
   - id: schema
     resource: /okf/snomed-post-processing/data/annotation-store-sqlite.md
@@ -42,22 +42,22 @@ They are intended to run against SQLite databases created by `build-annotation-s
 
 # Query runner
 
-Use the Python stdlib SQLite wrapper instead of `uvx sqlite3`:
+You can use the Click-based Python stdlib SQLite wrapper:
 
 ```bash
-uv run python queries/run_sql.py \
+uv run sql-query \
   gemtex_semantic_snomed_annotations.sqlite \
   queries/annotation-store/semantic_tag_counts.sql
 ```
 
-`uvx sqlite3` is not expected to work because `sqlite3` is a system binary / Python stdlib module, not a PyPI tool package.
+`uvx sqlite3` is not expected to work because `sqlite3` is a system binary / Python stdlib module, not a PyPI tool package. The wrapper itself uses Click for command-line parsing, consistent with the rest of the project CLIs.
 
 Supported output formats:
 
 ```bash
-uv run python queries/run_sql.py --format table DB.sqlite query.sql
-uv run python queries/run_sql.py --format json DB.sqlite query.sql
-uv run python queries/run_sql.py --format csv DB.sqlite query.sql > result.csv
+uv run sql-query --format table DB.sqlite query.sql
+uv run sql-query --format json DB.sqlite query.sql
+uv run sql-query --format csv DB.sqlite query.sql > result.csv
 ```
 
 By default the runner prints a small metadata block containing the query path, row count, limit parameter `n` when present, and effective parameters. For table output this metadata is printed above the table on stdout. For JSON and CSV output it is printed to stderr so stdout remains valid JSON/CSV. Suppress it with `--no-info`.
@@ -79,7 +79,7 @@ limit :n
 Pass values with repeatable `--param` options:
 
 ```bash
-uv run python queries/run_sql.py \
+uv run sql-query \
   --param n=20 \
   DB.sqlite \
   queries/annotation-store/top_sctids.sql
@@ -187,7 +187,7 @@ This applies the `n` limit after Python post-processing.
 Counts annotation occurrences by semantic tag:
 
 ```bash
-uv run python queries/run_sql.py \
+uv run sql-query \
   DB.sqlite \
   queries/annotation-store/semantic_tag_counts.sql
 ```
@@ -208,7 +208,7 @@ Main columns:
 Reports the most frequent SCTIDs, with default `n=50`:
 
 ```bash
-uv run python queries/run_sql.py \
+uv run sql-query \
   DB.sqlite \
   queries/annotation-store/top_sctids.sql
 ```
@@ -216,7 +216,7 @@ uv run python queries/run_sql.py \
 Override the limit:
 
 ```bash
-uv run python queries/run_sql.py \
+uv run sql-query \
   --param n=20 \
   DB.sqlite \
   queries/annotation-store/top_sctids.sql
@@ -235,36 +235,36 @@ Main columns:
 - `fsn`
 - `annotation_count`
 
-## `texts_for_st.sql`
+## `terms_for_semantic_tag.sql`
 
 Reports covered-text bins for a semantic tag. It supports either exact semantic-tag lookup or partial semantic-tag lookup.
 
 Exact semantic tag:
 
 ```bash
-uv run python queries/run_sql.py \
+uv run sql-query \
   --param semantic_tag="medicinal product" \
   DB.sqlite \
-  queries/annotation-store/texts_for_st.sql
+  queries/annotation-store/terms_for_semantic_tag.sql
 ```
 
 Partial semantic-tag lookup:
 
 ```bash
-uv run python queries/run_sql.py \
+uv run sql-query \
   --param semantic_tag_part=medicinal \
   DB.sqlite \
-  queries/annotation-store/texts_for_st.sql
+  queries/annotation-store/terms_for_semantic_tag.sql
 ```
 
 Enable Python-side partial covered-text binning:
 
 ```bash
-uv run python queries/run_sql.py \
+uv run sql-query \
   --param semantic_tag="medicinal product" \
   --param partial_binning=true \
   DB.sqlite \
-  queries/annotation-store/texts_for_st.sql
+  queries/annotation-store/terms_for_semantic_tag.sql
 ```
 
 Parameters:
@@ -289,34 +289,34 @@ Main columns:
 
 Partial binning is intentionally conservative. It handles textual containment, not synonymy or alias resolution. Non-containment relationships require concept-aware grouping, an alias table, or review-oriented fuzzy matching.
 
-## `fsn_for_text.sql`
+## `fsn_for_term.sql`
 
-Reports FSN/SCTID counts for a covered text. It supports either exact covered-text lookup or partial covered-text lookup. This is the preferred concept-oriented view for answering “what was this text annotated as?”.
+Reports FSN/SCTID counts for an annotation term. It supports either exact term lookup or partial term lookup. This is the preferred concept-oriented view for answering “what was this term annotated as?”.
 
-Exact covered text:
+Exact term lookup:
 
 ```bash
-uv run python queries/run_sql.py \
-  --param covered_text="ASS" \
+uv run sql-query \
+  --param term="ASS" \
   DB.sqlite \
-  queries/annotation-store/fsn_for_text.sql
+  queries/annotation-store/fsn_for_term.sql
 ```
 
-Partial covered-text lookup:
+Partial term lookup:
 
 ```bash
-uv run python queries/run_sql.py \
-  --param covered_text_part=ass \
+uv run sql-query \
+  --param term_part=ass \
   DB.sqlite \
-  queries/annotation-store/fsn_for_text.sql
+  queries/annotation-store/fsn_for_term.sql
 ```
 
 Parameters:
 
 | Parameter | Default | Required | Description |
 |---|---:|---:|---|
-| `covered_text` | empty string | no | Exact case-insensitive covered-text filter. If non-empty, this takes precedence over `covered_text_part`. |
-| `covered_text_part` | empty string | no | Case-insensitive substring filter used when `covered_text` is empty. |
+| `term` | empty string | no | Exact case-insensitive covered-text/term filter. If non-empty, this takes precedence over `term_part`. |
+| `term_part` | empty string | no | Case-insensitive substring filter used when `term` is empty. |
 | `order` | `count` | no | Sort mode. Use `count`, `fsn`, `semantic_tag`, `sctid`, or a custom column list such as `fsn,-annotation_count`. |
 | `n` | `20` | no | Maximum number of rows after Python-side sorting. |
 
@@ -325,36 +325,36 @@ Main columns:
 - `sctid`;
 - `fsn`;
 - `semantic_tag`;
-- `annotation_count`: total occurrences matching the selected covered text.
+- `annotation_count`: total occurrences matching the selected term.
 
-## `text_variants_for_text.sql`
+## `text_variants_for_term.sql`
 
-Reports actual covered-text variants matching a covered-text search, grouped by lowercase covered text and semantic tag. This is useful after `fsn_for_text.sql` shows that a searched text spans multiple semantic tags or FSNs.
+Reports actual covered-text variants matching a term search, grouped by lowercase covered text and semantic tag. This is useful after `fsn_for_term.sql` shows that a searched term spans multiple semantic tags or FSNs.
 
-Partial covered-text lookup:
+Partial term lookup:
 
 ```bash
-uv run python queries/run_sql.py \
-  --param covered_text_part=folfox \
+uv run sql-query \
+  --param term_part=folfox \
   DB.sqlite \
-  queries/annotation-store/text_variants_for_text.sql
+  queries/annotation-store/text_variants_for_term.sql
 ```
 
-Exact covered-text lookup:
+Exact term lookup:
 
 ```bash
-uv run python queries/run_sql.py \
-  --param covered_text="FOLFOX" \
+uv run sql-query \
+  --param term="FOLFOX" \
   DB.sqlite \
-  queries/annotation-store/text_variants_for_text.sql
+  queries/annotation-store/text_variants_for_term.sql
 ```
 
 Parameters:
 
 | Parameter | Default | Required | Description |
 |---|---:|---:|---|
-| `covered_text` | empty string | no | Exact case-insensitive covered-text filter. If non-empty, this takes precedence over `covered_text_part`. |
-| `covered_text_part` | empty string | no | Case-insensitive substring filter used when `covered_text` is empty. |
+| `term` | empty string | no | Exact case-insensitive covered-text/term filter. If non-empty, this takes precedence over `term_part`. |
+| `term_part` | empty string | no | Case-insensitive substring filter used when `term` is empty. |
 | `order` | `count` | no | Sort mode. Use `count`, `semantic_tag`, `covered_text`, or a custom column list. |
 | `n` | `50` | no | Maximum number of rows after Python-side sorting. |
 
