@@ -40,4 +40,7 @@ ENTRYPOINT []
 
 RUN chmod +x ./entrypoint.sh
 
+LABEL org.opencontainers.image.source="https://github.com/medizininformatik-initiative/GeMTeX/tree/main/snomed-postprocessing"
+LABEL org.opencontainers.image.description="Program that creates SNOMED CT dumps of a particular version and/or with some filters for semantic tags or concept ids applied. It also logs SNOMED CT annotated documents under these filters in mind."
+
 ENTRYPOINT ["bash", "-c", "./entrypoint.sh \"$@\"", "--"]
