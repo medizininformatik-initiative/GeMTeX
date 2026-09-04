@@ -45,6 +45,11 @@ def _format_association_type_option(association_type: str) -> str:
     return association_type
 
 
+def _snogit_source_upload_suffix(uploaded_file: Any) -> str:
+    suffix = pathlib.Path(str(getattr(uploaded_file, "name", ""))).suffix.lower()
+    return suffix if suffix in {".zip", ".dat"} else ".zip"
+
+
 def _enforce_embedded_blacklist(release_blacklist_mode: str) -> bool:
     return release_blacklist_mode in {"embedded", "embedded+custom"}
 
@@ -179,11 +184,11 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
 
         use_snogit_bm25 = False
         snogit_sidecar_file = None
-        snogit_zip_file = None
+        snogit_source_file = None
         snogit_sidecar_path_text = ""
-        snogit_zip_path_text = ""
+        snogit_source_path_text = ""
         selected_snogit_cache_from_dir = None
-        selected_snogit_zip_from_dir = None
+        selected_snogit_source_from_dir = None
         selected_snogit_members = []
 
         with st.expander("Advanced suggestion settings"):
@@ -250,7 +255,7 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                 value=False,
                 help=(
                     "Use a processed SNOGIT cache if available. This setting is used only when Semantic BM25 fallback is enabled. "
-                    "If no cache is available, create one from SNOGIT-release.zip first; suggestion generation starts only after you explicitly run it with a cache."
+                    "If no cache is available, create one from a SNOGIT ZIP or .dat file first; suggestion generation starts only after you explicitly run it with a cache."
                 ),
             )
             snogit_cache_selection = render_file_source_selector(
@@ -267,40 +272,40 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
             snogit_sidecar_file = snogit_cache_selection.value if snogit_cache_selection.source == "upload" else None
             snogit_sidecar_path_text = str(snogit_cache_selection.path) if snogit_cache_selection.source == "path" and snogit_cache_selection.path is not None else ""
 
-            snogit_zip_selection = render_file_source_selector(
-                "SNOGIT release ZIP for processed cache creation",
-                key="snogit_release_zip",
+            snogit_source_selection = render_file_source_selector(
+                "SNOGIT ZIP or .dat source for processed cache creation",
+                key="snogit_source",
                 data_dir=inputs.data_dir,
-                suffixes=(".zip",),
-                upload_types=("zip",),
+                suffixes=(".zip", ".dat"),
+                upload_types=("zip", "dat"),
                 default_source="Data directory",
                 # name_contains=("snogit",),
                 help="Use this only to create a processed SNOGIT cache first. Suggestion generation will not start automatically after cache creation.",
             )
-            selected_snogit_zip_from_dir = snogit_zip_selection.path if snogit_zip_selection.source in {"data_dir", "path"} else None
-            snogit_zip_file = snogit_zip_selection.value if snogit_zip_selection.source == "upload" else None
-            snogit_zip_path_text = str(snogit_zip_selection.path) if snogit_zip_selection.source == "path" and snogit_zip_selection.path is not None else ""
+            selected_snogit_source_from_dir = snogit_source_selection.path if snogit_source_selection.source in {"data_dir", "path"} else None
+            snogit_source_file = snogit_source_selection.value if snogit_source_selection.source == "upload" else None
+            snogit_source_path_text = str(snogit_source_selection.path) if snogit_source_selection.source == "path" and snogit_source_selection.path is not None else ""
 
             snogit_sidecar_path_candidate = selected_snogit_cache_from_dir
-            snogit_zip_path_candidate = selected_snogit_zip_from_dir
-            if (snogit_zip_file is not None or snogit_zip_path_candidate is not None) and snogit_sidecar_file is None and snogit_sidecar_path_candidate is None:
+            snogit_source_path_candidate = selected_snogit_source_from_dir
+            if (snogit_source_file is not None or snogit_source_path_candidate is not None) and snogit_sidecar_file is None and snogit_sidecar_path_candidate is None:
                 try:
-                    snogit_zip_temp_path = snogit_zip_path_candidate or save_uploaded_file(snogit_zip_file, ".zip")
-                    snogit_members = list_snogit_zip_members(snogit_zip_temp_path)
+                    snogit_source_temp_path = snogit_source_path_candidate or save_uploaded_file(snogit_source_file, _snogit_source_upload_suffix(snogit_source_file))
+                    snogit_members = list_snogit_zip_members(snogit_source_temp_path)
                     default_members = [member.name for member in snogit_members if member.recommended_default]
                     selected_snogit_members = st.multiselect(
-                        "SNOGIT ZIP members",
+                        "SNOGIT .dat source/member(s)",
                         options=[member.name for member in snogit_members],
                         default=default_members,
                         help=(
-                            "Default is the newest general SNOGIT_*.dat member only. "
-                            "ELGA and Latin files can be selected explicitly."
+                            "ZIP inputs default to the newest general SNOGIT_*.dat member only. "
+                            "ELGA and Latin files can be selected explicitly. Raw .dat inputs are selected directly."
                         ),
                     )
                     if default_members:
-                        st.caption(f"Default general SNOGIT member: {default_members[0]}")
+                        st.caption(f"Default SNOGIT source/member: {default_members[0]}")
                 except Exception as exc:
-                    st.warning(f"Could not inspect SNOGIT ZIP members: {exc}")
+                    st.warning(f"Could not inspect SNOGIT source: {exc}")
             st.divider()
             st.markdown("#### Association type meanings")
             st.text(format_association_type_descriptions())
@@ -350,15 +355,15 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
             created_snogit_cache_path = None
 
     snogit_cache_available = snogit_sidecar_file is not None or selected_snogit_cache_path is not None
-    snogit_zip_available = (snogit_zip_file is not None or selected_snogit_zip_from_dir is not None or bool(snogit_zip_path_text.strip())) and bool(selected_snogit_members)
+    snogit_source_available = (snogit_source_file is not None or selected_snogit_source_from_dir is not None or bool(snogit_source_path_text.strip())) and bool(selected_snogit_members)
     snogit_ready = not (sanitize_semantic_bm25_fallback and use_snogit_bm25) or snogit_cache_available
     if sanitize_semantic_bm25_fallback and use_snogit_bm25 and not snogit_cache_available:
         st.info(
-            "To use SNOGIT BM25 candidates, provide a processed SNOGIT cache or create one from a SNOGIT ZIP first. "
+            "To use SNOGIT BM25 candidates, provide a processed SNOGIT cache or create one from a SNOGIT ZIP or .dat file first. "
             "Creating the cache does not automatically start suggestion generation."
         )
 
-    if use_snogit_bm25 and not snogit_cache_available and snogit_zip_available:
+    if use_snogit_bm25 and not snogit_cache_available and snogit_source_available:
         if st.button(
             "Create processed SNOGIT cache",
             disabled=not inputs.hdf5_file,
@@ -368,13 +373,13 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                     st.write("Preparing HDF5 input...")
                     if inputs.hdf5_temp_path is None:
                         inputs.hdf5_temp_path = save_uploaded_file(inputs.hdf5_file, ".hdf5")
-                    st.write("Preparing SNOGIT ZIP input...")
-                    if selected_snogit_zip_from_dir is not None:
-                        snogit_zip_path = selected_snogit_zip_from_dir
-                    elif snogit_zip_path_text.strip():
-                        snogit_zip_path = pathlib.Path(snogit_zip_path_text).expanduser()
+                    st.write("Preparing SNOGIT ZIP/.dat input...")
+                    if selected_snogit_source_from_dir is not None:
+                        snogit_source_path = selected_snogit_source_from_dir
+                    elif snogit_source_path_text.strip():
+                        snogit_source_path = pathlib.Path(snogit_source_path_text).expanduser()
                     else:
-                        snogit_zip_path = save_uploaded_file(snogit_zip_file, ".zip")
+                        snogit_source_path = save_uploaded_file(snogit_source_file, _snogit_source_upload_suffix(snogit_source_file))
                     output_dir_for_sidecar = pathlib.Path(
                         tempfile.mkdtemp(prefix="snomed_gui_snogit_cache_")
                     )
@@ -412,7 +417,7 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
 
                     build_result = build_snogit_sidecar(
                         hdf5_path=inputs.hdf5_temp_path,
-                        snogit_zip_path=snogit_zip_path,
+                        snogit_zip_path=snogit_source_path,
                         output_path=snogit_sidecar_path,
                         members=selected_snogit_members,
                         progress_callback=update_cache_progress,

@@ -44,7 +44,7 @@ Data directory
 Server path
 ```
 
-This pattern applies to INCEpTION ZIPs, HDF5 files, CriticalFindings JSON, processed SNOGIT caches, SNOGIT ZIPs, and custom blacklist rule files.
+This pattern applies to INCEpTION ZIPs, HDF5 files, CriticalFindings JSON, processed SNOGIT caches, SNOGIT ZIP/`.dat` sources, and custom blacklist rule files.
 
 # Review and apply behavior
 
