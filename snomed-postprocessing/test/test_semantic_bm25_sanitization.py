@@ -320,7 +320,7 @@ class TestSemanticBm25Sanitization(unittest.TestCase):
             _write_compact_hdf5(hdf5_path, blacklist_indices=(3,))
             dat_path.write_text(
                 "100\tt1\tAlpha therapy procedure (procedure)\tHerzinfarkt\n",
-                encoding="utf-8",
+                encoding="utf-16",
             )
 
             members = list_snogit_zip_members(dat_path)

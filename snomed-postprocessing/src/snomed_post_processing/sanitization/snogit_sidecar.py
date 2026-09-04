@@ -18,6 +18,7 @@ from __future__ import annotations
 import dataclasses
 import datetime
 import hashlib
+import io
 import math
 import pathlib
 import re
@@ -798,21 +799,48 @@ def _iter_selected_dat_lines(
     selected: Sequence[str],
     *,
     source_is_dat: bool,
-) -> Iterable[tuple[str, Iterable[bytes]]]:
+) -> Iterable[tuple[str, Iterable[str]]]:
     if source_is_dat:
         for member in selected:
             with snogit_source_path.open("rb") as raw_file:
-                yield member, raw_file
+                yield member, _iter_decoded_dat_lines(raw_file)
         return
 
     with zipfile.ZipFile(snogit_source_path) as archive:
         for member in selected:
             with archive.open(member) as raw_file:
-                yield member, raw_file
+                yield member, _iter_decoded_dat_lines(raw_file)
 
 
-def _parse_dat_line(raw_line: bytes) -> Optional[tuple[str, str]]:
-    line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
+def _iter_decoded_dat_lines(raw_file) -> Iterable[str]:
+    prefix = raw_file.read(4096)
+    raw_file.seek(0)
+    encoding = _guess_dat_encoding(prefix)
+    text_file = io.TextIOWrapper(raw_file, encoding=encoding, errors="replace", newline=None)
+    for line in text_file:
+        # h5py variable-length strings cannot store embedded NUL characters.
+        # SNOGIT .dat files may be UTF-16 encoded; if such a file is decoded as
+        # UTF-8, ASCII text appears interleaved with NULs. The encoding guess
+        # above handles normal cases, and this replacement is a final guard
+        # against malformed or mixed-encoding rows.
+        yield line.replace("\x00", "")
+
+
+def _guess_dat_encoding(prefix: bytes) -> str:
+    if prefix.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return "utf-16"
+    if not prefix:
+        return "utf-8-sig"
+    nul_count = prefix.count(b"\x00")
+    if nul_count > max(4, len(prefix) // 10):
+        even_nuls = prefix[0::2].count(b"\x00")
+        odd_nuls = prefix[1::2].count(b"\x00")
+        return "utf-16-be" if even_nuls > odd_nuls else "utf-16-le"
+    return "utf-8-sig"
+
+
+def _parse_dat_line(raw_line: str) -> Optional[tuple[str, str]]:
+    line = raw_line.rstrip("\r\n")
     if not line:
         return None
     parts = line.split("\t")
