@@ -46,7 +46,17 @@ Server path
 
 This pattern applies to INCEpTION ZIPs, HDF5 files, CriticalFindings JSON, processed SNOGIT caches, SNOGIT ZIP/`.dat` sources, and custom blacklist rule files.
 
+When the GUI creates a processed SNOGIT cache, it writes the HDF5 to a persistent subdirectory under the configured data directory when possible:
+
+```text
+<data-dir>/generated-snogit-caches/snogit_cache_<timestamp>.hdf5
+```
+
+If the data directory is unavailable, it falls back to a temporary directory. Suggestion generation prefers this selected/created server-side cache path over stale uploaded-file objects after download-button reruns.
+
 # Review and apply behavior
+
+The review UI distinguishes **single/no-choice** replacement suggestions from rows that need an explicit manual candidate choice. “Single/no-choice” means that at most one replacement candidate is available; it does not mean the row has already been accepted. The review workspace provides bulk actions to apply or clear all single/no-choice replacements globally or within a document section. BM25 single-candidate suggestions are intentionally review suggestions and are not automatically accepted unless the user selects Apply or uses the bulk action.
 
 The review UI supports these reviewed actions:
 

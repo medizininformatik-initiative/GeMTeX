@@ -50,6 +50,14 @@ def _snogit_source_upload_suffix(uploaded_file: Any) -> str:
     return suffix if suffix in {".zip", ".dat"} else ".zip"
 
 
+def _snogit_cache_output_dir(data_dir: pathlib.Path) -> pathlib.Path:
+    if data_dir.exists() and data_dir.is_dir():
+        output_dir = data_dir / "generated-snogit-caches"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        return output_dir
+    return pathlib.Path(tempfile.mkdtemp(prefix="snomed_gui_snogit_cache_"))
+
+
 def _enforce_embedded_blacklist(release_blacklist_mode: str) -> bool:
     return release_blacklist_mode in {"embedded", "embedded+custom"}
 
@@ -380,9 +388,7 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                         snogit_source_path = pathlib.Path(snogit_source_path_text).expanduser()
                     else:
                         snogit_source_path = save_uploaded_file(snogit_source_file, _snogit_source_upload_suffix(snogit_source_file))
-                    output_dir_for_sidecar = pathlib.Path(
-                        tempfile.mkdtemp(prefix="snomed_gui_snogit_cache_")
-                    )
+                    output_dir_for_sidecar = _snogit_cache_output_dir(inputs.data_dir)
                     timestamp_for_sidecar = datetime.datetime.now().strftime('%d-%m-%Y_%H-%M')
                     snogit_sidecar_path = output_dir_for_sidecar / f"snogit_cache_{timestamp_for_sidecar}.hdf5"
                     st.write("Parsing/filtering selected SNOGIT member(s) and writing cache...")
@@ -537,12 +543,12 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                 suggestions = resolver.suggest_all(findings)
                 snogit_sidecar_path = None
                 if sanitize_semantic_bm25_fallback and use_snogit_bm25:
-                    if snogit_sidecar_file is not None:
+                    if selected_snogit_cache_path is not None:
+                        st.write("Using selected/created processed SNOGIT cache...")
+                        snogit_sidecar_path = selected_snogit_cache_path
+                    elif snogit_sidecar_file is not None:
                         st.write("Using uploaded processed SNOGIT cache...")
                         snogit_sidecar_path = save_uploaded_file(snogit_sidecar_file, ".hdf5")
-                    elif selected_snogit_cache_path is not None:
-                        st.write("Using selected processed SNOGIT cache...")
-                        snogit_sidecar_path = selected_snogit_cache_path
                     if snogit_sidecar_path is not None and not pathlib.Path(snogit_sidecar_path).exists():
                         raise FileNotFoundError(
                             "Processed SNOGIT cache does not exist on the Streamlit server: "

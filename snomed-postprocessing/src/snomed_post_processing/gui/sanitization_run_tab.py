@@ -95,6 +95,10 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
     )
     reviewed_decisions = []
     if rows:
+        _render_single_choice_bulk_actions(
+            [row for row in rows if _row_has_actionable_replacement(row)],
+            label_prefix="all",
+        )
         _render_manual_choice_bulk_actions([row for row in rows if _row_has_actionable_replacement(row)])
         reviewed_decisions.extend(_render_document_review_sections(rows))
     else:
@@ -647,7 +651,7 @@ def _render_document_review_sections(rows: list[dict[str, Any]]) -> list[dict[st
             _render_document_metrics(document_rows)
 
             manual_rows = [row for row in document_rows if row.get("_needs_choice")]
-            automatic_rows = [row for row in document_rows if not row.get("_needs_choice")]
+            single_choice_rows = [row for row in document_rows if not row.get("_needs_choice")]
 
             if manual_rows:
                 st.markdown("#### Manual choices")
@@ -658,12 +662,17 @@ def _render_document_review_sections(rows: list[dict[str, Any]]) -> list[dict[st
                 )
                 decisions.extend(_render_manual_choice_cards(manual_rows, document))
 
-            if automatic_rows:
+            if single_choice_rows:
                 st.markdown(
                     "#### Single/no-choice suggestions",
-                    help="Checkbox behavior: no selection keeps the annotation unchanged; 'Needs manual edit' takes precedence over Apply/Delete; deletion takes precedence over Apply."
+                    help="These rows have at most one replacement candidate. They are not necessarily selected for application; use the Apply column or the bulk action. Checkbox behavior: no selection keeps the annotation unchanged; 'Needs manual edit' takes precedence over Apply/Delete; deletion takes precedence over Apply."
                 )
-                review_df = pd.DataFrame(automatic_rows).drop(
+                _render_single_choice_bulk_actions(
+                    single_choice_rows,
+                    label_prefix=f"document {_safe_key(document)}",
+                    compact=True,
+                )
+                review_df = pd.DataFrame(single_choice_rows).drop(
                     columns=["Document", "_offset", "_layer", "_status_raw"],
                     errors="ignore",
                 )
@@ -757,7 +766,7 @@ def _render_document_review_sections(rows: list[dict[str, Any]]) -> list[dict[st
                             width="stretch",
                         )
                 decisions.extend(
-                    _review_rows_to_decisions(edited.to_dict("records"), automatic_rows, {})
+                    _review_rows_to_decisions(edited.to_dict("records"), single_choice_rows, {})
                 )
 
             all_manual_row_numbers = [int(row["#"]) for row in manual_rows]
@@ -795,6 +804,65 @@ def _render_document_metrics(document_rows: list[dict[str, Any]]) -> None:
         f"{manual_edits} manual-edit marker(s) selected · {manual_text} · "
         f"{no_replacement} without replacement"
     )
+
+
+def _render_single_choice_bulk_actions(
+    rows: list[dict[str, Any]], *, label_prefix: str = "all", compact: bool = False
+) -> None:
+    single_rows = [
+        row
+        for row in rows
+        if not row.get("_needs_choice") and _row_has_actionable_replacement(row)
+    ]
+    if not single_rows:
+        return
+    selected_count = sum(1 for row in single_rows if _row_apply_selected(row))
+    bm25_count = sum(
+        1
+        for row in single_rows
+        if row.get("_status_raw") == SanitizationStatus.SEMANTIC_BM25_REPLACEMENT.value
+    )
+    if compact:
+        st.caption(
+            f"Bulk actions for {len(single_rows)} single/no-choice replacement(s) in this document; "
+            f"{selected_count} currently selected for application."
+        )
+    else:
+        extra = f" ({bm25_count} from BM25 fallback)" if bm25_count else ""
+        st.info(
+            f"{len(single_rows)} single/no-choice replacement suggestion(s){extra}; "
+            f"{selected_count} currently selected for application. They are review suggestions, "
+            "not automatically accepted unless their Apply checkbox is selected."
+        )
+    action_col1, action_col2 = st.columns(2)
+    safe_label = _safe_key(label_prefix)
+    with action_col1:
+        if st.button(
+            "Apply all" if compact else "Apply all single/no-choice replacements",
+            key=f"single_apply_all_{safe_label}",
+            help="Select all single/no-choice replacements for application. Review exceptions before running.",
+            width="stretch",
+        ):
+            _set_single_choice_apply_defaults(single_rows, apply=True)
+            st.rerun()
+    with action_col2:
+        if st.button(
+            "Clear all" if compact else "Clear all single/no-choice applications",
+            key=f"single_clear_all_{safe_label}",
+            help="Unselect all single/no-choice replacement applications.",
+            width="stretch",
+        ):
+            _set_single_choice_apply_defaults(single_rows, apply=False)
+            st.rerun()
+
+
+def _set_single_choice_apply_defaults(rows: list[dict[str, Any]], *, apply: bool) -> None:
+    for row in rows:
+        row_number = int(row["#"])
+        st.session_state[_manual_apply_key(row_number)] = bool(apply)
+        if apply:
+            st.session_state[_manual_delete_key(row_number)] = False
+            st.session_state[_manual_edit_key(row_number)] = False
 
 
 def _render_manual_choice_bulk_actions(
@@ -1098,7 +1166,7 @@ def _render_non_actionable_summary(rows: list[dict[str, Any]]) -> None:
 
 def _render_review_summary(rows: list[dict[str, Any]]) -> None:
     grouped_rows = _group_rows_by_document(rows)
-    automatic_replacements = sum(
+    single_choice_replacements = sum(
         1
         for row in rows
         if row.get("Suggested replacement") != NO_REPLACEMENT_LABEL
@@ -1111,7 +1179,7 @@ def _render_review_summary(rows: list[dict[str, Any]]) -> None:
     metric_cols = st.columns(5)
     metric_cols[0].metric("Suggestions", len(rows))
     metric_cols[1].metric("Documents", len(grouped_rows))
-    metric_cols[2].metric("Automatic", automatic_replacements)
+    metric_cols[2].metric("Single/no-choice", single_choice_replacements)
     metric_cols[3].metric("Need choice", needs_choice)
     metric_cols[4].metric("No replacement", no_replacement)
 
@@ -1187,28 +1255,38 @@ def _suggestions_to_review_rows(
         restored_decision = restored_by_index.get(idx, {})
         replacement_options, replacement_hints = _replacement_options_and_hints(suggestion)
         replacement_label = _replacement_label(suggestion)
-        is_automatic_replacement = replacement_label != NO_REPLACEMENT_LABEL
         needs_choice = _needs_row_specific_choice(suggestion, replacement_options)
-        apply_by_default = (
-            is_automatic_replacement
-            and not needs_choice
-            and _status_value(suggestion.status) != SanitizationStatus.SEMANTIC_BM25_REPLACEMENT.value
-        )
+        apply_by_default = False
         selected_label = st.session_state.get(
             _choice_key(row_number),
             restored_decision.get("replacement_choice")
             or (replacement_options[0] if replacement_options else NO_REPLACEMENT_LABEL),
         )
+        manual_edit_selected = bool(
+            st.session_state.get(
+                _manual_edit_key(row_number),
+                bool(restored_decision.get("manual_edit"))
+                or restored_decision.get("action") == "manual_edit",
+            )
+        )
+        delete_selected = bool(
+            st.session_state.get(
+                _manual_delete_key(row_number),
+                bool(restored_decision.get("delete_annotation")),
+            )
+        ) and not manual_edit_selected
+        apply_selected = bool(
+            st.session_state.get(
+                _manual_apply_key(row_number),
+                bool(restored_decision.get("apply", apply_by_default)),
+            )
+        ) and not delete_selected and not manual_edit_selected
         rows.append(
             {
                 "#": row_number,
-                "Apply": bool(restored_decision.get("apply", apply_by_default))
-                    and not bool(restored_decision.get("delete_annotation"))
-                    and not bool(restored_decision.get("manual_edit")),
-                "Delete annotation": bool(restored_decision.get("delete_annotation"))
-                    and not bool(restored_decision.get("manual_edit")),
-                "Needs manual edit": bool(restored_decision.get("manual_edit"))
-                    or restored_decision.get("action") == "manual_edit",
+                "Apply": apply_selected,
+                "Delete annotation": delete_selected,
+                "Needs manual edit": manual_edit_selected,
                 "Document": suggestion.finding.document,
                 "Annotator": suggestion.finding.annotator,
                 "Source code": suggestion.finding.code or "",
