@@ -99,7 +99,21 @@ class MainHdf5Fingerprint:
 
 
 def list_snogit_zip_members(zip_path: Union[str, pathlib.Path]) -> list[SnogitZipMember]:
-    """List supported ``.dat`` terminology files in a SNOGIT release ZIP."""
+    """List supported ``.dat`` terminology files in a SNOGIT ZIP or raw ``.dat`` file."""
+    zip_path = pathlib.Path(zip_path)
+    if zip_path.suffix.lower() == ".dat":
+        kind = _source_kind(zip_path.name)
+        if kind not in {"snogit", "snogit_elga", "snomed_latin"}:
+            return []
+        return [
+            SnogitZipMember(
+                name=zip_path.name,
+                kind=kind,
+                date=_member_date(zip_path.name),
+                recommended_default=True,
+            )
+        ]
+
     members: list[SnogitZipMember] = []
     with zipfile.ZipFile(zip_path) as archive:
         for name in sorted(archive.namelist()):
@@ -138,11 +152,13 @@ def build_snogit_sidecar(
     chunk_size: int = _DEFAULT_CHUNK_SIZE,
     progress_callback: Optional[Callable[[dict[str, object]], None]] = None,
 ) -> SnogitSidecarBuildResult:
-    """Build a minimal filtered HDF5 sidecar from selected SNOGIT ZIP members.
+    """Build a minimal filtered HDF5 sidecar from selected SNOGIT data.
 
-    If ``members`` is omitted, the newest general ``SNOGIT_*.dat`` file in the
-    archive is used. Rows are filtered to concepts that are active, whitelisted,
-    and not blacklisted in the selected main HDF5.
+    ``snogit_zip_path`` may point to either a SNOGIT release ZIP or a single raw
+    ``.dat`` file. If ``members`` is omitted for a ZIP, the newest general
+    ``SNOGIT_*.dat`` file in the archive is used. For a raw ``.dat`` file, that
+    file is used directly. Rows are filtered to concepts that are active,
+    whitelisted, and not blacklisted in the selected main HDF5.
     """
     hdf5_path = pathlib.Path(hdf5_path)
     snogit_zip_path = pathlib.Path(snogit_zip_path)
@@ -162,23 +178,29 @@ def build_snogit_sidecar(
         )
         fingerprint = fingerprint_main_hdf5(h5_file, allowed_indices=allowed_indices)
 
+    source_is_dat = snogit_zip_path.suffix.lower() == ".dat"
     zip_members = list_snogit_zip_members(snogit_zip_path)
     if members is None:
-        selected = tuple(member.name for member in default_snogit_members(zip_members))
+        selected = tuple(member.name for member in zip_members) if source_is_dat else tuple(member.name for member in default_snogit_members(zip_members))
     else:
         selected = tuple(members)
     if not selected:
-        raise ValueError("No SNOGIT ZIP member selected; choose at least one .dat member.")
+        raise ValueError("No SNOGIT .dat source selected; choose a supported .dat file or ZIP member.")
 
     available = {member.name for member in zip_members}
     missing = [member for member in selected if member not in available]
     if missing:
-        raise ValueError("Selected SNOGIT member(s) not found in ZIP: " + ", ".join(missing))
+        location = "file" if source_is_dat else "ZIP"
+        raise ValueError(f"Selected SNOGIT member(s) not found in {location}: " + ", ".join(missing))
 
     selected_member_sizes: dict[str, int] = {}
-    with zipfile.ZipFile(snogit_zip_path) as archive:
+    if source_is_dat:
         for member in selected:
-            selected_member_sizes[member] = int(archive.getinfo(member).file_size)
+            selected_member_sizes[member] = int(snogit_zip_path.stat().st_size)
+    else:
+        with zipfile.ZipFile(snogit_zip_path) as archive:
+            for member in selected:
+                selected_member_sizes[member] = int(archive.getinfo(member).file_size)
     total_selected_bytes = sum(selected_member_sizes.values())
     processed_bytes = 0
 
@@ -266,72 +288,70 @@ def build_snogit_sidecar(
             pending_terms.clear()
             pending_lengths.clear()
 
-        with zipfile.ZipFile(snogit_zip_path) as archive:
-            for member in selected:
-                report_progress(
-                    phase="parsing",
-                    member=member,
-                    selected_members=selected,
-                    total_bytes=total_selected_bytes,
-                    processed_bytes=processed_bytes,
-                    progress=(processed_bytes / total_selected_bytes if total_selected_bytes else 0.0),
-                    **counters,
-                )
-                with archive.open(member) as raw_file:
-                    for raw_line in raw_file:
-                        counters["rows_read"] += 1
-                        processed_bytes += len(raw_line)
-                        if counters["rows_read"] % max(1, chunk_size) == 0:
-                            report_progress(
-                                phase="parsing",
-                                member=member,
-                                selected_members=selected,
-                                total_bytes=total_selected_bytes,
-                                processed_bytes=processed_bytes,
-                                progress=(processed_bytes / total_selected_bytes if total_selected_bytes else 0.0),
-                                **counters,
-                            )
-                        parsed = _parse_dat_line(raw_line)
-                        if parsed is None:
-                            counters["rows_skipped_empty_term"] += 1
-                            continue
-                        concept_code, term = parsed
-                        concept_idx = concepts.code_to_index.get(concept_code)
-                        if concept_idx is None:
-                            counters["rows_skipped_unknown_concept"] += 1
-                            continue
-                        if concept_idx not in allowed_indices:
-                            counters["rows_skipped_policy"] += 1
-                            continue
-                        normalized = _normalize_term(term)
-                        if not normalized:
-                            counters["rows_skipped_empty_term"] += 1
-                            continue
-                        key = (concept_idx, normalized)
-                        if key in seen:
-                            counters["duplicate_rows"] += 1
-                            continue
-                        tokens = _tokenize(term)
-                        if not tokens:
-                            counters["rows_skipped_empty_term"] += 1
-                            continue
-                        if max_terms_per_concept is not None:
-                            count = per_concept_counts.get(concept_idx, 0)
-                            if count >= max_terms_per_concept:
-                                counters["duplicate_rows"] += 1
-                                continue
-                            per_concept_counts[concept_idx] = count + 1
-                        row_id = counters["rows_kept"]
-                        seen.add(key)
-                        counters["rows_kept"] += 1
-                        token_counts = Counter(tokens)
-                        for token, count in token_counts.items():
-                            postings[token].append((row_id, int(count)))
-                        pending_indices.append(int(concept_idx))
-                        pending_terms.append(term)
-                        pending_lengths.append(len(tokens))
-                        if len(pending_indices) >= chunk_size:
-                            flush()
+        for member, raw_lines in _iter_selected_dat_lines(snogit_zip_path, selected, source_is_dat=source_is_dat):
+            report_progress(
+                phase="parsing",
+                member=member,
+                selected_members=selected,
+                total_bytes=total_selected_bytes,
+                processed_bytes=processed_bytes,
+                progress=(processed_bytes / total_selected_bytes if total_selected_bytes else 0.0),
+                **counters,
+            )
+            for raw_line in raw_lines:
+                counters["rows_read"] += 1
+                processed_bytes += len(raw_line)
+                if counters["rows_read"] % max(1, chunk_size) == 0:
+                    report_progress(
+                        phase="parsing",
+                        member=member,
+                        selected_members=selected,
+                        total_bytes=total_selected_bytes,
+                        processed_bytes=processed_bytes,
+                        progress=(processed_bytes / total_selected_bytes if total_selected_bytes else 0.0),
+                        **counters,
+                    )
+                parsed = _parse_dat_line(raw_line)
+                if parsed is None:
+                    counters["rows_skipped_empty_term"] += 1
+                    continue
+                concept_code, term = parsed
+                concept_idx = concepts.code_to_index.get(concept_code)
+                if concept_idx is None:
+                    counters["rows_skipped_unknown_concept"] += 1
+                    continue
+                if concept_idx not in allowed_indices:
+                    counters["rows_skipped_policy"] += 1
+                    continue
+                normalized = _normalize_term(term)
+                if not normalized:
+                    counters["rows_skipped_empty_term"] += 1
+                    continue
+                key = (concept_idx, normalized)
+                if key in seen:
+                    counters["duplicate_rows"] += 1
+                    continue
+                tokens = _tokenize(term)
+                if not tokens:
+                    counters["rows_skipped_empty_term"] += 1
+                    continue
+                if max_terms_per_concept is not None:
+                    count = per_concept_counts.get(concept_idx, 0)
+                    if count >= max_terms_per_concept:
+                        counters["duplicate_rows"] += 1
+                        continue
+                    per_concept_counts[concept_idx] = count + 1
+                row_id = counters["rows_kept"]
+                seen.add(key)
+                counters["rows_kept"] += 1
+                token_counts = Counter(tokens)
+                for token, count in token_counts.items():
+                    postings[token].append((row_id, int(count)))
+                pending_indices.append(int(concept_idx))
+                pending_terms.append(term)
+                pending_lengths.append(len(tokens))
+                if len(pending_indices) >= chunk_size:
+                    flush()
         flush()
         report_progress(
             phase="writing_index",
@@ -739,6 +759,8 @@ def _write_metadata(
     metadata.attrs["created_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
     metadata.attrs["main_hdf5_file_name"] = hdf5_path.name
     metadata.attrs["snogit_zip_file_name"] = snogit_zip_path.name
+    metadata.attrs["snogit_source_file_name"] = snogit_zip_path.name
+    metadata.attrs["snogit_source_kind"] = "dat" if snogit_zip_path.suffix.lower() == ".dat" else "zip"
     metadata.attrs["source_selection"] = "default_general_newest" if len(selected_members) == 1 and _source_kind(pathlib.PurePosixPath(selected_members[0]).name) == "snogit" else "explicit"
     metadata.attrs["max_terms_per_concept"] = "" if max_terms_per_concept is None else int(max_terms_per_concept)
     metadata.create_dataset("source_members", data=np.asarray(list(selected_members), dtype=object), dtype=_STRING_DTYPE)
@@ -769,6 +791,24 @@ def _attr(group: h5py.Group, name: str) -> str:
     if name not in group.attrs:
         return ""
     return _decode(group.attrs[name])
+
+
+def _iter_selected_dat_lines(
+    snogit_source_path: pathlib.Path,
+    selected: Sequence[str],
+    *,
+    source_is_dat: bool,
+) -> Iterable[tuple[str, Iterable[bytes]]]:
+    if source_is_dat:
+        for member in selected:
+            with snogit_source_path.open("rb") as raw_file:
+                yield member, raw_file
+        return
+
+    with zipfile.ZipFile(snogit_source_path) as archive:
+        for member in selected:
+            with archive.open(member) as raw_file:
+                yield member, raw_file
 
 
 def _parse_dat_line(raw_line: bytes) -> Optional[tuple[str, str]]:

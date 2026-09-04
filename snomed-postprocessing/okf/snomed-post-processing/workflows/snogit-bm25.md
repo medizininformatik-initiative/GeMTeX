@@ -33,27 +33,27 @@ SNOMED FSN BM25 + optional processed SNOGIT cache
 
 # Terminology
 
-Use the user-facing term **processed SNOGIT cache** for the reusable HDF5 built from a raw SNOGIT ZIP. The implementation module is named `snogit_sidecar.py`.
+Use the user-facing term **processed SNOGIT cache** for the reusable HDF5 built from a raw SNOGIT ZIP or a single raw SNOGIT `.dat` file. The implementation module is named `snogit_sidecar.py`.
 
-`suggest-sanitization` consumes a processed cache only. It does not parse raw SNOGIT ZIPs and does not create a cache.
+`suggest-sanitization` consumes a processed cache only. It does not parse raw SNOGIT ZIPs/`.dat` files and does not create a cache.
 
 # Cache creation
 
 ```bash
 uv run build-snogit-cache \
   --hdf5 concepts.hdf5 \
-  --snogit-zip SNOGIT.zip \
+  --snogit-source SNOGIT.zip \
   --output processed_snogit_cache.hdf5
 ```
 
-Default member selection uses the newest general `SNOGIT_*.dat` member in the ZIP.
+`--snogit-source` accepts either a SNOGIT release ZIP or a single SNOGIT `.dat` file. `--snogit-zip` remains accepted as a backwards-compatible alias. Default member selection for ZIP inputs uses the newest general `SNOGIT_*.dat` member in the ZIP. Raw `.dat` inputs are used directly.
 
-Override with explicit members:
+Override ZIP inputs with explicit members:
 
 ```bash
 uv run build-snogit-cache \
   --hdf5 concepts.hdf5 \
-  --snogit-zip SNOGIT.zip \
+  --snogit-source SNOGIT.zip \
   --output processed_snogit_cache.hdf5 \
   --snogit-member path/in/zip/SNOGIT_20240131.dat \
   --snogit-member path/in/zip/SNOGIT_ELGA_20240131.dat

@@ -27,7 +27,7 @@ sources:
 | `log-critical-documents` | `cli.app:log_documents` | Check annotations and write critical reports/artifacts. |
 | `create-concepts-dump` | `cli.app:create_concept_id_dump` | Create SNOMED HDF5 from RF2 ZIP or Snowstorm. |
 | `summarize-hdf5` | `cli.app:summarize_hdf5` | Print HDF5 metadata summary. |
-| `build-snogit-cache` | `cli.app:build_snogit_cache_cli` | Create processed SNOGIT cache for BM25 evidence. |
+| `build-snogit-cache` | `cli.app:build_snogit_cache_cli` | Create processed SNOGIT cache for BM25 evidence from a SNOGIT ZIP or single `.dat` file. |
 | `suggest-sanitization` | `cli.app:suggest_sanitization_cli` | Generate Markdown/JSON sanitization suggestions. |
 | `build-inception-shell-project` | `cli.app:build_inception_shell_project_cli` | Lower-level shell ZIP builder. |
 | `build-inception-upload-artifacts` | `cli.app:build_inception_upload_artifacts_cli` | Lower-level repaired flattened CAS artifact builder. |

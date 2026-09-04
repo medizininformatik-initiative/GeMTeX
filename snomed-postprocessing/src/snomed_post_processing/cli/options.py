@@ -234,7 +234,8 @@ def build_snogit_cache_options(fnc):
         multiple=True,
         help=(
             "SNOGIT ZIP .dat member to include. Can be provided multiple times. "
-            "Defaults to the newest general SNOGIT_*.dat member."
+            "Defaults to the newest general SNOGIT_*.dat member for ZIP inputs. "
+            "Not needed when --snogit-source points directly to a .dat file."
         ),
     )(fnc)
     fnc = click.option(
@@ -244,10 +245,12 @@ def build_snogit_cache_options(fnc):
         help="Output path for the processed SNOGIT cache HDF5.",
     )(fnc)
     fnc = click.option(
+        "--snogit-source",
         "--snogit-zip",
+        "snogit_zip",
         required=True,
         type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
-        help="Path to the SNOGIT release ZIP.",
+        help="Path to a SNOGIT release ZIP or a single SNOGIT .dat file.",
     )(fnc)
     fnc = click.option(
         "--hdf5",

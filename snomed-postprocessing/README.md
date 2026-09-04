@@ -116,7 +116,7 @@ Docker CLI example with local files mounted into `/app/data`:
 docker run \
   --volume ./data:/app/data \
   --rm \
-  ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:2.0.0 \
+  ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:2.0.1 \
   log-critical-documents \
   --lists-path /app/data/gemtex_snomedct_codes.hdf5 \
   /app/data/inception-export.zip
@@ -253,16 +253,16 @@ uv run suggest-sanitization \
   --semantic-bm25-fallback
 ```
 
-To use SNOGIT terms as additional BM25 evidence, first build a processed SNOGIT cache from a SNOGIT ZIP and the same main HDF5:
+To use SNOGIT terms as additional BM25 evidence, first build a processed SNOGIT cache from a SNOGIT ZIP, or from a single SNOGIT `.dat` file, and the same main HDF5:
 
 ```bash
 uv run build-snogit-cache \
   --hdf5 /path/to/gemtex_snomedct_codes.hdf5 \
-  --snogit-zip /path/to/SNOGIT.zip \
+  --snogit-source /path/to/SNOGIT.zip \
   --output /path/to/processed_snogit_cache.hdf5
 ```
 
-By default, cache creation uses the newest general `SNOGIT_*.dat` member in the ZIP. To include specific `.dat` members instead, pass `--snogit-member` one or more times, for example to add ELGA or Latin term files.
+For backwards compatibility, `--snogit-zip` is still accepted as an alias for `--snogit-source`. By default, cache creation uses the newest general `SNOGIT_*.dat` member in ZIP inputs. To include specific `.dat` members from a ZIP instead, pass `--snogit-member` one or more times, for example to add ELGA or Latin term files. If you already have just one `.dat` file, pass it directly via `--snogit-source`; no member selection is needed.
 
 Then pass that processed cache during suggestion generation:
 
@@ -275,7 +275,7 @@ uv run suggest-sanitization \
   --use-snogit-cache /path/to/processed_snogit_cache.hdf5
 ```
 
-`suggest-sanitization` does not parse raw SNOGIT ZIP files or create caches; use `build-snogit-cache` for that step.
+`suggest-sanitization` does not parse raw SNOGIT ZIP/`.dat` files or create caches; use `build-snogit-cache` for that step.
 
 ### Apply reviewed decisions and deploy to INCEpTION
 
@@ -353,7 +353,7 @@ With Docker, the GUI can be started as:
 
 ```bash
 docker run --rm -p HOST_PORT:8501 \
-  ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:2.0.0 \
+  ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:2.0.1 \
   start-gui
 ```
 

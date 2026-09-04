@@ -311,6 +311,32 @@ class TestSemanticBm25Sanitization(unittest.TestCase):
         defaults = [member.name for member in members if member.recommended_default]
         self.assertEqual(defaults, ["release/SNOGIT_20260712.dat"])
 
+    def test_builds_snogit_sidecar_from_single_dat_file(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = pathlib.Path(tmpdir)
+            hdf5_path = tmpdir / "concepts.hdf5"
+            sidecar_path = tmpdir / "snogit-sidecar.hdf5"
+            dat_path = tmpdir / "SNOGIT_20260712.dat"
+            _write_compact_hdf5(hdf5_path, blacklist_indices=(3,))
+            dat_path.write_text(
+                "100\tt1\tAlpha therapy procedure (procedure)\tHerzinfarkt\n",
+                encoding="utf-8",
+            )
+
+            members = list_snogit_zip_members(dat_path)
+            result = build_snogit_sidecar(
+                hdf5_path=hdf5_path,
+                snogit_zip_path=dat_path,
+                output_path=sidecar_path,
+            )
+
+            self.assertEqual([member.name for member in members], ["SNOGIT_20260712.dat"])
+            self.assertEqual(result.selected_members, ("SNOGIT_20260712.dat",))
+            self.assertEqual(result.rows_written, 1)
+            with h5py.File(sidecar_path, "r") as sidecar:
+                self.assertEqual(sidecar["metadata"].attrs["snogit_source_kind"], "dat")
+                self.assertEqual(sidecar["metadata"].attrs["snogit_source_file_name"], "SNOGIT_20260712.dat")
+
     def test_builds_minimal_snogit_sidecar_and_validates_hdf5_compatibility(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir = pathlib.Path(tmpdir)
