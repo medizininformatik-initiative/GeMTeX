@@ -2,7 +2,12 @@
 
 SNOMED Postprocessing checks SNOMED CT annotations in INCEpTION/UIMA exports against a materialized SNOMED HDF5 file. In policy mode, annotations are checked against whitelist/blacklist policy views. The tool reports non-whitelisted or blacklisted annotations, can generate sanitization suggestions, and can apply reviewed replacement/delete decisions to a copied project ZIP.
 
-The project can be used from the command line or through a Streamlit GUI.
+The project can be used from the command line or through a Streamlit GUI.  
+
+The usage of this program requires a SNOMED CT policy file (``hdf5`` format). You can either create it yourself with a SNOMED CT release archive (``zip``)
+or with a SNOWSTORM instance - see below for instructions.  
+For the GeMTeX project there is a working file here:  
+[Technik/Methodik > Technisches Dashboard > SNOMED CT Semantic Tag / Dashboard](https://confluence.imi.med.fau.de/download/attachments/317216732/gemtex_snomedct_codes_release20260401_policy20240401.hdf5?version=1&modificationDate=1788504062723&api=v2)
 
 ## Main workflows
 
