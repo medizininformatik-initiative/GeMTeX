@@ -54,9 +54,9 @@ When the GUI creates a processed SNOGIT cache, it writes the HDF5 to a persisten
 
 If the data directory is unavailable, it falls back to a temporary directory. Suggestion generation prefers this selected/created server-side cache path over stale uploaded-file objects after download-button reruns.
 
-# Annotation ID prefix
+# Annotation ID feature and prefix
 
-The sidebar annotation-layer settings include the configurable SNOMED ID prefix used in the annotation feature named `id`. The default is `http://snomed.info/id/`; use an empty prefix for layers that store plain SCTIDs. The same prefix is used when matching reviewed decisions and writing replacement IDs.
+The sidebar annotation-layer settings include the configurable SNOMED ID feature name and prefix. The feature defaults to `id`; the prefix defaults to `http://snomed.info/id/`. Use an empty prefix for layers that store plain SCTIDs. The same feature/prefix settings are used when matching reviewed decisions and writing replacement IDs. See [Annotation layer requirements](/snomed-post-processing/data/annotation-layer-requirements.md).
 
 # Review and apply behavior
 

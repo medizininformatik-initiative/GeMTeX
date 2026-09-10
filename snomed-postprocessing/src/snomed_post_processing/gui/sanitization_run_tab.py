@@ -132,6 +132,7 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
         has_invalid_selected_rows=bool(invalid_selected_rows),
         manual_review_layer=manual_review_layer,
         id_prefix=inputs.id_prefix,
+        id_feature=inputs.id_feature,
     )
 
 
@@ -267,6 +268,7 @@ def _render_sanitization_run_controls(
     has_invalid_selected_rows: bool,
     manual_review_layer: str = "webanno.custom.ManualReview",
     id_prefix: str = "http://snomed.info/id/",
+    id_feature: str = "id",
 ) -> None:
     st.subheader("Run")
     project_source = st.session_state.get("zip_file")
@@ -305,6 +307,7 @@ def _render_sanitization_run_controls(
         has_invalid_selected_rows=has_invalid_selected_rows,
         manual_review_layer=manual_review_layer,
         id_prefix=id_prefix,
+        id_feature=id_feature,
     )
 
     if not run_clicked:
@@ -323,6 +326,7 @@ def _render_sanitization_run_controls(
                 output_project,
                 manual_review_layer=manual_review_layer.strip() or "webanno.custom.ManualReview",
                 id_prefix=id_prefix,
+                id_feature=id_feature,
             )
             st.write("Preparing sanitized project ZIP for download...")
             status.update(
@@ -355,6 +359,7 @@ def _render_inception_apply_upload_controls(
     has_invalid_selected_rows: bool,
     manual_review_layer: str,
     id_prefix: str,
+    id_feature: str,
 ) -> None:
     st.subheader("Apply decisions and upload to INCEpTION")
     st.caption(
@@ -440,6 +445,7 @@ def _render_inception_apply_upload_controls(
                 project_slug=project_slug.strip() or None,
                 manual_review_layer=manual_review_layer.strip() or "webanno.custom.ManualReview",
                 id_prefix=id_prefix,
+                id_feature=id_feature,
                 inception_url=inception_url.strip() or None,
                 username=username.strip() or None,
                 password=password or None,
@@ -1202,6 +1208,7 @@ def _decisions_metadata(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "suggestions_report_path": st.session_state.get("sanitization_suggestions_report_path"),
         "manual_review_layer": st.session_state.get("manual_review_layer", "webanno.custom.ManualReview"),
         "id_prefix": st.session_state.get("snomed_annotation_id_prefix", "http://snomed.info/id/"),
+        "id_feature": st.session_state.get("snomed_annotation_id_feature", "id"),
         "document_count": len(documents),
         "reviewed_documents": reviewed_documents,
     }
@@ -1228,6 +1235,8 @@ def _restore_decision_state(decisions: list[dict[str, Any]], metadata: dict[str,
         st.session_state["manual_review_layer"] = str(metadata["manual_review_layer"])
     if isinstance(metadata, dict) and "id_prefix" in metadata:
         st.session_state["snomed_annotation_id_prefix"] = str(metadata.get("id_prefix") or "")
+    if isinstance(metadata, dict) and "id_feature" in metadata:
+        st.session_state["snomed_annotation_id_feature"] = str(metadata.get("id_feature") or "id") or "id"
     reviewed_documents = metadata.get("reviewed_documents", []) if isinstance(metadata, dict) else []
     for document in reviewed_documents:
         st.session_state[_document_reviewed_key(str(document))] = True

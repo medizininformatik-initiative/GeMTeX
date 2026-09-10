@@ -63,6 +63,7 @@ def build_inception_upload_artifacts(
     output_dir: pathlib.Path,
     *,
     id_prefix: str = "http://snomed.info/id/",
+    id_feature: str = "id",
     manual_review_layer: str = "webanno.custom.ManualReview",
     force: bool = False,
     repair_for_remote_upload: bool = True,
@@ -135,6 +136,7 @@ def build_inception_upload_artifacts(
                     document=source_document,
                     annotator=annotator,
                     id_prefix=id_prefix,
+                    id_feature=id_feature,
                     manual_review_layer=manual_review_layer,
                 )
                 all_skipped_decisions.extend(sanitized.skipped_decisions)

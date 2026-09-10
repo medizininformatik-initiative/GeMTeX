@@ -48,6 +48,7 @@ def log_documents(
     ignore_overlap_type: tuple[str, ...],
     ignore_overlap_mode: str,
     id_prefix: str,
+    id_feature: str,
 ):
     """
     Analyzes an INCEpTION project zip file (if PROCESS_PATH points to a local zip file) or a particular project in an INCEpTION instance
@@ -71,6 +72,7 @@ def log_documents(
         ignore_overlap_type=ignore_overlap_type,
         ignore_overlap_mode=ignore_overlap_mode,
         id_prefix=id_prefix,
+        id_feature=id_feature,
     )
 
 @click.command()
@@ -292,6 +294,12 @@ def build_inception_shell_project_cli(
     show_default=True,
     help="SNOMED URI prefix used in CAS annotation IDs.",
 )
+@click.option(
+    "--id-feature",
+    default="id",
+    show_default=True,
+    help="Annotation string feature that stores the SNOMED CT ID/SCTID.",
+)
 @click.option("--force", is_flag=True, help="Allow writing into a non-empty output directory.")
 @click.option(
     "--no-repair-for-remote-upload",
@@ -304,6 +312,7 @@ def build_inception_upload_artifacts_cli(
     output_dir: pathlib.Path,
     manual_review_layer: str,
     id_prefix: str,
+    id_feature: str,
     force: bool,
     no_repair_for_remote_upload: bool,
 ):
@@ -314,6 +323,7 @@ def build_inception_upload_artifacts_cli(
         decisions=decisions,
         output_dir=output_dir,
         id_prefix=id_prefix,
+        id_feature=id_feature,
         manual_review_layer=manual_review_layer,
         force=force,
         repair_for_remote_upload=not no_repair_for_remote_upload,
@@ -364,6 +374,12 @@ def build_inception_upload_artifacts_cli(
     show_default=True,
     help="SNOMED URI prefix used in CAS annotation IDs.",
 )
+@click.option(
+    "--id-feature",
+    default="id",
+    show_default=True,
+    help="Annotation string feature that stores the SNOMED CT ID/SCTID.",
+)
 @click.option("--inception-url", default=None, help="INCEpTION base URL, e.g. http://localhost:8080.")
 @click.option("--username", default=None, help="INCEpTION username for connection check/apply.")
 @click.option("--password", default=None, help="INCEpTION password. Prefer --password-env to avoid shell history.")
@@ -383,6 +399,7 @@ def apply_decisions_to_inception_cli(
     project_description: Optional[str],
     manual_review_layer: str,
     id_prefix: str,
+    id_feature: str,
     inception_url: Optional[str],
     username: Optional[str],
     password: Optional[str],
@@ -404,6 +421,7 @@ def apply_decisions_to_inception_cli(
         project_description=project_description,
         manual_review_layer=manual_review_layer,
         id_prefix=id_prefix,
+        id_feature=id_feature,
         repair_for_remote_upload=not no_repair_for_remote_upload,
         inception_url=inception_url,
         username=username,

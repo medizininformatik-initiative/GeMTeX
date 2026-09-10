@@ -54,6 +54,7 @@ def get_annotations_from_document(
     document: Union[cassis.Cas, str, pathlib.Path],
     annotation_types: list[str] = None,
     id_prefix: str = "http://snomed.info/id/",
+    id_feature: str = "id",
     ignore_overlap_types: Optional[list[str]] = None,
     ignore_overlap_mode: str = "overlap",
 ) -> DocumentAnnotations:
@@ -62,6 +63,7 @@ def get_annotations_from_document(
     if ignore_overlap_types is None:
         ignore_overlap_types = []
     id_prefix = _normalized_id_prefix(id_prefix)
+    id_feature = str(id_feature or "id").strip() or "id"
 
     if not isinstance(document, cassis.Cas):
         document = _load_document(document)
@@ -84,7 +86,7 @@ def get_annotations_from_document(
     for type_ in annotation_types:
         for annotation in _safe_select(document, type_):
             try:
-                _id = annotation.get("id")
+                _id = annotation.get(id_feature)
                 if _id is None:
                     codes.append(np.nan)
                 else:

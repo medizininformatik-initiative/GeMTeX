@@ -44,6 +44,7 @@ This bundle is the agent-readable knowledge layer for the Python app under [`/sr
 ## Data and formats
 
 - [HDF5 policy store layout](/snomed-post-processing/data/hdf5-policy-store.md)
+- [Annotation layer requirements](/snomed-post-processing/data/annotation-layer-requirements.md)
 - [JSON artifacts](/snomed-post-processing/data/json-artifacts.md)
 - [JSON artifact formats](/snomed-post-processing/data/json-artifact-formats.md)
 - [INCEpTION project ZIP and CAS handling](/snomed-post-processing/data/inception-cas-and-zip.md)
