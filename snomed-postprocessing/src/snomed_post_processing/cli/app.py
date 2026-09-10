@@ -47,6 +47,7 @@ def log_documents(
     annotation_type: tuple[str, ...],
     ignore_overlap_type: tuple[str, ...],
     ignore_overlap_mode: str,
+    id_prefix: str,
 ):
     """
     Analyzes an INCEpTION project zip file (if PROCESS_PATH points to a local zip file) or a particular project in an INCEpTION instance
@@ -69,6 +70,7 @@ def log_documents(
         annotation_type=annotation_type,
         ignore_overlap_type=ignore_overlap_type,
         ignore_overlap_mode=ignore_overlap_mode,
+        id_prefix=id_prefix,
     )
 
 @click.command()

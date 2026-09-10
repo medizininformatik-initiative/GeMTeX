@@ -39,7 +39,7 @@ SNOMED IDs are expected in an annotation feature named `id`, often shaped like:
 http://snomed.info/id/<SCTID>
 ```
 
-The app normalizes this to the plain SCTID string for policy checks.
+The URI/string prefix is configurable through `--id-prefix` in the CLI and the GUI annotation-layer settings. Use an empty prefix when annotations store plain SCTIDs. The app normalizes IDs to the plain SCTID string for policy checks.
 
 Each extracted annotation can carry:
 

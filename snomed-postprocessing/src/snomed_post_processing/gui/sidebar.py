@@ -21,6 +21,7 @@ class GuiInputs:
     annotation_types_text: str
     ignore_overlap_types_text: str
     ignore_overlap_mode: str
+    id_prefix: str
     data_dir: pathlib.Path
     target_view: str = "policy"
     release_blacklist_mode: str = "none"
@@ -102,6 +103,15 @@ def render_sidebar() -> GuiInputs:
                 index=0,
                 help="Controls how target annotations must match ignore annotations to be ignored.",
             )
+            id_prefix = st.text_input(
+                "SNOMED ID prefix in annotation feature",
+                value=st.session_state.get("snomed_annotation_id_prefix", "http://snomed.info/id/"),
+                key="snomed_annotation_id_prefix",
+                help=(
+                    "Prefix used before the SCTID in the annotation feature named 'id'. "
+                    "For plain SCTIDs, leave this empty. The same prefix is used when writing replacement IDs."
+                ),
+            )
 
     return GuiInputs(
         load_annotators=load_annotators,
@@ -109,6 +119,7 @@ def render_sidebar() -> GuiInputs:
         annotation_types_text=annotation_types_text,
         ignore_overlap_types_text=ignore_overlap_types_text,
         ignore_overlap_mode=ignore_overlap_mode,
+        id_prefix=id_prefix,
         data_dir=data_dir,
         target_view=target_view,
         release_blacklist_mode=release_blacklist_mode,

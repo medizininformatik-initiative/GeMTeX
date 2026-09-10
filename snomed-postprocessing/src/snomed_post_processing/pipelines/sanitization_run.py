@@ -575,15 +575,28 @@ def _matching_annotations(cas, decision: dict[str, Any], *, id_prefix: str):
 def _normalize_snomed_id(value: Any, *, id_prefix: str) -> str:
     if value is None:
         return ""
-    prefix = id_prefix if id_prefix.endswith("/") else id_prefix + "/"
-    return str(value).strip().lower().removeprefix(prefix.lower()).strip()
+    prefix = _normalized_id_prefix(id_prefix)
+    text = str(value).strip().lower()
+    if prefix:
+        text = text.removeprefix(prefix)
+    return text.strip()
 
 
 def _replacement_id(current_id: Any, replacement_code: str, *, id_prefix: str) -> str:
-    if current_id is not None and str(current_id).strip().lower().startswith(id_prefix.lower()):
-        prefix = id_prefix if id_prefix.endswith("/") else id_prefix + "/"
+    prefix = _normalized_id_prefix(id_prefix, lower=False)
+    prefix_lower = prefix.lower()
+    if prefix and current_id is not None and str(current_id).strip().lower().startswith(prefix_lower):
+        return prefix + replacement_code
+    if prefix and current_id is None:
         return prefix + replacement_code
     return replacement_code
+
+
+def _normalized_id_prefix(id_prefix: str, *, lower: bool = True) -> str:
+    prefix = str(id_prefix or "").strip()
+    if prefix and not prefix.endswith("/"):
+        prefix += "/"
+    return prefix.lower() if lower else prefix
 
 
 def _serialize_cas_for_member(cas, member_name: str) -> bytes:

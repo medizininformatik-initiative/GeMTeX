@@ -239,7 +239,7 @@ Replacement is applied only when the decision is actionable, has a valid choice,
 
 # Metadata
 
-`metadata` is intentionally flexible and workflow-specific. Current GUI/pipeline metadata may include paths to source suggestion artifacts, manual-review layer name, document counts, reviewed document names, HDF5/source settings, target view, and blacklist settings.
+`metadata` is intentionally flexible and workflow-specific. Current GUI/pipeline metadata may include paths to source suggestion artifacts, manual-review layer name, annotation ID prefix (`id_prefix`), document counts, reviewed document names, HDF5/source settings, target view, and blacklist settings.
 
 # Compatibility notes
 

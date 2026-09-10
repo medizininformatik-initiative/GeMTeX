@@ -38,6 +38,10 @@ sources:
 
 # Common public workflows
 
+## Check annotated documents
+
+`log-critical-documents` checks configured annotation layers and normalizes the annotation feature named `id` to a plain SCTID. Use `--id-prefix` to match workflows that store IDs differently; the default is `http://snomed.info/id/`, and an empty value supports plain SCTIDs.
+
 ## Build HDF5 from RF2
 
 ```bash
@@ -83,6 +87,8 @@ uv run apply-decisions-to-inception \
   --decisions reviewed-sanitization-decisions.json \
   --output-dir sanitized-inception-output
 ```
+
+Use `--id-prefix` here as well when reviewed decisions should match/write IDs using a non-default annotation ID prefix.
 
 Real remote apply requires explicit `--apply` and connection settings:
 

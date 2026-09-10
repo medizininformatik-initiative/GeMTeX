@@ -36,6 +36,20 @@ def _safe_select(document: cassis.Cas, type_: str):
         logging.debug(f"Could not select annotations of type '{type_}': {e}")
 
 
+def _normalized_id_prefix(id_prefix: str) -> str:
+    prefix = str(id_prefix or "").strip().lower()
+    if prefix and not prefix.endswith("/"):
+        prefix += "/"
+    return prefix
+
+
+def _normalize_annotation_id(value: object, *, id_prefix: str) -> str:
+    text = str(value).strip().lower()
+    if id_prefix:
+        text = text.removeprefix(id_prefix)
+    return text.strip()
+
+
 def get_annotations_from_document(
     document: Union[cassis.Cas, str, pathlib.Path],
     annotation_types: list[str] = None,
@@ -47,8 +61,7 @@ def get_annotations_from_document(
         annotation_types = ["gemtex.Concept"]
     if ignore_overlap_types is None:
         ignore_overlap_types = []
-    id_prefix = id_prefix + "/" if not id_prefix.endswith("/") else id_prefix
-    id_prefix = id_prefix.lower()
+    id_prefix = _normalized_id_prefix(id_prefix)
 
     if not isinstance(document, cassis.Cas):
         document = _load_document(document)
@@ -75,7 +88,7 @@ def get_annotations_from_document(
                 if _id is None:
                     codes.append(np.nan)
                 else:
-                    _id = str(_id).strip().lower().removeprefix(id_prefix).strip()
+                    _id = _normalize_annotation_id(_id, id_prefix=id_prefix)
                     if _id in {"", "null", "none", "nan"}:
                         codes.append(np.nan)
                     else:

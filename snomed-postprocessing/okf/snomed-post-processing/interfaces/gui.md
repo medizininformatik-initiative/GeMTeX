@@ -54,6 +54,10 @@ When the GUI creates a processed SNOGIT cache, it writes the HDF5 to a persisten
 
 If the data directory is unavailable, it falls back to a temporary directory. Suggestion generation prefers this selected/created server-side cache path over stale uploaded-file objects after download-button reruns.
 
+# Annotation ID prefix
+
+The sidebar annotation-layer settings include the configurable SNOMED ID prefix used in the annotation feature named `id`. The default is `http://snomed.info/id/`; use an empty prefix for layers that store plain SCTIDs. The same prefix is used when matching reviewed decisions and writing replacement IDs.
+
 # Review and apply behavior
 
 The review UI distinguishes **single/no-choice** replacement suggestions from rows that need an explicit manual candidate choice. “Single/no-choice” means that at most one replacement candidate is available; it does not mean the row has already been accepted. The review workspace provides bulk actions to apply or clear all single/no-choice replacements globally or within a document section. BM25 single-candidate suggestions are intentionally review suggestions and are not automatically accepted unless the user selects Apply or uses the bulk action.

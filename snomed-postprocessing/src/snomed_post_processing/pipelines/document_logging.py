@@ -36,6 +36,7 @@ def run_log_documents(
     annotation_type: tuple[str, ...],
     ignore_overlap_type: tuple[str, ...],
     ignore_overlap_mode: str,
+    id_prefix: str = "http://snomed.info/id/",
 ):
     """Run the critical-document logging pipeline."""
     set_log_level(log_level)
@@ -113,6 +114,7 @@ def run_log_documents(
         project_zip,
         annotator_filter=names_filter,
         annotation_types=list(annotation_type),
+        id_prefix=id_prefix,
         ignore_overlap_types=list(ignore_overlap_type),
         ignore_overlap_mode=ignore_overlap_mode,
     ):
@@ -145,6 +147,7 @@ def run_log_documents(
                 "annotation_types": list(annotation_type),
                 "ignore_overlap_types": list(ignore_overlap_type),
                 "ignore_overlap_mode": ignore_overlap_mode,
+                "id_prefix": id_prefix,
             },
         )
         logging.info(
