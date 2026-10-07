@@ -106,6 +106,8 @@ def render_policy_tab(inputs: GuiInputs) -> None:
                     annotation_types=annotation_types,
                     ignore_overlap_types=ignore_overlap_types,
                     ignore_overlap_mode=inputs.ignore_overlap_mode,
+                    id_prefix=inputs.id_prefix,
+                    id_feature=inputs.id_feature,
                 )
                 progress_bar.empty()
                 status.update(label="Policy check finished.", state="complete", expanded=False)

@@ -76,6 +76,7 @@ def process_inception_zip(
     annotator_filter=None,
     annotation_types: list[str] = None,
     id_prefix: str = "http://snomed.info/id/",
+    id_feature: str = "id",
     allowed_extensions: Optional[list[str]] = None,
     ignore_overlap_types: Optional[list[str]] = None,
     ignore_overlap_mode: str = "overlap",
@@ -171,6 +172,7 @@ def process_inception_zip(
                             cas,
                             annotation_types,
                             id_prefix,
+                            id_feature=id_feature,
                             ignore_overlap_types=ignore_overlap_types,
                             ignore_overlap_mode=ignore_overlap_mode,
                         )

@@ -38,6 +38,10 @@ sources:
 
 # Common public workflows
 
+## Check annotated documents
+
+`log-critical-documents` checks configured annotation layers and normalizes a configured annotation ID feature to a plain SCTID. Use `--id-feature` for workflows that use a feature other than `id`; use `--id-prefix` to match workflows that store IDs with a different URI/string prefix. The default prefix is `http://snomed.info/id/`, and an empty value supports plain SCTIDs. See [Annotation layer requirements](/snomed-post-processing/data/annotation-layer-requirements.md).
+
 ## Build HDF5 from RF2
 
 ```bash
@@ -83,6 +87,8 @@ uv run apply-decisions-to-inception \
   --decisions reviewed-sanitization-decisions.json \
   --output-dir sanitized-inception-output
 ```
+
+Use `--id-feature` and `--id-prefix` here as well when reviewed decisions should match/write IDs using a non-default annotation ID feature or prefix.
 
 Real remote apply requires explicit `--apply` and connection settings:
 

@@ -53,6 +53,7 @@ def sanitize_cas_bytes(
     document: Optional[str] = None,
     annotator: Optional[str] = None,
     id_prefix: str = "http://snomed.info/id/",
+    id_feature: str = "id",
     manual_review_layer: str = "webanno.custom.ManualReview",
 ) -> SanitizedCasBytesResult:
     """Apply reviewed sanitization decisions to one JSONCAS/XMI CAS byte payload.
@@ -77,6 +78,7 @@ def sanitize_cas_bytes(
         list(enumerate(applicable_decisions)),
         matched_decision_indices,
         id_prefix=id_prefix,
+        id_feature=id_feature,
         manual_review_layer=manual_review_layer,
     )
     return SanitizedCasBytesResult(
@@ -98,6 +100,7 @@ def run_sanitization(
     *,
     annotator_filter: Optional[set[str]] = None,
     id_prefix: str = "http://snomed.info/id/",
+    id_feature: str = "id",
     manual_review_layer: str = "webanno.custom.ManualReview",
     sanitized_project_suffix: str = "sanitized",
 ) -> SanitizationRunResult:
@@ -203,6 +206,7 @@ def run_sanitization(
                             member_decisions,
                             matched_decision_indices,
                             id_prefix=id_prefix,
+                            id_feature=id_feature,
                             manual_review_layer=manual_review_layer,
                         )
                         if changed:
@@ -466,18 +470,19 @@ def _apply_decisions_to_cas(
     matched_indices: set[int],
     *,
     id_prefix: str,
+    id_feature: str,
     manual_review_layer: str,
 ) -> int:
     changed = 0
     for decision_idx, decision in decisions:
-        for annotation in _matching_annotations(cas, decision, id_prefix=id_prefix):
+        for annotation in _matching_annotations(cas, decision, id_prefix=id_prefix, id_feature=id_feature):
             if bool(decision.get("manual_edit")) or decision.get("action") == "manual_edit":
                 _add_manual_review_marker(cas, annotation, decision, manual_review_layer=manual_review_layer)
             elif bool(decision.get("delete_annotation")) or decision.get("action") == "delete":
                 _remove_annotation(cas, annotation)
             else:
-                current_id = annotation.get("id")
-                annotation.set("id", _replacement_id(current_id, str(decision["replacement_code"]), id_prefix=id_prefix))
+                current_id = annotation.get(id_feature)
+                annotation.set(id_feature, _replacement_id(current_id, str(decision["replacement_code"]), id_prefix=id_prefix))
             matched_indices.add(decision_idx)
             changed += 1
             break
@@ -546,7 +551,7 @@ def _remove_annotation(cas, annotation) -> None:
     raise SanitizationRunError("CAS implementation does not support annotation removal.")
 
 
-def _matching_annotations(cas, decision: dict[str, Any], *, id_prefix: str):
+def _matching_annotations(cas, decision: dict[str, Any], *, id_prefix: str, id_feature: str):
     layer = decision.get("layer")
     if not layer:
         return
@@ -560,7 +565,7 @@ def _matching_annotations(cas, decision: dict[str, Any], *, id_prefix: str):
     for annotation in annotations:
         if len(offset) == 2 and (int(annotation.begin), int(annotation.end)) != (int(offset[0]), int(offset[1])):
             continue
-        current_code = _normalize_snomed_id(annotation.get("id"), id_prefix=id_prefix)
+        current_code = _normalize_snomed_id(annotation.get(id_feature), id_prefix=id_prefix)
         if source_code and current_code != source_code.lower():
             continue
         if covered_text:
@@ -575,15 +580,28 @@ def _matching_annotations(cas, decision: dict[str, Any], *, id_prefix: str):
 def _normalize_snomed_id(value: Any, *, id_prefix: str) -> str:
     if value is None:
         return ""
-    prefix = id_prefix if id_prefix.endswith("/") else id_prefix + "/"
-    return str(value).strip().lower().removeprefix(prefix.lower()).strip()
+    prefix = _normalized_id_prefix(id_prefix)
+    text = str(value).strip().lower()
+    if prefix:
+        text = text.removeprefix(prefix)
+    return text.strip()
 
 
 def _replacement_id(current_id: Any, replacement_code: str, *, id_prefix: str) -> str:
-    if current_id is not None and str(current_id).strip().lower().startswith(id_prefix.lower()):
-        prefix = id_prefix if id_prefix.endswith("/") else id_prefix + "/"
+    prefix = _normalized_id_prefix(id_prefix, lower=False)
+    prefix_lower = prefix.lower()
+    if prefix and current_id is not None and str(current_id).strip().lower().startswith(prefix_lower):
+        return prefix + replacement_code
+    if prefix and current_id is None:
         return prefix + replacement_code
     return replacement_code
+
+
+def _normalized_id_prefix(id_prefix: str, *, lower: bool = True) -> str:
+    prefix = str(id_prefix or "").strip()
+    if prefix and not prefix.endswith("/"):
+        prefix += "/"
+    return prefix.lower() if lower else prefix
 
 
 def _serialize_cas_for_member(cas, member_name: str) -> bytes:

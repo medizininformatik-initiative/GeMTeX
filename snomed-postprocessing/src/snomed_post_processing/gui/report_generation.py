@@ -23,6 +23,8 @@ def generate_report(
     annotation_types: Optional[list[str]] = None,
     ignore_overlap_types: Optional[list[str]] = None,
     ignore_overlap_mode: str = "overlap",
+    id_prefix: str = "http://snomed.info/id/",
+    id_feature: str = "id",
 ) -> tuple[pathlib.Path, pathlib.Path, pathlib.Path, pathlib.Path, int, list[CriticalFinding]]:
     json_dump_dictionary = {}
     output_md = project_zip.parent / (
@@ -40,6 +42,8 @@ def generate_report(
         project_zip,
         annotator_filter=anno_filter,
         annotation_types=annotation_types,
+        id_prefix=id_prefix,
+        id_feature=id_feature,
         ignore_overlap_types=ignore_overlap_types,
         ignore_overlap_mode=ignore_overlap_mode,
     )
@@ -74,6 +78,8 @@ def generate_report(
             "annotation_types": annotation_types or [],
             "ignore_overlap_types": ignore_overlap_types or [],
             "ignore_overlap_mode": ignore_overlap_mode,
+            "id_prefix": id_prefix,
+            "id_feature": id_feature,
         },
     )
 

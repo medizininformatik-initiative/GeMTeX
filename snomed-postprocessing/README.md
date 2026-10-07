@@ -116,7 +116,7 @@ Docker CLI example with local files mounted into `/app/data`:
 docker run \
   --volume ./data:/app/data \
   --rm \
-  ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:2.0.1 \
+  ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:2.0.2 \
   log-critical-documents \
   --lists-path /app/data/gemtex_snomedct_codes.hdf5 \
   /app/data/inception-export.zip
@@ -152,6 +152,17 @@ uv run log-critical-documents \
 ```
 
 Supported ignore modes are `overlap`, `covered-by`, `contains`, and `exact`.
+
+SNOMED IDs are read from a configurable string feature on the target layer. The default feature is `id` and the default prefix is `http://snomed.info/id/`. Use `--id-feature` for custom feature names and `--id-prefix ""` for plain SCTIDs:
+
+```bash
+uv run log-critical-documents \
+  --lists-path /path/to/gemtex_snomedct_codes.hdf5 \
+  --annotation-type webanno.custom.MyConcept \
+  --id-feature snomedId \
+  --id-prefix "" \
+  /path/to/inception-export.zip
+```
 
 ### Create an HDF5 policy from an RF2 ZIP
 For the following three commands:
@@ -353,7 +364,7 @@ With Docker, the GUI can be started as:
 
 ```bash
 docker run --rm -p HOST_PORT:8501 \
-  ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:2.0.1 \
+  ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:2.0.2 \
   start-gui
 ```
 

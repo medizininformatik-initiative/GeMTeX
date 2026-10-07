@@ -71,6 +71,21 @@ def common_click_args(fnc):
 def log_documents_options(fnc):
     """Apply options for the log-critical-documents command."""
     fnc = click.option(
+        "--id-feature",
+        default="id",
+        show_default=True,
+        help="Name of the annotation string feature that stores the SNOMED CT ID/SCTID.",
+    )(fnc)
+    fnc = click.option(
+        "--id-prefix",
+        default="http://snomed.info/id/",
+        show_default=True,
+        help=(
+            "Prefix used before the SCTID in the annotation ID feature. "
+            "Use an empty string for plain SCTIDs."
+        ),
+    )(fnc)
+    fnc = click.option(
         "--ignore-overlap-mode",
         default="overlap",
         show_default=True,

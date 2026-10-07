@@ -21,6 +21,10 @@ sources:
     title: Deployment report writer
 ---
 
+# Format details
+
+Exact field-level documentation for critical findings, sanitization suggestions, and reviewed decision JSON lives in [JSON artifact formats](json-artifact-formats.md).
+
 # CriticalFindings JSON
 
 Produced by logging/check workflows and consumed by `suggest-sanitization`.
@@ -120,5 +124,6 @@ It summarizes the whole pipeline: source project, decisions path, shell ZIP, art
 
 # Related concepts
 
+- [JSON artifact formats](json-artifact-formats.md)
 - [Reviewed decisions and write-back](/snomed-post-processing/workflows/reviewed-decisions-and-writeback.md)
 - [INCEpTION deployment](/snomed-post-processing/workflows/inception-deployment.md)
