@@ -127,7 +127,7 @@ def run_build_annotation_store(
                         else:
                             summary.unknown_sctids.add(occurrence.sctid)
                     if writer.insert_annotation(view_id, occurrence):
-                        summary.annotations += 1
+                        summary.annotation_occurrences += 1
 
             if len(summary.failed_cas_members) > failures_before and fail_fast:
                 break
@@ -136,9 +136,10 @@ def run_build_annotation_store(
         summary.documents = writer.count("documents")
         summary.annotation_views = writer.count("annotation_views")
         summary.annotations = writer.count("annotations")
+        summary.annotation_occurrences = writer.count("annotation_occurrence_links")
         summary.known_sctids = int(
             writer.connection.execute(
-                "select count(*) as n from annotations where sctid is not null and fsn is not null"
+                "select count(*) as n from annotation_occurrence_links o join annotations a on a.id = o.annotation_id where a.sctid is not null and a.fsn is not null"
             ).fetchone()["n"]
         )
         summary.unknown_sctids = {
@@ -148,7 +149,7 @@ def run_build_annotation_store(
             )
         }
         summary.missing_sctid_occurrences = int(
-            writer.connection.execute("select count(*) as n from annotations where sctid is null").fetchone()["n"]
+            writer.connection.execute("select count(*) as n from annotation_occurrence_links o join annotations a on a.id = o.annotation_id where a.sctid is null").fetchone()["n"]
         )
         summary.missing_batches = _missing_batches_from_db(writer)
         writer.commit()
@@ -217,6 +218,7 @@ def _summary_as_dict(summary: AnnotationStoreSummary) -> dict:
         "documents": summary.documents,
         "annotation_views": summary.annotation_views,
         "annotations": summary.annotations,
+        "annotation_occurrences": summary.annotation_occurrences,
         "known_sctids": summary.known_sctids,
         "missing_sctid_occurrences": summary.missing_sctid_occurrences,
         "unknown_sctids": sorted(summary.unknown_sctids),
@@ -237,7 +239,8 @@ def _log_summary(summary: AnnotationStoreSummary, output: pathlib.Path) -> None:
     logging.info("Exports processed: %s", summary.exports_processed)
     logging.info("Documents: %s", summary.documents)
     logging.info("Annotation views: %s", summary.annotation_views)
-    logging.info("Annotations: %s", summary.annotations)
+    logging.info("Shared annotations: %s", summary.annotations)
+    logging.info("Annotation occurrences: %s", summary.annotation_occurrences)
     logging.info("Known SCTID occurrences: %s", summary.known_sctids)
     logging.info(
         "Unknown SCTIDs: %s (%s missing/empty/null-like ids)",

@@ -603,7 +603,8 @@ def build_annotation_store_cli(
     click.echo(f"Exports processed: {summary.exports_processed}")
     click.echo(f"Documents: {summary.documents}")
     click.echo(f"Annotation views: {summary.annotation_views}")
-    click.echo(f"Annotations: {summary.annotations}")
+    click.echo(f"Shared annotations: {summary.annotations}")
+    click.echo(f"Annotation occurrences: {summary.annotation_occurrences}")
     click.echo(
         f"Unknown SCTIDs: {len(summary.unknown_sctids)} "
         f"({summary.missing_sctid_occurrences} missing/empty/null-like ids)"

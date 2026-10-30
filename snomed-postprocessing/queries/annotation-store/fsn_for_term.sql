@@ -9,7 +9,7 @@ select
   fsn,
   semantic_tag,
   count(*) as annotation_count
-from annotation_occurrences
+from annotations
 where
   (
     :term != ''

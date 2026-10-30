@@ -47,8 +47,13 @@ def run_check_annotation_store_document(
     text = document.read_text(encoding=encoding)
     text_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
 
-    with sqlite3.connect(store) as connection:
+    from contextlib import closing
+
+    with closing(sqlite3.connect(store)) as connection:
         connection.row_factory = sqlite3.Row
+        version = connection.execute("pragma user_version").fetchone()[0]
+        if version != 2:
+            raise ValueError("Unsupported annotation-store schema. Build a new deduplicated store.")
         rows = connection.execute(
             """
             select
@@ -65,7 +70,7 @@ def run_check_annotation_store_document(
             join annotation_views av on av.document_hash_id = dh.id
             join documents d on d.id = av.document_id
             join exports e on e.id = av.export_id
-            left join annotations a on a.view_id = av.id
+            left join annotation_occurrence_links a on a.view_id = av.id
             where dh.text_hash = ?
             group by
               e.site,

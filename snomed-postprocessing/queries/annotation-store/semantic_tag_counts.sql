@@ -5,5 +5,5 @@
 select
     semantic_tag,
     count(*) as annotation_count
-from annotation_occurrences
+from annotations
 group by semantic_tag;

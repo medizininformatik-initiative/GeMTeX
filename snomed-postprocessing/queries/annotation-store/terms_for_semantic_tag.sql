@@ -14,7 +14,7 @@ select
   lower(covered_text) as covered_text_bin,
   group_concat(distinct covered_text) as covered_text_variants,
   count(*) as annotation_count
-from annotation_occurrences
+from annotations
 where
   (
     :semantic_tag != ''

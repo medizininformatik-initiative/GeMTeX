@@ -9,7 +9,7 @@ select
   group_concat(distinct covered_text) as covered_text_variants,
   semantic_tag,
   count(*) as annotation_count
-from annotation_occurrences
+from annotations
 where
   (
     :term != ''
