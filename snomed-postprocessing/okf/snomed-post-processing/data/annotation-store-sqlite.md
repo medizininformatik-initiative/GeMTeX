@@ -134,12 +134,14 @@ Semantic tag nullability rules:
 
 ## `annotations`
 
-One row per annotation occurrence.
+For newly built stores (SQLite `user_version = 2`), one row per shared annotation, not per occurrence. Exact identity includes document content hash, layer, offsets, covered text, SCTID, FSN, semantic tag, active, raw ID, and literal. No normalization is applied. If document text is unavailable, sharing is restricted to the same view.
+
+Build a new output database for this schema. The builder and document-check command require this schema; there is no migration or compatibility query layer.
 
 | Column | Type | Description |
 |---|---|---|
-| `id` | integer primary key | Annotation row id. |
-| `view_id` | integer not null | References `annotation_views.id`. |
+| `id` | integer primary key | Shared annotation row id. |
+| `document_hash_id` | integer nullable | References exact document content in `document_hashes`. |
 | `layer` | text not null | CAS annotation layer, default `gemtex.Concept`. |
 | `begin_offset` | integer not null | Begin offset in the exact document text. |
 | `end_offset` | integer not null | End offset in the exact document text. |
@@ -150,11 +152,24 @@ One row per annotation occurrence.
 | `active` | integer nullable | Active flag copied from HDF5 at import time. |
 | `raw_id` | text nullable | Original annotation id feature. |
 | `literal` | text nullable | Optional annotation literal feature. |
-| `annotation_hash` | text not null unique | Deterministic occurrence hash used for append/retry idempotence. |
+| `annotation_hash` | text not null unique | Deterministic shared-data hash used for annotation reuse. |
 
-# Convenience view
+## `annotation_occurrence_links`
 
-`annotation_occurrences` flattens the main joins for analysis:
+One row per imported occurrence, preserving provenance even when data is shared.
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | integer primary key | Occurrence row id. |
+| `annotation_id` | integer not null | References shared `annotations.id`. |
+| `view_id` | integer not null | References originating `annotation_views.id`. |
+| `occurrence_hash` | text not null unique | Original provenance-aware hash for append/retry idempotence. |
+
+Build summaries report `annotations` (shared-data rows) and `annotation_occurrences` (provenance links) separately. Known/missing-ID occurrence counters explicitly count links. Bundled analysis queries count shared annotations.
+
+# Explicit provenance queries
+
+No flattened compatibility view is created. Join the normalized tables explicitly when site/view provenance is needed:
 
 ```sql
 select
@@ -177,8 +192,9 @@ select
   a.active,
   a.raw_id,
   a.literal
-from annotations a
-join annotation_views av on av.id = a.view_id
+from annotation_occurrence_links occurrence
+join annotations a on a.id = occurrence.annotation_id
+join annotation_views av on av.id = occurrence.view_id
 join exports e on e.id = av.export_id
 join documents d on d.id = av.document_id
 left join document_hashes dh on dh.id = av.document_hash_id;
@@ -217,7 +233,7 @@ from document_hashes dh
 join annotation_views av on av.document_hash_id = dh.id
 join exports e on e.id = av.export_id
 join documents d on d.id = av.document_id
-left join annotations a on a.view_id = av.id
+left join annotation_occurrence_links a on a.view_id = av.id
 where dh.text_hash = ?
 group by e.site, e.filename, e.batch_index, e.batch_total, d.document_name, av.view_kind, av.annotator;
 ```

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import pathlib
 import sqlite3
 from typing import Optional, Union
@@ -65,7 +67,7 @@ create table if not exists snomed_concepts(
 
 create table if not exists annotations(
   id integer primary key,
-  view_id integer not null,
+  document_hash_id integer,
   layer text not null,
   begin_offset integer not null,
   end_offset integer not null,
@@ -77,49 +79,29 @@ create table if not exists annotations(
   raw_id text,
   literal text,
   annotation_hash text not null unique,
-  foreign key(view_id) references annotation_views(id),
+  foreign key(document_hash_id) references document_hashes(id),
   foreign key(sctid) references snomed_concepts(sctid)
 );
+
+create table if not exists annotation_occurrence_links(
+  id integer primary key,
+  annotation_id integer not null,
+  view_id integer not null,
+  occurrence_hash text not null unique,
+  foreign key(annotation_id) references annotations(id),
+  foreign key(view_id) references annotation_views(id)
+);
+create index if not exists idx_occurrence_links_annotation on annotation_occurrence_links(annotation_id);
+create index if not exists idx_occurrence_links_view on annotation_occurrence_links(view_id);
 
 create index if not exists idx_exports_site on exports(site);
 create index if not exists idx_exports_site_batch on exports(site, batch_index, batch_total);
 create index if not exists idx_views_export_doc on annotation_views(export_id, document_id);
 create index if not exists idx_views_annotator on annotation_views(annotator);
-create index if not exists idx_annotations_view_offsets on annotations(view_id, begin_offset, end_offset);
+create index if not exists idx_annotations_document_offsets on annotations(document_hash_id, begin_offset, end_offset);
 create index if not exists idx_annotations_sctid on annotations(sctid);
 create index if not exists idx_annotations_semantic_tag on annotations(semantic_tag);
 """
-
-VIEW_SQL = """
-drop view if exists annotation_occurrences;
-create view annotation_occurrences as
-select
-  e.site,
-  e.filename as export_file,
-  e.batch_index,
-  e.batch_total,
-  d.document_name,
-  av.view_kind,
-  av.annotator,
-  av.cas_path,
-  dh.text_hash as document_text_hash,
-  a.layer,
-  a.begin_offset,
-  a.end_offset,
-  a.covered_text,
-  a.sctid,
-  a.semantic_tag,
-  a.fsn,
-  a.active,
-  a.raw_id,
-  a.literal
-from annotations a
-join annotation_views av on av.id = a.view_id
-join exports e on e.id = av.export_id
-join documents d on d.id = av.document_id
-left join document_hashes dh on dh.id = av.document_hash_id;
-"""
-
 
 class AnnotationStoreWriter:
     """Small upsert-oriented SQLite writer."""
@@ -134,14 +116,18 @@ class AnnotationStoreWriter:
         self.connection.close()
 
     def initialize(self) -> None:
-        self.connection.execute("drop view if exists annotation_occurrences")
+        # Only empty databases or this application's current schema are accepted.
+        version = self.connection.execute("pragma user_version").fetchone()[0]
+        has_tables = self.connection.execute(
+            "select 1 from sqlite_master where type = 'table' and name not like 'sqlite_%' limit 1"
+        ).fetchone() is not None
+        if (has_tables and version != 2) or version not in (0, 2):
+            raise ValueError(
+                "Unsupported annotation-store schema. Build a new database at a different "
+                "output path; automatic migration is not supported."
+            )
         self.connection.executescript(SCHEMA_SQL)
-        self.connection.commit()
-        self.connection.execute("pragma foreign_keys = off")
-        self._migrate_existing_schema()
-        self.connection.commit()
-        self.connection.execute("pragma foreign_keys = on")
-        self.connection.executescript(VIEW_SQL)
+        self.connection.execute("pragma user_version = 2")
         self.connection.commit()
 
     def insert_export(self, metadata: ExportMetadata, export_path: pathlib.Path, imported_at: str) -> int:
@@ -250,15 +236,31 @@ class AnnotationStoreWriter:
         )
 
     def insert_annotation(self, view_id: int, occurrence: AnnotationOccurrence) -> bool:
-        cursor = self.connection.execute(
+        view = self.connection.execute(
+            "select document_hash_id from annotation_views where id = ?", (view_id,)
+        ).fetchone()
+        if view is None:
+            raise ValueError(f"Unknown annotation view: {view_id}")
+        document_hash_id = view["document_hash_id"]
+        # Missing document text must not cause sharing across unrelated views.
+        payload = [
+            document_hash_id, view_id if document_hash_id is None else None,
+            occurrence.layer, occurrence.begin_offset, occurrence.end_offset,
+            occurrence.covered_text, occurrence.sctid, occurrence.fsn,
+            occurrence.semantic_tag, occurrence.active, occurrence.raw_id, occurrence.literal,
+        ]
+        annotation_hash = hashlib.sha256(
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        self.connection.execute(
             """
             insert or ignore into annotations(
-              view_id, layer, begin_offset, end_offset, covered_text, sctid, fsn,
+              document_hash_id, layer, begin_offset, end_offset, covered_text, sctid, fsn,
               semantic_tag, active, raw_id, literal, annotation_hash
             ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                view_id,
+                document_hash_id,
                 occurrence.layer,
                 occurrence.begin_offset,
                 occurrence.end_offset,
@@ -269,8 +271,15 @@ class AnnotationStoreWriter:
                 _bool_to_int(occurrence.active),
                 occurrence.raw_id,
                 occurrence.literal,
-                occurrence.annotation_hash,
+                annotation_hash,
             ),
+        )
+        annotation_id = self._id_for("annotations", "annotation_hash", annotation_hash)
+        cursor = self.connection.execute(
+            """insert or ignore into annotation_occurrence_links(
+                annotation_id, view_id, occurrence_hash
+            ) values (?, ?, ?)""",
+            (annotation_id, view_id, occurrence.annotation_hash),
         )
         return cursor.rowcount > 0
 
@@ -280,114 +289,6 @@ class AnnotationStoreWriter:
     def count(self, table: str) -> int:
         row = self.connection.execute(f"select count(*) as n from {table}").fetchone()
         return int(row["n"])
-
-    def _migrate_existing_schema(self) -> None:
-        """Migrate early annotation-store schemas in-place.
-
-        Development builds initially stored provenance fields on
-        `document_hashes`. Applicability is content-hash based, while provenance
-        belongs to `annotation_views -> exports`, so this method rebuilds
-        `document_hashes` to `(id, text_hash)` and rewrites optional raw text
-        storage to reference the canonical hash row.
-        """
-        view_columns = {
-            row["name"]
-            for row in self.connection.execute("pragma table_info(annotation_views)")
-        }
-        if "document_hash_id" not in view_columns:
-            self.connection.execute("alter table annotation_views add column document_hash_id integer")
-
-        hash_columns = {
-            row["name"]
-            for row in self.connection.execute("pragma table_info(document_hashes)")
-        }
-        if hash_columns and hash_columns != {"id", "text_hash"}:
-            self._rebuild_document_hashes_table()
-
-        text_columns = {
-            row["name"]
-            for row in self.connection.execute("pragma table_info(document_texts)")
-        }
-        if text_columns and text_columns != {"id", "document_hash_id", "text"}:
-            self._rebuild_document_texts_table()
-
-        self.connection.execute(
-            "create unique index if not exists idx_document_hashes_text_hash_unique on document_hashes(text_hash)"
-        )
-
-    def _rebuild_document_hashes_table(self) -> None:
-        self.connection.execute(
-            """
-            update annotation_views
-            set document_hash_id = (
-              select min(canonical.id)
-              from document_hashes current
-              join document_hashes canonical on canonical.text_hash = current.text_hash
-              where current.id = annotation_views.document_hash_id
-            )
-            where document_hash_id is not null
-            """
-        )
-        self.connection.execute("alter table document_hashes rename to document_hashes_old")
-        self.connection.execute(
-            """
-            create table document_hashes(
-              id integer primary key,
-              text_hash text not null unique
-            )
-            """
-        )
-        self.connection.execute(
-            """
-            insert into document_hashes(id, text_hash)
-            select min(id), text_hash
-            from document_hashes_old
-            group by text_hash
-            """
-        )
-        self.connection.execute("drop table document_hashes_old")
-
-    def _rebuild_document_texts_table(self) -> None:
-        old_columns = {
-            row["name"]
-            for row in self.connection.execute("pragma table_info(document_texts)")
-        }
-        if "text_hash" not in old_columns:
-            return
-        self.connection.execute("alter table document_texts rename to document_texts_old")
-        self.connection.execute(
-            """
-            create table document_texts(
-              id integer primary key,
-              document_hash_id integer not null unique,
-              text text not null,
-              foreign key(document_hash_id) references document_hashes(id)
-            )
-            """
-        )
-        self.connection.execute(
-            """
-            insert or ignore into document_texts(id, document_hash_id, text)
-            select min(dt.id), dh.id, dt.text
-            from document_texts_old dt
-            join document_hashes dh on dh.text_hash = dt.text_hash
-            group by dt.text_hash
-            """
-        )
-        self.connection.execute(
-            """
-            update annotation_views
-            set document_text_id = (
-              select min(new_dt.id)
-              from document_texts_old old_dt
-              join document_hashes dh on dh.text_hash = old_dt.text_hash
-              join document_texts new_dt on new_dt.document_hash_id = dh.id
-              where old_dt.id = annotation_views.document_text_id
-            )
-            where document_text_id is not null
-            """
-        )
-        self.connection.execute("drop table document_texts_old")
 
     def _id_for(self, table: str, column: str, value) -> int:
         row = self.connection.execute(

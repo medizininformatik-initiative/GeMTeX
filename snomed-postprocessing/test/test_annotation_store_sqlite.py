@@ -59,7 +59,15 @@ def test_sqlite_writer_inserts_and_flattens_rows(tmp_path):
             ),
         ) is False
         writer.commit()
-        row = writer.connection.execute("select * from annotation_occurrences").fetchone()
+        row = writer.connection.execute("""
+            select e.site, d.document_name, a.sctid, dh.text_hash as document_text_hash
+            from annotation_occurrence_links o
+            join annotations a on a.id = o.annotation_id
+            join annotation_views av on av.id = o.view_id
+            join exports e on e.id = av.export_id
+            join documents d on d.id = av.document_id
+            join document_hashes dh on dh.id = a.document_hash_id
+        """).fetchone()
         assert row["site"] == "berlin"
         assert row["document_name"] == "Albers.txt"
         assert row["sctid"] == "123"

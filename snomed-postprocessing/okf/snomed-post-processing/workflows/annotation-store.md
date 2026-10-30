@@ -171,7 +171,10 @@ Unknown SCTIDs are retained with null metadata.
 Most downstream queries should use the flattened SQL view:
 
 ```sql
-select * from annotation_occurrences;
+-- Shared annotation data (deduplicated):
+select * from annotations;
+-- Provenance occurrences:
+select * from annotation_occurrence_links;
 ```
 
 See [Annotation store SQLite schema](/snomed-post-processing/data/annotation-store-sqlite.md) for table-level details and example queries.

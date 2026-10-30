@@ -4,7 +4,7 @@ select
   semantic_tag,
   fsn,
   count(*) as annotation_count
-from annotation_occurrences
+from annotations
 group by sctid, semantic_tag, fsn
 order by annotation_count desc, sctid
 limit :n;

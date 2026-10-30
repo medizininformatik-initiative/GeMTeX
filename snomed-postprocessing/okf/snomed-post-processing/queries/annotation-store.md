@@ -38,7 +38,9 @@ Reusable analysis queries live under:
 queries/annotation-store/
 ```
 
-They are intended to run against SQLite databases created by `build-annotation-store`.
+These queries target newly built, deduplicated stores (`PRAGMA user_version = 2`). Build a new database resource, for example `gemtex_semantic_snomed_annotations_deduplicated.sqlite`, and substitute that path in the commands below. Do not reuse the previous database file.
+
+All `annotation_count` results count shared rows in `annotations`, not site/annotator occurrence links. To analyze provenance, explicitly join `annotation_occurrence_links` to `annotation_views` and `exports`. No compatibility view or legacy query path is provided.
 
 # Query runner
 
