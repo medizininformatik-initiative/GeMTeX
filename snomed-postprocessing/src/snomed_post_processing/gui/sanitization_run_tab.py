@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 import io
+import logging
 import pathlib
 import tempfile
 import zipfile
@@ -33,6 +34,8 @@ from .file_sources import render_file_source_selector
 from .files import save_uploaded_file
 from .sidebar import GuiInputs
 
+
+logger = logging.getLogger(__name__)
 
 NO_REPLACEMENT_LABEL = "— no replacement selected —"
 
@@ -74,6 +77,7 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
     metadata_contexts = _metadata_finding_context_lookup(
         st.session_state.get("sanitization_suggestions_metadata") or {}
     )
+    _log_missing_context_documents(suggestions, document_texts, metadata_contexts)
     rows = _suggestions_to_review_rows(suggestions, document_texts, metadata_contexts)
     _render_review_summary(rows)
 
@@ -523,6 +527,7 @@ def _selected_file_name(selected_file: Any) -> str:
 
 def _project_document_text_lookup(project_source: Any) -> dict[str, str]:
     if project_source is None:
+        logger.debug("Context extraction skipped: no project ZIP selected.")
         return {}
     upload_key = _selected_file_key(project_source)
     cache_key = "sanitization_project_text_lookup_key"
@@ -537,7 +542,13 @@ def _project_document_text_lookup(project_source: Any) -> dict[str, str]:
             source_name = getattr(project_source, "name", None)
         lookup = _extract_project_document_texts(data, source_name)
     except Exception:
+        logger.exception("Could not extract review context from the selected project ZIP.")
         lookup = {}
+    if not lookup:
+        logger.warning(
+            "Review context lookup is empty for the selected project ZIP. "
+            "Extraction failures are logged above; reselect/reload the project to retry."
+        )
     st.session_state[cache_key] = upload_key
     st.session_state["sanitization_project_text_lookup"] = lookup
     return lookup
@@ -545,6 +556,7 @@ def _project_document_text_lookup(project_source: Any) -> dict[str, str]:
 
 def _extract_project_document_texts(project_zip_bytes: bytes, file_name: str | None) -> dict[str, str]:
     lookup: dict[str, str] = {}
+    documents_seen = documents_loaded = cas_failures = empty_texts = 0
     with zipfile.ZipFile(io.BytesIO(project_zip_bytes)) as zip_file:
         project_documents = _read_project(zip_file, file_name or "uploaded project")
         for document_name, cas_paths in _yield_matching_files(
@@ -553,16 +565,37 @@ def _extract_project_document_texts(project_zip_bytes: bytes, file_name: str | N
             file_name=file_name,
             allowed_extensions=[".json", ".xmi"],
         ):
+            documents_seen += 1
             for cas_path in cas_paths:
+                stage = "typesystem loading"
                 try:
                     typesystem = _load_typesystem_from_zip(zip_file, cas_path)
+                    stage = "CAS loading"
                     cas = _load_cas_from_zip_member(zip_file, cas_path, typesystem=typesystem)
+                    stage = "sofa text extraction"
                     text = _cas_document_text(cas)
                 except Exception:
+                    cas_failures += 1
+                    logger.exception(
+                        "Context extraction failed during %s: document=%r, CAS member=%r",
+                        stage, document_name, cas_path,
+                    )
                     continue
                 if text:
                     _store_document_text_aliases(lookup, document_name, cas_path, text)
+                    documents_loaded += 1
                     break
+                empty_texts += 1
+                logger.warning("CAS has no document text: document=%r, CAS member=%r", document_name, cas_path)
+            else:
+                logger.warning("No usable context found for document=%r", document_name)
+    logger.warning(
+        "Review context extraction summary: documents discovered=%d, loaded=%d, "
+        "failed CAS attempts=%d, empty-text CAS=%d, lookup aliases=%d",
+        documents_seen, documents_loaded, cas_failures, empty_texts, len(lookup),
+    )
+    if not documents_seen:
+        logger.warning("No matching JSON/XMI documents found in the selected project ZIP; check its archive layout.")
     return lookup
 
 
@@ -576,8 +609,34 @@ def _cas_document_text(cas: Any) -> str:
         if text:
             return str(text)
     except Exception:
-        pass
+        logger.exception("Could not read sofa text from CAS via get_sofa().")
     return ""
+
+
+def _log_missing_context_documents(
+    suggestions: list[Any],
+    document_texts: dict[str, str],
+    metadata_contexts: dict,
+) -> None:
+    """Report missing context once per distinct result, not on every rerun."""
+    missing = sorted({
+        str(getattr(suggestion.finding, "document", ""))
+        for suggestion in suggestions
+        if not _lookup_document_text(document_texts, str(getattr(suggestion.finding, "document", "")))
+        and not metadata_contexts.get(_finding_context_key(suggestion.finding))
+    })
+    signature = tuple(missing)
+    key = "sanitization_missing_context_log_signature"
+    if st.session_state.get(key) == signature:
+        return
+    st.session_state[key] = signature
+    if missing:
+        logger.warning(
+            "Review context unavailable for %d document(s): %r. "
+            "No matching project text or saved context snippet was found. "
+            "Check the selected ZIP and exact document names (lookup aliases=%d).",
+            len(missing), missing, len(document_texts),
+        )
 
 
 def _store_document_text_aliases(
