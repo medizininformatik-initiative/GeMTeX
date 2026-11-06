@@ -20,12 +20,10 @@ from snomed_post_processing.hdf5_handling.policy import (
 )
 from snomed_post_processing.sanitization import (
     ASSOCIATION_TYPE_DESCRIPTIONS,
-    DEFAULT_ALLOWED_ASSOCIATION_TYPES,
     SUPPORTED_ASSOCIATION_TYPES,
     SanitizationResolver,
     apply_semantic_bm25_fallback,
     build_snogit_sidecar,
-    format_association_type_descriptions,
     list_snogit_zip_members,
     sanitization_suggestions_json_text,
     write_sanitization_markdown_report,
@@ -36,6 +34,13 @@ from .file_sources import list_server_files, render_file_source_selector
 from .files import save_uploaded_file
 from .sanitization_run_tab import _finding_context_label, _project_document_text_lookup
 from .sidebar import GuiInputs
+
+
+# GUI suggestion defaults are intentionally broader than the conservative CLI/API defaults.
+DEFAULT_GUI_ASSOCIATION_TYPES = tuple(
+    association_type for association_type in SUPPORTED_ASSOCIATION_TYPES
+    if association_type not in {"MOVED_FROM", "REFERS_TO"}
+)
 
 
 def _format_association_type_option(association_type: str) -> str:
@@ -166,7 +171,7 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
         with fallback_col1:
             activate_historical_ancestor_fallback = st.checkbox(
                 "Historical ancestor fallback",
-                value=False,
+                value=True,
                 help=(
                     "For unresolved whitelist findings: try nearest active whitelisted "
                     "ancestor, then nearest active whitelisted ancestor reachable "
@@ -177,16 +182,17 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
         with fallback_col2:
             sanitize_semantic_bm25_fallback = st.checkbox(
                 "Semantic BM25 fallback",
-                value=False,
+                value=True,
                 help="Suggest lexically similar active concepts for unresolved findings.",
             )
             sanitize_blacklist_suggestions = st.checkbox(
-                "Include blacklist findings in BM25 fallback",
-                value=False,
+                "Include exclusion-list findings in BM25 fallback",
+                value=True,
                 help=(
-                    "This only affects semantic BM25 fallback candidates. If "
-                    "Semantic BM25 fallback is off, this setting is saved but has no effect. "
-                    "Historical ancestor fallback does not resolve blacklist findings."
+                    "Generate BM25 suggestions for exclusion-list findings too; "
+                    "candidate validity rules still apply. If Semantic BM25 fallback "
+                    "is off, this setting is saved but has no effect. "
+                    "Historical ancestor fallback does not resolve exclusion-list findings."
                 ),
             )
 
@@ -204,15 +210,14 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
             sanitization_association_types = st.multiselect(
                 "Allowed historical association types",
                 options=list(SUPPORTED_ASSOCIATION_TYPES),
-                default=list(DEFAULT_ALLOWED_ASSOCIATION_TYPES),
+                default=list(DEFAULT_GUI_ASSOCIATION_TYPES),
                 format_func=_format_association_type_option,
                 help=(
                     "Choose which RF2 historical association types may propose "
                     "replacement candidates. Short explanations are shown in the "
-                    "dropdown labels and listed below."
+                    "dropdown labels. Suggestions still require a review decision."
                 ),
             )
-            st.caption("Association type explanations are listed below.")
             st.markdown("#### Ancestor fallback limits")
             use_absolute_ancestor_limit = st.checkbox(
                 "Use absolute ancestor distance limit",
@@ -251,7 +256,7 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                 "Minimum lexical overlap ratio",
                 min_value=0.0,
                 max_value=1.0,
-                value=0.15,
+                value=0.0,
                 step=0.05,
             )
             sanitize_bm25_max_candidates = st.number_input(
@@ -314,9 +319,6 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                         st.caption(f"Default SNOGIT source/member: {default_members[0]}")
                 except Exception as exc:
                     st.warning(f"Could not inspect SNOGIT source: {exc}")
-            st.divider()
-            st.markdown("#### Association type meanings")
-            st.text(format_association_type_descriptions())
         settings_applied = st.form_submit_button("Apply suggestion settings")
     if settings_applied:
         st.success("Suggestion settings applied.")
@@ -515,8 +517,7 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                 st.write("Creating resolver and loading SNOMED lookup data...")
                 resolver = SanitizationResolver(
                     inputs.hdf5_temp_path,
-                    allowed_association_types=sanitization_association_types
-                    or list(DEFAULT_ALLOWED_ASSOCIATION_TYPES),
+                    allowed_association_types=sanitization_association_types,
                     activate_historical_ancestor_fallback=activate_historical_ancestor_fallback,
                     ancestor_max_distance=(
                         int(ancestor_max_distance) if use_absolute_ancestor_limit else None
@@ -621,7 +622,7 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                 "custom_blacklist_path": str(custom_blacklist_path) if custom_blacklist_path is not None else None,
                 "custom_blacklist_concepts": len(runtime_blacklist_indices),
                 "allowed_association_types": list(
-                    sanitization_association_types or DEFAULT_ALLOWED_ASSOCIATION_TYPES
+                    sanitization_association_types
                 ),
                 "historical_ancestor_fallback": bool(activate_historical_ancestor_fallback),
                 "ancestor_max_distance": int(ancestor_max_distance) if use_absolute_ancestor_limit else None,
@@ -792,13 +793,13 @@ def _render_active_settings_notice(
         snogit_text = "on, cache ready" if snogit_cache_available else "on, cache missing"
     elif use_snogit_bm25:
         snogit_text = "selected, inactive until BM25 is on"
-    association_text = ", ".join(association_types or list(DEFAULT_ALLOWED_ASSOCIATION_TYPES))
+    association_text = ", ".join(association_types) or "none"
     st.info(
         "Active settings: "
         f"historical associations {association_text} · "
         f"ancestor fallback {ancestor_text} · "
         f"BM25 {bm25_text} · "
-        f"blacklist BM25 {blacklist_text} · "
+        f"exclusion-list BM25 {blacklist_text} · "
         f"SNOGIT {snogit_text}",
         icon="ℹ️",
     )

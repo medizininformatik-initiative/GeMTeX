@@ -6,6 +6,18 @@ Dieses Dokument strukturiert sämtliche Punkte aus `todo.md`, beantwortet die do
 
 **Status:** Arbeitsplan, keine Implementierung. Gewünschte Änderungen, verifizierter Ist-Zustand und neue Vorschläge sind jeweils getrennt gekennzeichnet. Numerische Schwellenwerte für automatische Entscheidungen müssen mit Reviewer-Beispielen validiert werden.
 
+### Umsetzungsstand: erstes Paket
+
+Umgesetzt und mit fokussierten Tests geprüft:
+
+- GUI startet ohne vorausgewählten Overlap-Ignore-Layer `webanno.custom.No_Human`; manuelle Eingabe bleibt möglich (Abschnitt 3).
+- Die drei Fallback-Optionen sind standardmäßig aktiviert (Abschnitt 5.1).
+- Historische Beziehungstypen: alle außer `MOVED_FROM` und `REFERS_TO` vorausgewählt; Overlap-Minimum `0.0`; separate Erklärung entfernt (Abschnitt 5.2).
+- Explizite Einstellungen bleiben über Reruns erhalten. Eine leere Auswahl historischer Beziehungstypen wird nicht mehr stillschweigend durch Standardwerte ersetzt.
+- Das bearbeitete BM25-Label verwendet „exclusion-list findings“. Die vollständige Terminologieumstellung aus Abschnitt 4 steht noch aus.
+
+Diese Änderungen betreffen die GUI. CLI-/API-Standardwerte bleiben unverändert. Die übrigen Arbeitspakete und die Upload-Fehlerbehebung sind noch offen.
+
 ## 2. Policy-Check-Ergebnisse als interaktive Tabelle
 
 **Anforderung:** Die Verbesserungen der MIE-Version zurückführen: Policy-Check-Ergebnisse sollen als interaktive Datentabelle statt ausschließlich als Markdown angezeigt werden.
@@ -268,8 +280,8 @@ Fehlschläge sollen den betroffenen Verarbeitungsschritt und eine verständliche
 
 ## 12. Übergreifende Tests und Abnahme
 
-- [ ] Alle gewünschten Standardwerte in einer neuen Sitzung korrekt.
-- [ ] Explizite Nutzerauswahlen bleiben über Reruns erhalten.
+- [x] Gewünschte Layer-/Suggestion-Standardwerte aus Abschnitt 3 und 5 in einer neuen GUI-Sitzung korrekt.
+- [x] Explizite Layer-/Suggestion-Einstellungen bleiben über Reruns erhalten.
 - [ ] Policy-Tabellen und Exporte sind inhaltlich konsistent.
 - [ ] Exclusion-list-Ziele werden über alle Kandidatenquellen und unterstützten Zielmodi gesperrt.
 - [ ] Number-Sonderregel entfernt ausschließlich die ID, nicht die Annotation.

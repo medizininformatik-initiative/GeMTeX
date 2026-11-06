@@ -91,11 +91,12 @@ def render_sidebar() -> GuiInputs:
             )
             ignore_overlap_types_text = st.text_area(
                 "Ignore faulty target annotations overlapping these types",
-                value="webanno.custom.No_Human",
+                value="",
                 help=(
                     "One UIMA layer/type per line. Faulty target annotations overlapping these layers "
-                    "are reported separately and excluded from the critical count. Default: "
-                    "webanno.custom.No_Human."
+                    "are reported separately and excluded from the critical count. "
+                    "No ignore layer is selected by default. To ignore No_Human annotations, "
+                    "add webanno.custom.No_Human explicitly."
                 ),
             )
             ignore_overlap_mode = st.selectbox(

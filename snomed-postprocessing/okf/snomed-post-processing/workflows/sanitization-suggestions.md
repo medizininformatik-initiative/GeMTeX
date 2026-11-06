@@ -64,6 +64,22 @@ For each finding, `SanitizationResolver.suggest` proceeds as follows:
 7. Optionally, after resolver output, apply semantic BM25 fallback.
 8. Otherwise report no replacement or no target-view-acceptable candidate.
 
+# GUI suggestion defaults
+
+In a new GUI session:
+
+- Historical ancestor fallback and semantic BM25 fallback are enabled.
+- BM25 also considers exclusion-list findings. This does not relax target-candidate validity gates.
+- All supported historical association types except `MOVED_FROM` and `REFERS_TO` are selected.
+- Minimum lexical overlap ratio is `0.0`; minimum BM25 score remains `1.5`.
+- Association meanings appear inline in the selection options, not in a separate explanation section.
+
+Explicit settings, including an empty association-type selection, are preserved across reruns. An empty selection disables historical-association candidates; enabled ancestor/BM25 fallbacks can still produce suggestions. These are suggestion defaults, not automatic review approval.
+
+CLI/API defaults remain conservative: association types `SAME_AS` and `REPLACED_BY`; ancestor and BM25 fallbacks are opt-in.
+
+The GUI sidebar starts with no overlap-ignore layer selected. Users may explicitly add `webanno.custom.No_Human` if desired.
+
 # Historical associations
 
 Historical association replacement uses RF2 historical association refsets such as:
@@ -85,7 +101,7 @@ If exactly one acceptable target code remains, status is `historical_association
 
 # Ancestor fallback
 
-Ancestor fallback is opt-in:
+In the CLI, ancestor fallback is opt-in (the GUI enables it by default):
 
 ```bash
 --activate-historical-ancestor-fallback
