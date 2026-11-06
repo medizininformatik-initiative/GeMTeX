@@ -13,6 +13,7 @@ import pandas as pd
 import streamlit as st
 
 from snomed_post_processing.findings_io import read_critical_findings_json
+from snomed_post_processing.terminology import policy_label
 from snomed_post_processing.hdf5_handling.metadata import inspect_hdf5_metadata
 from snomed_post_processing.hdf5_handling.policy import (
     read_blacklist_rule_file,
@@ -736,7 +737,7 @@ def _suggestion_overview_row(index: int, suggestion: Any) -> dict[str, Any]:
         "Annotator": finding.annotator,
         "Source code": finding.code or "",
         "Covered text": finding.covered_text,
-        "Issue": getattr(finding, "list_type", ""),
+        "Issue": policy_label(getattr(finding, "list_type", "")),
         "Status": _status_text(getattr(suggestion, "status", "")),
         "Replacement code": getattr(suggestion, "replacement_code", None) or "",
         "Replacement FSN": getattr(suggestion, "replacement_fsn", None) or "",

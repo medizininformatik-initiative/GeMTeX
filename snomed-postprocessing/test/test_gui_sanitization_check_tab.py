@@ -1,6 +1,7 @@
 import pathlib
 import tempfile
 import unittest
+from types import SimpleNamespace
 
 import h5py
 import numpy as np
@@ -9,6 +10,7 @@ from snomed_post_processing.gui.sanitization_check_tab import (
     _enforce_embedded_blacklist,
     _resolve_custom_blacklist_indices,
     _uses_custom_blacklist,
+    _suggestion_overview_row,
 )
 
 
@@ -48,6 +50,17 @@ class GuiSanitizationCheckHelpersTest(unittest.TestCase):
                 "ancestor_distance",
                 data=np.asarray([1], dtype=np.int64),
             )
+
+    def test_overview_issue_uses_display_labels_without_mutating_identifiers(self):
+        for raw, label in (("whitelist", "inclusion list"), ("blacklist", "exclusion list"), ("other", "other")):
+            with self.subTest(list_type=raw):
+                finding = SimpleNamespace(
+                    document="doc.txt", annotator="reviewer", code="123",
+                    covered_text="example", list_type=raw,
+                )
+                row = _suggestion_overview_row(1, SimpleNamespace(finding=finding))
+                self.assertEqual(row["Issue"], label)
+                self.assertEqual(finding.list_type, raw)
 
     def test_release_blacklist_mode_helpers(self):
         self.assertFalse(_enforce_embedded_blacklist("none"))
