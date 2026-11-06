@@ -131,7 +131,7 @@ def _format_candidates(suggestion) -> str:
     context_candidates = getattr(suggestion, "context_candidates", ()) or ()
     if context_candidates:
         parts.append(
-            "Nearest rejected ancestor: "
+            "Diagnostic candidates (not selectable): "
             + _format_candidate_list(context_candidates)
         )
     candidates = getattr(suggestion, "candidates", ()) or ()

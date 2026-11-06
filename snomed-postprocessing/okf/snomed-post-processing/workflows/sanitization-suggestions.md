@@ -31,7 +31,13 @@ All replacement sources share the same target-view gates from `/src/snomed_post_
 | policy | active AND whitelisted AND not blacklisted |
 | release | active in selected release, plus optional embedded/custom blacklist exclusions |
 
-Release mode deliberately has no whitelist requirement. The SNOMED root concept `138875005` is rejected as a replacement candidate.
+Release mode (**Active release** in the sidebar) deliberately has no inclusion-list requirement. Embedded exclusion-list enforcement stays optional; custom exclusions apply only when selected. The SNOMED root concept `138875005` is rejected as a generic replacement candidate.
+
+# Selectable versus diagnostic candidates
+
+Both structured and BM25 suggestions separate `candidates` (selectable) from `context_candidates` (diagnostic only). `candidate_count` counts selectable candidates. Rejected historical targets, ancestors rejected by distance limits, and BM25 hits below thresholds are context, not replacement choices. Overview/report displays explicitly label diagnostics as not selectable.
+
+JSON serialization preserves this separation. BM25 fallback preserves diagnostic historical/ancestor context when it supplies a replacement. Regenerate suggestions after changing target settings; review and export use the generated candidates rather than adding another HDF5 validation layer. There is no legacy-file normalization or status-based selection allowlist.
 
 # Release-view blacklist modes
 

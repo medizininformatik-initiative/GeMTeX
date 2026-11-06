@@ -198,16 +198,14 @@ class SanitizationResolver:
                 finding=finding,
                 status=SanitizationStatus.NO_POLICY_ACCEPTABLE_CANDIDATE,
                 reason=f"historical associations exist, but no candidate satisfies {self.target_view}-view validity or enabled ancestor-distance limits",
-                candidate_count=len(combined_candidates),
-                candidates=combined_candidates,
+                context_candidates=combined_candidates,
             )
 
         return SanitizationSuggestion(
             finding=finding,
             status=SanitizationStatus.NO_HISTORICAL_ASSOCIATION,
             reason="no active allowed historical association found for source concept",
-            candidate_count=len(ancestor_context),
-            candidates=tuple(ancestor_context),
+            context_candidates=tuple(ancestor_context),
         )
 
     def suggest_all(self, findings: Sequence[CriticalFinding]) -> list[SanitizationSuggestion]:

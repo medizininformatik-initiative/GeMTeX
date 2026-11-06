@@ -72,3 +72,4 @@ class SanitizationSuggestion:
     reason: str = ""
     candidate_count: int = 0
     candidates: tuple[SanitizationCandidate, ...] = ()
+    context_candidates: tuple[SanitizationCandidate, ...] = ()

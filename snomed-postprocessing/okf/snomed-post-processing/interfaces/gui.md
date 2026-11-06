@@ -77,6 +77,12 @@ CriticalFindings JSON, Markdown, masked Markdown, and report JSON downloads rema
 
 The sidebar annotation-layer settings include the configurable SNOMED ID feature name and prefix. The feature defaults to `id`; the prefix defaults to `http://snomed.info/id/`. Use an empty prefix for layers that store plain SCTIDs. The same feature/prefix settings are used when matching reviewed decisions and writing replacement IDs. See [Annotation layer requirements](/snomed-post-processing/data/annotation-layer-requirements.md).
 
+# Replacement choice safety
+
+Suggestion generation puts selectable replacements in `candidates` and rejected targets in `context_candidates`. Review offers only replacement candidates, not diagnostic context. Overview/report displays label diagnostics **Diagnostic candidates (not selectable)**.
+
+**Active release** keeps optional exclusion-list enforcement, following the sidebar settings. Policy mode remains strict; explicit concept rules retain their existing **Override policy** behavior. Regenerate suggestions after changing target settings. No additional HDF5 revalidation is performed during generic review/export.
+
 # Concept rules
 
 The **Suggest policy sanitization** tab includes a **Concept rules** form in a collapsed-by-default expander above fallback settings. It defaults to Number `410680006` → remove ID only, and Date `410671006` → Date property `410672004`. Rules and per-rule **Override policy** are enabled by default. The form supports dynamic rows and separate rule JSON import/export. It uses the sidebar's target annotation layers across all documents and annotators; there are no separate rule-scope input boxes.

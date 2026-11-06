@@ -232,17 +232,21 @@ Die GUI unterscheidet für den Release-Modus die Verwendung eingebetteter und/od
 
 **Antwort:** Im Policy-Modus ja. Eine pauschale Zusicherung für jeden Sanitization-Modus wäre derzeit falsch: Im Release-Modus hängt die eingebettete Liste von der Konfiguration ab.
 
-### Gewünschtes Soll-Verhalten
+### Bestätigtes Verhalten (umgesetzt)
 
-Für generische Historical-/Ancestor-/BM25-Vorschläge gilt die Anforderung „ausgeschlossene Konzepte dürfen nicht vorgeschlagen werden“ über alle relevanten Zielmodi. **Explizite Ausnahme:** Konzeptregeln aus Abschnitt 6 dürfen mit aktiviertem `override policy` diese Policy-Anforderungen übersteuern; solche Entscheidungen müssen sichtbar als Regel-Override ausgewiesen werden.
+Für generische Historical-/Ancestor-/BM25-Vorschläge sind Ziele verboten, die durch die **wirksamen** Policy-Einstellungen ausgeschlossen werden. Im Modus **Active release** (Sidebar) bleibt die Durchsetzung eingebetteter/custom Ausschlüsse ausdrücklich optional und richtet sich nach der dortigen Auswahl; keine zusätzliche pauschale Sperre wurde eingeführt. **Explizite Ausnahme:** Konzeptregeln aus Abschnitt 6 dürfen mit aktiviertem `override policy` die wirksamen Policy-Anforderungen übersteuern; solche Entscheidungen werden sichtbar als Regel-Override ausgewiesen.
+
+**Behobene Lücke:** Abgelehnte historische Ziele und Distanz-/Score-Diagnostik wurden bisher teilweise in `candidates` gespeichert und dadurch als auswählbare Review-Optionen angeboten. Sie liegen jetzt separat in `context_candidates`; `candidate_count` zählt nur auswählbare Ziele. JSON erhält diese Trennung; Review bietet nur `candidates` zur Auswahl an. Nach Änderung der Ziel-Einstellungen Vorschläge neu erzeugen.
+
+**Bewusster Umfang:** Nur die fehlerhafte Vermischung von Auswahl und Diagnostik wird korrigiert. Keine Legacy-Normalisierung, keine zusätzliche Status-Allowlist und keine neue HDF5-Revalidierung bei Review/Export; bestehende Konzeptregel-Validierung und API-Verträge bleiben unverändert.
 
 - Die geltende exclusion list sichtbar anzeigen.
 - Die Kandidatenfilterung vor Ranking-/Review-Ausgabe anwenden.
 - Historische Ziele, Ancestor-Ziele und BM25-/SNOGIT-Ziele identisch behandeln.
-- Die Regel beim automatischen Auswählen und vor Write-back erneut prüfen, insbesondere bei geladenen älteren Suggestions-/Decisions-Dateien.
+- Automatische Auswahl darf nur die generierten `candidates` berücksichtigen, niemals `context_candidates`. Keine zusätzliche Revalidierung älterer Dateien vorgesehen.
 - Ausschlüsse haben Vorrang vor inclusion-list-Mitgliedschaft und hoher BM25-Bewertung.
 
-**Abnahme:** Ein absichtlich ausgeschlossener Zielcode erscheint in keinem auswählbaren generischen Vorschlag und kann nicht durch die automatischen Bedingungen aus Abschnitt 7 freigegeben werden. Eine Ausnahme ist ausschließlich eine explizite Konzeptregel mit aktiviertem `override policy` gemäß Abschnitt 6. Falls diagnostische Kandidaten gezeigt werden, klar als nicht auswählbar kennzeichnen.
+**Abnahme:** Ein durch die wirksamen Einstellungen ausgeschlossener Zielcode erscheint in keinem auswählbaren generischen Vorschlag und kann nicht durch die automatischen Bedingungen aus Abschnitt 7 freigegeben werden. Eine Ausnahme ist ausschließlich eine explizite Konzeptregel mit aktiviertem `override policy` gemäß Abschnitt 6. Falls diagnostische Kandidaten gezeigt werden, klar als nicht auswählbar kennzeichnen.
 
 ## 9. Frage: Welche Metrik beschreibt den Abstand des ersten BM25-Kandidaten?
 
@@ -332,7 +336,7 @@ Fehlschläge sollen den betroffenen Verarbeitungsschritt und eine verständliche
 - [x] Gewünschte Layer-/Suggestion-Standardwerte aus Abschnitt 3 und 5 in einer neuen GUI-Sitzung korrekt.
 - [x] Explizite Layer-/Suggestion-Einstellungen bleiben über Reruns erhalten.
 - [x] Policy-Tabellen nutzen dieselben Findings wie Exporte und Sanitization; Filter verändern die Quelldaten nicht.
-- [ ] Exclusion-list-Ziele werden über alle Kandidatenquellen und unterstützten Zielmodi gesperrt.
+- [x] Durch wirksame Einstellungen ausgeschlossene Ziele werden als Diagnostik statt als generische Auswahloptionen erzeugt. Active-release-Enforcement bleibt optional, explizite Rule-Overrides bleiben möglich; keine Legacy-/Revalidierungsinfrastruktur.
 - [x] Konzeptregelform erlaubt `clear_id` und `replace`, vorausgefüllt mit Number- und Date-Regel.
 - [x] Number `410680006` entfernt ausschließlich die ID, nicht die Annotation.
 - [x] Date `410671006` wird deterministisch durch `410672004` ersetzt.

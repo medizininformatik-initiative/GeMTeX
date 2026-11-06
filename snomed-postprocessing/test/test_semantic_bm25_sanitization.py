@@ -17,6 +17,8 @@ from snomed_post_processing.sanitization import (
     validate_snogit_sidecar_compatibility,
     write_sanitization_markdown_report,
 )
+from snomed_post_processing.sanitization.json_io import sanitization_suggestion_from_dict, sanitization_suggestion_to_dict
+from snomed_post_processing.sanitization.models import SanitizationCandidate
 from snomed_post_processing.sanitization.semantic_bm25 import (
     BM25Index,
     SemanticBm25Resolver,
@@ -204,8 +206,14 @@ class TestSemanticBm25Sanitization(unittest.TestCase):
 
         self.assertEqual(suggestion.status, SanitizationStatus.NO_REPLACEMENT)
         self.assertIsNone(suggestion.replacement_code)
-        self.assertGreater(suggestion.candidate_count, 0)
+        self.assertEqual(suggestion.candidate_count, 0)
+        self.assertEqual(suggestion.candidates, ())
+        self.assertGreater(len(suggestion.context_candidates), 0)
         self.assertIn("threshold", suggestion.reason)
+        restored = sanitization_suggestion_from_dict(sanitization_suggestion_to_dict(suggestion))
+        self.assertEqual(restored, suggestion)
+        from snomed_post_processing.gui.sanitization_run_tab import _replacement_options_and_hints
+        self.assertEqual(_replacement_options_and_hints(restored), ([], {}))
 
     def test_blacklist_findings_remain_disabled_by_default(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -279,6 +287,9 @@ class TestSemanticBm25Sanitization(unittest.TestCase):
                 finding=_finding(),
                 status=SanitizationStatus.NO_HISTORICAL_ASSOCIATION,
                 reason="no historical association",
+                context_candidates=(SanitizationCandidate(
+                    "300", "Alpha therapy forbidden concept (procedure)", "REPLACED_BY", True, True, True,
+                ),),
             )
 
             suggestions = apply_semantic_bm25_fallback(
@@ -296,6 +307,14 @@ class TestSemanticBm25Sanitization(unittest.TestCase):
         self.assertIn("semantic_bm25_replacement", report)
         self.assertIn("BM25", report)
         self.assertIn("Alpha therapy procedure", report)
+        self.assertEqual(suggestions[0].context_candidates, historical_unresolved.context_candidates)
+        self.assertEqual(
+            sanitization_suggestion_from_dict(sanitization_suggestion_to_dict(suggestions[0])), suggestions[0],
+        )
+        from snomed_post_processing.gui.sanitization_run_tab import _replacement_options_and_hints
+        options, _ = _replacement_options_and_hints(suggestions[0])
+        self.assertTrue(options)
+        self.assertFalse(any("300" in option for option in options))
 
     def test_snogit_sidecar_defaults_to_newest_general_member(self):
         with tempfile.TemporaryDirectory() as tmpdir:

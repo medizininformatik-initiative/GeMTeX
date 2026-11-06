@@ -135,8 +135,7 @@ class SemanticBm25Resolver:
                     f"(score={best.score:.3f}, lexical={best.lexical_score:.3f})"
                 ),
                 score=best.score,
-                candidate_count=len(candidates),
-                candidates=candidates,
+                context_candidates=candidates,
             )
 
         tied = [candidate for candidate in candidates if math.isclose(candidate.score, best.score, rel_tol=1e-9, abs_tol=1e-9)]
@@ -427,7 +426,10 @@ def apply_semantic_bm25_fallback(
                 enhanced.append(
                     dataclasses.replace(
                         bm25_suggestion,
-                        context_candidates=tuple(getattr(suggestion, "candidates", ())),
+                        context_candidates=(
+                            tuple(getattr(suggestion, "context_candidates", ()))
+                            + tuple(getattr(suggestion, "candidates", ()))
+                        ),
                     )
                 )
                 report_progress(

@@ -725,6 +725,7 @@ def _render_suggestion_overview(suggestions: list[Any]) -> None:
             "Replacement FSN": st.column_config.TextColumn("Replacement FSN", width="large"),
             "Reason": st.column_config.TextColumn("Reason", width="large"),
             "Top candidates": st.column_config.TextColumn("Top candidates", width="large"),
+            "Diagnostic candidates (not selectable)": st.column_config.TextColumn("Diagnostic candidates (not selectable)", width="large"),
         },
     )
 
@@ -743,6 +744,7 @@ def _suggestion_overview_row(index: int, suggestion: Any) -> dict[str, Any]:
         "Replacement FSN": getattr(suggestion, "replacement_fsn", None) or "",
         "Reason": getattr(suggestion, "reason", "") or "",
         "Top candidates": _candidate_summary(getattr(suggestion, "candidates", ())),
+        "Diagnostic candidates (not selectable)": _candidate_summary(getattr(suggestion, "context_candidates", ())),
     }
 
 

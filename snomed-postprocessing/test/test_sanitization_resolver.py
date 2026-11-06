@@ -110,8 +110,9 @@ class TestSanitizationResolver(unittest.TestCase):
 
         self.assertEqual(suggestion.status, SanitizationStatus.NO_POLICY_ACCEPTABLE_CANDIDATE)
         self.assertEqual(suggestion.replacement_code, None)
-        self.assertEqual(suggestion.candidate_count, 1)
-        self.assertFalse(suggestion.candidates[0].policy_acceptable)
+        self.assertEqual(suggestion.candidate_count, 0)
+        self.assertEqual(suggestion.candidates, ())
+        self.assertFalse(suggestion.context_candidates[0].policy_acceptable)
 
     def test_release_view_accepts_active_candidate_without_whitelist(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -154,8 +155,43 @@ class TestSanitizationResolver(unittest.TestCase):
             suggestion = suggest_sanitization(_finding(), hdf5_path)
 
         self.assertEqual(suggestion.status, SanitizationStatus.NO_POLICY_ACCEPTABLE_CANDIDATE)
-        self.assertTrue(suggestion.candidates[0].in_whitelist)
-        self.assertTrue(suggestion.candidates[0].in_blacklist)
+        self.assertEqual(suggestion.candidates, ())
+        self.assertTrue(suggestion.context_candidates[0].in_whitelist)
+        self.assertTrue(suggestion.context_candidates[0].in_blacklist)
+
+    def test_diagnostics_roundtrip_without_becoming_review_choices(self):
+        from snomed_post_processing.gui.sanitization_check_tab import _suggestion_overview_row
+        from snomed_post_processing.gui.sanitization_run_tab import _replacement_options_and_hints
+        from snomed_post_processing.sanitization.json_io import (
+            sanitization_suggestion_from_dict,
+            sanitization_suggestion_to_dict,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            hdf5_path = pathlib.Path(tmpdir) / "concepts.hdf5"
+            _write_sanitization_ready_hdf5(hdf5_path, blacklist_indices=(1,))
+            for view, enforce_exclusions, selectable in (
+                ("policy", False, False),
+                ("release", False, True),
+                ("release", True, False),
+            ):
+                with self.subTest(view=view, enforce_exclusions=enforce_exclusions):
+                    suggestion = suggest_sanitization(
+                        _finding(), hdf5_path, target_view=view,
+                        release_exclude_blacklist=enforce_exclusions,
+                    )
+                    restored = sanitization_suggestion_from_dict(sanitization_suggestion_to_dict(suggestion))
+                    self.assertEqual(restored, suggestion)
+                    options, _ = _replacement_options_and_hints(restored)
+                    self.assertEqual(bool(options), selectable)
+                    self.assertEqual(restored.candidate_count, int(selectable))
+                    if not selectable:
+                        overview = _suggestion_overview_row(1, restored)
+                        self.assertEqual(overview["Top candidates"], "")
+                        self.assertIn("200", overview["Diagnostic candidates (not selectable)"])
+                        report = io.StringIO()
+                        write_sanitization_markdown_report([restored], report)
+                        self.assertIn("Diagnostic candidates (not selectable)", report.getvalue())
 
     def test_marks_multiple_acceptable_targets_as_ambiguous(self):
         with tempfile.TemporaryDirectory() as tmpdir:

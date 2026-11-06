@@ -43,7 +43,7 @@ class SemanticBm25Suggestion:
     score: float = 0.0
     candidate_count: int = 0
     candidates: tuple[SemanticBm25Candidate, ...] = ()
-    context_candidates: tuple[SanitizationCandidate, ...] = ()
+    context_candidates: tuple[SanitizationCandidate | SemanticBm25Candidate, ...] = ()
 
 
 @dataclasses.dataclass(frozen=True)
