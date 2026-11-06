@@ -31,6 +31,7 @@ The Streamlit GUI wraps the same pipeline functions as the CLI. It is intended f
 | `/src/snomed_post_processing/gui/file_sources.py` | Shared file selector supporting Upload, Data directory, and Server path. |
 | `/src/snomed_post_processing/gui/policy_tab.py` | Policy checks, persistent findings tables, and report downloads. |
 | `/src/snomed_post_processing/gui/sanitization_check_tab.py` | Suggestion generation UI and settings metadata. |
+| `/src/snomed_post_processing/gui/concept_rules.py` | Explicit concept-rule form, one-step application to review, and rule-decision review/undo. |
 | `/src/snomed_post_processing/gui/sanitization_run_tab.py` | Review/apply UI and INCEpTION deployment form. |
 | `/src/snomed_post_processing/gui/downloads.py` | Markdown/JSON download helpers. |
 
@@ -75,6 +76,14 @@ CriticalFindings JSON, Markdown, masked Markdown, and report JSON downloads rema
 # Annotation ID feature and prefix
 
 The sidebar annotation-layer settings include the configurable SNOMED ID feature name and prefix. The feature defaults to `id`; the prefix defaults to `http://snomed.info/id/`. Use an empty prefix for layers that store plain SCTIDs. The same feature/prefix settings are used when matching reviewed decisions and writing replacement IDs. See [Annotation layer requirements](/snomed-post-processing/data/annotation-layer-requirements.md).
+
+# Concept rules
+
+The **Suggest policy sanitization** tab includes a **Concept rules** form in a collapsed-by-default expander above fallback settings. It defaults to Number `410680006` → remove ID only, and Date `410671006` → Date property `410672004`. Rules and per-rule **Override policy** are enabled by default. The form supports dynamic rows and separate rule JSON import/export. It uses the sidebar's target annotation layers across all documents and annotators; there are no separate rule-scope input boxes.
+
+Use the single **Apply rules to review** button to save/validate the configuration, scan matching annotations, and select decisions in Review & apply. A summary reports ID removals, replacements, actual policy overrides, and manual conflicts. JSON uploads load configuration automatically without applying it; **Download concept rules JSON** remains separate. There are no Save, Preview, Load, or separate acceptance buttons in the rules form. All matching original annotations are considered, not just policy findings. `literal` is always preserved. Replacements require an existing active target even when overriding policy.
+
+**Review & apply** shows a separate rule-decision editor, allowing Apply choices to be saved and automatic selections undone. Existing manual decisions are protected; stale inputs or conflicts block export. Rule-only reviews are supported without generating generic suggestions. The ordinary Run sanitization / deployment controls perform the actual write-back. See [rule semantics and write-back](/snomed-post-processing/workflows/reviewed-decisions-and-writeback.md).
 
 # Review and apply behavior
 

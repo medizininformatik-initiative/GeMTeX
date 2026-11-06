@@ -34,6 +34,7 @@ from .file_sources import list_server_files, render_file_source_selector
 from .files import save_uploaded_file
 from .sanitization_run_tab import _finding_context_label, _project_document_text_lookup
 from .sidebar import GuiInputs
+from .concept_rules import render_concept_rules_form
 
 
 # GUI suggestion defaults are intentionally broader than the conservative CLI/API defaults.
@@ -163,6 +164,8 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
             help="Load a CriticalFindings JSON file, or run the policy check in this session first.",
         )
         uploaded_findings_file = findings_selection.value
+
+    render_concept_rules_form(inputs)
 
     st.subheader("Settings")
     st.caption("Change settings inside the form, then apply them. This avoids rerunning the app for every checkbox or threshold edit.")

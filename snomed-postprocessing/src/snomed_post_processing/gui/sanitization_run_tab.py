@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import datetime
 import io
 import logging
@@ -33,6 +34,8 @@ from snomed_post_processing.uima_processing.io import (
 from .file_sources import render_file_source_selector
 from .files import save_uploaded_file
 from .sidebar import GuiInputs
+from .concept_rules import render_rule_review, protect_manual_decisions
+from snomed_post_processing.sanitization.concept_rules import decision_key
 
 
 logger = logging.getLogger(__name__)
@@ -50,8 +53,14 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
     if st.session_state.get("sanitization_last_load_message"):
         st.success(st.session_state.pop("sanitization_last_load_message"))
 
-    suggestions = st.session_state.get("sanitization_suggestions")
-    if not suggestions:
+    suggestions = st.session_state.get("sanitization_suggestions") or []
+    rule_decisions, rule_invalid = render_rule_review(inputs)
+    rule_decisions, rule_conflicts = protect_manual_decisions(rule_decisions)
+    rule_invalid = rule_invalid or rule_conflicts
+    if not suggestions and st.session_state.get("sanitization_restored_decisions_by_index"):
+        rule_invalid = True
+        st.warning("Load the matching suggestions before exporting restored non-rule review decisions.")
+    if not suggestions and not rule_decisions and not rule_invalid:
         if st.session_state.get("sanitization_restored_decisions_by_index"):
             st.info(
                 "Reviewed decisions are loaded, but no sanitization suggestions are available yet. "
@@ -65,7 +74,7 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
         st.button("Run sanitization", type="primary", disabled=True)
         return
 
-    st.caption(f"Loaded {len(suggestions)} suggestion(s).")
+    st.caption(f"Loaded {len(suggestions)} generic suggestion(s) and {len(rule_decisions)} explicit concept-rule decision(s).")
     json_path = st.session_state.get("sanitization_suggestions_json_path")
     if json_path:
         st.caption(f"Suggestions JSON: `{json_path}`")
@@ -79,14 +88,22 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
     )
     _log_missing_context_documents(suggestions, document_texts, metadata_contexts)
     rows = _suggestions_to_review_rows(suggestions, document_texts, metadata_contexts)
-    _render_review_summary(rows)
+    # Preserve original suggestion indices; explicit rules reserve their annotations
+    # even when deselected, rather than exposing an unrelated fallback candidate.
+    rule_keys = {decision_key(item) for item in rule_decisions}
+    rows = [row for row in rows if (
+        row["Document"], row["Annotator"], row.get("_layer"),
+        tuple(row.get("_offset") or ()), row["Source code"],
+    ) not in rule_keys]
+    if rows:
+        _render_review_summary(rows)
 
     with st.popover("Suggestion metadata"):
         _render_suggestion_settings(st.session_state.get("sanitization_suggestions_metadata") or {})
 
     st.subheader("Review workspace")
     st.caption(
-        "For each finding, apply a selected replacement, delete the matched annotation, or mark it for manual editing in the sanitized copy."
+        "Concept-rule actions are reviewed above. For each remaining finding, apply a selected replacement, delete the matched annotation, or mark it for manual editing in the sanitized copy."
     )
     st.caption(
         "Checkbox behavior: no selection keeps the annotation unchanged; Needs manual edit takes precedence over Apply/Delete; deletion takes precedence over Apply."
@@ -97,7 +114,7 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
         key="manual_review_layer",
         help="Layer added to the sanitized project for rows marked 'Needs manual edit'.",
     )
-    reviewed_decisions = []
+    reviewed_decisions = list(rule_decisions)
     if rows:
         _render_single_choice_bulk_actions(
             [row for row in rows if _row_has_actionable_replacement(row)],
@@ -106,21 +123,38 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
         _render_manual_choice_bulk_actions([row for row in rows if _row_has_actionable_replacement(row)])
         reviewed_decisions.extend(_render_document_review_sections(rows))
     else:
-        st.info("No sanitization suggestions are available for review.")
+        st.info("No additional generic suggestions to review.")
     st.session_state["sanitization_review_decisions"] = reviewed_decisions
 
     decisions_metadata = _decisions_metadata(rows)
+    decisions_metadata["concept_rule_scope"] = st.session_state.get("concept_rule_scope", {})
+    decisions_metadata["concept_rules"] = (
+        [dataclasses.asdict(rule) for rule in st.session_state["concept_rules"]]
+        if "concept_rules" in st.session_state else list({
+            item["concept_rule"]["rule_id"]: item["concept_rule"] for item in rule_decisions
+        }.values())
+    )
+    # Rule-only documents are reviewed only when all their decisions are selected.
+    rule_documents = {item["document"] for item in rule_decisions} - {row["Document"] for row in rows}
+    auto_reviewed = {doc for doc in rule_documents if all(
+        item.get("apply") for item in rule_decisions if item["document"] == doc
+    )}
+    if auto_reviewed:
+        st.caption(f"Automatically reviewed {len(auto_reviewed)} rule-only document section(s): {', '.join(sorted(auto_reviewed))}.")
+    decisions_metadata["reviewed_documents"] = sorted(set(decisions_metadata["reviewed_documents"]) | auto_reviewed)
+    decisions_metadata["document_count"] = len({item["document"] for item in reviewed_decisions})
     decisions_text = sanitization_decisions_json_text(reviewed_decisions, metadata=decisions_metadata)
 
     invalid_selected_rows = [
         decision for decision in reviewed_decisions if decision["apply"] and not decision["valid_choice"]
     ]
-    replacement_count = sum(1 for decision in reviewed_decisions if decision.get("action") == "replace")
     delete_count = sum(1 for decision in reviewed_decisions if decision.get("action") == "delete")
     manual_edit_count = sum(1 for decision in reviewed_decisions if decision.get("action") == "manual_edit")
-    selected_count = replacement_count + delete_count + manual_edit_count
+    clear_id_count = sum(1 for decision in reviewed_decisions if decision.get("action") == "clear_id" and decision.get("apply"))
+    replacement_count = sum(1 for decision in reviewed_decisions if decision.get("action") == "replace" and decision.get("apply"))
+    selected_count = replacement_count + delete_count + manual_edit_count + clear_id_count
     st.caption(
-        f"Selected {replacement_count} replacement(s), {delete_count} deletion(s), "
+        f"Selected {replacement_count} replacement(s), {clear_id_count} ID removal(s), {delete_count} deletion(s), "
         f"and {manual_edit_count} manual-edit marker(s) for the future sanitization run."
     )
     if invalid_selected_rows:
@@ -133,7 +167,7 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
         reviewed_decisions,
         decisions_text,
         selected_count=selected_count,
-        has_invalid_selected_rows=bool(invalid_selected_rows),
+        has_invalid_selected_rows=bool(invalid_selected_rows) or rule_invalid,
         manual_review_layer=manual_review_layer,
         id_prefix=inputs.id_prefix,
         id_feature=inputs.id_feature,
@@ -665,10 +699,12 @@ def _strip_known_suffix(name: str) -> str:
 
 
 def _keep_document_open(document: str) -> None:
+    st.session_state[f"sanitization_human_reviewed_{_safe_key(document)}"] = True
     st.session_state["sanitization_keep_document_open"] = document
 
 
 def _mark_document_reviewed(document: str) -> None:
+    st.session_state[f"sanitization_human_reviewed_{_safe_key(document)}"] = True
     st.session_state[_document_reviewed_key(document)] = True
     st.session_state.pop("sanitization_keep_document_open", None)
 
@@ -1274,6 +1310,19 @@ def _decisions_metadata(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _restore_decision_state(decisions: list[dict[str, Any]], metadata: dict[str, Any]) -> None:
+    from snomed_post_processing.sanitization.concept_rules import ConceptRule, validate_rules
+    rules = metadata.get("concept_rules", []) if isinstance(metadata, dict) else []
+    if rules:
+        st.session_state["concept_rules"] = validate_rules(ConceptRule(**rule) for rule in rules)
+    st.session_state["concept_rule_decisions"] = [decision for decision in decisions if decision.get("concept_rule")]
+    st.session_state.pop("concept_rule_decisions_source", None)
+    st.session_state["concept_rule_needs_validation"] = True
+    st.session_state.pop("concept_rule_undo", None)
+    st.session_state["concept_rule_scope"] = metadata.get("concept_rule_scope", {})
+    st.session_state.pop("concept_rule_preview", None)
+    st.session_state["concept_rules_editor_revision"] = st.session_state.get("concept_rules_editor_revision", 0) + 1
+    st.session_state["concept_rule_review_revision"] = st.session_state.get("concept_rule_review_revision", 0) + 1
+    st.session_state["sanitization_review_decisions"] = decisions
     st.session_state["sanitization_restored_decisions_by_index"] = {
         int(decision["suggestion_index"]): decision
         for decision in decisions
@@ -1292,10 +1341,13 @@ def _restore_decision_state(decisions: list[dict[str, Any]], metadata: dict[str,
         st.session_state[_manual_edit_key(row_number)] = manual_edit
     if isinstance(metadata, dict) and metadata.get("manual_review_layer"):
         st.session_state["manual_review_layer"] = str(metadata["manual_review_layer"])
+    pending_ids = {}
     if isinstance(metadata, dict) and "id_prefix" in metadata:
-        st.session_state["snomed_annotation_id_prefix"] = str(metadata.get("id_prefix") or "")
+        pending_ids["snomed_annotation_id_prefix"] = str(metadata.get("id_prefix") or "")
     if isinstance(metadata, dict) and "id_feature" in metadata:
-        st.session_state["snomed_annotation_id_feature"] = str(metadata.get("id_feature") or "id") or "id"
+        pending_ids["snomed_annotation_id_feature"] = str(metadata.get("id_feature") or "id") or "id"
+    if pending_ids:
+        st.session_state["sanitization_pending_id_settings"] = pending_ids
     reviewed_documents = metadata.get("reviewed_documents", []) if isinstance(metadata, dict) else []
     for document in reviewed_documents:
         st.session_state[_document_reviewed_key(str(document))] = True
@@ -1411,6 +1463,7 @@ def _review_rows_to_decisions(
         decisions.append(
             {
                 "suggestion_index": row_number - 1,
+                "reviewed_by_human": bool(st.session_state.get(f"sanitization_human_reviewed_{_safe_key(str(original.get('Document', '')))}", False)),
                 "action": action,
                 "apply": apply_replacement,
                 "delete_annotation": delete_annotation,

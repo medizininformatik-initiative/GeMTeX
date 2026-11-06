@@ -24,6 +24,7 @@ Reviewed decisions JSON is the bridge between suggestion generation and write-ba
 | Action | Effect |
 |---|---|
 | `replace` / applicable `apply` decision | Replace matching annotation SCTID with reviewed target SCTID. |
+| `clear_id` with `apply=true`, `valid_choice=true`, and no replacement code | Set only the matching annotation ID feature to `None` (unset/null); keep the annotation and every other feature, including `literal`. |
 | `delete` / `delete_annotation` | Remove the matching CAS annotation. |
 | `manual_edit` / `manual_edit=true` | Keep original annotation and add a `ManualReview` marker. |
 | no selection / skipped / no apply | Leave annotation unchanged. |
@@ -31,12 +32,32 @@ Reviewed decisions JSON is the bridge between suggestion generation and write-ba
 Precedence during application:
 
 ```text
-manual_edit > delete > apply > keep unchanged
+manual_edit > delete > clear_id / replacement apply > keep unchanged
 ```
+
+# Explicit concept rules
+
+The reusable engine is `sanitization/concept_rules.py`. The GUI form is above fallback settings in **Suggest policy sanitization**:
+
+- Number `410680006`: `clear_id`.
+- Date `410671006`: replace with Date property `410672004`.
+- Both rules are enabled initially; per-rule `override_policy` defaults to true, including new rows.
+
+The form can add/edit/disable/remove rules and download/load separate concept-rules JSON (`snomed-post-processing.concept-rules`, version 1). The collapsible form uses the sidebar's target annotation layers and covers all documents and annotators; there are no separate rule-scope input boxes. Older saved scope filters are not reused for new GUI rule applications. It scans original JSONCAS/XMI annotations directly, including annotations absent from policy findings. It does not alter source CAS files or chain rules.
+
+Workflow: **Apply rules to review → review/save choices → explicit export/upload**. The single submit saves and validates rules, scans the original annotations, and selects rule decisions without a separate preview/accept step. A summary shows ID removals, replacements, actual policy overrides, and manual conflicts. JSON uploads automatically load configuration once per file content, without applying decisions; download remains a separate button. Applying rules to review or rerunning Streamlit does not write CAS files. The review works without generic suggestions. Rule decisions reserve their annotation identities, so generic fallback choices cannot replace them. The inherited annotation-layer selection is shared by all rules. The engine API still supports document/annotator filters for programmatic callers.
+
+`override_policy=true` permits targets outside the inclusion list or on the exclusion list; replacement targets must still exist and be active. With override off, selected target-view validity gates apply. `clear_id` has no target membership requirement. Provenance distinguishes override permission from `policy_overridden`, an actual bypass. Loaded rule decisions are checked for rule/action consistency and revalidated against the selected HDF5 before GUI export.
+
+Review decisions carry the rule snapshot and actual override flag; decisions metadata carries rule definitions, scope, and reviewed-document state. No existing JSON identifiers are renamed or artifacts migrated. Rule-only documents are included in reviewed metadata only when all their decisions are selected.
+
+Input/configuration changes block stale decisions. Conflicting manual decisions (including explicitly reviewed keep choices) block export until resolved. Undo restores the previous automatic selection without overwriting manually edited rule choices; an explicitly labelled discard button can clear those too. The later association/BM25 condition form remains separate.
+
+Only the configured ID feature changes for rule actions: `literal`, other features, annotation count, type, and offsets are preserved in JSONCAS/XMI and offline upload-artifact tests. Live INCEpTION reimport is a separate validation step requiring approval.
 
 # Matching semantics
 
-Decisions are matched conservatively by document, annotator, annotation layer, span/offset, source code, and optionally covered text. A decision that cannot be matched is reported as unmatched.
+Decisions are matched conservatively by document, annotator, annotation layer, span/offset, source code, and optionally covered text. A decision that cannot be matched is reported as unmatched. Matching is planned against original IDs before modifications, preventing accidental chaining. Ambiguous concept-rule matches and multiple decisions targeting one annotation are rejected.
 
 # Local ZIP write-back
 

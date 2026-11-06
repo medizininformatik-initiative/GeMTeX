@@ -15,6 +15,7 @@ Umgesetzt und mit fokussierten Tests geprüft:
 - Historische Beziehungstypen: alle außer `MOVED_FROM` und `REFERS_TO` vorausgewählt; Overlap-Minimum `0.0`; separate Erklärung entfernt (Abschnitt 5.2).
 - Explizite Einstellungen bleiben über Reruns erhalten. Eine leere Auswahl historischer Beziehungstypen wird nicht mehr stillschweigend durch Standardwerte ersetzt.
 - Die nach außen sichtbare Terminologie verwendet „inclusion list“ / „exclusion list“ in GUI, CLI-Hilfetexten, Konsolenmeldungen, generierten Markdown-Reports und README (Abschnitt 4). Technische Bezeichner und Artefaktformate bleiben unverändert.
+- Konzeptregeln für Number und Date mit einklappbarer Regelform, gemeinsamem **Apply rules to review**-Button, Override-Option, Review/Undo und `literal`-erhaltendem Write-back sind offline umgesetzt (Abschnitt 6).
 
 Zusätzlich wurde die MIE-Ergebnisdarstellung aus `../../snomed-annotation-audit/` übernommen (Abschnitt 2): gruppierte Datentabellen, Kennzahlen, Filter mit Reset und sitzungsinterne Speicherung des letzten erfolgreichen Checks. Report-Downloads und Übergabe an die Sanitization bleiben erhalten. Filter ändern weder Exporte noch die gespeicherten Findings.
 
@@ -81,34 +82,80 @@ Die letzte Option erweitert die Menge der zu bearbeitenden Findings. Sie erlaubt
 
 **Abnahme:** Die Werte gelten für neue Sitzungen; gespeicherte oder bewusst geänderte Einstellungen werden nicht bei jedem Rerun überschrieben.
 
-## 6. Sonderregel für „Number (attribute)“
+## 6. Konfigurierbare Konzeptregeln: Number und Date
 
-### 6.1 Gewünschtes Verhalten
+**Status:** Konzeptregeln inklusive GUI, gemeinsamem Apply-Schritt, Review/Undo und gemeinsamem CAS-Write-back implementiert und offline getestet. Live-Reimport nach INCEpTION steht noch aus. Die folgenden SCTIDs wurden vom Nutzer vorgegeben. Bezeichnungen und Zielverfügbarkeit bei der Ausführung anhand des ausgewählten SNOMED-Releases prüfen; die Regeln selbst über die SCTID identifizieren, nicht über FSN-Textvergleich.
 
-Für eine Annotation mit dem entsprechenden SNOMED-Konzept soll eine konfigurierbare Sonderregel gelten:
+### 6.1 Vorgefüllte Regeln
 
-- Nur das `id`-Feature der betroffenen Annotation leeren.
-- Die Annotation selbst, ihr Layer-Typ, ihre Offsets, ihr Textbezug und alle anderen Features bleiben bestehen.
-- Insbesondere **keine Annotation löschen** und keinen Layer aus dem TypeSystem entfernen.
+| Quellkonzept | Quell-SCTID | Aktion | Zielkonzept / Ziel-SCTID |
+|---|---|---|---|
+| Number (attribute) | `410680006` | **Remove ID only** (`clear_id`) | Kein Ziel: nur die Konzeptreferenz leeren |
+| Date (attribute) | `410671006` | **Replace with concept** (`replace`) | Date property (qualifier value), `410672004` |
 
-### 6.2 Umsetzungsvorschlag
+**Verbindliche Invarianten für beide Aktionen:**
 
-Eine eigene Einstellung bzw. Regelzeile anbieten, die mit diesem Sonderfall vorausgefüllt ist:
+- `literal` bleibt exakt erhalten: keine Löschung, Normalisierung, Neuberechnung oder Übernahme aus einem Zielkonzept. Auch leere Werte, Nullwerte und ein nicht vorhandenes Feature dürfen nicht künstlich verändert oder ergänzt werden.
+- Die bestehende Annotation bleibt bestehen. Ihr Layer-Typ, ihre Offsets, ihr Textbezug und alle übrigen Features bleiben unverändert; verändert wird ausschließlich das konfigurierte Konzept-ID-Feature (standardmäßig `id`).
+- Keine Annotation löschen, nicht durch eine neu erzeugte Annotation ersetzen und keinen Layer aus dem TypeSystem entfernen.
+- URI-Präfixe und unpräfixierte SCTIDs gemäß den bestehenden ID-Einstellungen korrekt lesen und schreiben.
+- Die Date-Regel ist eine deterministische Ersetzung, kein historischer oder BM25-Vorschlag. Bei aktivierter Regel darf sie nicht durch einen anders gerankten Kandidaten ersetzt werden.
 
-| Feld | Vorgeschlagener Inhalt |
+### 6.2 Eigenständige Regelform
+
+Die Streamlit-Form **Concept rules** liegt im Tab **Suggest policy sanitization** in einem standardmäßig eingeklappten Expander oberhalb der Fallback-Einstellungen; getrennt von den score-/assoziationsbasierten Auto-Apply-Bedingungen aus Abschnitt 7. Die beiden obigen Regeln sind vorausgefüllt; weitere Regeln können hinzugefügt, bearbeitet, deaktiviert und entfernt werden.
+
+Vorgeschlagene Felder je Regel:
+
+| Feld | Funktion |
 |---|---|
-| Konzept | „Number (attribute)“, auf eine verifizierte SCTID aufgelöst |
-| Aktion | `clear_id` – nur Konzeptreferenz entfernen |
-| Geltungsbereich | Explizit gewählte Annotation-Layer |
-| Aktivierung | Sichtbare, veränderbare Option |
+| Aktiviert | Regel bewusst ein-/ausschalten |
+| Override policy | Boolean pro Regel, standardmäßig aktiviert; erlaubt eine explizite Abweichung von inclusion-/exclusion-list-Anforderungen, ohne die Policy selbst zu verändern |
+| Regel-ID / Name | Stabile technische Identität und verständliche Bezeichnung für Nachvollziehbarkeit |
+| Quell-SCTID | Exakter Konzept-Match; FSN nur zur Anzeige/Validierung |
+| Aktion | Auswahl zwischen **Remove ID only** und **Replace with concept** |
+| Ziel-SCTID | Nur bei Ersetzung erforderlich; bei `clear_id` nicht zulässig |
 
-Die Regel intern über die **SCTID** identifizieren, nicht ausschließlich über den FSN-Text. Die richtige SCTID im verwendeten Release verifizieren; dieses Dokument legt keine unbestätigte ID fest.
+Der Geltungsbereich wird nicht über zusätzliche Eingabeboxen konfiguriert: Die Regeln übernehmen die Ziel-Annotation-Layer aus der Sidebar und berücksichtigen alle Dokumente und Annotatoren. Frühere gespeicherte Regel-Scope-Filter werden bei neuen GUI-Regelanwendungen nicht angewandt.
 
-Die aktuelle Write-back-Dokumentation beschreibt Ersetzen, Löschen und manuelle Bearbeitung, aber keine separate `clear_id`-Aktion. Diese muss durchgängig in Review, Decisions-JSON, Validierung und JSONCAS-/XMI-Write-back ergänzt werden.
+`literal`-Erhalt ist eine feste Eigenschaft beider Aktionen und **keine abschaltbare Option**.
 
-**Noch zu entscheiden:** Soll die vorausgefüllte Regel standardmäßig aktiviert sein? Soll sie nur Findings oder jede passende Annotation im gewählten Geltungsbereich bearbeiten? Technisch ist außerdem das korrekte Leeren eines String-Features (`None` oder leerer String) anhand von CAS-Serialisierung und INCEpTION-Reimport zu testen.
+**Vereinfachte Bedienung (umgesetzt):** Die Regelform hat nur einen Aktionsbutton **Apply rules to review**: Einstellungen speichern/validieren, passende Annotationen scannen und Entscheidungen automatisch im Review auswählen. Eine Zusammenfassung zeigt ID-Entfernungen, Ersetzungen, tatsächliche Policy-Overrides und manuelle Konflikte. Separate Save-/Preview-/Übernahme-Buttons entfallen. JSON-Uploads laden nur die Konfiguration automatisch; der Download bleibt als eigener Button erhalten. Manuelle Entscheidungen und Undo bleiben geschützt. Formulareingaben, Regelanwendung im Review und Streamlit-Reruns schreiben niemals direkt CAS-Dateien um. Die tatsächliche Änderung erfolgt erst über den expliziten Export-/Write-back-Schritt.
 
-**Abnahme:** Anzahl und Offsets der Annotationen bleiben identisch; nur die betroffenen IDs sind leer. Das Ergebnis kann wieder in INCEpTION importiert werden.
+**Bestätigte Defaults:** Beide vorgefüllten Regeln aktiviert; `override policy` standardmäßig aktiviert, auch bei neu angelegten Regeln. Anwendung auf **alle passenden Annotationen im ausdrücklich gewählten Geltungsbereich**, nicht nur auf bereits gemeldete Policy-Findings. So gilt insbesondere die Date-Regel auch dann, wenn das Quellkonzept den Policy-Check bereits besteht. Das erfordert die Ermittlung passender Annotationen aus dem Projekt und darf nicht allein auf der Findings-Liste beruhen.
+
+### 6.3 Validierung, Priorität und Sicherheit
+
+- Quell-SCTID und Aktion validieren; bei `replace` zusätzlich Ziel-SCTID und Existenz/Aktivität prüfen. Bei deaktiviertem `override policy` muss das Ersetzungsziel auch die geltende Ziel-Policy erfüllen. Selbstersetzungen, widersprüchliche Regeln für dieselbe Quelle im selben Geltungsbereich und fehlende Zielcodes zurückweisen.
+- Pro Annotation genau eine passende Konzeptregel auswerten, anhand ihrer ursprünglichen ID. Im ersten Umfang keine verkettete Anwendung mehrerer Regeln und keine implizite Reihenfolge als Konfliktlösung.
+- Eine gültige, aktivierte Konzeptregel hat Vorrang vor generischen Historical-/Ancestor-/BM25-Vorschlägen. Vorhandene manuelle Entscheidungen nicht stillschweigend überschreiben; Konflikte sichtbar melden und eine explizite Entscheidung verlangen.
+- **Policy-Override pro Regel:** Mit aktiviertem `override policy` hat die explizite Regel Vorrang vor inclusion-/exclusion-list-Anforderungen, auch wenn beispielsweise `410672004` nach der gewählten Policy ausgeschlossen ist. Die Prüfung, ob ein Ersetzungsziel existiert und aktiv ist, bleibt verbindlich. Bei deaktiviertem Override ein unzulässiges Ersetzungsziel mit klarer Meldung blockieren; nicht stillschweigend einen Fallback-Kandidaten wählen. `clear_id` hat kein Ersetzungsziel und benötigt daher keine Ziel-Mitgliedschaftsprüfung; die ID darf weiterhin geleert werden. Die Regeln gelten unabhängig davon, ob das Quellkonzept bereits ein Policy-Finding erzeugt hat.
+- Override-Einstellung zusammen mit der Regel speichern und in Vorschau, Review und Decisions-Provenienz sichtbar machen. Zwischen „Override erlaubt“ und „tatsächlich Policy übergangen“ unterscheiden; die geltende Policy selbst bleibt unverändert.
+- `clear_id` ist eine eigene gültige Aktion ohne Zielcode, kein Löschen und keine Ersetzung durch den Text `None`. Implementiert ist `None` als nicht gesetzte ID; JSONCAS-/XMI-Roundtrips bestätigen diese Repräsentation. Der Live-INCEpTION-Reimport bleibt zu prüfen.
+- Regel-ID, Quelle, Aktion, gegebenenfalls Ziel und betroffene Annotation in Decisions/Reports nachvollziehbar speichern. Keine klinischen Literalwerte in Konsolenlogs ausgeben.
+- Automatische Änderungen rücknehmbar halten; Undo darf nachträgliche manuelle Änderungen nicht ungefragt überschreiben. Gemeinsame Infrastruktur mit Abschnitt 7 nutzen, sobald verfügbar; die Konzeptregeln benötigen aber keine BM25-Metrik.
+
+### 6.4 Technischer Implementierungsplan (offline umgesetzt)
+
+1. **Regelmodell und Validierung:** Die zwei Aktionen, stabile Regel-IDs, Geltungsbereich, boolesches `override_policy` (Default `true`) und die vorgegebenen Defaults modellieren. Regeln separat von einzelnen Review-Entscheidungen serialisieren und wieder laden können; vorhandene Artefakte nicht migrieren oder überschreiben.
+2. **Matching und Entscheidungen:** Passende Annotationen innerhalb der gewählten Layer/Dokumente/Annotatoren direkt aus dem Projekt ermitteln; deterministische Entscheidungen aus den Original-IDs erzeugen. Regeln vor generischen Fallbacks berücksichtigen und doppelte bzw. widersprüchliche Entscheidungen vermeiden.
+3. **Decisions und Write-back:** `clear_id` durchgängig in Validierung, Review, Decisions-Export/-Import und gemeinsamem CAS-Write-back ergänzen; `replace` für Date wiederverwenden. Nur das ID-Feature setzen/leeren, `literal` und andere Features nicht anfassen. Lokalen ZIP-Export und INCEpTION-Upload-Artefakte mit derselben Semantik versorgen.
+4. **GUI:** Einklappbare Regelform, Validierungsfehler, gemeinsamen Apply-Button mit Ergebniszusammenfassung und Rücknahme implementieren. Aktionen und Konflikte im Review klar anzeigen; Einstellungen über Reruns erhalten.
+5. **Tests und Dokumentation:** Beide Regeln und generisch angelegte Regeln für JSONCAS und XMI prüfen; Literal-/Feature-Erhalt, ID-Präfixe, Scope, Policy-Konflikte, manuelle Konflikte, keine Regelverkettung, Wiederholbarkeit, Undo und JSON-Roundtrips absichern. INCEpTION-Reimport erst mit freigegebenem Testprojekt und gesonderter Netzwerkfreigabe prüfen.
+
+### 6.5 Abnahmekriterien
+
+**Offline geprüft:** Regel-/Decisions-JSON-Roundtrips, JSONCAS/XMI mit unverändertem `literal` (einschließlich leer/null/fehlendem Feature), weitere Features und Offsets, gemeinsamer ZIP-/Upload-Artefaktpfad mit und ohne Reparatur, Override an/aus, aktive Ziele, Scopes, keine Regelverkettung, Mehrdeutigkeiten, GUI-Reruns, manuelle Konflikte und Undo. Die GUI übernimmt für alle Regeln die Annotation-Layer aus der Sidebar und bearbeitet alle Dokumente/Annotatoren; separate Regel-Scope-Boxen entfallen. Die Engine-API unterstützt weiterhin explizite Filter. Angenommene Regeln reservieren ihre Annotationen im Review; generische Fallback-Zeilen für dieselben Annotationen werden dort ausgeblendet. Die generische Vorschlagserzeugung selbst bleibt unabhängig.
+
+**Offen:** Live-INCEpTION-Reimport; weitere Auto-Apply-Bedingungen aus Abschnitt 7.
+
+- Number `410680006`: ausschließlich die ID ist nach Anwendung leer.
+- Date `410671006`: die ID verweist nach Anwendung auf `410672004`, nicht auf einen Fallback-Kandidaten.
+- Für beide Regeln sind `literal`, andere Features, Annotation-Anzahl, Layer und Offsets vor/nach Serialisierung identisch.
+- Deaktivierte Regeln und Annotationen außerhalb des gewählten Geltungsbereichs bleiben unverändert.
+- Regel- und Decisions-Export/-Import erhalten Aktion, Quelle, Ziel und Provenienz; Reruns lösen keine zusätzlichen Änderungen aus.
+- Konflikte werden sichtbar behandelt; Undo entfernt nur die zugehörigen automatischen Änderungen.
+- JSONCAS-/XMI-Export und erzeugte Upload-Artefakte bewahren dieselbe Semantik; INCEpTION-Reimport bestätigt die Nutzbarkeit.
 
 ## 7. Review & apply: bedingungsbasierte automatische Auswahl
 
@@ -187,7 +234,7 @@ Die GUI unterscheidet für den Release-Modus die Verwendung eingebetteter und/od
 
 ### Gewünschtes Soll-Verhalten
 
-Wenn die Review-Anforderung lautet „ausgeschlossene Konzepte dürfen nie vorgeschlagen werden“, muss dies als verbindliche Regel für **alle** relevanten Zielmodi festgelegt werden:
+Für generische Historical-/Ancestor-/BM25-Vorschläge gilt die Anforderung „ausgeschlossene Konzepte dürfen nicht vorgeschlagen werden“ über alle relevanten Zielmodi. **Explizite Ausnahme:** Konzeptregeln aus Abschnitt 6 dürfen mit aktiviertem `override policy` diese Policy-Anforderungen übersteuern; solche Entscheidungen müssen sichtbar als Regel-Override ausgewiesen werden.
 
 - Die geltende exclusion list sichtbar anzeigen.
 - Die Kandidatenfilterung vor Ranking-/Review-Ausgabe anwenden.
@@ -195,7 +242,7 @@ Wenn die Review-Anforderung lautet „ausgeschlossene Konzepte dürfen nie vorge
 - Die Regel beim automatischen Auswählen und vor Write-back erneut prüfen, insbesondere bei geladenen älteren Suggestions-/Decisions-Dateien.
 - Ausschlüsse haben Vorrang vor inclusion-list-Mitgliedschaft und hoher BM25-Bewertung.
 
-**Abnahme:** Ein absichtlich ausgeschlossener Zielcode erscheint in keinem auswählbaren Vorschlag und kann nicht durch automatische Bedingungen freigegeben werden. Falls diagnostische Kandidaten gezeigt werden, klar als nicht auswählbar kennzeichnen.
+**Abnahme:** Ein absichtlich ausgeschlossener Zielcode erscheint in keinem auswählbaren generischen Vorschlag und kann nicht durch die automatischen Bedingungen aus Abschnitt 7 freigegeben werden. Eine Ausnahme ist ausschließlich eine explizite Konzeptregel mit aktiviertem `override policy` gemäß Abschnitt 6. Falls diagnostische Kandidaten gezeigt werden, klar als nicht auswählbar kennzeichnen.
 
 ## 9. Frage: Welche Metrik beschreibt den Abstand des ersten BM25-Kandidaten?
 
@@ -276,7 +323,7 @@ Fehlschläge sollen den betroffenen Verarbeitungsschritt und eine verständliche
 1. Exclusion-list-Verhalten über die Zielmodi hinweg festlegen und mit Regressionstests absichern.
 2. Terminologie, Layer-Standardauswahl und Suggestion-Defaults umstellen; redundante Erklärung entfernen.
 3. MIE-Tabellenansicht übernehmen.
-4. `clear_id` als eigenständige, verlustfreie Aktion implementieren und den Number-Sonderfall konfigurieren.
+4. Konzeptregeln gemäß Abschnitt 6 implementieren: eigene Regelform mit `override policy` (Default aktiviert), Number `410680006` → ID leeren, Date `410671006` → `410672004`; `literal` bei beiden unverändert erhalten. Beide Regeln aktiviert und auf alle passenden Annotationen im gewählten Scope anwenden.
 5. Bedingungsform, historische Automatik, Zustandsverwaltung und Undo umsetzen.
 6. BM25-Metriken zunächst zur Beobachtung anzeigen; mit Reviewer-Beispielen kalibrieren und anschließend die automatische Auswahl freigeben.
 
@@ -286,7 +333,12 @@ Fehlschläge sollen den betroffenen Verarbeitungsschritt und eine verständliche
 - [x] Explizite Layer-/Suggestion-Einstellungen bleiben über Reruns erhalten.
 - [x] Policy-Tabellen nutzen dieselben Findings wie Exporte und Sanitization; Filter verändern die Quelldaten nicht.
 - [ ] Exclusion-list-Ziele werden über alle Kandidatenquellen und unterstützten Zielmodi gesperrt.
-- [ ] Number-Sonderregel entfernt ausschließlich die ID, nicht die Annotation.
+- [x] Konzeptregelform erlaubt `clear_id` und `replace`, vorausgefüllt mit Number- und Date-Regel.
+- [x] Number `410680006` entfernt ausschließlich die ID, nicht die Annotation.
+- [x] Date `410671006` wird deterministisch durch `410672004` ersetzt.
+- [x] Beide Aktionen erhalten `literal` exakt sowie alle übrigen Features, Layer, Offsets und Annotation-Anzahl (offline JSONCAS/XMI).
+- [x] Regeln respektieren Scope und manuelle Entscheidungen; Ziel-Policy-Konflikte, Wiederholbarkeit und Undo sind geprüft.
+- [x] `override policy` ist pro Regel standardmäßig aktiviert, editierbar und exportierbar; Tests prüfen beide Zustände und dokumentierte tatsächliche Policy-Overrides.
 - [ ] Mehrdeutige historische Ziele werden nicht versehentlich automatisch gewählt.
 - [ ] BM25-Gleichstände, weniger als drei Ziele und nicht vergleichbare Scores bleiben manuell.
 - [ ] Apply Conditions setzt Zielauswahl, resolved und reviewed konsistent.
@@ -297,6 +349,7 @@ Fehlschläge sollen den betroffenen Verarbeitungsschritt und eine verständliche
 ## 13. Verwendete Quellen
 
 - Ursprüngliche Review-Notizen: `todo.md`.
+- Ergänzende Nutzervorgabe: Number `410680006` → nur ID entfernen; Date `410671006` → Date property `410672004`; konfigurierbare Regelform und zwingender `literal`-Erhalt für beide Aktionen.
 - OKF-Einstieg: `okf/snomed-post-processing/index.md`.
 - Review-/Write-back-Semantik: `okf/snomed-post-processing/workflows/reviewed-decisions-and-writeback.md`.
 - Direkte Codeprüfung: `gui/sanitization_check_tab.py`, `gui/sanitization_run_tab.py`, `hdf5_handling/policy.py`, `sanitization/resolver.py`, `sanitization/semantic_bm25.py` (jeweils unter `src/snomed_post_processing/`).

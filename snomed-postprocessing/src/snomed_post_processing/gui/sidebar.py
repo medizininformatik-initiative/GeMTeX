@@ -31,6 +31,10 @@ class GuiInputs:
 
 
 def render_sidebar() -> GuiInputs:
+    # Decisions are loaded after sidebar widgets have rendered. Apply their ID
+    # settings on the next rerun, before instantiating the bound widgets.
+    for key, value in st.session_state.pop("sanitization_pending_id_settings", {}).items():
+        st.session_state[key] = value
     with st.sidebar:
         st.header("Inputs")
         load_annotators = st.checkbox("Load annotators from ZIP", value=True)
