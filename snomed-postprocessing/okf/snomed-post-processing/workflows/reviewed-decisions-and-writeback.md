@@ -51,7 +51,7 @@ Workflow: **Apply rules to review → review/save choices → explicit export/up
 
 Review decisions carry the rule snapshot and actual override flag; decisions metadata carries rule definitions, scope, and reviewed-document state. No existing JSON identifiers are renamed or artifacts migrated. Rule-only documents are included in reviewed metadata only when all their decisions are selected.
 
-Input/configuration changes block stale decisions. Conflicting manual decisions (including explicitly reviewed keep choices) block export until resolved. Undo restores the previous automatic selection without overwriting manually edited rule choices; an explicitly labelled discard button can clear those too. The later association/BM25 condition form remains separate.
+Input/configuration changes block stale decisions. Conflicting manual decisions (including explicitly reviewed keep choices) block export until resolved. Reapplying rules preserves saved manual Apply-checkbox choices. **Clear all pending rule decisions** explicitly removes all pending rule decisions, including those choices, without reverting rule definitions or changing CAS files. Clear lives beside rule configuration/application in tab 2's **Concept rules** expander, with no separate Undo button or application-history snapshot; tab 3 retains only the resulting decisions and their review/save controls. The later association/BM25 condition form remains separate.
 
 Only the configured ID feature changes for rule actions: `literal`, other features, annotation count, type, and offsets are preserved in JSONCAS/XMI and offline upload-artifact tests. Live INCEpTION reimport is a separate validation step requiring approval.
 

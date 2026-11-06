@@ -31,7 +31,7 @@ The Streamlit GUI wraps the same pipeline functions as the CLI. It is intended f
 | `/src/snomed_post_processing/gui/file_sources.py` | Shared file selector supporting Upload, Data directory, and Server path. |
 | `/src/snomed_post_processing/gui/policy_tab.py` | Policy checks, persistent findings tables, and report downloads. |
 | `/src/snomed_post_processing/gui/sanitization_check_tab.py` | Suggestion generation UI and settings metadata. |
-| `/src/snomed_post_processing/gui/concept_rules.py` | Explicit concept-rule form, one-step application to review, and rule-decision review/undo. |
+| `/src/snomed_post_processing/gui/concept_rules.py` | Explicit concept-rule form, one-step application to review, and rule-decision review/clearing. |
 | `/src/snomed_post_processing/gui/sanitization_run_tab.py` | Review/apply UI and INCEpTION deployment form. |
 | `/src/snomed_post_processing/gui/downloads.py` | Markdown/JSON download helpers. |
 
@@ -89,7 +89,7 @@ The **Suggest policy sanitization** tab includes a **Concept rules** form in a c
 
 Use the single **Apply rules to review** button to save/validate the configuration, scan matching annotations, and select decisions in Review & apply. A summary reports ID removals, replacements, actual policy overrides, and manual conflicts. JSON uploads load configuration automatically without applying it; **Download concept rules JSON** remains separate. There are no Save, Preview, Load, or separate acceptance buttons in the rules form. All matching original annotations are considered, not just policy findings. `literal` is always preserved. Replacements require an existing active target even when overriding policy.
 
-**Review & apply** shows a separate rule-decision editor, allowing Apply choices to be saved and automatic selections undone. Existing manual decisions are protected; stale inputs or conflicts block export. Rule-only reviews are supported without generating generic suggestions. The ordinary Run sanitization / deployment controls perform the actual write-back. See [rule semantics and write-back](/snomed-post-processing/workflows/reviewed-decisions-and-writeback.md).
+**Clear all pending rule decisions** is always visible with **Apply rules to review** in tab 2's **Concept rules** expander, disabled when no pending rule decisions exist. Clear removes all pending decisions, including saved Apply-checkbox choices, without changing rule definitions or CAS files. Reapplying rules preserves saved checkbox choices. There is no separate Undo button or application-history snapshot. **Review & apply** (tab 3) shows only the resulting rule-decision editor and its Save action, not the rule-management buttons. Existing manual decisions are protected; stale inputs or conflicts block export. Rule-only reviews are supported without generating generic suggestions. The ordinary Run sanitization / deployment controls perform the actual write-back. See [rule semantics and write-back](/snomed-post-processing/workflows/reviewed-decisions-and-writeback.md).
 
 # Review and apply behavior
 

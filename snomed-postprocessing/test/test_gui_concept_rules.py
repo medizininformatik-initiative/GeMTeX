@@ -43,8 +43,11 @@ with patch("streamlit.segmented_control", side_effect=lambda *args, **kwargs: kw
      patch("streamlit.pills", side_effect=lambda *args, **kwargs: kwargs["default"]), \\
      patch("streamlit.data_editor", side_effect=editor), \\
      patch("streamlit.file_uploader", side_effect=uploader):
-    render_concept_rules_form(inputs)
-    render_sanitization_run_tab(inputs)
+    rules_tab, review_tab = st.tabs(["Suggest policy sanitization", "Review & apply"])
+    with rules_tab:
+        render_concept_rules_form(inputs)
+    with review_tab:
+        render_sanitization_run_tab(inputs)
 '''
 
 
@@ -81,8 +84,29 @@ class GuiConceptRulesTest(unittest.TestCase):
         self.assertFalse(self.widget("button", "Apply rules to review").disabled)
         container = next(item for item in self.app.expander if item.label == "Concept rules")
         self.assertFalse(container.proto.expanded)
-        self.assertEqual([item.label for item in container.button], ["Apply rules to review"])
+        self.assertEqual([item.label for item in container.button], [
+            "Apply rules to review", "Clear all pending rule decisions",
+        ])
+        self.assertTrue(self.widget("button", "Clear all pending rule decisions").disabled)
         self.assertFalse(any(item.label.startswith("Rule ") for item in self.app.text_area))
+
+    def test_rule_management_stays_with_configuration_not_review(self):
+        source = self.fixture.project.read_bytes()
+        self.apply_rules()
+        rules_tab = next(item for item in self.app.tabs if item.label == "Suggest policy sanitization")
+        review_tab = next(item for item in self.app.tabs if item.label == "Review & apply")
+        actions = {"Clear all pending rule decisions"}
+        self.assertFalse(any("Undo" in item.label for item in self.app.button))
+        self.assertTrue(actions.issubset({item.label for item in rules_tab.button}))
+        self.assertFalse(self.widget("button", "Clear all pending rule decisions").disabled)
+        self.assertTrue(actions.isdisjoint({item.label for item in review_tab.button}))
+        self.assertTrue(any(item.value == "Explicit concept rule decisions" for item in review_tab.subheader))
+        self.widget("button", "Clear all pending rule decisions").click().run()
+        self.assertHealthy()
+        self.assertEqual(self.app.session_state["concept_rule_decisions"], [])
+        self.assertFalse(any(item.value == "Explicit concept rule decisions" for item in self.app.subheader))
+        self.assertTrue(self.widget("button", "Clear all pending rule decisions").disabled)
+        self.assertEqual(self.fixture.project.read_bytes(), source)
 
     def test_upload_loads_configuration_once_without_applying_rules(self):
         source = self.fixture.project.read_bytes()
@@ -101,7 +125,7 @@ class GuiConceptRulesTest(unittest.TestCase):
         self.assertHealthy()
         self.assertEqual(self.app.session_state["concept_rules"], DEFAULT_CONCEPT_RULES)
 
-    def test_rule_only_review_is_selected_persists_and_undoes(self):
+    def test_rule_only_review_is_selected_persists_and_clears(self):
         source = self.fixture.project.read_bytes()
         self.apply_rules()
         decisions = self.app.session_state["sanitization_review_decisions"]
@@ -111,20 +135,20 @@ class GuiConceptRulesTest(unittest.TestCase):
         self.app.run()
         self.assertHealthy()
         self.assertEqual(self.app.session_state["sanitization_review_decisions"], decisions)
-        self.widget("button", "Undo concept rule decisions").click().run()
+        self.widget("button", "Clear all pending rule decisions").click().run()
         self.assertHealthy()
         self.assertEqual(self.app.session_state["concept_rule_decisions"], [])
         self.assertTrue(self.widget("button", "Run sanitization").disabled)
         self.assertEqual(self.fixture.project.read_bytes(), source)
 
-    def test_scope_change_blocks_stale_decisions_but_undo_remains_available(self):
+    def test_scope_change_blocks_stale_decisions_but_clear_remains_available(self):
         self.apply_rules()
         self.app.session_state["test_annotation_types"] = "gemtex.Concept\nwebanno.custom.Concept"
         self.app.run()
         self.assertHealthy()
         self.assertTrue(self.widget("button", "Run sanitization").disabled)
         self.assertTrue(any("inputs changed" in item.value for item in self.app.error))
-        self.widget("button", "Undo concept rule decisions").click().run()
+        self.widget("button", "Clear all pending rule decisions").click().run()
         self.assertHealthy()
         self.assertEqual(self.app.session_state["concept_rule_decisions"], [])
 
@@ -147,23 +171,21 @@ class GuiConceptRulesTest(unittest.TestCase):
         self.assertEqual(self.app.session_state["sanitization_review_decisions"], decisions)
         self.assertFalse(self.widget("button", "Run sanitization").disabled)
 
-    def test_undo_preserves_manually_edited_rule_choices(self):
+    def test_reapply_preserves_checkbox_choices_and_clear_removes_them(self):
         self.apply_rules()
         self.app.session_state["test_rule_edit"] = True
         self.widget("button", "Save rule decisions").click().run()
         self.assertHealthy()
         self.assertTrue(self.app.session_state["concept_rule_decisions"][0]["rule_reviewed_by_human"])
         self.app.session_state["test_rule_edit"] = False
-        self.widget("button", "Undo concept rule decisions").click().run()
-        self.assertHealthy()
-        retained = self.app.session_state["concept_rule_decisions"]
-        self.assertEqual(len(retained), 1)
-        self.assertFalse(retained[0]["apply"])
-        self.assertTrue(retained[0]["rule_reviewed_by_human"])
         self.widget("button", "Apply rules to review").click().run()
         self.assertHealthy()
         self.assertEqual(len(self.app.session_state["concept_rule_decisions"]), 6)
         self.assertEqual(sum(not item["apply"] for item in self.app.session_state["concept_rule_decisions"]), 1)
+        self.widget("button", "Clear all pending rule decisions").click().run()
+        self.assertHealthy()
+        self.assertEqual(self.app.session_state["concept_rule_decisions"], [])
+        self.assertEqual(self.app.session_state["concept_rules"], DEFAULT_CONCEPT_RULES)
 
     def test_rule_overrides_generic_fallback_without_duplicate_decisions(self):
         decision = self.fixture.preview()[1]

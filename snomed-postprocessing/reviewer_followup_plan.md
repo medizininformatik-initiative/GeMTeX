@@ -15,7 +15,7 @@ Umgesetzt und mit fokussierten Tests geprüft:
 - Historische Beziehungstypen: alle außer `MOVED_FROM` und `REFERS_TO` vorausgewählt; Overlap-Minimum `0.0`; separate Erklärung entfernt (Abschnitt 5.2).
 - Explizite Einstellungen bleiben über Reruns erhalten. Eine leere Auswahl historischer Beziehungstypen wird nicht mehr stillschweigend durch Standardwerte ersetzt.
 - Die nach außen sichtbare Terminologie verwendet „inclusion list“ / „exclusion list“ in GUI, CLI-Hilfetexten, Konsolenmeldungen, generierten Markdown-Reports und README (Abschnitt 4). Technische Bezeichner und Artefaktformate bleiben unverändert.
-- Konzeptregeln für Number und Date mit einklappbarer Regelform, gemeinsamem **Apply rules to review**-Button, Override-Option, Review/Undo und `literal`-erhaltendem Write-back sind offline umgesetzt (Abschnitt 6).
+- Konzeptregeln für Number und Date mit einklappbarer Regelform, gemeinsamem **Apply rules to review**-Button, Override-Option, Review/Clear und `literal`-erhaltendem Write-back sind offline umgesetzt (Abschnitt 6).
 
 Zusätzlich wurde die MIE-Ergebnisdarstellung aus `../../snomed-annotation-audit/` übernommen (Abschnitt 2): gruppierte Datentabellen, Kennzahlen, Filter mit Reset und sitzungsinterne Speicherung des letzten erfolgreichen Checks. Report-Downloads und Übergabe an die Sanitization bleiben erhalten. Filter ändern weder Exporte noch die gespeicherten Findings.
 
@@ -84,7 +84,7 @@ Die letzte Option erweitert die Menge der zu bearbeitenden Findings. Sie erlaubt
 
 ## 6. Konfigurierbare Konzeptregeln: Number und Date
 
-**Status:** Konzeptregeln inklusive GUI, gemeinsamem Apply-Schritt, Review/Undo und gemeinsamem CAS-Write-back implementiert und offline getestet. Live-Reimport nach INCEpTION steht noch aus. Die folgenden SCTIDs wurden vom Nutzer vorgegeben. Bezeichnungen und Zielverfügbarkeit bei der Ausführung anhand des ausgewählten SNOMED-Releases prüfen; die Regeln selbst über die SCTID identifizieren, nicht über FSN-Textvergleich.
+**Status:** Konzeptregeln inklusive GUI, gemeinsamem Apply-Schritt, Review/Clear und gemeinsamem CAS-Write-back implementiert und offline getestet. Live-Reimport nach INCEpTION steht noch aus. Die folgenden SCTIDs wurden vom Nutzer vorgegeben. Bezeichnungen und Zielverfügbarkeit bei der Ausführung anhand des ausgewählten SNOMED-Releases prüfen; die Regeln selbst über die SCTID identifizieren, nicht über FSN-Textvergleich.
 
 ### 6.1 Vorgefüllte Regeln
 
@@ -120,7 +120,7 @@ Der Geltungsbereich wird nicht über zusätzliche Eingabeboxen konfiguriert: Die
 
 `literal`-Erhalt ist eine feste Eigenschaft beider Aktionen und **keine abschaltbare Option**.
 
-**Vereinfachte Bedienung (umgesetzt):** Die Regelform hat nur einen Aktionsbutton **Apply rules to review**: Einstellungen speichern/validieren, passende Annotationen scannen und Entscheidungen automatisch im Review auswählen. Eine Zusammenfassung zeigt ID-Entfernungen, Ersetzungen, tatsächliche Policy-Overrides und manuelle Konflikte. Separate Save-/Preview-/Übernahme-Buttons entfallen. JSON-Uploads laden nur die Konfiguration automatisch; der Download bleibt als eigener Button erhalten. Manuelle Entscheidungen und Undo bleiben geschützt. Formulareingaben, Regelanwendung im Review und Streamlit-Reruns schreiben niemals direkt CAS-Dateien um. Die tatsächliche Änderung erfolgt erst über den expliziten Export-/Write-back-Schritt.
+**Vereinfachte Bedienung (umgesetzt):** Die Regelform hat nur einen Aktionsbutton **Apply rules to review**: Einstellungen speichern/validieren, passende Annotationen scannen und Entscheidungen automatisch im Review auswählen. Eine Zusammenfassung zeigt ID-Entfernungen, Ersetzungen, tatsächliche Policy-Overrides und manuelle Konflikte. Separate Save-/Preview-/Übernahme-Buttons entfallen. JSON-Uploads laden nur die Konfiguration automatisch; der Download bleibt als eigener Button erhalten. Erneutes Anwenden erhält gespeicherte manuelle Apply-Checkbox-Änderungen. **Clear all pending rule decisions** entfernt ausdrücklich sämtliche ausstehenden Regelentscheidungen einschließlich dieser Checkbox-Auswahl, ändert weder Regeldefinitionen noch CAS-Dateien und steht gemeinsam mit der Regelkonfiguration/-anwendung im **Concept rules**-Expander in Tab 2. Ein separater Undo-Button und die zugehörigen Verlaufssnapshots entfallen; Tab 3 zeigt nur die resultierenden Entscheidungen mit Review-/Save-Funktion. Formulareingaben, Regelanwendung im Review und Streamlit-Reruns schreiben niemals direkt CAS-Dateien um. Die tatsächliche Änderung erfolgt erst über den expliziten Export-/Write-back-Schritt.
 
 **Bestätigte Defaults:** Beide vorgefüllten Regeln aktiviert; `override policy` standardmäßig aktiviert, auch bei neu angelegten Regeln. Anwendung auf **alle passenden Annotationen im ausdrücklich gewählten Geltungsbereich**, nicht nur auf bereits gemeldete Policy-Findings. So gilt insbesondere die Date-Regel auch dann, wenn das Quellkonzept den Policy-Check bereits besteht. Das erfordert die Ermittlung passender Annotationen aus dem Projekt und darf nicht allein auf der Findings-Liste beruhen.
 
@@ -133,7 +133,7 @@ Der Geltungsbereich wird nicht über zusätzliche Eingabeboxen konfiguriert: Die
 - Override-Einstellung zusammen mit der Regel speichern und in Vorschau, Review und Decisions-Provenienz sichtbar machen. Zwischen „Override erlaubt“ und „tatsächlich Policy übergangen“ unterscheiden; die geltende Policy selbst bleibt unverändert.
 - `clear_id` ist eine eigene gültige Aktion ohne Zielcode, kein Löschen und keine Ersetzung durch den Text `None`. Implementiert ist `None` als nicht gesetzte ID; JSONCAS-/XMI-Roundtrips bestätigen diese Repräsentation. Der Live-INCEpTION-Reimport bleibt zu prüfen.
 - Regel-ID, Quelle, Aktion, gegebenenfalls Ziel und betroffene Annotation in Decisions/Reports nachvollziehbar speichern. Keine klinischen Literalwerte in Konsolenlogs ausgeben.
-- Automatische Änderungen rücknehmbar halten; Undo darf nachträgliche manuelle Änderungen nicht ungefragt überschreiben. Gemeinsame Infrastruktur mit Abschnitt 7 nutzen, sobald verfügbar; die Konzeptregeln benötigen aber keine BM25-Metrik.
+- Ausstehende Regelentscheidungen explizit über Clear zurücknehmen können; erneutes Anwenden erhält gespeicherte manuelle Checkbox-Auswahlen. Kein separater Undo-Verlauf für Konzeptregeln; die geplante Undo-Funktion in Abschnitt 7 bleibt davon unabhängig.
 
 ### 6.4 Technischer Implementierungsplan (offline umgesetzt)
 
@@ -141,11 +141,11 @@ Der Geltungsbereich wird nicht über zusätzliche Eingabeboxen konfiguriert: Die
 2. **Matching und Entscheidungen:** Passende Annotationen innerhalb der gewählten Layer/Dokumente/Annotatoren direkt aus dem Projekt ermitteln; deterministische Entscheidungen aus den Original-IDs erzeugen. Regeln vor generischen Fallbacks berücksichtigen und doppelte bzw. widersprüchliche Entscheidungen vermeiden.
 3. **Decisions und Write-back:** `clear_id` durchgängig in Validierung, Review, Decisions-Export/-Import und gemeinsamem CAS-Write-back ergänzen; `replace` für Date wiederverwenden. Nur das ID-Feature setzen/leeren, `literal` und andere Features nicht anfassen. Lokalen ZIP-Export und INCEpTION-Upload-Artefakte mit derselben Semantik versorgen.
 4. **GUI:** Einklappbare Regelform, Validierungsfehler, gemeinsamen Apply-Button mit Ergebniszusammenfassung und Rücknahme implementieren. Aktionen und Konflikte im Review klar anzeigen; Einstellungen über Reruns erhalten.
-5. **Tests und Dokumentation:** Beide Regeln und generisch angelegte Regeln für JSONCAS und XMI prüfen; Literal-/Feature-Erhalt, ID-Präfixe, Scope, Policy-Konflikte, manuelle Konflikte, keine Regelverkettung, Wiederholbarkeit, Undo und JSON-Roundtrips absichern. INCEpTION-Reimport erst mit freigegebenem Testprojekt und gesonderter Netzwerkfreigabe prüfen.
+5. **Tests und Dokumentation:** Beide Regeln und generisch angelegte Regeln für JSONCAS und XMI prüfen; Literal-/Feature-Erhalt, ID-Präfixe, Scope, Policy-Konflikte, manuelle Konflikte, keine Regelverkettung, Wiederholbarkeit, Clear und JSON-Roundtrips absichern. INCEpTION-Reimport erst mit freigegebenem Testprojekt und gesonderter Netzwerkfreigabe prüfen.
 
 ### 6.5 Abnahmekriterien
 
-**Offline geprüft:** Regel-/Decisions-JSON-Roundtrips, JSONCAS/XMI mit unverändertem `literal` (einschließlich leer/null/fehlendem Feature), weitere Features und Offsets, gemeinsamer ZIP-/Upload-Artefaktpfad mit und ohne Reparatur, Override an/aus, aktive Ziele, Scopes, keine Regelverkettung, Mehrdeutigkeiten, GUI-Reruns, manuelle Konflikte und Undo. Die GUI übernimmt für alle Regeln die Annotation-Layer aus der Sidebar und bearbeitet alle Dokumente/Annotatoren; separate Regel-Scope-Boxen entfallen. Die Engine-API unterstützt weiterhin explizite Filter. Angenommene Regeln reservieren ihre Annotationen im Review; generische Fallback-Zeilen für dieselben Annotationen werden dort ausgeblendet. Die generische Vorschlagserzeugung selbst bleibt unabhängig.
+**Offline geprüft:** Regel-/Decisions-JSON-Roundtrips, JSONCAS/XMI mit unverändertem `literal` (einschließlich leer/null/fehlendem Feature), weitere Features und Offsets, gemeinsamer ZIP-/Upload-Artefaktpfad mit und ohne Reparatur, Override an/aus, aktive Ziele, Scopes, keine Regelverkettung, Mehrdeutigkeiten, GUI-Reruns, manuelle Konflikte und Clear. Die GUI übernimmt für alle Regeln die Annotation-Layer aus der Sidebar und bearbeitet alle Dokumente/Annotatoren; separate Regel-Scope-Boxen entfallen. Die Engine-API unterstützt weiterhin explizite Filter. Angenommene Regeln reservieren ihre Annotationen im Review; generische Fallback-Zeilen für dieselben Annotationen werden dort ausgeblendet. Die generische Vorschlagserzeugung selbst bleibt unabhängig.
 
 **Offen:** Live-INCEpTION-Reimport; weitere Auto-Apply-Bedingungen aus Abschnitt 7.
 
@@ -154,7 +154,7 @@ Der Geltungsbereich wird nicht über zusätzliche Eingabeboxen konfiguriert: Die
 - Für beide Regeln sind `literal`, andere Features, Annotation-Anzahl, Layer und Offsets vor/nach Serialisierung identisch.
 - Deaktivierte Regeln und Annotationen außerhalb des gewählten Geltungsbereichs bleiben unverändert.
 - Regel- und Decisions-Export/-Import erhalten Aktion, Quelle, Ziel und Provenienz; Reruns lösen keine zusätzlichen Änderungen aus.
-- Konflikte werden sichtbar behandelt; Undo entfernt nur die zugehörigen automatischen Änderungen.
+- Konflikte werden sichtbar behandelt; Clear entfernt explizit alle ausstehenden Regelentscheidungen einschließlich gespeicherter manueller Checkbox-Auswahlen.
 - JSONCAS-/XMI-Export und erzeugte Upload-Artefakte bewahren dieselbe Semantik; INCEpTION-Reimport bestätigt die Nutzbarkeit.
 
 ## 7. Review & apply: bedingungsbasierte automatische Auswahl
@@ -341,7 +341,7 @@ Fehlschläge sollen den betroffenen Verarbeitungsschritt und eine verständliche
 - [x] Number `410680006` entfernt ausschließlich die ID, nicht die Annotation.
 - [x] Date `410671006` wird deterministisch durch `410672004` ersetzt.
 - [x] Beide Aktionen erhalten `literal` exakt sowie alle übrigen Features, Layer, Offsets und Annotation-Anzahl (offline JSONCAS/XMI).
-- [x] Regeln respektieren Scope und manuelle Entscheidungen; Ziel-Policy-Konflikte, Wiederholbarkeit und Undo sind geprüft.
+- [x] Regeln respektieren Scope und manuelle Entscheidungen; Ziel-Policy-Konflikte, Wiederholbarkeit und Clear sind geprüft.
 - [x] `override policy` ist pro Regel standardmäßig aktiviert, editierbar und exportierbar; Tests prüfen beide Zustände und dokumentierte tatsächliche Policy-Overrides.
 - [ ] Mehrdeutige historische Ziele werden nicht versehentlich automatisch gewählt.
 - [ ] BM25-Gleichstände, weniger als drei Ziele und nicht vergleichbare Scores bleiben manuell.

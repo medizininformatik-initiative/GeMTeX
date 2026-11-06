@@ -1317,7 +1317,6 @@ def _restore_decision_state(decisions: list[dict[str, Any]], metadata: dict[str,
     st.session_state["concept_rule_decisions"] = [decision for decision in decisions if decision.get("concept_rule")]
     st.session_state.pop("concept_rule_decisions_source", None)
     st.session_state["concept_rule_needs_validation"] = True
-    st.session_state.pop("concept_rule_undo", None)
     st.session_state["concept_rule_scope"] = metadata.get("concept_rule_scope", {})
     st.session_state.pop("concept_rule_preview", None)
     st.session_state["concept_rules_editor_revision"] = st.session_state.get("concept_rules_editor_revision", 0) + 1

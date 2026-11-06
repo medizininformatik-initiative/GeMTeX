@@ -151,7 +151,6 @@ def _render_concept_rules_form(inputs: GuiInputs) -> None:
             if has_edits and previous_source is not None and previous_source[:8] != signature[:8]:
                 raise ValueError("Inputs changed while manually edited rule decisions exist. Explicitly discard those decisions before applying new rules.")
             decisions = preserve_rule_edits(decisions, previous)
-            st.session_state["concept_rule_undo"] = {"decisions": previous, "source": previous_source}
             st.session_state["concept_rule_decisions"] = decisions
             st.session_state["concept_rule_decisions_source"] = signature
             st.session_state.pop("concept_rule_needs_validation", None)
@@ -168,32 +167,28 @@ def _render_concept_rules_form(inputs: GuiInputs) -> None:
             )
         except Exception as exc:
             st.error(f"Could not apply concept rules to review: {exc}")
+    _render_rule_decision_actions()
     st.download_button("Download concept rules JSON", rules_json_text(rules), "concept_rules.json", "application/json")
+
+
+def _render_rule_decision_actions() -> None:
+    decisions = st.session_state.get("concept_rule_decisions", [])
+    if st.button(
+        "Clear all pending rule decisions",
+        disabled=not decisions,
+        help="Clears every pending rule decision, including saved Apply checkbox choices. Rule definitions and CAS files are unchanged.",
+    ):
+        st.session_state["concept_rule_decisions"] = []
+        st.session_state.pop("concept_rule_decisions_source", None)
+        st.session_state["concept_rule_review_revision"] = st.session_state.get("concept_rule_review_revision", 0) + 1
+        st.rerun()
 
 
 def render_rule_review(inputs: GuiInputs) -> tuple[list[dict[str, Any]], bool]:
     decisions = st.session_state.get("concept_rule_decisions", [])
-    if not decisions and not st.session_state.get("concept_rule_undo"):
+    if not decisions:
         return [], False
     st.subheader("Explicit concept rule decisions")
-    if st.button("Discard all concept rule decisions (including manual edits)"):
-        st.session_state["concept_rule_decisions"] = []
-        st.session_state.pop("concept_rule_undo", None)
-        st.session_state.pop("concept_rule_decisions_source", None)
-        st.session_state["concept_rule_review_revision"] = st.session_state.get("concept_rule_review_revision", 0) + 1
-        st.rerun()
-    if st.button("Undo concept rule decisions"):
-        previous = st.session_state.pop("concept_rule_undo", {})
-        old_source = st.session_state.pop("concept_rule_decisions_source", None)
-        st.session_state["concept_rule_decisions"] = preserve_rule_edits(previous.get("decisions", []), decisions)
-        binding = old_source if any(item.get("rule_reviewed_by_human") for item in decisions) else previous.get("source")
-        if binding is not None:
-            st.session_state["concept_rule_decisions_source"] = binding
-        st.session_state["concept_rule_review_revision"] = st.session_state.get("concept_rule_review_revision", 0) + 1
-        st.rerun()
-    if not decisions:
-        st.caption("No active concept-rule decisions. Undo can restore the previous automatic selection.")
-        return [], False
     if st.session_state.get("concept_rule_needs_validation"):
         try:
             _validate_loaded_decisions(inputs, decisions)
@@ -203,7 +198,7 @@ def render_rule_review(inputs: GuiInputs) -> tuple[list[dict[str, Any]], bool]:
             return [], True
     binding = st.session_state.setdefault("concept_rule_decisions_source", source_signature(inputs))
     if binding != source_signature(inputs):
-        st.error("Concept-rule inputs changed. Apply rules to review again, or undo the rule decisions. Export is blocked.")
+        st.error("Concept-rule inputs changed. Apply rules again or clear pending decisions in tab 2 (Concept rules). Export is blocked.")
         return [], True
     st.caption("Selected rule decisions are resolved. No CAS files change until explicit export/upload. Manual decisions are protected.")
     with st.form("concept_rule_review_form"):
