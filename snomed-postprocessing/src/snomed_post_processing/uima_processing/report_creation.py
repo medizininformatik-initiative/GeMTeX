@@ -10,6 +10,7 @@ import h5py
 
 from ..hdf5_handling.policy import read_policy_data
 from ..snomed import Information, ListDumpType
+from ..terminology import policy_label
 from .analysis import analyze_documents
 from .markdown_report import finding_counters, log_final_tag_count, render_finding_sections
 from .models import CriticalFinding, TemporaryCorpus
@@ -37,7 +38,7 @@ def create_log_from_results(
 
         ft_iter = [ListDumpType.WHITELIST, ListDumpType.BLACKLIST]
         for i, ft in enumerate(ft_iter):
-            print(f"-- {ft.name.capitalize()} --")
+            print(f"-- {policy_label(ft.name.lower()).capitalize()} --")
             group_name = ft.name.lower()
             policy_data = read_policy_data(h5_file, group_name)
             if policy_data is None:
@@ -56,7 +57,7 @@ def create_log_from_results(
                     if progress_obj is None
                     else {
                         "obj": progress_obj["obj"],
-                        "text_pre": f"__{group_name.capitalize()}__: ",
+                        "text_pre": f"__{policy_label(group_name).capitalize()}__: ",
                         "progress_increment": progress_increment,
                         "current_progress": 1.0 * (i / len(ft_iter)),
                     }

@@ -56,14 +56,14 @@ if inputs.target_view == "policy":
     )
 else:
     blacklist_label = {
-        "none": "no blacklist",
-        "embedded": "embedded HDF5 blacklist",
-        "custom": "custom blacklist",
-        "embedded+custom": "embedded HDF5 blacklist + custom blacklist",
+        "none": "no exclusion list",
+        "embedded": "embedded HDF5 exclusion list",
+        "custom": "custom exclusion list",
+        "embedded+custom": "embedded HDF5 exclusion list + custom exclusion list",
     }.get(inputs.release_blacklist_mode, inputs.release_blacklist_mode)
     st.info(
         "**Current target: Active release** — annotations must be active concepts "
-        "in the materialized release view stored in the uploaded HDF5; blacklist "
+        "in the materialized release view stored in the uploaded HDF5; exclusion-list "
         f"mode: {blacklist_label}. To use another release snapshot, select an "
         "HDF5 built for that snapshot.",
         icon="🎯",
@@ -93,11 +93,11 @@ if inputs.hdf5_file is not None:
             )
             if hdf5_summary.blacklist_metadata:
                 st.divider()
-                st.markdown("#### Embedded blacklist rule metadata")
+                st.markdown("#### Embedded exclusion-list rule metadata")
                 for blacklist_metadata in hdf5_summary.blacklist_metadata:
                     source = blacklist_metadata.source_name or "unknown"
                     st.caption(
-                        f"blacklists/{blacklist_metadata.view_name} · "
+                        f"Exclusion list (HDF5: metadata/blacklists/{blacklist_metadata.view_name}) · "
                         f"{len(blacklist_metadata.rules):,} rule(s) · source: {source}"
                     )
                     numeric_rule_fsns = _numeric_blacklist_rule_fsns(
@@ -117,8 +117,8 @@ if inputs.hdf5_file is not None:
                     )
             elif any(policy == "blacklist" for policy, _, _ in hdf5_summary.policy_view_counts):
                 st.info(
-                    "This HDF5 contains a compact blacklist view, but no embedded blacklist rule metadata was found. "
-                    "Recreate or update the HDF5 with the current RF2 ingestion code to store the original blacklist rules."
+                    "This HDF5 contains a compact exclusion-list view, but no embedded exclusion-list rule metadata was found. "
+                    "Recreate or update the HDF5 with the current RF2 ingestion code to store the original exclusion-list rules."
                 )
     except Exception as exc:
         st.warning(f"Could not read HDF5 metadata: {exc}")

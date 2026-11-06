@@ -102,13 +102,13 @@ class TestIgnoreOverlapReporting(unittest.TestCase):
 
         report = log_doc.getvalue()
         self.assertEqual(err_docs, 1)
-        self.assertIn("# Blacklist\n", report)
+        self.assertIn("# Exclusion list\n", report)
         self.assertIn("333", report)
         self.assertIn("Actionable concept (finding)", report)
         self.assertIn("actionable text more", report)
         self.assertNotIn("actionable\ntext", report)
         self.assertIn("# Ignored faulty concepts", report)
-        self.assertIn("## Blacklist", report)
+        self.assertIn("## Exclusion list", report)
         self.assertIn("222", report)
         self.assertIn("Ignored concept (finding)", report)
         self.assertIn("ignored text", report)
@@ -151,10 +151,10 @@ class TestIgnoreOverlapReporting(unittest.TestCase):
 
         report = log_doc.getvalue()
         self.assertEqual(err_docs, 1)
-        self.assertIn("# Blacklist\n", report)
+        self.assertIn("# Exclusion list\n", report)
         self.assertIn("333", report)
         self.assertIn("Blacklisted concept (finding)", report)
-        self.assertNotIn("# Whitelist\n", report)
+        self.assertNotIn("# Inclusion list\n", report)
 
     def test_document_analysis_error_skips_only_bad_document(self):
         corpus = TemporaryCorpus(
@@ -200,7 +200,7 @@ class TestIgnoreOverlapReporting(unittest.TestCase):
         self.assertEqual(err_docs, 1)
         self.assertIn("good.txt", report)
         self.assertIn("333", report)
-        self.assertIn("Skipped documents (blacklist)", report)
+        self.assertIn("Skipped documents (exclusion list)", report)
         self.assertIn("bad.txt", report)
         self.assertIn("IndexError", report)
 
@@ -246,11 +246,11 @@ class TestIgnoreOverlapReporting(unittest.TestCase):
         report = log_doc.getvalue()
         self.assertEqual(err_docs, 0)
         self.assertIn("# Ignored faulty concepts", report)
-        self.assertIn("## Whitelist", report)
+        self.assertIn("## Inclusion list", report)
         self.assertIn("gemtex.DoNotCheck", report)
         self.assertIn("222", report)
         self.assertNotIn("Overlap Details", report)
-        self.assertNotRegex(report, r"(?m)^# Whitelist$")
+        self.assertNotRegex(report, r"(?m)^# Inclusion list$")
 
 
 if __name__ == "__main__":

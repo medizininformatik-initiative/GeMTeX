@@ -1,8 +1,10 @@
 # SNOMED Postprocessing
 
-SNOMED Postprocessing checks SNOMED CT annotations in INCEpTION/UIMA exports against a materialized SNOMED HDF5 file. In policy mode, annotations are checked against whitelist/blacklist policy views. The tool reports non-whitelisted or blacklisted annotations, can generate sanitization suggestions, and can apply reviewed replacement/delete decisions to a copied project ZIP.
+SNOMED Postprocessing checks SNOMED CT annotations in INCEpTION/UIMA exports against a materialized SNOMED HDF5 file. In policy mode, annotations are checked against inclusion/exclusion-list policy views. The tool reports annotations outside the inclusion list or on the exclusion list, can generate sanitization suggestions, and can apply reviewed replacement/delete decisions to a copied project ZIP.
 
-The project can be used from the command line or through a Streamlit GUI.  
+The project can be used from the command line or through a Streamlit GUI.
+
+User-facing wording uses **inclusion list** / **exclusion list**. Existing technical identifiers remain unchanged: CLI flags such as `--custom-blacklist`, HDF5 paths such as `policy_views/whitelist`, and JSON values such as `list_type="blacklist"` retain their established names. No artifact migration is required.
 
 The usage of this program requires a SNOMED CT policy file (``hdf5`` format). You can either create it yourself with a SNOMED CT release archive (``zip``)
 or with a SNOWSTORM instance - see below for instructions.  
@@ -15,7 +17,7 @@ For the GeMTeX project there is a working file here:
 
 Input:
 - an INCEpTION project export ZIP, or an INCEpTION project fetched through the API
-- a whitelist/blacklist HDF5 file
+- an inclusion/exclusion-list HDF5 file
 
 Supported CAS formats in the export are JSON CAS and XMI. Java serialized CAS (`.ser`) exports are not supported. In INCEpTION, a suitable JSON CAS backup can be created via:
 
@@ -39,7 +41,7 @@ The HDF5 policy file can be created in two modes:
 - **Snowstorm mode**: query concepts from a running Snowstorm instance.
 
 The resulting HDF5 can contain:
-- compact whitelist/blacklist policy views
+- compact inclusion/exclusion-list policy views
 - full concept metadata
 - semantic tags
 - historical associations
@@ -62,8 +64,8 @@ Suggestion generation supports two target views and several fallback levels:
 
 | Target view | Candidate rule |
 |---|---|
-| policy | active AND whitelisted AND not blacklisted |
-| release | active in the selected release; optional blacklist exclusions |
+| policy | active AND in inclusion list AND not in exclusion list |
+| release | active in the selected release; optional exclusion-list rules |
 
 | Suggestion source | Purpose |
 |---|---|
@@ -179,7 +181,7 @@ uv run create-concepts-dump \
   --dump-mode version
 ```
 
-Create a blacklist policy by semantic tags or root codes:
+Create an exclusion-list policy by semantic tags or root codes:
 
 ```bash
 uv run create-concepts-dump \
@@ -190,7 +192,7 @@ uv run create-concepts-dump \
   --filter-list /path/to/blacklist_filter_tags.txt
 ```
 
-Create both blacklist and whitelist policy in one run:
+Create both exclusion-list and inclusion-list policy in one run:
 
 ```bash
 uv run create-concepts-dump \
@@ -213,7 +215,7 @@ uv run create-concepts-dump \
   --dump-mode version
 ```
 
-For semantic/blacklist dumps, provide one or more `--filter-list` values or a filter-list file.
+For semantic/exclusion-list dumps, provide one or more `--filter-list` values or a filter-list file.
 
 ### Inspect an HDF5 file
 
@@ -224,7 +226,7 @@ uv run summarize-hdf5 --markdown /path/to/gemtex_snomedct_codes.hdf5
 
 ### Generate sanitization suggestions
 
-Policy-view suggestions use the HDF5 whitelist/blacklist policy:
+Policy-view suggestions use the HDF5 inclusion/exclusion-list policy:
 
 ```bash
 uv run suggest-sanitization \
@@ -233,7 +235,7 @@ uv run suggest-sanitization \
   --output /path/to/sanitization_suggestions.md
 ```
 
-Release-view suggestions ignore the whitelist and allow any active concept by default:
+Release-view suggestions do not require inclusion-list membership and allow any active concept by default:
 
 ```bash
 uv run suggest-sanitization \
@@ -243,16 +245,16 @@ uv run suggest-sanitization \
   --target-view release
 ```
 
-Release-view blacklist exclusions are opt-in:
+Release-view exclusion-list rules are opt-in:
 
 | Options | Effective release-view rule |
 |---|---|
 | none | active concept |
-| `--enforce-embedded-blacklist` | active AND not in embedded HDF5 blacklist |
-| `--custom-blacklist PATH` | active AND not in custom blacklist |
-| both | active AND not in either blacklist |
+| `--enforce-embedded-blacklist` | active AND not in embedded HDF5 exclusion list |
+| `--custom-blacklist PATH` | active AND not in custom exclusion list |
+| both | active AND not in either exclusion list |
 
-A custom blacklist file uses the same format as RF2 blacklist ingestion: numeric SCTID lines exclude the concept and descendants; non-numeric lines exclude by FSN semantic tag.
+A custom exclusion-list file uses the same format as RF2 exclusion-list ingestion: numeric SCTID lines exclude the concept and descendants; non-numeric lines exclude by FSN semantic tag.
 
 Optional semantic BM25 fallback can be combined with either target view. It ranks SNOMED FSNs lexically and only keeps candidates that pass the selected policy/release gates:
 
@@ -379,11 +381,11 @@ If you want to run them as `./log-inception-docs.sh` or `./start-gui.sh`, mark t
 
 The GUI has three tabs:
 
-1. **Check whitelist/blacklist**  
+1. **Check policy**
    Upload an INCEpTION ZIP or fetch one through the INCEpTION API, upload the HDF5 policy file, optionally select annotators and annotation layers, then run the policy check. Reports and JSON artifacts can be downloaded.
 
 2. **Sanitization suggestions**  
-   Use the `CriticalFindings` JSON from the current session or upload one. Select policy or active-release target view, configure optional embedded/custom blacklist handling for release view, choose fallback methods, optionally select/create a processed SNOGIT cache, then download suggestion reports.
+   Use the `CriticalFindings` JSON from the current session or upload one. Select policy or active-release target view, configure optional embedded/custom exclusion-list handling for release view, choose fallback methods, optionally select/create a processed SNOGIT cache, then download suggestion reports.
 
 3. **Review & apply / Sanitization run**  
    Review suggestions, save/load reviewed decisions, and either:

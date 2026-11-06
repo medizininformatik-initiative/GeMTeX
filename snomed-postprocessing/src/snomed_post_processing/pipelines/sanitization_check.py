@@ -58,7 +58,7 @@ def run_sanitization_check(
                 runtime_blacklist_rules,
             )
         logging.info(
-            "Resolved custom release blacklist '%s' to %d concept(s).",
+            "Resolved custom release exclusion list '%s' to %d concept(s).",
             custom_blacklist,
             len(runtime_blacklist_indices),
         )

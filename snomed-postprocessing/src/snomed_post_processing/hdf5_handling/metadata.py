@@ -9,6 +9,7 @@ from typing import Any, Optional, Union
 import h5py
 import numpy as np
 
+from ..terminology import policy_label
 from .policy import decode_array
 
 
@@ -235,22 +236,22 @@ def format_hdf5_metadata_summary(
     if summary.policy_view_counts:
         lines.append("- Compact policy views:")
         for policy, view_name, count in summary.policy_view_counts:
-            lines.append(f"  - {policy}/{view_name}: {count:,} concepts")
+            lines.append(f"  - {policy_label(policy).capitalize()} (HDF5: {policy}/{view_name}: {count:,} concepts)")
     else:
         lines.append("- Compact policy views: missing")
     if summary.legacy_group_counts:
         lines.append("- Legacy groups:")
         for policy, view_name, count in summary.legacy_group_counts:
-            lines.append(f"  - {policy}/{view_name}: {count:,} concepts")
+            lines.append(f"  - {policy_label(policy).capitalize()} (HDF5: {policy}/{view_name}: {count:,} concepts)")
     if summary.blacklist_metadata:
         if not include_blacklist_rule_details:
-            lines.append("- Blacklist rule metadata: yes (see below)")
+            lines.append("- Exclusion-list rule metadata: yes (see below)")
         else:
-            lines.append("- Blacklist rule metadata:")
+            lines.append("- Exclusion-list rule metadata:")
             for metadata in summary.blacklist_metadata:
                 source = f", source: {metadata.source_name}" if metadata.source_name else ""
                 lines.append(
-                    f"  - blacklists/{metadata.view_name}: {len(metadata.rules):,} rule(s){source}"
+                    f"  - Exclusion list (HDF5: metadata/blacklists/{metadata.view_name}): {len(metadata.rules):,} rule(s){source}"
                 )
                 for rule in metadata.rules[:10]:
                     lines.append(f"    - {_format_blacklist_rule_kind(rule.kind)}: {rule.raw}")

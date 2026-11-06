@@ -14,11 +14,11 @@ Umgesetzt und mit fokussierten Tests geprüft:
 - Die drei Fallback-Optionen sind standardmäßig aktiviert (Abschnitt 5.1).
 - Historische Beziehungstypen: alle außer `MOVED_FROM` und `REFERS_TO` vorausgewählt; Overlap-Minimum `0.0`; separate Erklärung entfernt (Abschnitt 5.2).
 - Explizite Einstellungen bleiben über Reruns erhalten. Eine leere Auswahl historischer Beziehungstypen wird nicht mehr stillschweigend durch Standardwerte ersetzt.
-- Das bearbeitete BM25-Label verwendet „exclusion-list findings“. Die vollständige Terminologieumstellung aus Abschnitt 4 steht noch aus.
+- Die nach außen sichtbare Terminologie verwendet „inclusion list“ / „exclusion list“ in GUI, CLI-Hilfetexten, Konsolenmeldungen, generierten Markdown-Reports und README (Abschnitt 4). Technische Bezeichner und Artefaktformate bleiben unverändert.
 
 Zusätzlich wurde die MIE-Ergebnisdarstellung aus `../../snomed-annotation-audit/` übernommen (Abschnitt 2): gruppierte Datentabellen, Kennzahlen, Filter mit Reset und sitzungsinterne Speicherung des letzten erfolgreichen Checks. Report-Downloads und Übergabe an die Sanitization bleiben erhalten. Filter ändern weder Exporte noch die gespeicherten Findings.
 
-Diese Änderungen betreffen die GUI. CLI-/API-Standardwerte bleiben unverändert. Die übrigen Arbeitspakete und die Upload-Fehlerbehebung sind noch offen.
+Die funktionalen Änderungen betreffen die GUI; die Terminologieumstellung umfasst zusätzlich Reports und CLI-Hilfetexte. CLI-/API-Standardwerte bleiben unverändert. Die übrigen Arbeitspakete und die Upload-Fehlerbehebung sind noch offen.
 
 ## 2. Policy-Check-Ergebnisse als interaktive Tabelle
 
@@ -50,13 +50,11 @@ Vor der Umsetzung den tatsächlich verwendeten vollständigen CAS-Typnamen fests
 
 **Technische Einordnung:** Die alten Bezeichner sind derzeit auch Bestandteil von Python-Feldern, CLI-Optionen, JSON-Werten und HDF5-Pfaden. Ein bloßes globales Suchen/Ersetzen würde bestehende Artefakte und Aufrufe brechen.
 
-**Vorgehen:**
-1. Alle sichtbaren und technischen Verwendungen inventarisieren.
-2. Die Benennung in Oberfläche und Reports umstellen.
-3. Technische Schnittstellen und Speicherformate in einem expliziten, getesteten Änderungsschritt umbenennen; nötige Neuerstellung von Artefakten dokumentieren.
-4. Entscheiden, ob bestehende HDF5-/JSON-Artefakte neu erzeugt werden oder eine gesonderte Konvertierung benötigt wird. Keine stillschweigende Kompatibilität voraussetzen.
+**Aktueller Umfang (umgesetzt):** Nur die nach außen sichtbare Benennung ändern. GUI-Labels, Hilfetexte, Statusanzeigen, CLI-Hilfe, Konsolenmeldungen, Markdown-Reports und README verwenden die neuen Begriffe. Report-Überschriften und interne Markdown-Links sind aufeinander abgestimmt.
 
-**Abnahme:** Keine widersprüchlichen sichtbaren Begriffe; neue technische Namen funktionieren über CLI, GUI und Artefakte hinweg. Die technische Umstellung ist kein bereits implementiertes Verhalten.
+**Bewusst unverändert:** Python-Namen, CLI-Flags wie `--custom-blacklist`, HDF5-Pfade, JSON-Schlüssel sowie strukturierte `list_type`-/`reason`-/Statuswerte. In Metadatenansichten werden tatsächliche Speicherpfade ausdrücklich als HDF5-Pfade gekennzeichnet. Klinische Texte, FSNs, Dateinamen und vorhandene Reports werden nicht umgeschrieben. Keine Migration erforderlich; eine spätere technische Umbenennung wäre ein eigenständiger, gesondert zu beauftragender Schritt.
+
+**Abnahme:** Neue Begriffe in den bearbeiteten Anzeige- und Reportflächen; bestehende CLI-Aufrufe und Artefakte bleiben verwendbar. Tests sichern Anzeige, Report-Links und unveränderte JSON-Identifikatoren ab.
 
 ## 5. Suggest policy sanitization: neue Standardwerte
 

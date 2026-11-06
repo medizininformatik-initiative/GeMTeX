@@ -139,12 +139,12 @@ def render_sidebar() -> GuiInputs:
 def _render_target_view_selector() -> str:
     target_options = {
         "Policy rules": (
-            "Use the embedded whitelist/blacklist policy views. Best for the current "
+            "Use the embedded inclusion/exclusion-list policy views. Best for the current "
             "GeMTeX policy check and sanitization workflow."
         ),
         "Active release": (
-            "Use active concepts from the selected SNOMED release. Whitelist is "
-            "ignored; embedded and custom blacklists are optional."
+            "Use active concepts from the selected SNOMED release. Inclusion-list membership is "
+            "not required; embedded and custom exclusion lists are optional."
         ),
     }
     selected_target = st.segmented_control(
@@ -163,31 +163,31 @@ def _render_target_view_selector() -> str:
 
 def _render_release_blacklist_selector(data_dir: pathlib.Path) -> tuple[str, Any]:
     enforce_embedded = st.checkbox(
-        "Enforce embedded HDF5 blacklist",
+        "Enforce embedded HDF5 exclusion list",
         value=False,
         help=(
-            "If enabled, release-view suggestions exclude active concepts listed in the embedded HDF5 blacklist. "
-            "By default, release view ignores the embedded blacklist."
+            "If enabled, release-view suggestions exclude active concepts listed in the embedded HDF5 exclusion list. "
+            "By default, release view ignores the embedded exclusion list."
         ),
     )
     use_custom_blacklist = st.checkbox(
-        "Use custom blacklist rule file",
+        "Use custom exclusion-list rule file",
         value=False,
         help=(
-            "If enabled, release-view suggestions exclude rules from a custom blacklist file. "
+            "If enabled, release-view suggestions exclude concepts matched by a custom exclusion-list rule file. "
             "Numeric lines exclude a concept and descendants; non-numeric lines exclude by FSN semantic tag."
         ),
     )
     runtime_blacklist_file = None
     if use_custom_blacklist:
         runtime_blacklist_selection = render_file_source_selector(
-            "Custom blacklist rule file",
+            "Custom exclusion-list rule file",
             key="custom_blacklist_rule_file",
             data_dir=data_dir,
             suffixes=(".txt",),
             upload_types=("txt",),
             default_source="Upload",
-            help="Blacklist rule files are usually small, but upload, data-directory, and server-path modes are available.",
+            help="Exclusion-list rule files are usually small, but upload, data-directory, and server-path modes are available.",
         )
         runtime_blacklist_file = runtime_blacklist_selection.value
 

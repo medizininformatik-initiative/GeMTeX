@@ -54,6 +54,12 @@ When the GUI creates a processed SNOGIT cache, it writes the HDF5 to a persisten
 
 If the data directory is unavailable, it falls back to a temporary directory. Suggestion generation prefers this selected/created server-side cache path over stale uploaded-file objects after download-button reruns.
 
+# Policy terminology
+
+User-facing labels and messages use **inclusion list** / **exclusion list** across the sidebar, check results, suggestion settings, review status, and metadata display. CLI help, console messages, and generated Markdown reports use the same wording.
+
+This is a presentation change only: Python names, CLI flags, HDF5 paths, and JSON identifiers retain `whitelist`/`blacklist` where established. Actual storage paths shown in metadata are explicitly identified as HDF5 paths. Existing artifacts do not need migration; original clinical text and FSNs are not rewritten.
+
 # Policy-check results
 
 The policy-check tab displays the last successful check from `st.session_state["policy_check_result"]` on every rerun. Filtering or downloading does not rerun the check. Results persist within the current session, not across server restarts; changed project/HDF5 inputs require an explicit new check. A caption identifies results as the last successful check.

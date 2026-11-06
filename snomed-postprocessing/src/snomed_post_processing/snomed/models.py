@@ -60,11 +60,11 @@ class Information:
     log_dump_pretext_caption: str = "Vorbemerkung"
     log_dump_pretext: str = (
         f"### {log_dump_pretext_caption}\n"
-        "Manche Codes, die als 'blacklisted' gekenzeichnet sind, mögen ersteinmal verwundern, da sie den Semantic Tag `(qualifier value)` haben,\n"
+        "Manche Codes, die als 'auf der exclusion list' gekennzeichnet sind, mögen ersteinmal verwundern, da sie den Semantic Tag `(qualifier value)` haben,\n"
         "der nicht verboten ist. Diese fallen dann jedoch unter die Kategorien `Overlapping sites` oder `action`,\n"
         "welche wiederum als ganzes ausgeschlossen wurden.\n\n"
         "Es folgt:\n"
-        "* eine Auflistung nach Annotator*in und dazugehörige Dokumente für: [Whitelist](#whitelist) und [Blacklist](#blacklist)\n"
-        "* eine Tabelle, mit allen gefundenen [Whitelist Codes](#snomed-ct-codes) (mit Anzahl über das gesamte Projekt)\n"
+        "* eine Auflistung nach Annotator*in und dazugehörige Dokumente für: [Inclusion list](#inclusion-list) und [Exclusion list](#exclusion-list)\n"
+        "* eine Tabelle, mit allen gefundenen [Codes außerhalb der inclusion list](#snomed-ct-codes) (mit Anzahl über das gesamte Projekt)\n"
         "* eine Tabelle, mit allen gefundenen [Semantic Tags](#semantic-tags) (mit Anzahl über das gesamte Projekt)\n\n"
     )

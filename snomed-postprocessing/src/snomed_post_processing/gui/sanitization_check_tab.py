@@ -123,7 +123,7 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
     if inputs.target_view == "release":
         st.info(
             "Release-view normalization suggestions are enabled. Replacement candidates only need to be active "
-            "in the release, unless the embedded and/or custom release blacklist is selected."
+            "in the release, unless the embedded and/or custom release exclusion list is selected."
         )
     st.write(
         "Generate sanitization suggestions from CriticalFindings JSON produced by "
@@ -173,8 +173,8 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                 "Historical ancestor fallback",
                 value=True,
                 help=(
-                    "For unresolved whitelist findings: try nearest active whitelisted "
-                    "ancestor, then nearest active whitelisted ancestor reachable "
+                    "For unresolved inclusion-list findings: try the nearest active ancestor in the inclusion list, "
+                    "then the nearest active ancestor in the inclusion list reachable "
                     "through stored inactive is-a fallback edges."
                 ),
             )
@@ -473,7 +473,7 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
         or inputs.runtime_blacklist_file is not None
     )
     if _uses_custom_blacklist(inputs.release_blacklist_mode) and inputs.runtime_blacklist_file is None:
-        st.warning("Custom blacklist mode is selected. Select or upload a custom blacklist rule file before generating suggestions.")
+        st.warning("Custom exclusion-list mode is selected. Select or upload a custom exclusion-list rule file before generating suggestions.")
 
     if st.button(
         "Generate sanitization suggestions",
@@ -499,14 +499,14 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                 custom_blacklist_path = None
                 if inputs.target_view == "release" and _uses_custom_blacklist(inputs.release_blacklist_mode):
                     if inputs.runtime_blacklist_file is None:
-                        raise ValueError("Custom blacklist mode is selected, but no custom blacklist rule file was provided.")
-                    st.write("Resolving custom release blacklist rules...")
+                        raise ValueError("Custom exclusion-list mode is selected, but no custom exclusion-list rule file was provided.")
+                    st.write("Resolving custom release exclusion-list rules...")
                     custom_blacklist_path, runtime_blacklist_indices = _resolve_custom_blacklist_indices(
                         inputs.hdf5_temp_path,
                         inputs.runtime_blacklist_file,
                     )
                     st.write(
-                        f"Resolved custom blacklist to {len(runtime_blacklist_indices):,} concept(s)."
+                        f"Resolved custom exclusion list to {len(runtime_blacklist_indices):,} concept(s)."
                     )
                 if use_session_findings:
                     findings = st.session_state["critical_findings"]

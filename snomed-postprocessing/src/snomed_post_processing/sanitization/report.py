@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Sequence, TextIO
 
+from ..terminology import suggestion_status_label
 from .models import SanitizationStatus, SanitizationSuggestion
 
 
@@ -25,7 +26,7 @@ def write_sanitization_markdown_report(
         counts[suggestion.status] = counts.get(suggestion.status, 0) + 1
     for status, count in counts.items():
         if count:
-            output_file.write(f"| {status.value} | {count} |\n")
+            output_file.write(f"| {suggestion_status_label(status.value)} | {count} |\n")
     if not suggestions:
         output_file.write("| no_findings | 0 |\n")
     output_file.write("\n")
@@ -68,7 +69,7 @@ def _write_replacement_table(
             suggestion.finding.code or "",
             suggestion.finding.covered_text,
             suggestion.finding.fsn or "",
-            suggestion.status.value,
+            suggestion_status_label(suggestion.status.value),
             suggestion.replacement_code or "",
             suggestion.replacement_fsn or "",
             suggestion.association_type or "",
@@ -92,7 +93,7 @@ def _write_unresolved_table(
             suggestion.finding.code or "",
             suggestion.finding.covered_text,
             suggestion.finding.fsn or "",
-            suggestion.status.value,
+            suggestion_status_label(suggestion.status.value),
             _format_candidates(suggestion),
         ),
     )

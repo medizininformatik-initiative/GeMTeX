@@ -802,7 +802,7 @@ def _render_document_review_sections(rows: list[dict[str, Any]]) -> list[dict[st
                             ),
                             "Policy issue": st.column_config.TextColumn(
                                 "Policy issue",
-                                help="Whether the original finding came from the whitelist or blacklist policy check.",
+                                help="Whether the original finding came from the inclusion-list or exclusion-list policy check.",
                             ),
                             "Finding context": st.column_config.TextColumn(
                                 "Finding context",
@@ -1474,9 +1474,9 @@ def _policy_issue_label(finding: Any) -> str:
     list_type = str(getattr(finding, "list_type", "") or "").lower()
     reason = str(getattr(finding, "reason", "") or "").replace("_", " ").strip()
     if list_type == "blacklist":
-        return "Reason: blacklisted"
+        return "Reason: on exclusion list"
     if list_type == "whitelist":
-        return "Reason: not on whitelist"
+        return "Reason: not on inclusion list"
     return f"Reason: {reason}" if reason else "Reason: policy finding"
 
 
@@ -1701,7 +1701,7 @@ def _status_label(status: Any) -> str:
         SanitizationStatus.AMBIGUOUS_ANCESTOR.value: "Ambiguous ancestor",
         SanitizationStatus.NO_POLICY_ACCEPTABLE_CANDIDATE.value: "No acceptable candidate",
         SanitizationStatus.NO_HISTORICAL_ASSOCIATION.value: "No historical association",
-        SanitizationStatus.BLACKLISTED_NO_AUTO_SANITIZATION.value: "Blacklisted/no automatic sanitization",
+        SanitizationStatus.BLACKLISTED_NO_AUTO_SANITIZATION.value: "Excluded/no automatic sanitization",
     }
     value = _status_value(status)
     return labels.get(value, value.replace("_", " ").title())

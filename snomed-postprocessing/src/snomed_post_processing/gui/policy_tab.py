@@ -7,6 +7,7 @@ import pathlib
 
 import streamlit as st
 
+from snomed_post_processing.terminology import policy_label
 from snomed_post_processing.uima_processing import CriticalFinding, get_annotator_names
 
 from .downloads import download_json_report, download_md_report
@@ -297,8 +298,4 @@ def _finding_row(finding: CriticalFinding) -> dict[str, str]:
 
 
 def _check_label(list_type: str) -> str:
-    if list_type == "whitelist":
-        return "inclusion list"
-    if list_type == "blacklist":
-        return "exclusion list"
-    return list_type
+    return policy_label(list_type)
