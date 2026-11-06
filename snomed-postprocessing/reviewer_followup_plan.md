@@ -4,9 +4,9 @@
 
 Dieses Dokument strukturiert sämtliche Punkte aus `todo.md`, beantwortet die dort gestellten Fragen anhand des aktuellen Codes und ergänzt Umsetzungshinweise sowie Abnahmekriterien.
 
-**Status:** Arbeitsplan, keine Implementierung. Gewünschte Änderungen, verifizierter Ist-Zustand und neue Vorschläge sind jeweils getrennt gekennzeichnet. Numerische Schwellenwerte für automatische Entscheidungen müssen mit Reviewer-Beispielen validiert werden.
+**Status:** Arbeitsplan mit dokumentiertem Umsetzungsstand. Gewünschte Änderungen, verifizierter Ist-Zustand und neue Vorschläge sind jeweils getrennt gekennzeichnet. Numerische Schwellenwerte für automatische Entscheidungen müssen mit Reviewer-Beispielen validiert werden.
 
-### Umsetzungsstand: erstes Paket
+### Umsetzungsstand
 
 Umgesetzt und mit fokussierten Tests geprüft:
 
@@ -16,11 +16,15 @@ Umgesetzt und mit fokussierten Tests geprüft:
 - Explizite Einstellungen bleiben über Reruns erhalten. Eine leere Auswahl historischer Beziehungstypen wird nicht mehr stillschweigend durch Standardwerte ersetzt.
 - Das bearbeitete BM25-Label verwendet „exclusion-list findings“. Die vollständige Terminologieumstellung aus Abschnitt 4 steht noch aus.
 
+Zusätzlich wurde die MIE-Ergebnisdarstellung aus `../../snomed-annotation-audit/` übernommen (Abschnitt 2): gruppierte Datentabellen, Kennzahlen, Filter mit Reset und sitzungsinterne Speicherung des letzten erfolgreichen Checks. Report-Downloads und Übergabe an die Sanitization bleiben erhalten. Filter ändern weder Exporte noch die gespeicherten Findings.
+
 Diese Änderungen betreffen die GUI. CLI-/API-Standardwerte bleiben unverändert. Die übrigen Arbeitspakete und die Upload-Fehlerbehebung sind noch offen.
 
 ## 2. Policy-Check-Ergebnisse als interaktive Tabelle
 
 **Anforderung:** Die Verbesserungen der MIE-Version zurückführen: Policy-Check-Ergebnisse sollen als interaktive Datentabelle statt ausschließlich als Markdown angezeigt werden.
+
+**Umgesetzt:** Dokument-Expander mit Tabellen pro Annotator. Spalten: SCTID, FSN, Covered Text, Status, Check-Typ und Annotation-Layer. Kennzahlen sowie Filter für Status, Check-Typ, SCTID und Text inklusive Reset sind verfügbar. Dokument/Annotator stehen in der Gruppierung, Offsets bestimmen die anfängliche Reihenfolge; detaillierte Gründe und Offsets bleiben in den strukturierten Findings/Reports. Markdown-Downloads bleiben erhalten, die bisherige Inline-Markdown-Vorschau wird durch die Tabelle ersetzt. Ergebnisse bleiben über Reruns innerhalb der Sitzung sichtbar; ein Hinweis kennzeichnet den letzten erfolgreichen Check.
 
 - Die konkrete MIE-Implementierung vor der Übernahme identifizieren und mit dem aktuellen Workflow vergleichen.
 - Tabellenansicht mit den relevanten Finding-Feldern, insbesondere Dokument, Annotator, Layer, Textspanne, SCTID und Prüfgrund, anbieten.
@@ -282,7 +286,7 @@ Fehlschläge sollen den betroffenen Verarbeitungsschritt und eine verständliche
 
 - [x] Gewünschte Layer-/Suggestion-Standardwerte aus Abschnitt 3 und 5 in einer neuen GUI-Sitzung korrekt.
 - [x] Explizite Layer-/Suggestion-Einstellungen bleiben über Reruns erhalten.
-- [ ] Policy-Tabellen und Exporte sind inhaltlich konsistent.
+- [x] Policy-Tabellen nutzen dieselben Findings wie Exporte und Sanitization; Filter verändern die Quelldaten nicht.
 - [ ] Exclusion-list-Ziele werden über alle Kandidatenquellen und unterstützten Zielmodi gesperrt.
 - [ ] Number-Sonderregel entfernt ausschließlich die ID, nicht die Annotation.
 - [ ] Mehrdeutige historische Ziele werden nicht versehentlich automatisch gewählt.

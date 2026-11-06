@@ -29,7 +29,7 @@ The Streamlit GUI wraps the same pipeline functions as the CLI. It is intended f
 | `/src/snomed_post_processing/gui/app.py` | Main Streamlit page setup and tab orchestration. |
 | `/src/snomed_post_processing/gui/sidebar.py` | Shared input/sidebar controls, target-view selection, blacklist mode selection, INCEpTION API controls. |
 | `/src/snomed_post_processing/gui/file_sources.py` | Shared file selector supporting Upload, Data directory, and Server path. |
-| `/src/snomed_post_processing/gui/policy_tab.py` | Policy/HDF5 creation UI. |
+| `/src/snomed_post_processing/gui/policy_tab.py` | Policy checks, persistent findings tables, and report downloads. |
 | `/src/snomed_post_processing/gui/sanitization_check_tab.py` | Suggestion generation UI and settings metadata. |
 | `/src/snomed_post_processing/gui/sanitization_run_tab.py` | Review/apply UI and INCEpTION deployment form. |
 | `/src/snomed_post_processing/gui/downloads.py` | Markdown/JSON download helpers. |
@@ -53,6 +53,18 @@ When the GUI creates a processed SNOGIT cache, it writes the HDF5 to a persisten
 ```
 
 If the data directory is unavailable, it falls back to a temporary directory. Suggestion generation prefers this selected/created server-side cache path over stale uploaded-file objects after download-button reruns.
+
+# Policy-check results
+
+The policy-check tab displays the last successful check from `st.session_state["policy_check_result"]` on every rerun. Filtering or downloading does not rerun the check. Results persist within the current session, not across server restarts; changed project/HDF5 inputs require an explicit new check. A caption identifies results as the last successful check.
+
+The MIE/audit findings display is grouped by document and annotator, with rows sorted initially by span offset. Each table shows SCTID, FSN, covered text, critical/ignored status, inclusion-/exclusion-list check, and annotation layer. Tables support Streamlit's interactive column sorting.
+
+Summary metrics cover critical and ignored findings, inclusion-/exclusion-list findings, affected documents, and affected annotators. These metrics describe the complete result. Document/annotator group counts describe the filtered rows.
+
+Filters support status, check type, SCTID substring, and case-insensitive covered-text substring. Clear all filters restores the full display. Filters never modify the stored findings or exported reports. Empty findings and empty filtered results have explicit messages.
+
+CriticalFindings JSON, Markdown, masked Markdown, and report JSON downloads remain available. The table replaces the inline Markdown report preview, not the Markdown exports. The existing `critical_findings`, `critical_findings_json_text`, and `critical_findings_json_name` session fields remain populated for sanitization.
 
 # Annotation ID feature and prefix
 
