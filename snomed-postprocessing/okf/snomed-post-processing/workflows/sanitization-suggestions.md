@@ -86,6 +86,12 @@ CLI/API defaults remain conservative: association types `SAME_AS` and `REPLACED_
 
 The GUI sidebar starts with no overlap-ignore layer selected. Users may explicitly add `webanno.custom.No_Human` if desired.
 
+# Planned conditional review selection
+
+The upcoming **Apply Conditions** automation is restricted to source findings from the inclusion-list check (`finding.list_type == "whitelist"`), for both historical-association and BM25 conditions. Exclusion-list findings (`list_type == "blacklist"`) remain manual regardless of score gaps or unique historical targets. An annotation with an exclusion-list finding must not be automatically approved through a second inclusion-list finding either. Open exclusion-list findings prevent automatic document-review completion.
+
+This is a source-finding restriction, not a new inclusion-list requirement on source or target concepts. Existing target-view gates, optional Active-release exclusions, and separately configured explicit concept rules are unchanged. BM25 suggestions for exclusion-list findings may still be generated for manual inspection. Lexical similarity is not clinical replacement evidence; comparative reliability has not been measured here. This conditional-selection requirement is documented but not implemented yet; see `reviewer_followup_plan.md`, section 7.
+
 # Historical associations
 
 Historical association replacement uses RF2 historical association refsets such as:

@@ -159,6 +159,16 @@ Der Geltungsbereich wird nicht über zusätzliche Eingabeboxen konfiguriert: Die
 
 ## 7. Review & apply: bedingungsbasierte automatische Auswahl
 
+### 7.0 Verbindlicher Quell-Scope (bestätigt; noch umzusetzen)
+
+**Apply Conditions darf ausschließlich Findings aus der inclusion-list-Prüfung automatisch auswählen** (`finding.list_type == "whitelist"`, z. B. `not_in_whitelist`). Das bezeichnet die Herkunft des Findings, nicht eine inclusion-list-Mitgliedschaft des Quellcodes.
+
+- Findings aus der exclusion-list-Prüfung (`list_type == "blacklist"`) bleiben manuell, unabhängig von Historical Association, eindeutigem Ziel oder BM25-Score/-Abstand. Die Einschränkung gilt gleichermaßen für Bedingung A und B.
+- Betrifft dieselbe Annotation auch ein exclusion-list-Finding, darf sie nicht über ein zusätzliches inclusion-list-Finding automatisch freigegeben werden.
+- BM25-Vorschläge für exclusion-list-Findings dürfen weiterhin zur manuellen Prüfung erzeugt werden; Vorschlagserzeugung ist keine automatische Freigabe. Lexikalische Ähnlichkeit belegt keine klinische Eignung; eine vergleichende Zuverlässigkeit wurde hier nicht empirisch bestimmt.
+- Gemischte Dokumente mit offenen exclusion-list-Findings nicht automatisch als reviewed markieren.
+- Zielvalidität richtet sich weiterhin nach dem gewählten Policy-/Active-release-Modus; optionale Release-Ausschlüsse bleiben optional. Explizite Konzeptregeln aus Abschnitt 6 sind ein separater, bewusst konfigurierter Mechanismus und von diesem Quell-Scope nicht betroffen.
+
 ### 7.1 Bisherige Bulk-Aktionen ersetzen
 
 Die vier globalen Aktionen entfernen:
@@ -343,6 +353,7 @@ Fehlschläge sollen den betroffenen Verarbeitungsschritt und eine verständliche
 - [x] Beide Aktionen erhalten `literal` exakt sowie alle übrigen Features, Layer, Offsets und Annotation-Anzahl (offline JSONCAS/XMI).
 - [x] Regeln respektieren Scope und manuelle Entscheidungen; Ziel-Policy-Konflikte, Wiederholbarkeit und Clear sind geprüft.
 - [x] `override policy` ist pro Regel standardmäßig aktiviert, editierbar und exportierbar; Tests prüfen beide Zustände und dokumentierte tatsächliche Policy-Overrides.
+- [ ] Apply Conditions wählt ausschließlich inclusion-list-Quellfindings; exclusion-list-Findings bleiben auch bei eindeutigen historischen Zielen oder hohen BM25-Scores manuell.
 - [ ] Mehrdeutige historische Ziele werden nicht versehentlich automatisch gewählt.
 - [ ] BM25-Gleichstände, weniger als drei Ziele und nicht vergleichbare Scores bleiben manuell.
 - [ ] Apply Conditions setzt Zielauswahl, resolved und reviewed konsistent.
