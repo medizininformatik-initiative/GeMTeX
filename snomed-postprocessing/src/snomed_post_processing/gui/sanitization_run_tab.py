@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import dataclasses
 import datetime
+import hashlib
 import io
+import json
 import logging
 import pathlib
 import tempfile
@@ -21,7 +23,12 @@ from snomed_post_processing.sanitization import (
 )
 
 from .downloads import download_json_report
-from snomed_post_processing.sanitization.models import SanitizationStatus
+from snomed_post_processing.sanitization.models import SanitizationStatus, SUPPORTED_ASSOCIATION_TYPES
+from snomed_post_processing.sanitization.json_io import sanitization_suggestion_to_dict
+from snomed_post_processing.sanitization.conditions import (
+    DEFAULT_CONDITION_ASSOCIATIONS, apply_conditions, undo_automatic_conditions,
+    bm25_assessments, decision_selection,
+)
 from snomed_post_processing.pipelines import apply_decisions_and_upload_to_inception
 from snomed_post_processing.pipelines.sanitization_run import run_sanitization
 from snomed_post_processing.uima_processing.io import (
@@ -54,6 +61,7 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
         st.success(st.session_state.pop("sanitization_last_load_message"))
 
     suggestions = st.session_state.get("sanitization_suggestions") or []
+    _prepare_automatic_condition_source(suggestions)
     rule_decisions, rule_invalid = render_rule_review(inputs)
     rule_decisions, rule_conflicts = protect_manual_decisions(rule_decisions)
     rule_invalid = rule_invalid or rule_conflicts
@@ -116,11 +124,7 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
     )
     reviewed_decisions = list(rule_decisions)
     if rows:
-        _render_single_choice_bulk_actions(
-            [row for row in rows if _row_has_actionable_replacement(row)],
-            label_prefix="all",
-        )
-        _render_manual_choice_bulk_actions([row for row in rows if _row_has_actionable_replacement(row)])
+        _render_automatic_conditions(suggestions, rows, rule_decisions)
         reviewed_decisions.extend(_render_document_review_sections(rows))
     else:
         st.info("No additional generic suggestions to review.")
@@ -762,22 +766,12 @@ def _render_document_review_sections(rows: list[dict[str, Any]]) -> list[dict[st
 
             if manual_rows:
                 st.markdown("#### Manual choices")
-                _render_manual_choice_bulk_actions(
-                    manual_rows,
-                    label_prefix=f"document {_safe_key(document)}",
-                    compact=True,
-                )
                 decisions.extend(_render_manual_choice_cards(manual_rows, document))
 
             if single_choice_rows:
                 st.markdown(
                     "#### Single/no-choice suggestions",
-                    help="These rows have at most one replacement candidate. They are not necessarily selected for application; use the Apply column or the bulk action. Checkbox behavior: no selection keeps the annotation unchanged; 'Needs manual edit' takes precedence over Apply/Delete; deletion takes precedence over Apply."
-                )
-                _render_single_choice_bulk_actions(
-                    single_choice_rows,
-                    label_prefix=f"document {_safe_key(document)}",
-                    compact=True,
+                    help="These rows have at most one replacement candidate. They are not necessarily selected for application; use the Apply column or the historical conditions form. Checkbox behavior: no selection keeps the annotation unchanged; 'Needs manual edit' takes precedence over Apply/Delete; deletion takes precedence over Apply."
                 )
                 review_df = pd.DataFrame(single_choice_rows).drop(
                     columns=["Document", "_offset", "_layer", "_status_raw"],
@@ -913,136 +907,128 @@ def _render_document_metrics(document_rows: list[dict[str, Any]]) -> None:
     )
 
 
-def _render_single_choice_bulk_actions(
-    rows: list[dict[str, Any]], *, label_prefix: str = "all", compact: bool = False
-) -> None:
-    single_rows = [
-        row
-        for row in rows
-        if not row.get("_needs_choice") and _row_has_actionable_replacement(row)
-    ]
-    if not single_rows:
-        return
-    selected_count = sum(1 for row in single_rows if _row_apply_selected(row))
-    bm25_count = sum(
-        1
-        for row in single_rows
-        if row.get("_status_raw") == SanitizationStatus.SEMANTIC_BM25_REPLACEMENT.value
+def _condition_source(suggestions) -> str:
+    payload = [sanitization_suggestion_to_dict(item) for item in suggestions]
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def _prepare_automatic_condition_source(suggestions) -> None:
+    source = _condition_source(suggestions)
+    previous = st.session_state.get("sanitization_conditions_source")
+    if previous is not None and previous != source:
+        automatic = st.session_state.pop("sanitization_automatic_decisions", {})
+        for index, item in automatic.items():
+            if not st.session_state.get(f"sanitization_human_reviewed_{_safe_key(item['document'])}"):
+                st.session_state[_manual_apply_key(index + 1)] = False
+                st.session_state.pop(_choice_key(index + 1), None)
+                st.session_state.pop(_previous_choice_key(index + 1), None)
+        for document in st.session_state.pop("sanitization_automatic_reviewed_documents", set()):
+            if not st.session_state.get(f"sanitization_human_reviewed_{_safe_key(document)}"):
+                st.session_state[_document_reviewed_key(document)] = False
+        st.session_state.pop("sanitization_conditions_undo", None)
+        if automatic:
+            st.session_state["sanitization_conditions_message"] = "Suggestions changed; automatic selections were cleared. Apply conditions again if needed."
+        _bump_review_state_revision()
+    st.session_state["sanitization_conditions_source"] = source
+
+
+def _sync_condition_result(result, documents) -> None:
+    old_reviewed = {doc for doc in documents if st.session_state.get(_document_reviewed_key(doc), False)}
+    owned = set(st.session_state.get("sanitization_automatic_reviewed_documents", set()))
+    st.session_state["sanitization_automatic_reviewed_documents"] = (
+        (owned | (result.reviewed_documents - old_reviewed)) & result.reviewed_documents
     )
-    if compact:
+    for document in documents:
+        st.session_state[_document_reviewed_key(document)] = document in result.reviewed_documents
+    for item in result.decisions:
+        if "suggestion_index" not in item:
+            continue
+        number = item["suggestion_index"] + 1
+        st.session_state[_choice_key(number)] = item.get("replacement_choice") or NO_REPLACEMENT_LABEL
+        st.session_state[_previous_choice_key(number)] = st.session_state[_choice_key(number)]
+        st.session_state[_manual_apply_key(number)] = bool(item.get("apply"))
+        st.session_state[_manual_delete_key(number)] = bool(item.get("delete_annotation"))
+        st.session_state[_manual_edit_key(number)] = bool(item.get("manual_edit"))
+    st.session_state["sanitization_automatic_decisions"] = {
+        item["suggestion_index"]: item for item in result.decisions
+        if "suggestion_index" in item and item.get("automatic_condition")
+    }
+    st.session_state["sanitization_review_decisions"] = result.decisions
+    _bump_review_state_revision()
+
+
+def _render_automatic_conditions(suggestions, rows, rule_decisions) -> None:
+    st.markdown("#### Automatic conditions")
+    st.caption(
+        "Only inclusion-list source findings qualify. Exclusion-list findings remain manual. "
+        "Historical relationships and BM25 gaps are not guarantees of clinical equivalence. No CAS files change here."
+    )
+    with st.form("sanitization_conditions_form"):
+        associations = st.multiselect(
+            "Historical association types", options=SUPPORTED_ASSOCIATION_TYPES,
+            default=list(DEFAULT_CONDITION_ASSOCIATIONS), key="sanitization_condition_associations",
+            help="Select only when these relationship types yield exactly one distinct selectable target code.",
+        )
+        bm25_enabled = st.checkbox("Enable BM25 automatic selection (heuristic)", value=False, key="sanitization_condition_bm25")
+        threshold_columns = st.columns(2)
+        with threshold_columns[0]:
+            min_dominance = st.number_input(
+                "Minimum BM25 gap dominance", min_value=0.0, max_value=1.0, value=2 / 3,
+                step=0.05, format="%.3f", key="sanitization_condition_bm25_dominance",
+            )
+        with threshold_columns[1]:
+            min_relative_lead = st.number_input(
+                "Minimum BM25 relative lead", min_value=0.0, max_value=1.0, value=0.20,
+                step=0.05, format="%.3f", key="sanitization_condition_bm25_lead",
+            )
         st.caption(
-            f"Bulk actions for {len(single_rows)} single/no-choice replacement(s) in this document; "
-            f"{selected_count} currently selected for application."
+            "BM25: D = first gap / (first gap + largest later gap); M = first gap / top score. "
+            "Uses all saved, distinct targets (at least 3) from one comparable score channel. "
+            "Mixed FSN/SNOGIT channels are skipped. Thresholds are unvalidated heuristics. "
+            "Historical OR enabled BM25 conditions can select a row. Existing selections are not cleared; use Undo to reverse the last run."
         )
-    else:
-        extra = f" ({bm25_count} from BM25 fallback)" if bm25_count else ""
-        st.info(
-            f"{len(single_rows)} single/no-choice replacement suggestion(s){extra}; "
-            f"{selected_count} currently selected for application. They are review suggestions, "
-            "not automatically accepted unless their Apply checkbox is selected."
-        )
-    action_col1, action_col2 = st.columns(2)
-    safe_label = _safe_key(label_prefix)
-    with action_col1:
-        if st.button(
-            "Apply all" if compact else "Apply all single/no-choice replacements",
-            key=f"single_apply_all_{safe_label}",
-            help="Select all single/no-choice replacements for application. Review exceptions before running.",
-            width="stretch",
-        ):
-            _set_single_choice_apply_defaults(single_rows, apply=True)
-            st.rerun()
-    with action_col2:
-        if st.button(
-            "Clear all" if compact else "Clear all single/no-choice applications",
-            key=f"single_clear_all_{safe_label}",
-            help="Unselect all single/no-choice replacement applications.",
-            width="stretch",
-        ):
-            _set_single_choice_apply_defaults(single_rows, apply=False)
-            st.rerun()
-
-
-def _set_single_choice_apply_defaults(rows: list[dict[str, Any]], *, apply: bool) -> None:
-    for row in rows:
-        row_number = int(row["#"])
-        st.session_state[_manual_apply_key(row_number)] = bool(apply)
-        if apply:
-            st.session_state[_manual_delete_key(row_number)] = False
-            st.session_state[_manual_edit_key(row_number)] = False
-
-
-def _render_manual_choice_bulk_actions(
-    rows: list[dict[str, Any]], *, label_prefix: str = "all", compact: bool = False
-) -> None:
-    manual_rows = [row for row in rows if row.get("_needs_choice")]
-    if not manual_rows:
+        apply = st.form_submit_button("Apply Conditions")
+    assessments = bm25_assessments(suggestions, min_dominance, min_relative_lead)
+    if assessments:
+        with st.expander("BM25 score-gap assessment", expanded=False):
+            st.caption("Qualifies indicates the score/source condition only, before manual-choice protection. BM25 selection is opt-in.")
+            st.dataframe(pd.DataFrame([{
+                "#": index + 1, "Document": suggestions[index].finding.document,
+                "Source SCTID": suggestions[index].finding.code,
+                "Distinct targets": item["candidate_count"], "Scores": item.get("scores", []),
+                "D": item.get("dominance"), "M": item.get("relative_lead"),
+                "Qualifies if enabled": item["eligible"], "Reason": item["reason"],
+            } for index, item in assessments.items()]), hide_index=True, width="stretch")
+    undo = st.button(
+        "Undo Automatic Conditions", disabled=not st.session_state.get("sanitization_conditions_undo"),
+        help="Undo the last Apply Conditions changes, preserving later manual saves. CAS files are unchanged.",
+    )
+    if st.session_state.get("sanitization_conditions_message"):
+        st.info(st.session_state.pop("sanitization_conditions_message"))
+    if not apply and not undo:
         return
-    applied_count = sum(1 for row in manual_rows if _row_apply_selected(row))
-    delete_count = sum(1 for row in manual_rows if _row_delete_selected(row))
-    manual_edit_count = sum(1 for row in manual_rows if _row_manual_edit_selected(row))
-    resolved_count = sum(1 for row in manual_rows if _row_manual_choice_resolved(row))
-    if compact:
-        st.caption(
-            f"Bulk actions for {len(manual_rows)} manual-choice suggestion(s) in "
-            f"this document; {resolved_count} currently resolved "
-            f"({applied_count} replacement(s), {delete_count} deletion(s), "
-            f"{manual_edit_count} manual-edit marker(s))."
+    current = list(rule_decisions) + _review_rows_to_decisions(rows, rows, {})
+    documents = {item["document"] for item in current}
+    reviewed = {doc for doc in documents if st.session_state.get(_document_reviewed_key(doc), False)}
+    if apply:
+        restored = st.session_state.get("sanitization_restored_decisions_by_index", {})
+        protected = {index for index, item in restored.items() if not item.get("automatic_condition")}
+        choices = {row["#"] - 1: row.get("_valid_choices", ()) for row in rows}
+        result = apply_conditions(
+            suggestions, current, associations, choices, reviewed, protected,
+            bm25_enabled=bm25_enabled, bm25_min_dominance=min_dominance, bm25_min_relative_lead=min_relative_lead,
         )
-    elif resolved_count == len(manual_rows):
-        st.success(
-            f"All {len(manual_rows)} manual-choice suggestion(s) currently have "
-            f"a reviewed action selected ({applied_count} replacement(s), "
-            f"{delete_count} deletion(s), {manual_edit_count} manual-edit marker(s)). "
-            "Inspect exceptions per document before running."
-        )
+        if result.undo is not None:
+            st.session_state["sanitization_conditions_undo"] = result.undo
+        message = (f"Conditions updated {result.changed} row(s); left {result.skipped} unchanged; "
+                   f"newly reviewed {len(result.reviewed_documents - reviewed)} document(s).")
     else:
-        st.warning(
-            f"{len(manual_rows)} suggestion(s) need manual choices; "
-            f"{resolved_count} currently have a reviewed action selected "
-            f"({applied_count} replacement(s), {delete_count} deletion(s), "
-            f"{manual_edit_count} manual-edit marker(s)). If the first "
-            "candidate is acceptable as a review starting point, use the bulk action "
-            "below and then inspect exceptions per document."
-        )
-    action_col1, action_col2 = st.columns(2)
-    safe_label = _safe_key(label_prefix)
-    with action_col1:
-        if st.button(
-            "Apply first candidate" if compact else "Apply first candidate to all manual choices",
-            key=f"manual_apply_first_{safe_label}",
-            help=(
-                "Selects the first ranked candidate for each manual-choice row and "
-                "marks it for application. Review carefully before running."
-            ),
-            width="stretch",
-        ):
-            _set_manual_choice_defaults(manual_rows, apply=True)
-            st.rerun()
-    with action_col2:
-        if st.button(
-            "Clear manual choices" if compact else "Clear all manual applications",
-            key=f"manual_clear_{safe_label}",
-            help="Keeps candidate selections but unchecks manual-choice applications.",
-            width="stretch",
-        ):
-            _set_manual_choice_defaults(manual_rows, apply=False)
-            st.rerun()
-
-
-def _set_manual_choice_defaults(rows: list[dict[str, Any]], *, apply: bool) -> None:
-    for row in rows:
-        row_number = int(row["#"])
-        options = list(row.get("_valid_choices", ()))
-        choice = options[0] if options else NO_REPLACEMENT_LABEL
-        if apply and choice != NO_REPLACEMENT_LABEL:
-            st.session_state[_choice_key(row_number)] = choice
-            st.session_state[_previous_choice_key(row_number)] = choice
-            st.session_state[_manual_apply_key(row_number)] = True
-            st.session_state[_manual_delete_key(row_number)] = False
-            st.session_state[_manual_edit_key(row_number)] = False
-        else:
-            st.session_state[_manual_apply_key(row_number)] = False
+        protected_documents = {doc for doc in documents if st.session_state.get(f"sanitization_human_reviewed_{_safe_key(doc)}")}
+        result = undo_automatic_conditions(current, reviewed, st.session_state.pop("sanitization_conditions_undo"), protected_documents)
+        message = f"Undid {result.changed} automatic selection(s); preserved {result.skipped} changed/manual selection(s)."
+    _sync_condition_result(result, documents)
+    st.session_state["sanitization_conditions_message"] = message
+    st.rerun()
 
 
 def _save_manual_choice_form(document: str, row_numbers: list[int]) -> None:
@@ -1208,10 +1194,6 @@ def _group_rows_by_document(rows: list[dict[str, Any]]) -> dict[str, list[dict[s
     return grouped
 
 
-def _row_has_actionable_replacement(row: dict[str, Any]) -> bool:
-    return bool(row.get("_valid_choices")) and row.get("Suggested replacement") != NO_REPLACEMENT_LABEL
-
-
 def _row_apply_selected(row: dict[str, Any]) -> bool:
     if _row_manual_edit_selected(row) or _row_delete_selected(row):
         return False
@@ -1306,11 +1288,20 @@ def _decisions_metadata(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "id_feature": st.session_state.get("snomed_annotation_id_feature", "id"),
         "document_count": len(documents),
         "reviewed_documents": reviewed_documents,
+        "automatic_reviewed_documents": sorted(set(st.session_state.get("sanitization_automatic_reviewed_documents", set())) & set(reviewed_documents)),
     }
 
 
 def _restore_decision_state(decisions: list[dict[str, Any]], metadata: dict[str, Any]) -> None:
     from snomed_post_processing.sanitization.concept_rules import ConceptRule, validate_rules
+    documents = {item["document"] for item in decisions} | {
+        item["document"] for item in st.session_state.get("sanitization_review_decisions", [])
+    }
+    for document in documents:
+        st.session_state[_document_reviewed_key(document)] = False
+        st.session_state[f"sanitization_human_reviewed_{_safe_key(document)}"] = any(
+            item.get("reviewed_by_human") for item in decisions if item["document"] == document
+        )
     rules = metadata.get("concept_rules", []) if isinstance(metadata, dict) else []
     if rules:
         st.session_state["concept_rules"] = validate_rules(ConceptRule(**rule) for rule in rules)
@@ -1321,6 +1312,13 @@ def _restore_decision_state(decisions: list[dict[str, Any]], metadata: dict[str,
     st.session_state.pop("concept_rule_preview", None)
     st.session_state["concept_rules_editor_revision"] = st.session_state.get("concept_rules_editor_revision", 0) + 1
     st.session_state["concept_rule_review_revision"] = st.session_state.get("concept_rule_review_revision", 0) + 1
+    st.session_state.pop("sanitization_conditions_undo", None)
+    st.session_state["sanitization_automatic_decisions"] = {
+        int(item["suggestion_index"]): item for item in decisions
+        if "suggestion_index" in item and item.get("automatic_condition")
+    }
+    st.session_state["sanitization_automatic_reviewed_documents"] = set(metadata.get("automatic_reviewed_documents", []))
+    st.session_state["sanitization_conditions_source"] = _condition_source(st.session_state.get("sanitization_suggestions") or [])
     st.session_state["sanitization_review_decisions"] = decisions
     st.session_state["sanitization_restored_decisions_by_index"] = {
         int(decision["suggestion_index"]): decision
@@ -1448,6 +1446,8 @@ def _review_rows_to_decisions(
     ambiguous_choices: dict[int, str],
 ) -> list[dict[str, Any]]:
     original_by_number = {row["#"]: row for row in original_rows}
+    previous = dict(st.session_state.get("sanitization_restored_decisions_by_index", {}))
+    previous.update({item["suggestion_index"]: item for item in st.session_state.get("sanitization_review_decisions", []) if "suggestion_index" in item})
     decisions = []
     for edited in edited_rows:
         row_number = int(edited["#"])
@@ -1459,28 +1459,39 @@ def _review_rows_to_decisions(
         delete_annotation = bool(edited.get("Delete annotation")) and not manual_edit
         apply_replacement = bool(edited.get("Apply")) and not delete_annotation and not manual_edit
         action = "manual_edit" if manual_edit else ("delete" if delete_annotation else ("replace" if apply_replacement and valid_choice else "none"))
-        decisions.append(
-            {
-                "suggestion_index": row_number - 1,
-                "reviewed_by_human": bool(st.session_state.get(f"sanitization_human_reviewed_{_safe_key(str(original.get('Document', '')))}", False)),
-                "action": action,
-                "apply": apply_replacement,
-                "delete_annotation": delete_annotation,
-                "manual_edit": manual_edit,
-                "annotator": edited.get("Annotator", ""),
-                "document": original.get("Document", ""),
-                "source_code": edited.get("Source code", ""),
-                "covered_text": edited.get("Covered text", ""),
-                "offset": list(original.get("_offset", ())),
-                "layer": original.get("_layer"),
-                "replacement_choice": choice,
-                "replacement_code": _code_from_label(choice) if valid_choice else None,
-                "replacement_fsn": _fsn_from_label(choice) if valid_choice else None,
-                "suggestion_status": original.get("Status", ""),
-                "review_note": original.get("Why suggested", ""),
-                "valid_choice": valid_choice,
-            }
-        )
+        decision = {
+            "suggestion_index": row_number - 1,
+            "reviewed_by_human": bool(st.session_state.get(f"sanitization_human_reviewed_{_safe_key(str(original.get('Document', '')))}", False)),
+            "action": action,
+            "apply": apply_replacement,
+            "delete_annotation": delete_annotation,
+            "manual_edit": manual_edit,
+            "annotator": edited.get("Annotator", ""),
+            "document": original.get("Document", ""),
+            "source_code": edited.get("Source code", ""),
+            "covered_text": edited.get("Covered text", ""),
+            "offset": list(original.get("_offset", ())),
+            "layer": original.get("_layer"),
+            "replacement_choice": choice,
+            "replacement_code": _code_from_label(choice) if valid_choice else None,
+            "replacement_fsn": _fsn_from_label(choice) if valid_choice else None,
+            "suggestion_status": original.get("Status", ""),
+            "review_note": original.get("Why suggested", ""),
+            "valid_choice": valid_choice,
+            "resolved": (apply_replacement and valid_choice) or delete_annotation,
+        }
+        prior = previous.get(row_number - 1, {})
+        if decision_key(prior) == decision_key(decision) and prior.get("reviewed_by_human"):
+            decision["reviewed_by_human"] = True
+        automatic = st.session_state.get("sanitization_automatic_decisions", {}).get(row_number - 1)
+        if automatic and not decision["reviewed_by_human"] and decision_selection(decision) == decision_selection(automatic):
+            decision["automatic_condition"] = automatic["automatic_condition"]
+        if not original.get("_needs_choice"):
+            # Persist saved grid choices before condition actions recreate its widget.
+            st.session_state[_manual_apply_key(row_number)] = apply_replacement
+            st.session_state[_manual_delete_key(row_number)] = delete_annotation
+            st.session_state[_manual_edit_key(row_number)] = manual_edit
+        decisions.append(decision)
     return decisions
 
 
@@ -1712,7 +1723,7 @@ def _code_fsn_label(code: str | None, fsn: str | None) -> str:
 def _code_from_label(label: str) -> str | None:
     if not label or label == NO_REPLACEMENT_LABEL:
         return None
-    return label.split(" — ", 1)[0]
+    return label.split(" —", 1)[0]
 
 
 def _fsn_from_label(label: str) -> str | None:

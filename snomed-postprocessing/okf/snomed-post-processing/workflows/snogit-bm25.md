@@ -104,6 +104,14 @@ bm25_max_candidates
 
 Repeated normalized query texts are cached during one resolver run.
 
+# Optional automatic review acceptance
+
+Tab 3's **Automatic conditions** form has an opt-in BM25 heuristic (off initially). It only selects inclusion-list source findings, never exclusion-list findings. Scores must come from a single known source/channel and the same index member. Mixed FSN/SNOGIT candidates are not compared, and a SNOGIT channel without a known member remains manual. Deduplication is by target code, retaining its best score, after validating the full saved candidate set.
+
+For at least three distinct targets sorted by score, `first_gap = s1 - s2` and `largest_later_gap = max(s2-s3, ..., s[n-1]-sn)`. Both `D = first_gap / (first_gap + largest_later_gap) >= 2/3` and `M = first_gap / s1 >= 0.20` must pass (configurable). With three targets this reduces to the original three-score formula. Tied first place, missing/non-finite/negative scores, or fewer than three distinct targets remain manual. Equal runner-up scores alone do not imply a tied first place.
+
+The calculation uses all candidates saved in the suggestion, so retrieval limits affect the result. It uses saved ranking scores, including any configured semantic-tag boost; keep retrieval, query and scoring settings consistent during calibration. Existing generation score/lexical/target-view gates still apply. Thresholds are unvalidated heuristics, not probabilities or clinical confidence. Metrics are visible in the assessment table and saved with automatic decision provenance. Historical OR BM25 selection shares the same manual-choice protection and session-only Undo; CAS changes still require explicit export/upload. See [review/write-back](/snomed-post-processing/workflows/reviewed-decisions-and-writeback.md).
+
 # Processed cache compatibility
 
 The cache stores a fingerprint of the main HDF5 so stale or mismatching caches can be rejected. Compatibility metadata includes release date, policy/view date, RF2 view, concept count, policy candidate count, concept-code hash, and policy-candidate hash.

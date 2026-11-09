@@ -159,7 +159,7 @@ Der Geltungsbereich wird nicht über zusätzliche Eingabeboxen konfiguriert: Die
 
 ## 7. Review & apply: bedingungsbasierte automatische Auswahl
 
-### 7.0 Verbindlicher Quell-Scope (bestätigt; noch umzusetzen)
+### 7.0 Verbindlicher Quell-Scope (für beide Bedingungen umgesetzt)
 
 **Apply Conditions darf ausschließlich Findings aus der inclusion-list-Prüfung automatisch auswählen** (`finding.list_type == "whitelist"`, z. B. `not_in_whitelist`). Das bezeichnet die Herkunft des Findings, nicht eine inclusion-list-Mitgliedschaft des Quellcodes.
 
@@ -169,23 +169,23 @@ Der Geltungsbereich wird nicht über zusätzliche Eingabeboxen konfiguriert: Die
 - Gemischte Dokumente mit offenen exclusion-list-Findings nicht automatisch als reviewed markieren.
 - Zielvalidität richtet sich weiterhin nach dem gewählten Policy-/Active-release-Modus; optionale Release-Ausschlüsse bleiben optional. Explizite Konzeptregeln aus Abschnitt 6 sind ein separater, bewusst konfigurierter Mechanismus und von diesem Quell-Scope nicht betroffen.
 
-### 7.1 Bisherige Bulk-Aktionen ersetzen
+### 7.1 Bisherige Bulk-Aktionen ersetzen (umgesetzt)
 
-Die vier globalen Aktionen entfernen:
+Die vier bisherigen globalen Aktionen wurden entfernt:
 
 - Apply all single/no-choice replacements
 - Clear all single/no-choice replacements
 - Apply first candidate(s) to all manual choices
 - Clear all manual applications
 
-Stattdessen eine Form mit zunächst zwei unabhängig konfigurierbaren Bedingungen und zwei Buttons anbieten:
+Stattdessen steht in Tab 3 eine Form mit historischer Bedingung und optionaler BM25-Bedingung sowie zwei Buttons. Auch die entsprechenden dokumentweisen Bulk-Buttons entfallen, damit exclusion-list-/BM25-Fälle nicht ungeprüft gesammelt ausgewählt werden:
 
 - **Apply Conditions**
 - **Undo Automatic Conditions**
 
-Die Bedingungen werden vorgeschlagen als **ODER-Verknüpfung** ausgewertet: Eine passende historische Beziehung **oder** ein ausreichend klarer BM25-Erstplatzierter kann eine Auswahl auslösen. Diese Verknüpfung vor Umsetzung bestätigen.
+Beide Bedingungen sind als **ODER-Verknüpfung** umgesetzt: Eine passende historische Beziehung **oder** ein ausreichend klarer BM25-Erstplatzierter kann eine Auswahl auslösen. BM25 ist explizit opt-in und standardmäßig deaktiviert. Ein leeres historisches Typenfeld deaktiviert die historische Bedingung. Bereits getroffene Auswahlen werden durch strengere Parameter oder das Abschalten einer Bedingung nicht stillschweigend entfernt; dafür Undo verwenden.
 
-### 7.2 Bedingung A: Historical Associations
+### 7.2 Bedingung A: Historical Associations (umgesetzt)
 
 Standardauswahl gemäß Review:
 
@@ -195,19 +195,19 @@ Standardauswahl gemäß Review:
 - `ALTERNATIVE`
 - `SIMILAR_TO`
 
-**Vorgeschlagene Auswertungsregel:** Automatisch nur dann auswählen, wenn die zulässigen historischen Beziehungen genau einen gültigen Zielcode ergeben. Mehrere verschiedene gültige Ziele bleiben manuell zu entscheiden. Bei mehreren Beziehungstypen zum selben Ziel müssen die Typen strukturiert ausgewertet werden, nicht als ein einzelner kommaseparierter String.
+**Umgesetzte Auswertungsregel:** Automatisch nur dann auswählen, wenn die gewählten historischen Beziehungen genau einen generierten auswählbaren Zielcode ergeben. Mehrere verschiedene zulässige Ziele bleiben manuell zu entscheiden. Mehrere Beziehungstypen zum selben Ziel zählen als ein Ziel; ausgewertet werden die einzelnen Kandidatenbeziehungen, nicht ein kommaseparierter Summary-String. Die historische Bedingung wählt keine diagnostischen Kandidaten, Ancestor-/BM25-Vorschläge, ignorierten Findings oder doppelten Annotationsidentitäten; für BM25 gilt ausschließlich die separate Bedingung B.
 
 **Fachlicher Hinweis:** Auch `WAS_A`, `ALTERNATIVE` und `SIMILAR_TO` sind keine Äquivalenzgarantie. Ihre automatische Freigabe ist eine explizite Review-Policy, keine aus SNOMED ableitbare Sicherheitsgarantie.
 
-### 7.3 Bedingung B: klar führender BM25-Kandidat
+### 7.3 Bedingung B: klar führender BM25-Kandidat (opt-in umgesetzt)
 
-Bei mehreren BM25-Kandidaten soll Kandidat 1 automatisch ausgewählt werden können, wenn sein Score ausreichend deutlich vor den Folgeplätzen liegt. Die vorgeschlagene Metrik und Einschränkungen stehen in Abschnitt 9.
+**Enable BM25 automatic selection (heuristic)** aktiviert die zweite Bedingung. Konfigurierbare Schwellen starten bei `D >= 2/3` und `M >= 0.20`. Mindestens drei unterschiedliche Zielcodes sind erforderlich; bei mehr Kandidaten gehen sämtliche gespeicherten Rangplätze in die größte spätere Score-Lücke ein. Die eingeklappte **BM25 score-gap assessment**-Tabelle zeigt Zahl der Ziele, Scores, D/M und Gründe für fehlende Eignung vor Schutz manueller Entscheidungen. Nur vergleichbare bekannte Kanäle/Index-Member sind zulässig; gemischte FSN-/SNOGIT-Scores, unbekannte SNOGIT-Member, ungültige Scores und Gleichstand auf Platz 1 bleiben manuell. Die Berechnung ist eine ausdrücklich gewählte, nicht empirisch validierte Heuristik. Details in Abschnitt 9.
 
 ### 7.4 Verhalten von Apply Conditions
 
 - Passende Annotationen markieren und die konkrete Zielauswahl speichern.
 - Automatisch entschiedene Zeilen im Review-Workflow als **resolved** behandeln.
-- Nur tatsächlich vorhandene, aktuell gültige Ziele zulassen.
+- Nur generierte auswählbare `candidates` im gewählten Zielmodus zulassen; keine zusätzliche HDF5-Revalidierung bei Review/Export.
 - Manuelle Entscheidungen, Löschungen und „Needs manual edit“-Markierungen nicht stillschweigend überschreiben.
 - Regel, Parameter und Auslöser jeder automatischen Entscheidung nachvollziehbar speichern.
 - Dokumente als **reviewed** markieren, wenn alle prüfpflichtigen Zeilen automatisch aufgelöst wurden und keine offenen oder manuell zu bearbeitenden Fälle verbleiben. Gemischte Dokumente nicht voreilig als geprüft markieren.
@@ -225,7 +225,7 @@ Vor einer automatischen Aktion den Ausgangszustand der betroffenen Entscheidunge
 - Auch automatisch gesetzte `resolved`-/`reviewed`-Zustände berücksichtigen.
 - Wiederholtes Anwenden darf keine zusätzlichen oder widersprüchlichen Entscheidungen erzeugen.
 
-**Vorschlag für den ersten Umfang:** Undo bezieht sich auf den letzten Apply-Conditions-Durchlauf. Mehrstufiges Undo wäre eine separate Erweiterung.
+**Umgesetzter Umfang:** Undo bezieht sich auf den letzten tatsächlich ändernden Apply-Conditions-Durchlauf in dieser Sitzung; identische Wiederholungen ersetzen den Snapshot nicht. Spätere manuelle Änderungen werden übersprungen. Änderungen der Suggestions löschen automatische Auswahlen, automatisch gesetzte Review-Markierungen und den Undo-Verlauf. Decisions-JSON erhält `automatic_condition`-Provenienz und Review-Fortschritt, nicht den Undo-Snapshot. Laden eines Review-Stands ersetzt den bisherigen lokalen Review-Fortschritt. Mehrstufiges Undo bleibt eine separate Erweiterung. Historische und BM25-Bedingung nutzen denselben Snapshot, Schutz manueller Entscheidungen und Dokument-Review-Fortschritt. BM25-Provenienz enthält Algorithmus, alle unterschiedlichen Scores/Zielcodes, Kanal/Member, D/M und Schwellen.
 
 ## 8. Frage: Wird die exclusion list bei Sanitization beachtet?
 
@@ -260,22 +260,22 @@ Für generische Historical-/Ancestor-/BM25-Vorschläge sind Ziele verboten, die 
 
 ## 9. Frage: Welche Metrik beschreibt den Abstand des ersten BM25-Kandidaten?
 
-### 9.1 Vorschlag: Dominanz des ersten Score-Abstands
+### 9.1 Umgesetzt: erster Abstand gegenüber größtem späteren Abstand
 
-Für drei verschiedene, gültige Zielcodes mit sortierten Scores `s1 ≥ s2 ≥ s3 ≥ 0`:
+Für `n >= 3` unterschiedliche gültige Zielcodes mit sortierten, vergleichbaren Scores `s1 >= s2 >= ... >= sn >= 0`:
 
 ```text
-d12 = s1 - s2
-d23 = s2 - s3
-D   = d12 / (d12 + d23) = (s1 - s2) / (s1 - s3)
+first_gap = s1 - s2
+largest_later_gap = max(s2 - s3, s3 - s4, ..., s[n-1] - sn)
+D = first_gap / (first_gap + largest_later_gap)
 ```
 
-- `D = 0.5`: Abstand 1→2 ist genauso groß wie Abstand 2→3.
-- `D ≥ 2/3`: Abstand 1→2 ist mindestens doppelt so groß wie Abstand 2→3.
-- Hohe Werte sprechen für einen vergleichsweise klaren Erstplatzierten, nicht für klinische Richtigkeit.
-- Bei `s1 = s3` ist die Metrik nicht definiert; Gleichstand führt nicht zur automatischen Auswahl.
-
-Die beschränkte Kennzahl ist leichter darzustellen als `d12 / d23`, das bei `d23 = 0` unendlich wird. Ein kleines `d23` kann allerdings auch bei fast gleichen Scores einen hohen Wert ergeben.
+- Bei drei Zielen entspricht dies genau `D = (s1-s2)/(s1-s3)` aus dem ursprünglichen Vorschlag.
+- Bei mehr als drei Zielen werden **alle gespeicherten unterschiedlichen Ziele** berücksichtigt, nicht nur die ersten drei.
+- `D = 0.5`: erster Abstand gleich größtem späteren Abstand.
+- `D >= 2/3`: erster Abstand mindestens doppelt so groß wie jeder spätere Abstand.
+- Gleichstand (auch numerisch fast gleich) auf Platz 1, nicht-positive Spitze oder ungültige Scores führen zur manuellen Prüfung. Gleichstände nur unter Folgeplätzen sind zulässig.
+- Hohe D-Werte sind keine klinische Richtigkeitsgarantie; ein kleiner größter Folgeabstand kann auch bei fast gleichen Scores einen hohen Wert erzeugen. Deshalb gilt zusätzlich M.
 
 ### 9.2 Zusätzlicher relativer Mindestabstand
 
@@ -285,7 +285,7 @@ Deshalb zusätzlich:
 M = (s1 - s2) / s1       (nur für s1 > 0)
 ```
 
-**Vorläufiger Startvorschlag für die Validierung:**
+**Konfigurierbare opt-in-Startwerte (weiterhin zu validieren):**
 
 - `D ≥ 2/3` und
 - `M ≥ 0.20` und
@@ -298,6 +298,8 @@ Beispiele:
 | 12, 7, 6 | 0.83 | 0.42 | automatisch auswählbar |
 | 10, 9.9, 9.89 | 0.91 | 0.01 | nicht automatisch: praktisch Gleichstand |
 | 10, 8, 5 | 0.40 | 0.20 | nicht automatisch: kein klarer Abstandsknick |
+| 12, 7, 6, 5, 4 | 0.83 | 0.42 | automatisch auswählbar |
+| 12, 7, 6, 0 | 0.45 | 0.42 | nicht automatisch: größte spätere Lücke erst bei 6→0 |
 
 **Diese Schwellen sind Heuristiken, keine empirisch bestätigten Defaults.** Sie anhand akzeptierter und abgelehnter Reviewer-Beispiele kalibrieren. Insbesondere den Anteil falscher automatischer Entscheidungen und die erreichte Abdeckung messen.
 
@@ -306,10 +308,10 @@ Beispiele:
 - Nur echte BM25-Scores verwenden, keine Reihenfolgen historischer oder hierarchischer Kandidaten als numerische Evidenz interpretieren.
 - Nach Zielcode deduplizieren: mehrere Terme desselben Konzepts sind keine unabhängigen Folgeplätze.
 - Bei weniger als drei Kandidaten im ersten Umfang keine automatische Entscheidung durch diese Regel. Ein Zweikandidaten-Fallback wäre gesondert festzulegen.
-- Fehlende, nicht endliche oder ungültige Scores sowie Gleichstände führen zur manuellen Prüfung.
-- Mindestens drei Kandidaten speichern/abrufen; die Entscheidung darf nicht nur auf den aktuell sichtbaren Tabellenzeilen beruhen.
+- Fehlende, negative, nicht endliche oder ungültige Scores sowie Gleichstand auf Platz 1 führen zur manuellen Prüfung. Nicht passende oder ungültige Treffer nicht einfach aus der Bewertungsmenge entfernen.
+- Mindestens drei unterschiedliche Zielcodes speichern/abrufen; die Entscheidung nutzt alle gespeicherten Kandidaten, nicht nur sichtbare Tabellenzeilen. Nach Code deduplizieren und jeweils den höchsten Score behalten. Retrieval-Limits beeinflussen das Ergebnis und müssen für die Kalibrierung konsistent sein.
 - BM25 ist kein Wahrscheinlichkeitsmaß. FSN- und SNOGIT-Suchen können verschiedene Suchtexte und Indizes verwenden; ihre Rohscores sind nicht automatisch vergleichbar.
-- Die aktuelle Implementierung kombiniert solche Treffer. Vor Freigabe dieser Automatik prüfen, ob alle drei Scores vergleichbar sind. Im ersten Umfang gemischte Suchkanäle ausschließen; später eine separat validierte Normalisierung oder Fusion erwägen.
+- Die Vorschlagserzeugung kombiniert solche Treffer. Die neue Bedingung lehnt gemischte/unbekannte Kanäle und unterschiedliche Index-Member ab; ein SNOGIT-Kanal benötigt einen bekannten Member. Nur einheitliche vergleichbare Scores werden ausgewertet; später eine separat validierte Normalisierung oder Fusion erwägen.
 - Ein geringer Lexical-Overlap-Schwellenwert bei der Vorschlagserzeugung rechtfertigt keine automatische Freigabe. Für automatische Entscheidungen kann ein eigener, strengerer Evidenzfilter sinnvoll sein; dessen Wert bleibt zu validieren.
 
 ## 10. Bug: Upload sanitizierter Daten nach INCEpTION scheitert beim Reviewer
@@ -338,8 +340,8 @@ Fehlschläge sollen den betroffenen Verarbeitungsschritt und eine verständliche
 2. Terminologie, Layer-Standardauswahl und Suggestion-Defaults umstellen; redundante Erklärung entfernen.
 3. MIE-Tabellenansicht übernehmen.
 4. Konzeptregeln gemäß Abschnitt 6 implementieren: eigene Regelform mit `override policy` (Default aktiviert), Number `410680006` → ID leeren, Date `410671006` → `410672004`; `literal` bei beiden unverändert erhalten. Beide Regeln aktiviert und auf alle passenden Annotationen im gewählten Scope anwenden.
-5. Bedingungsform, historische Automatik, Zustandsverwaltung und Undo umsetzen.
-6. BM25-Metriken zunächst zur Beobachtung anzeigen; mit Reviewer-Beispielen kalibrieren und anschließend die automatische Auswahl freigeben.
+5. Bedingungsform, historische Automatik, Zustandsverwaltung und Undo sind umgesetzt und offline getestet.
+6. BM25-Metriken und optionale heuristische Auswahl sind umgesetzt; die opt-in-Schwellen weiterhin mit akzeptierten/abgelehnten Reviewer-Beispielen empirisch kalibrieren.
 
 ## 12. Übergreifende Tests und Abnahme
 
@@ -353,11 +355,11 @@ Fehlschläge sollen den betroffenen Verarbeitungsschritt und eine verständliche
 - [x] Beide Aktionen erhalten `literal` exakt sowie alle übrigen Features, Layer, Offsets und Annotation-Anzahl (offline JSONCAS/XMI).
 - [x] Regeln respektieren Scope und manuelle Entscheidungen; Ziel-Policy-Konflikte, Wiederholbarkeit und Clear sind geprüft.
 - [x] `override policy` ist pro Regel standardmäßig aktiviert, editierbar und exportierbar; Tests prüfen beide Zustände und dokumentierte tatsächliche Policy-Overrides.
-- [ ] Apply Conditions wählt ausschließlich inclusion-list-Quellfindings; exclusion-list-Findings bleiben auch bei eindeutigen historischen Zielen oder hohen BM25-Scores manuell.
-- [ ] Mehrdeutige historische Ziele werden nicht versehentlich automatisch gewählt.
-- [ ] BM25-Gleichstände, weniger als drei Ziele und nicht vergleichbare Scores bleiben manuell.
-- [ ] Apply Conditions setzt Zielauswahl, resolved und reviewed konsistent.
-- [ ] Undo stellt automatische Änderungen zurück, ohne manuelle Arbeit zu verlieren.
+- [x] Apply Conditions wählt ausschließlich inclusion-list-Quellfindings; exclusion-list-Findings bleiben auch bei eindeutigen historischen Zielen oder hohen BM25-Scores manuell.
+- [x] Mehrere unterschiedliche Ziele innerhalb der gewählten historischen Beziehungstypen werden nicht automatisch gewählt.
+- [x] BM25-Gleichstand auf Platz 1, weniger als drei unterschiedliche Ziele, ungültige oder nicht vergleichbare Scores bleiben manuell; alle gespeicherten späteren Score-Lücken werden geprüft.
+- [x] Historische und optionale BM25-Bedingung setzen Zielauswahl, `resolved` und Dokument-Review-Fortschritt konsistent; gemischte/offene Dokumente bleiben unreviewed.
+- [x] Undo Automatic Conditions stellt den letzten ändernden Lauf zurück, ohne spätere manuelle Arbeit zu verlieren; Snapshot und automatische Markierungen sind gegen geänderte Suggestions abgesichert.
 - [ ] JSONCAS-/XMI-Write-back, Decisions-Export/-Import und INCEpTION-Reimport funktionieren.
 - [ ] Sanitized Upload funktioniert auch im Reviewer-Szenario; Fehler-/Teilfehlerdiagnose und sichere Wiederholung sind geprüft.
 
