@@ -35,6 +35,16 @@ The Streamlit GUI wraps the same pipeline functions as the CLI. It is intended f
 | `/src/snomed_post_processing/gui/sanitization_run_tab.py` | Review/apply UI and INCEpTION deployment form. |
 | `/src/snomed_post_processing/gui/downloads.py` | Markdown/JSON download helpers. |
 
+# Contextual help
+
+Use short widget tooltips for parameter meaning, scope and consequences; table-column help explains editable rule/review fields. Obvious labels do not need redundant tooltips. Keep essential safety notes visible: decisions are staged until export/upload, BM25 thresholds are unvalidated heuristics, and exclusion-list source findings remain manual. Longer mathematical explanations belong beside the D/M controls rather than in repeated captions.
+
+Help covers ancestor-distance units, lexical token overlap, saved candidate limits, rule actions/overrides, review saving, file locations and deployment controls. Historical relationship descriptions appear in both generation and automatic-condition dropdowns. BM25 acceptance needs at least three distinct comparable saved targets; retrieval limits affect this condition.
+
+The sidebar's **Replacement requirements → Allowed replacement concepts** selector and main banner describe which replacement suggestions are allowed: **Policy rules** requires active concepts in the loaded HDF5 inclusion list and outside its exclusion list; **Active release** allows any active release concept, with exclusions only when enabled in the sidebar. A shared caption states that tab 1's policy check is unaffected and explicit concept rules may override list restrictions. Date/snapshot details stay in the HDF5 metadata section. Tab 1 remains **Check policy** in both modes. Report-download help distinguishes CriticalFindings JSON, report JSON, suggestions JSON and reviewed decisions. Masked Markdown hides document/annotator names, **not clinical text**, and is not full anonymization.
+
+Deployment tooltips distinguish local preparation from remote writes, disclose that connection checks contact INCEpTION during dry-run, warn that disabling TLS verification weakens security, and clarify that temporary-output overwrite is not a remote-project overwrite setting. Shell ZIP, repaired CAS artifacts and pipeline-report downloads have separate explanations. These are presentation-only changes; processing defaults and behavior remain unchanged.
+
 # File source pattern
 
 The GUI should use the shared file-source selector for large/server-side files:

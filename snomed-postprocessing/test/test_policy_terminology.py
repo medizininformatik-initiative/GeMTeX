@@ -131,7 +131,7 @@ from unittest.mock import patch
 import streamlit as st
 from snomed_post_processing.gui.sidebar import render_sidebar
 from snomed_post_processing.gui.sanitization_check_tab import render_sanitization_check_tab
-with patch("streamlit.segmented_control", side_effect=lambda label, **kwargs: "Active release" if label == "Validation target" else kwargs["default"]):
+with patch("streamlit.segmented_control", side_effect=lambda label, **kwargs: "Active release" if label == "Allowed replacement concepts" else kwargs["default"]):
     with patch("snomed_post_processing.gui.sidebar.render_file_source_selector", return_value=SimpleNamespace(value=None)):
         inputs = render_sidebar()
     st.session_state["observed_mode"] = inputs.release_blacklist_mode

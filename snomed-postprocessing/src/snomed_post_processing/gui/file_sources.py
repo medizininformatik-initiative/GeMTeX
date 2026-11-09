@@ -71,6 +71,7 @@ def render_file_source_selector(
             f"Upload {label}",
             type=list(upload_types or _upload_types_from_suffixes(suffixes)),
             key=f"{key}_upload",
+            help="Upload a file from your computer to the Streamlit server.",
         )
         return FileSourceSelection(value=uploaded, source="upload", path=None)
 
@@ -88,6 +89,7 @@ def render_file_source_selector(
             options=[None] + candidates,
             format_func=lambda path: "None" if path is None else path.name,
             key=f"{key}_data_dir_select",
+            help="Files directly inside the server data directory; subfolders are not searched.",
         )
         return FileSourceSelection(value=selected, source="data_dir", path=selected)
 

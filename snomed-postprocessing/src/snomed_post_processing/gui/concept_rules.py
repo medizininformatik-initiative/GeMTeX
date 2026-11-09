@@ -82,12 +82,14 @@ def render_concept_rules_form(inputs: GuiInputs) -> None:
 
 def _render_concept_rules_form(inputs: GuiInputs) -> None:
     st.caption(
-        "Explicit rules run on all matching original annotations, not only policy findings. "
-        "Only the ID changes; literal and every other feature are preserved. "
-        "Apply rules to review to validate and select decisions; only export/upload changes CAS files. Rules never chain."
+        "Rules match original annotations across all documents and annotators in the sidebar's target layers. "
+        "Only IDs change; literal and other features are preserved. Rules never chain."
     )
     rules = st.session_state.get("concept_rules", DEFAULT_CONCEPT_RULES)
-    upload = st.file_uploader("Load concept rules JSON", type=["json"], key="concept_rules_upload")
+    upload = st.file_uploader(
+        "Load concept rules JSON", type=["json"], key="concept_rules_upload",
+        help="Load rule definitions into this form. Apply rules to review separately; loading does not select decisions.",
+    )
     upload_key = hashlib.sha256(upload.getvalue()).hexdigest() if upload is not None else None
     if upload_key is None:
         st.session_state.pop("concept_rules_loaded_upload", None)
@@ -101,7 +103,6 @@ def _render_concept_rules_form(inputs: GuiInputs) -> None:
         except Exception as exc:
             st.error(f"Could not load concept rules: {exc}")
     layers = inputs.annotation_types_text
-    st.caption("Uses the sidebar's target annotation layers across all documents and annotators.")
     with st.form("concept_rules_form"):
         records = [{**dataclasses.asdict(rule), "action": ACTION_LABELS[rule.action]} for rule in rules]
         edited = st.data_editor(
@@ -110,16 +111,31 @@ def _render_concept_rules_form(inputs: GuiInputs) -> None:
             num_rows="dynamic", hide_index=True, width="stretch",
             column_config={
                 "enabled": st.column_config.CheckboxColumn("Enabled", default=True, required=True),
-                "rule_id": st.column_config.TextColumn("Rule ID", required=True),
+                "rule_id": st.column_config.TextColumn(
+                    "Rule ID", required=True, help="Unique, stable identifier for this rule; not a SNOMED concept ID.",
+                ),
                 "name": st.column_config.TextColumn("Name"),
-                "source_code": st.column_config.TextColumn("Source SCTID", required=True),
-                "action": st.column_config.SelectboxColumn("Action", options=list(ACTION_LABELS.values()), required=True),
-                "target_code": st.column_config.TextColumn("Target SCTID"),
-                "override_policy": st.column_config.CheckboxColumn("Override policy", default=True, required=True),
+                "source_code": st.column_config.TextColumn(
+                    "Source SCTID", required=True, help="Match this concept ID on the original annotation, before any changes.",
+                ),
+                "action": st.column_config.SelectboxColumn(
+                    "Action", options=list(ACTION_LABELS.values()), required=True,
+                    help="Remove ID only keeps the annotation; Replace changes its concept ID. Neither changes literal.",
+                ),
+                "target_code": st.column_config.TextColumn(
+                    "Target SCTID", help="Replacement concept ID. Required for Replace; leave empty for Remove ID only.",
+                ),
+                "override_policy": st.column_config.CheckboxColumn(
+                    "Override policy", default=True, required=True,
+                    help="Allow this rule to bypass inclusion/exclusion restrictions. Replacement targets must still exist and be active.",
+                ),
             },
         )
-        st.caption("Override policy bypasses inclusion/exclusion rules, not target existence/activity. Remove ID only has no target to validate.")
-        apply = st.form_submit_button("Apply rules to review", disabled=not (st.session_state.get("zip_file") and inputs.hdf5_file))
+        st.caption("Apply stages review decisions; only export/upload changes CAS files. Manual decisions are protected.")
+        apply = st.form_submit_button(
+            "Apply rules to review", disabled=not (st.session_state.get("zip_file") and inputs.hdf5_file),
+            help="Validate rules, scan original annotations and select matching review decisions. Preserve saved Apply choices.",
+        )
     if apply:
         try:
             rules = _rules_from_editor(edited.to_dict("records"))
@@ -206,8 +222,13 @@ def render_rule_review(inputs: GuiInputs) -> tuple[list[dict[str, Any]], bool]:
             pd.DataFrame(_decision_rows(decisions)), hide_index=True, width="stretch",
             key=f"concept_rule_review_editor_{st.session_state.get('concept_rule_review_revision', 0)}",
             disabled=[key for key in _decision_rows(decisions)[0] if key != "Apply"],
+            column_config={"Apply": st.column_config.CheckboxColumn(
+                "Apply", help="Include this rule action in the next export/upload. Uncheck to leave the annotation unchanged.",
+            )},
         )
-        save = st.form_submit_button("Save rule decisions")
+        save = st.form_submit_button(
+            "Save rule decisions", help="Save Apply-checkbox choices for these rule decisions; CAS files are unchanged.",
+        )
     if save:
         decisions = [{
             **item, "apply": bool(row["Apply"]), "resolved": bool(row["Apply"]),
@@ -260,7 +281,10 @@ def protect_manual_decisions(rule_decisions):
     safe, conflicts = _split_manual_conflicts(rule_decisions)
     if conflicts:
         st.error(f"{len(conflicts)} concept-rule decision(s) conflict with manual decisions. Export is blocked until resolved.")
-        if st.button("Keep manual decisions for conflicts"):
+        if st.button(
+            "Keep manual decisions for conflicts",
+            help="Discard conflicting rule decisions and keep the existing manual choices.",
+        ):
             keys = {decision_key(item) for item in conflicts}
             st.session_state["concept_rule_decisions"] = [item for item in rule_decisions if decision_key(item) not in keys]
             st.session_state["concept_rule_review_revision"] = st.session_state.get("concept_rule_review_revision", 0) + 1

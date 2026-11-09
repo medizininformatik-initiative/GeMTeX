@@ -37,8 +37,14 @@ def render_sidebar() -> GuiInputs:
         st.session_state[key] = value
     with st.sidebar:
         st.header("Inputs")
-        load_annotators = st.checkbox("Load annotators from ZIP", value=True)
-        use_api = st.toggle("Use INCEpTION API", value=False)
+        load_annotators = st.checkbox(
+            "Load annotators from ZIP", value=True,
+            help="Read annotator names to enable filtering. Without a filter, all annotators are checked.",
+        )
+        use_api = st.toggle(
+            "Use INCEpTION API", value=False,
+            help="Load the source project from INCEpTION instead of selecting a project ZIP.",
+        )
         st.header("Server-side files")
         data_dir = pathlib.Path(
             st.text_input(
@@ -78,7 +84,7 @@ def render_sidebar() -> GuiInputs:
         )
         hdf5_file = hdf5_selection.value
 
-        st.header("Target")
+        st.header("Replacement requirements")
         target_view = _render_target_view_selector()
         release_blacklist_mode = "none"
         runtime_blacklist_file = None
@@ -91,7 +97,7 @@ def render_sidebar() -> GuiInputs:
             annotation_types_text = st.text_area(
                 "Target annotation types to check",
                 value="gemtex.Concept\nwebanno.custom.Concept",
-                help="One UIMA layer/type per line. Faulty SNOMED code checks run on these annotations.",
+                help="One full UIMA type name per line. Used by policy checks and concept rules.",
             )
             ignore_overlap_types_text = st.text_area(
                 "Ignore faulty target annotations overlapping these types",
@@ -107,7 +113,10 @@ def render_sidebar() -> GuiInputs:
                 "Ignore overlap mode",
                 options=["overlap", "covered-by", "contains", "exact"],
                 index=0,
-                help="Controls how target annotations must match ignore annotations to be ignored.",
+                help=(
+                    "overlap: any shared span; covered-by: target is inside the ignore span; "
+                    "contains: target encloses the ignore span; exact: identical boundaries."
+                ),
             )
             id_feature = st.text_input(
                 "SNOMED ID feature name",
@@ -143,20 +152,18 @@ def render_sidebar() -> GuiInputs:
 def _render_target_view_selector() -> str:
     target_options = {
         "Policy rules": (
-            "Use the embedded inclusion/exclusion-list policy views. Best for the current "
-            "GeMTeX policy check and sanitization workflow."
+            "Active concepts in the inclusion list and outside the exclusion list."
         ),
         "Active release": (
-            "Use active concepts from the selected SNOMED release. Inclusion-list membership is "
-            "not required; embedded and custom exclusion lists are optional."
+            "Any active concept; inclusion-list membership is not required. Exclusion lists are optional."
         ),
     }
     selected_target = st.segmented_control(
-        "Validation target",
+        "Allowed replacement concepts",
         options=list(target_options),
         default="Policy rules",
         key="target_view_selector",
-        help="Choose what makes an annotation acceptable.",
+        help="Choose which concepts may be suggested as replacements. Tab 1 always checks inclusion/exclusion policy.",
         width="stretch",
     ) or "Policy rules"
     st.caption(target_options[selected_target])
@@ -215,7 +222,8 @@ def _render_inception_api_controls() -> None:
 
     with st.form("inception_api_form"):
         url = st.text_input(
-            "INCEpTION API URL", value=st.session_state["api_credentials"]["url"]
+            "INCEpTION API URL", value=st.session_state["api_credentials"]["url"],
+            help="Base URL of the INCEpTION server, including any deployment path.",
         )
         username = st.text_input(
             "REMOTE Role Username",
@@ -226,7 +234,9 @@ def _render_inception_api_controls() -> None:
             type="password",
             value=st.session_state["api_credentials"]["password"],
         )
-        submitted = st.form_submit_button("Get Projects")
+        submitted = st.form_submit_button(
+            "Get Projects", help="Connect to INCEpTION and list projects available to this account.",
+        )
         if submitted:
             st.session_state["api_credentials"] = {
                 "url": url,
@@ -250,7 +260,8 @@ def _render_inception_api_controls() -> None:
 
     if st.session_state.get("projects"):
         project = st.selectbox(
-            "Select project", st.session_state["projects"], index=None
+            "Select project", st.session_state["projects"], index=None,
+            help="Selecting a project downloads its export ZIP for local processing.",
         )
         if project and (st.session_state.get("current_project") != project):
             st.session_state["current_project"] = project

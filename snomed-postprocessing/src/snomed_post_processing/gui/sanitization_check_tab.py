@@ -177,9 +177,8 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                 "Historical ancestor fallback",
                 value=True,
                 help=(
-                    "For unresolved inclusion-list findings: try the nearest active ancestor in the inclusion list, "
-                    "then the nearest active ancestor in the inclusion list reachable "
-                    "through stored inactive is-a fallback edges."
+                    "For unresolved inclusion-list findings, try the nearest active ancestor, including stored inactive is-a paths. "
+                    "Targets must satisfy the selected Policy rules or Active release requirements."
                 ),
             )
         sanitize_blacklist_suggestions = False
@@ -226,7 +225,7 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
             use_absolute_ancestor_limit = st.checkbox(
                 "Use absolute ancestor distance limit",
                 value=True,
-                help="Used only when Historical ancestor fallback is enabled.",
+                help="Limit how many parent steps an ancestor replacement may be from the source concept.",
             )
             ancestor_max_distance = st.number_input(
                 "Maximum absolute ancestor distance",
@@ -234,12 +233,12 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                 max_value=20,
                 value=3,
                 step=1,
-                help="Used only when Historical ancestor fallback and absolute distance limiting are enabled.",
+                help="Maximum parent steps from source to ancestor. Used when the absolute limit is enabled.",
             )
             use_relative_ancestor_limit = st.checkbox(
                 "Use relative ancestor distance limit",
                 value=True,
-                help="Used only when Historical ancestor fallback is enabled.",
+                help="Limit ancestor distance relative to the source concept's depth in the hierarchy.",
             )
             ancestor_max_relative_distance = st.number_input(
                 "Maximum relative ancestor distance",
@@ -248,13 +247,14 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                 value=0.35,
                 step=0.05,
                 help=(
-                    "Used only when Historical ancestor fallback and relative distance limiting are enabled. "
-                    "Distance divided by source depth-to-root. Lower values reject broader jumps in shallow hierarchies."
+                    "Parent steps divided by source depth-to-root. Lower values allow smaller relative jumps. "
+                    "Used when the relative limit is enabled."
                 ),
             )
             st.markdown("#### BM25 thresholds")
             sanitize_bm25_min_score = st.number_input(
-                "Minimum BM25 score", min_value=0.0, value=1.5, step=0.1
+                "Minimum BM25 score", min_value=0.0, value=1.5, step=0.1,
+                help="Minimum score for the top BM25 hit to become a selectable proposal. Not a probability of correctness.",
             )
             sanitize_bm25_min_lexical_score = st.number_input(
                 "Minimum lexical overlap ratio",
@@ -262,9 +262,11 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                 max_value=1.0,
                 value=0.0,
                 step=0.05,
+                help="Minimum fraction of unique query tokens matched by the top hit; 0 disables this additional filter.",
             )
             sanitize_bm25_max_candidates = st.number_input(
-                "Maximum retained candidates", min_value=1, max_value=50, value=5, step=1
+                "Maximum retained candidates", min_value=1, max_value=50, value=5, step=1,
+                help="Maximum BM25 targets saved per finding. Automatic BM25 selection needs at least three distinct targets.",
             )
             st.markdown("#### Optional SNOGIT/interface terms")
             use_snogit_bm25 = st.checkbox(
@@ -323,7 +325,9 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                         st.caption(f"Default SNOGIT source/member: {default_members[0]}")
                 except Exception as exc:
                     st.warning(f"Could not inspect SNOGIT source: {exc}")
-        settings_applied = st.form_submit_button("Apply suggestion settings")
+        settings_applied = st.form_submit_button(
+            "Apply suggestion settings", help="Save these settings. Generate suggestions separately to use them.",
+        )
     if settings_applied:
         st.success("Suggestion settings applied.")
 
@@ -481,6 +485,7 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
 
     if st.button(
         "Generate sanitization suggestions",
+        help="Generate replacement proposals using the current settings. Review and select actions separately; no CAS files change.",
         type="primary",
         disabled=not inputs.hdf5_file or not (use_session_findings or uploaded_findings_file) or not snogit_ready or not custom_blacklist_ready,
     ):
@@ -679,7 +684,10 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
             sanitization_report_text = output_sanitization_md.read_text(encoding="utf-8")
             st.success("Sanitization suggestions finished.")
 
-            download_json_report(sanitization_json_text, output_sanitization_json, "sanitization suggestion")
+            download_json_report(
+                sanitization_json_text, output_sanitization_json, "sanitization suggestion",
+                help="Save generated candidates and settings to load in Review & apply. This is not a saved review state.",
+            )
 
             st.subheader("Suggestion overview")
             _render_suggestion_overview(suggestions)
@@ -719,13 +727,22 @@ def _render_suggestion_overview(suggestions: list[Any]) -> None:
             "Annotator": st.column_config.TextColumn("Annotator", width="small"),
             "Source code": st.column_config.TextColumn("Source code", width="small"),
             "Covered text": st.column_config.TextColumn("Covered text", width="medium"),
-            "Issue": st.column_config.TextColumn("Issue", width="small"),
-            "Status": st.column_config.TextColumn("Status", width="medium"),
+            "Issue": st.column_config.TextColumn(
+                "Issue", width="small", help="Which policy check produced the source finding.",
+            ),
+            "Status": st.column_config.TextColumn(
+                "Status", width="medium", help="Suggestion-generation outcome, not a review approval.",
+            ),
             "Replacement code": st.column_config.TextColumn("Replacement code", width="small"),
             "Replacement FSN": st.column_config.TextColumn("Replacement FSN", width="large"),
             "Reason": st.column_config.TextColumn("Reason", width="large"),
-            "Top candidates": st.column_config.TextColumn("Top candidates", width="large"),
-            "Diagnostic candidates (not selectable)": st.column_config.TextColumn("Diagnostic candidates (not selectable)", width="large"),
+            "Top candidates": st.column_config.TextColumn(
+                "Top candidates", width="large", help="Leading selectable proposals; not automatically approved replacements.",
+            ),
+            "Diagnostic candidates (not selectable)": st.column_config.TextColumn(
+                "Diagnostic candidates (not selectable)", width="large",
+                help="Rejected or below-threshold evidence. These targets cannot be selected as replacements.",
+            ),
         },
     )
 

@@ -49,25 +49,21 @@ inputs = render_sidebar()
 
 if inputs.target_view == "policy":
     st.info(
-        "**Current target: Policy rules** — annotations must be valid in the "
-        "materialized policy view stored in the uploaded HDF5. To use another "
-        "policy date, select an HDF5 built for that date.",
+        "**Policy rules** — Replacement suggestions must be active concepts in the inclusion list "
+        "and outside the exclusion list stored in the loaded HDF5.",
         icon="🎯",
     )
 else:
-    blacklist_label = {
-        "none": "no exclusion list",
-        "embedded": "embedded HDF5 exclusion list",
-        "custom": "custom exclusion list",
-        "embedded+custom": "embedded HDF5 exclusion list + custom exclusion list",
-    }.get(inputs.release_blacklist_mode, inputs.release_blacklist_mode)
     st.info(
-        "**Current target: Active release** — annotations must be active concepts "
-        "in the materialized release view stored in the uploaded HDF5; exclusion-list "
-        f"mode: {blacklist_label}. To use another release snapshot, select an "
-        "HDF5 built for that snapshot.",
+        "**Active release** — Replacement suggestions may use any active concept in the loaded SNOMED release. "
+        "Inclusion-list membership is not required. Exclusion lists apply only when enabled in the sidebar.",
         icon="🎯",
     )
+
+st.caption(
+    "This setting controls replacement suggestions—not the policy check in tab 1. "
+    "Explicit concept rules may override list restrictions."
+)
 
 if inputs.hdf5_file is not None:
     st.success(f"HDF5 uploaded: {inputs.hdf5_file.name}")
@@ -123,7 +119,7 @@ if inputs.hdf5_file is not None:
     except Exception as exc:
         st.warning(f"Could not read HDF5 metadata: {exc}")
 
-check_label = "1. Check policy" if inputs.target_view == "policy" else "1. Check release view"
+check_label = "1. Check policy"
 suggest_label = "2. Suggest policy sanitization" if inputs.target_view == "policy" else "2. Suggest release normalization"
 run_label = "3. Review & apply"
 policy_tab, sanitization_check_tab, sanitization_run_tab = st.tabs(

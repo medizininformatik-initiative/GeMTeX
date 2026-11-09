@@ -63,6 +63,7 @@ def render_policy_tab(inputs: GuiInputs) -> None:
 
     if st.button(
         "Run policy check",
+        help="Check selected layers and annotators against inclusion/exclusion policy. No annotations are changed.",
         type="primary",
         disabled=not (st.session_state.get("zip_file") and inputs.hdf5_file),
     ):
@@ -170,9 +171,15 @@ def render_policy_check_result() -> None:
     with report_col1:
         download_md_report(result["markdown_text"], pathlib.Path(result["markdown_name"]), "markdown")
     with report_col2:
-        download_md_report(result["masked_markdown_text"], pathlib.Path(result["masked_markdown_name"]), "masked markdown")
+        download_md_report(
+            result["masked_markdown_text"], pathlib.Path(result["masked_markdown_name"]), "masked markdown",
+            help="Masks document and annotator names, not clinical text. This is not full anonymization.",
+        )
     with report_col3:
-        download_json_report(result["json_text"], pathlib.Path(result["json_name"]), "report")
+        download_json_report(
+            result["json_text"], pathlib.Path(result["json_name"]), "report",
+            help="Structured policy-check report. Use CriticalFindings JSON instead as input for suggestion generation.",
+        )
 
 
 def render_findings_table(findings: list[CriticalFinding]) -> None:
@@ -196,6 +203,7 @@ def render_findings_table(findings: list[CriticalFinding]) -> None:
     metric_cols[5].metric("Affected annotators", affected_annotators)
 
     with st.expander("Filters", expanded=False):
+        st.caption("Filters affect this display only, not report downloads or findings passed to suggestion generation.")
         if st.button("Clear all filters", key="findings_clear_filters"):
             st.session_state["findings_filter_status"] = "all"
             st.session_state["findings_filter_check"] = "all"

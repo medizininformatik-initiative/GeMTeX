@@ -23,7 +23,9 @@ from snomed_post_processing.sanitization import (
 )
 
 from .downloads import download_json_report
-from snomed_post_processing.sanitization.models import SanitizationStatus, SUPPORTED_ASSOCIATION_TYPES
+from snomed_post_processing.sanitization.models import (
+    ASSOCIATION_TYPE_DESCRIPTIONS, SanitizationStatus, SUPPORTED_ASSOCIATION_TYPES,
+)
 from snomed_post_processing.sanitization.json_io import sanitization_suggestion_to_dict
 from snomed_post_processing.sanitization.conditions import (
     DEFAULT_CONDITION_ASSOCIATIONS, apply_conditions, undo_automatic_conditions,
@@ -339,6 +341,7 @@ def _render_sanitization_run_controls(
                 decisions_text,
                 pathlib.Path("reviewed_sanitization_decisions.json"),
                 "reviewed sanitization decisions",
+                help="Save review choices and progress to restore later with matching suggestions. This does not export a project.",
             )
             st.caption("Save this JSON to restore the current review state later.")
     _render_inception_apply_upload_controls(
@@ -428,6 +431,7 @@ def _render_inception_apply_upload_controls(
                 value=st.session_state.get("inception_pipeline_url", ""),
                 key="inception_pipeline_url",
                 placeholder="http://localhost:8080",
+                help="Base URL of the target INCEpTION server, including any deployment path.",
             )
             col1, col2 = st.columns(2)
             with col1:
@@ -444,11 +448,13 @@ def _render_inception_apply_upload_controls(
                 "Check connection during dry-run",
                 value=False,
                 key="inception_pipeline_check_connection",
+                help="Contact INCEpTION to check connectivity during dry-run; no project or annotations are uploaded.",
             )
             no_verify_tls = st.checkbox(
                 "Disable TLS verification",
                 value=False,
                 key="inception_pipeline_no_verify_tls",
+                help="Skip HTTPS certificate checks. This weakens connection security; prefer configuring trusted certificates.",
             )
             apply_remote = st.checkbox(
                 "Apply to INCEpTION now (imports project and uploads artifacts)",
@@ -460,9 +466,11 @@ def _render_inception_apply_upload_controls(
                 "Overwrite temporary pipeline outputs if needed",
                 value=True,
                 key="inception_pipeline_force",
+                help="Allow overwriting generated files in the temporary output folder; not a remote-project overwrite setting.",
             )
             clicked = st.form_submit_button(
                 "Run INCEpTION deployment pipeline",
+                help="Prepare deployment artifacts. Remote import/upload occurs only when Apply to INCEpTION now is checked.",
                 disabled=disabled,
                 type="primary",
                 width="stretch",
@@ -516,6 +524,7 @@ def _render_inception_apply_upload_controls(
 def _render_inception_pipeline_downloads(result: Any) -> None:
     st.download_button(
         "Download shell project ZIP",
+        help="Project structure prepared for import; repaired annotation payloads are downloaded separately.",
         data=result.shell_project.read_bytes(),
         file_name=result.shell_project.name,
         mime="application/zip",
@@ -523,12 +532,14 @@ def _render_inception_pipeline_downloads(result: Any) -> None:
     artifacts_zip = _zip_directory_bytes(result.upload_artifacts_dir)
     st.download_button(
         "Download repaired upload artifacts ZIP",
+        help="Repaired, flattened CAS files prepared for upload to INCEpTION.",
         data=artifacts_zip,
         file_name="inception-upload-artifacts.zip",
         mime="application/zip",
     )
     st.download_button(
         "Download pipeline report JSON",
+        help="Deployment results, planned uploads and diagnostics; not a saved review state.",
         data=result.pipeline_report_path.read_bytes(),
         file_name=result.pipeline_report_path.name,
         mime="application/json",
@@ -771,7 +782,7 @@ def _render_document_review_sections(rows: list[dict[str, Any]]) -> list[dict[st
             if single_choice_rows:
                 st.markdown(
                     "#### Single/no-choice suggestions",
-                    help="These rows have at most one replacement candidate. They are not necessarily selected for application; use the Apply column or the historical conditions form. Checkbox behavior: no selection keeps the annotation unchanged; 'Needs manual edit' takes precedence over Apply/Delete; deletion takes precedence over Apply."
+                    help="At most one replacement is offered per row. Select Apply or use Automatic conditions; a suggestion is not approval."
                 )
                 review_df = pd.DataFrame(single_choice_rows).drop(
                     columns=["Document", "_offset", "_layer", "_status_raw"],
@@ -855,6 +866,7 @@ def _render_document_review_sections(rows: list[dict[str, Any]]) -> list[dict[st
                     with submit_col1:
                         st.form_submit_button(
                             "Save single/no-choice selections",
+                            help="Save this table's checkbox choices without changing CAS files.",
                             on_click=_keep_document_open,
                             args=(document,),
                             width="stretch",
@@ -862,6 +874,7 @@ def _render_document_review_sections(rows: list[dict[str, Any]]) -> list[dict[st
                     with submit_col2:
                         st.form_submit_button(
                             "Save and mark document reviewed",
+                            help="Save this table's choices and mark review progress. This does not select every replacement.",
                             on_click=_mark_document_reviewed,
                             args=(document,),
                             width="stretch",
@@ -967,27 +980,35 @@ def _render_automatic_conditions(suggestions, rows, rule_decisions) -> None:
         associations = st.multiselect(
             "Historical association types", options=SUPPORTED_ASSOCIATION_TYPES,
             default=list(DEFAULT_CONDITION_ASSOCIATIONS), key="sanitization_condition_associations",
-            help="Select only when these relationship types yield exactly one distinct selectable target code.",
+            format_func=lambda value: f"{value} — {ASSOCIATION_TYPE_DESCRIPTIONS[value]}",
+            help="Select when chosen relationships yield one distinct target. Leave empty to disable the historical condition.",
         )
-        bm25_enabled = st.checkbox("Enable BM25 automatic selection (heuristic)", value=False, key="sanitization_condition_bm25")
+        bm25_enabled = st.checkbox(
+            "Enable BM25 automatic selection (heuristic)", value=False, key="sanitization_condition_bm25",
+            help="Select a leading BM25 target when both gap thresholds pass. Requires at least three distinct, comparable targets.",
+        )
         threshold_columns = st.columns(2)
         with threshold_columns[0]:
             min_dominance = st.number_input(
                 "Minimum BM25 gap dominance", min_value=0.0, max_value=1.0, value=2 / 3,
                 step=0.05, format="%.3f", key="sanitization_condition_bm25_dominance",
+                help="D = first gap / (first gap + largest later gap). The default 2/3 requires a first gap at least twice every later gap.",
             )
         with threshold_columns[1]:
             min_relative_lead = st.number_input(
                 "Minimum BM25 relative lead", min_value=0.0, max_value=1.0, value=0.20,
                 step=0.05, format="%.3f", key="sanitization_condition_bm25_lead",
+                help="M = first gap / top score. A threshold of 0.20 requires a lead of at least 20% of the top score.",
             )
         st.caption(
-            "BM25: D = first gap / (first gap + largest later gap); M = first gap / top score. "
-            "Uses all saved, distinct targets (at least 3) from one comparable score channel. "
-            "Mixed FSN/SNOGIT channels are skipped. Thresholds are unvalidated heuristics. "
-            "Historical OR enabled BM25 conditions can select a row. Existing selections are not cleared; use Undo to reverse the last run."
+            "Historical OR enabled BM25 conditions can select a row. BM25 uses all saved distinct targets; "
+            "mixed score channels are skipped. Thresholds are unvalidated heuristics. "
+            "Existing selections are not cleared by stricter settings; use Undo to reverse the last changed run."
         )
-        apply = st.form_submit_button("Apply Conditions")
+        apply = st.form_submit_button(
+            "Apply Conditions",
+            help="Stage matching inclusion-list selections, preserving manual choices. Earlier selections are not cleared; CAS files are unchanged.",
+        )
     assessments = bm25_assessments(suggestions, min_dominance, min_relative_lead)
     if assessments:
         with st.expander("BM25 score-gap assessment", expanded=False):
@@ -1091,6 +1112,7 @@ def _render_manual_choice_cards(rows: list[dict[str, Any]], document: str) -> li
                     index=options.index(current_choice),
                     key=_choice_key(row_number),
                     format_func=lambda option, hints=choice_hints: _format_choice_option(option, hints),
+                    help="Choose a selectable target, then save this form. Diagnostic candidates are not offered.",
                 )
                 if choice_hint := choice_hints.get(choice):
                     st.caption(f"Selected candidate rationale: {choice_hint}")
@@ -1112,6 +1134,7 @@ def _render_manual_choice_cards(rows: list[dict[str, Any]], document: str) -> li
                     value=bool(row.get("Apply")) and choice != NO_REPLACEMENT_LABEL and not delete_annotation and not manual_edit,
                     key=_manual_apply_key(row_number),
                     disabled=choice == NO_REPLACEMENT_LABEL or delete_annotation or manual_edit,
+                    help="Include the chosen replacement in the next sanitization export/upload. Save this form to retain the choice.",
                 )
             decisions.extend(
                 _review_rows_to_decisions(
