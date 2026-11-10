@@ -74,6 +74,7 @@ Important options:
 - `--ancestor-max-distance N` where negative disables the absolute limit
 - `--ancestor-max-relative-distance R` where negative disables the relative limit
 - `--semantic-bm25-fallback`
+- `--bm25-semantic-tag-boost-percent P` (default 10, range 0–100; 0 disables the matching-FSN-tag score bonus). FSN tags are excluded from lexical matching, not from stored/displayed labels.
 - `--use-snogit-cache processed_snogit_cache.hdf5`
 - `--blacklist-suggestions` only with BM25 fallback
 

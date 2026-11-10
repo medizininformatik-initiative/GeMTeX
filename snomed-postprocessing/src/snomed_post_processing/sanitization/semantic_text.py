@@ -11,9 +11,14 @@ _TOKEN_RE = re.compile(r"[\w]+", re.UNICODE)
 _SEMANTIC_TAG_RE = re.compile(r"\(([^()]*)\)\s*$")
 
 
+def _fsn_text(fsn: Optional[str]) -> str:
+    """Remove only the trailing semantic tag from a known FSN, not arbitrary clinical text."""
+    return _SEMANTIC_TAG_RE.sub("", fsn or "").rstrip()
+
+
 def _query_text(finding: CriticalFinding, source_fsn: Optional[str] = None) -> str:
     return " ".join(
-        part for part in (finding.covered_text, source_fsn or "") if part
+        part for part in (finding.covered_text, _fsn_text(source_fsn)) if part
     )
 
 

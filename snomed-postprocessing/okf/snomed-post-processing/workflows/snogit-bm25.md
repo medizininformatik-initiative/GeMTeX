@@ -80,6 +80,14 @@ uv run suggest-sanitization \
 
 Without `--use-snogit-cache`, semantic BM25 still ranks SNOMED FSNs from the main HDF5.
 
+# FSN text matching and semantic-tag boost
+
+BM25 indexes known FSNs without their trailing semantic-tag suffix, e.g. `Pain (left side) (finding)` becomes `Pain (left side)` for matching. The source-FSN portion of the query is cleaned the same way. Tag words therefore do not contribute to FSN BM25 retrieval, document lengths or lexical overlap. Full FSNs, matched-term display and semantic-tag metadata are preserved. Annotation covered text, clinical parentheses and SNOGIT interface terms retain their existing tokenization; processed SNOGIT caches do not need rebuilding for this FSN-only change.
+
+Matching source/candidate FSN tags still produce a separate score multiplier: `1 + semantic_tag_boost_percent / 100`, default **10%** (`1.10`). GUI **Advanced suggestion settings → Matching semantic-tag boost (%)** and CLI `--bm25-semantic-tag-boost-percent` accept 0–100; **0 disables the boost**. It applies to matching-tag FSN and SNOGIT candidates without changing lexical overlap. The existing engine `use_semantic_tag_boost=False` switch also disables it.
+
+GUI suggestion JSON settings record `bm25_semantic_tag_boost_percent` and `bm25_fsn_semantic_tags_excluded=true`. Regenerate suggestions after this scoring change or editing the boost; reassess BM25 score and automatic-acceptance thresholds rather than comparing old and new scores directly. No HDF5/FSN rewrite is performed.
+
 # Candidate gates and safeguards
 
 BM25/SNOGIT candidates use the selected target view:

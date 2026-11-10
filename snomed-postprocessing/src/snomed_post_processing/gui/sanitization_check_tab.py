@@ -268,6 +268,14 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                 "Maximum retained candidates", min_value=1, max_value=50, value=5, step=1,
                 help="Maximum BM25 targets saved per finding. Automatic BM25 selection needs at least three distinct targets.",
             )
+            sanitize_bm25_semantic_tag_boost_percent = st.number_input(
+                "Matching semantic-tag boost (%)", min_value=0.0, max_value=100.0, value=10.0, step=1.0,
+                help="Increase BM25 scores when source and candidate FSN tags match. 10% multiplies by 1.10; 0% disables the boost. Lexical overlap is unchanged.",
+            )
+            st.caption(
+                "FSN semantic tags are excluded from word matching and lexical overlap. "
+                "The boost separately rewards matching tags. Regenerate suggestions after changing scoring settings."
+            )
             st.markdown("#### Optional SNOGIT/interface terms")
             use_snogit_bm25 = st.checkbox(
                 "Use SNOGIT/interface terms for BM25 candidates",
@@ -474,6 +482,7 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
         bm25_min_score=float(sanitize_bm25_min_score),
         bm25_min_lexical_score=float(sanitize_bm25_min_lexical_score),
         bm25_max_candidates=int(sanitize_bm25_max_candidates),
+        bm25_semantic_tag_boost_percent=float(sanitize_bm25_semantic_tag_boost_percent),
     )
 
     custom_blacklist_ready = (
@@ -606,6 +615,7 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                         min_score=sanitize_bm25_min_score,
                         min_lexical_score=sanitize_bm25_min_lexical_score,
                         max_candidates=int(sanitize_bm25_max_candidates),
+                        semantic_tag_boost_percent=float(sanitize_bm25_semantic_tag_boost_percent),
                         allow_blacklist_findings=sanitize_blacklist_suggestions,
                         snogit_sidecar_path=snogit_sidecar_path,
                         target_view=inputs.target_view,
@@ -643,6 +653,8 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                 "bm25_min_score": float(sanitize_bm25_min_score),
                 "bm25_min_lexical_score": float(sanitize_bm25_min_lexical_score),
                 "bm25_max_candidates": int(sanitize_bm25_max_candidates),
+                "bm25_semantic_tag_boost_percent": float(sanitize_bm25_semantic_tag_boost_percent),
+                "bm25_fsn_semantic_tags_excluded": True,
                 "snogit_bm25": bool(use_snogit_bm25),
                 "snogit_members": list(selected_snogit_members),
                 "snogit_cache_path": str(snogit_sidecar_path) if snogit_sidecar_path is not None else None,
@@ -796,6 +808,7 @@ def _render_active_settings_notice(
     bm25_min_score: float,
     bm25_min_lexical_score: float,
     bm25_max_candidates: int,
+    bm25_semantic_tag_boost_percent: float = 10.0,
 ) -> None:
     ancestor_bits = []
     if historical_ancestor_fallback:
@@ -806,7 +819,7 @@ def _render_active_settings_notice(
     ancestor_text = "on" + (f" ({', '.join(ancestor_bits)})" if ancestor_bits else "") if historical_ancestor_fallback else "off"
     bm25_text = (
         f"on (score ≥{bm25_min_score:.2f}, lexical ≥{bm25_min_lexical_score:.2f}, "
-        f"{bm25_max_candidates} candidate(s))"
+        f"{bm25_max_candidates} candidate(s), tag boost {bm25_semantic_tag_boost_percent:g}%)"
         if semantic_bm25_fallback
         else "off"
     )

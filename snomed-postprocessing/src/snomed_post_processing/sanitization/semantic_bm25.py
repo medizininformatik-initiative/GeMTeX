@@ -19,7 +19,7 @@ from ..hdf5_handling.policy import read_candidate_validity_sets, read_concepts, 
 from .bm25_index import BM25Index
 from .models import SanitizationStatus
 from .semantic_models import SemanticBm25Candidate, SemanticBm25Suggestion
-from .semantic_text import _query_text, _semantic_tag, _tokenize
+from .semantic_text import _fsn_text, _query_text, _semantic_tag, _tokenize
 from .snogit_sidecar import SnogitSidecarBm25Searcher, validate_snogit_sidecar_compatibility
 
 class SemanticBm25Resolver:
@@ -41,6 +41,7 @@ class SemanticBm25Resolver:
         k1: float = 1.5,
         b: float = 0.75,
         use_semantic_tag_boost: bool = True,
+        semantic_tag_boost_percent: float = 10.0,
         allow_blacklist_findings: bool = False,
         snogit_sidecar_path: Optional[Union[str, pathlib.Path]] = None,
         use_snogit: bool = False,
@@ -65,6 +66,9 @@ class SemanticBm25Resolver:
         self.runtime_blacklist_indices = frozenset(int(idx) for idx in runtime_blacklist_indices)
         self._snogit_searcher: Optional[SnogitSidecarBm25Searcher] = None
         self._snogit_query_cache = {}
+        self.semantic_tag_boost_percent = float(semantic_tag_boost_percent)
+        if not math.isfinite(self.semantic_tag_boost_percent) or not 0 <= self.semantic_tag_boost_percent <= 100:
+            raise ValueError("Semantic-tag boost must be a finite percentage between 0 and 100.")
         self._load()
         self._build_index()
 
@@ -207,7 +211,7 @@ class SemanticBm25Resolver:
         for idx in range(len(self.codes)):
             if self.candidate_validity_sets.check_index(idx).acceptable and self.fsn[idx]:
                 self.document_indices.append(idx)
-                self.documents.append(_tokenize(self.fsn[idx]))
+                self.documents.append(_tokenize(_fsn_text(self.fsn[idx])))
                 self.document_sources.append("snomed_fsn")
                 self.document_terms.append(self.fsn[idx])
                 self.document_source_members.append(None)
@@ -312,7 +316,7 @@ class SemanticBm25Resolver:
         semantic_tag = _semantic_tag(self.fsn[concept_idx])
         final_score = float(score)
         if self.use_semantic_tag_boost and source_tag and semantic_tag == source_tag:
-            final_score *= 1.1
+            final_score *= 1 + self.semantic_tag_boost_percent / 100
         return SemanticBm25Candidate(
             code=code,
             fsn=self.fsn[concept_idx],

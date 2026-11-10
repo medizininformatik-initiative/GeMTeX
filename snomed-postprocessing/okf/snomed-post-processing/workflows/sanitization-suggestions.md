@@ -80,6 +80,7 @@ In a new GUI session:
 - **Use SNOGIT/interface terms for BM25 candidates** is selected by default. A compatible processed cache must be selected or created before generating suggestions with SNOGIT enabled. An explicit opt-out persists across reruns; CLI/API defaults are unchanged.
 - All supported historical association types except `MOVED_FROM` and `REFERS_TO` are selected.
 - Minimum lexical overlap ratio is `0.0`; minimum BM25 score remains `1.5`.
+- Matching semantic-tag score boost defaults to 10% and is configurable from 0–100 (0 disables it). Known FSN suffix tags are excluded from lexical matching/overlap, while full FSNs and tag metadata are retained. Regenerate suggestions after scoring changes; see [BM25 matching details](/snomed-post-processing/workflows/snogit-bm25.md).
 - Association meanings appear inline in the selection options, not in a separate explanation section.
 
 Explicit settings, including an empty association-type selection, are preserved across reruns. An empty selection disables historical-association candidates; enabled ancestor/BM25 fallbacks can still produce suggestions. These are suggestion defaults, not automatic review approval.

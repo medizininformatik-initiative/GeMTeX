@@ -66,6 +66,17 @@ class GuiReviewDefaultsTest(unittest.TestCase):
         self.assertFalse(self.app.exception, str(self.app.exception))
         self.assertFalse(self.widget("checkbox", label).value)
 
+    def test_semantic_tag_boost_defaults_to_ten_percent_and_persists(self):
+        label = "Matching semantic-tag boost (%)"
+        self.assertEqual(self.widget("number_input", label).value, 10.0)
+        self.assertIn("0% disables", self.widget("number_input", label).help)
+        self.widget("number_input", label).set_value(37.0)
+        self.widget("button", "Apply suggestion settings").click().run()
+        self.app.run()
+        self.assertFalse(self.app.exception, str(self.app.exception))
+        self.assertEqual(self.widget("number_input", label).value, 37.0)
+        self.assertTrue(any("tag boost 37%" in item.value for item in self.app.info))
+
     def test_no_human_is_not_selected_by_default(self):
         self.assertEqual(
             self.widget("text_area", "Ignore faulty target annotations overlapping these types").value,

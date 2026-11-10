@@ -261,7 +261,11 @@ Release-view exclusion-list rules are opt-in:
 
 A custom exclusion-list file uses the same format as RF2 exclusion-list ingestion: numeric SCTID lines exclude the concept and descendants; non-numeric lines exclude by FSN semantic tag.
 
-Optional semantic BM25 fallback can be combined with either target view. It ranks SNOMED FSNs lexically and only keeps candidates that pass the selected policy/release gates:
+Optional semantic BM25 fallback can be combined with either target view. It ranks SNOMED FSNs lexically and only keeps candidates that pass the selected policy/release gates. Trailing FSN semantic tags such as `(finding)` are excluded from word matching and lexical overlap; full FSNs and clinical parentheses are preserved.
+
+Matching source/candidate tags still receive a separate **10% score boost** by default. Change it via **Advanced suggestion settings → Matching semantic-tag boost (%)** or `--bm25-semantic-tag-boost-percent P` (0–100; 0 disables the boost). Regenerate suggestions after changing scoring settings and reassess automatic-acceptance thresholds. Existing processed SNOGIT caches need no rebuild for this FSN-only change.
+
+For example:
 
 ```bash
 uv run suggest-sanitization \

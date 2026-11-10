@@ -87,6 +87,10 @@ CriticalFindings JSON, Markdown, masked Markdown, and report JSON downloads rema
 
 The sidebar annotation-layer settings include the configurable SNOMED ID feature name and prefix. The feature defaults to `id`; the prefix defaults to `http://snomed.info/id/`. Use an empty prefix for layers that store plain SCTIDs. The same feature/prefix settings are used when matching reviewed decisions and writing replacement IDs. See [Annotation layer requirements](/snomed-post-processing/data/annotation-layer-requirements.md).
 
+# BM25 matching settings
+
+**Advanced suggestion settings → Matching semantic-tag boost (%)** controls the separate score bonus for matching source/candidate FSN tags (default 10%, range 0–100; 0 disables it). A tooltip explains the multiplier and unchanged lexical overlap, and the active-settings notice shows the selected percentage. Known FSNs are indexed/queried without the trailing semantic tag; full display labels, clinical parentheses and SNOGIT terms are preserved. Suggestion JSON settings record the boost and FSN-tag exclusion. Regenerate suggestions after changing scoring settings; automatic-acceptance thresholds remain unvalidated heuristics.
+
 # Replacement choice safety
 
 Suggestion generation puts selectable replacements in `candidates` and rejected targets in `context_candidates`. Review offers only replacement candidates, not diagnostic context. Overview/report displays label diagnostics **Diagnostic candidates (not selectable)**.

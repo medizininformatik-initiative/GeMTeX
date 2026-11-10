@@ -351,6 +351,13 @@ def suggest_sanitization_options(fnc):
         help="Minimum query-token overlap ratio required for semantic BM25 fallback suggestions.",
     )(fnc)
     fnc = click.option(
+        "--bm25-semantic-tag-boost-percent",
+        default=10.0,
+        show_default=True,
+        type=click.FloatRange(0.0, 100.0),
+        help="Percentage score boost for matching FSN semantic tags; 0 disables it. FSN tags are excluded from word matching.",
+    )(fnc)
+    fnc = click.option(
         "--bm25-min-score",
         default=1.5,
         show_default=True,

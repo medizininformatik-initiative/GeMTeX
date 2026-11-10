@@ -36,6 +36,7 @@ def run_sanitization_check(
     enforce_embedded_blacklist: bool = False,
     custom_blacklist: pathlib.Path | None = None,
     log_level: str = "INFO",
+    bm25_semantic_tag_boost_percent: float = 10.0,
 ):
     """Create sanitization suggestions from a CriticalFindings JSON artifact."""
     set_log_level(log_level)
@@ -82,6 +83,7 @@ def run_sanitization_check(
             min_score=bm25_min_score,
             min_lexical_score=bm25_min_lexical_score,
             max_candidates=bm25_max_candidates,
+            semantic_tag_boost_percent=bm25_semantic_tag_boost_percent,
             allow_blacklist_findings=blacklist_suggestions,
             snogit_sidecar_path=use_snogit_cache,
             target_view=target_view,
