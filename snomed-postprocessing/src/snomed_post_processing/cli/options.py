@@ -341,7 +341,7 @@ def suggest_sanitization_options(fnc):
         default=5,
         show_default=True,
         type=int,
-        help="Maximum BM25 fallback candidates retained internally per finding.",
+        help="Soft maximum BM25 candidates per finding; retain cutoff ties together, subject to explicit safety caps.",
     )(fnc)
     fnc = click.option(
         "--bm25-min-lexical-score",

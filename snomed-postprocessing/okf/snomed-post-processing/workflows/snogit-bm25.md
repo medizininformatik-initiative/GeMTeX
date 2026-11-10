@@ -84,7 +84,7 @@ Without `--use-snogit-cache`, semantic BM25 still ranks SNOMED FSNs from the mai
 
 BM25 indexes known FSNs without their trailing semantic-tag suffix, e.g. `Pain (left side) (finding)` becomes `Pain (left side)` for matching. The source-FSN portion of the query is cleaned the same way. Tag words therefore do not contribute to FSN BM25 retrieval, document lengths or lexical overlap. Full FSNs, matched-term display and semantic-tag metadata are preserved. Annotation covered text, clinical parentheses and SNOGIT interface terms retain their existing tokenization; processed SNOGIT caches do not need rebuilding for this FSN-only change.
 
-Matching source/candidate FSN tags still produce a separate score multiplier: `1 + semantic_tag_boost_percent / 100`, default **10%** (`1.10`). GUI **Advanced suggestion settings → Matching semantic-tag boost (%)** and CLI `--bm25-semantic-tag-boost-percent` accept 0–100; **0 disables the boost**. It applies to matching-tag FSN and SNOGIT candidates without changing lexical overlap. The existing engine `use_semantic_tag_boost=False` switch also disables it.
+Matching source/candidate FSN tags still produce a separate score multiplier: `1 + semantic_tag_boost_percent / 100`, default **10%** (`1.10`). GUI **Advanced suggestion settings → Matching semantic-tag boost (%)** and CLI `--bm25-semantic-tag-boost-percent` accept 0–100; **0 disables the boost**. It applies to matching-tag FSN-channel scores without changing lexical overlap; SNOGIT raw scores remain unboosted, as before. The existing engine `use_semantic_tag_boost=False` switch also disables it.
 
 GUI suggestion JSON settings record `bm25_semantic_tag_boost_percent` and `bm25_fsn_semantic_tags_excluded=true`. Regenerate suggestions after this scoring change or editing the boost; reassess BM25 score and automatic-acceptance thresholds rather than comparing old and new scores directly. No HDF5/FSN rewrite is performed.
 
@@ -111,6 +111,16 @@ bm25_max_candidates
 ```
 
 Repeated normalized query texts are cached during one resolver run.
+
+# Cutoff ties and retrieval coverage
+
+The requested candidate maximum is a **soft cutoff**: keep the entire score-tie group at its boundary, after policy/release filtering and target-code deduplication. Ties use full-precision `math.isclose` semantics (`rel_tol=1e-9`, `abs_tol=1e-9`), not rounded displayed scores. A first-place tie remains ambiguous even when the requested maximum is one; there is no preferred replacement code.
+
+SNOGIT hit retrieval also retains boundary ties before merging evidence. Existing postings/candidate-row guards remain. Safety caps bound expanded groups to 2,000 SNOGIT term hits and 2,000 final candidates (or the explicitly requested count if larger). Reached postings, candidate-row, hit or tie caps are recorded in `SemanticBm25Suggestion.retrieval_limits`, preserved in suggestion JSON, and shown in the overview, review and Markdown report. Counts then describe saved/retrieved candidates, not complete totals. Cached queries retain their own coverage flags.
+
+In Review & apply, large first-place ties (more than five distinct targets) have a collapsed searchable candidate browser before the document's manual-choice form. The scrolling, single-row-selectable table shows SCTID, full FSN and high-precision scores. Search matches SCTID/FSN; selection is stored as SCTID, mapped against the rendered snapshot, not a later filtered row index. **Use selected candidate** stages it in the compact dropdown; the existing **Save choices** action commits it. Small tied sets retain the dropdown but begin with no replacement selected. Browser search/selection runs in a fragment outside the form, avoiding unrelated reruns; Use refreshes the form. No CAS files change here.
+
+A warning distinguishes complete saved tie groups from partial retrieval. Any recorded retrieval limit prevents automatic BM25 acceptance, while manual choices remain available. Exclusion-list source findings remain manual regardless. Regenerate suggestions to use tie-aware retention; old files cannot reveal candidates that were never saved. No new HDF5 schema or cache rebuild is required.
 
 # Optional automatic review acceptance
 

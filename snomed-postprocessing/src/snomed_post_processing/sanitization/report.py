@@ -128,6 +128,9 @@ def _write_grouped_suggestion_table(
 
 def _format_candidates(suggestion) -> str:
     parts = []
+    limits = getattr(suggestion, "retrieval_limits", ())
+    if limits:
+        parts.append("Retrieval limits reached; additional matches may exist: " + ", ".join(limits))
     context_candidates = getattr(suggestion, "context_candidates", ()) or ()
     if context_candidates:
         parts.append(

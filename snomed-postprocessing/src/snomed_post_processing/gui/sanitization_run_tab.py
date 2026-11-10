@@ -8,9 +8,11 @@ import hashlib
 import io
 import json
 import logging
+import math
 import pathlib
 import tempfile
 import zipfile
+from functools import partial
 from typing import Any
 
 import pandas as pd
@@ -785,7 +787,7 @@ def _render_document_review_sections(rows: list[dict[str, Any]]) -> list[dict[st
                     help="At most one replacement is offered per row. Select Apply or use Automatic conditions; a suggestion is not approval."
                 )
                 review_df = pd.DataFrame(single_choice_rows).drop(
-                    columns=["Document", "_offset", "_layer", "_status_raw"],
+                    columns=["Document", "_offset", "_layer", "_status_raw", "_bm25_candidates", "_retrieval_limits"],
                     errors="ignore",
                 )
                 preferred_columns = [
@@ -1075,6 +1077,97 @@ def _save_manual_choice_form_and_mark_reviewed(document: str, row_numbers: list[
     _mark_document_reviewed(document)
 
 
+def _candidate_ranks(candidates) -> list[int]:
+    """Competition ranks for an ordered list: equal BM25 scores share 1, 1, 3 ranks."""
+    ranks = []
+    rank, group_score = 0, None
+    for position, candidate in enumerate(candidates, start=1):
+        score = getattr(candidate, "score", None)
+        if score is None or group_score is None or not math.isclose(score, group_score, rel_tol=1e-9, abs_tol=1e-9):
+            rank, group_score = position, score
+        ranks.append(rank)
+    return ranks
+
+
+def _bm25_tie_count(candidates) -> int:
+    if not candidates:
+        return 0
+    best = max(candidate.score for candidate in candidates)
+    return len({candidate.code for candidate in candidates
+                if math.isclose(candidate.score, best, rel_tol=1e-9, abs_tol=1e-9)})
+
+
+def _browser_identity(row) -> str:
+    identity = [row.get(key) for key in ("Document", "Annotator", "_layer", "_offset", "Source code", "Covered text", "Policy issue")]
+    return "sanitization_bm25_browser_" + hashlib.sha256(json.dumps(identity).encode()).hexdigest()[:24]
+
+
+def _stage_browser_selection(table_key, codes, pending_key) -> None:
+    rows = st.session_state.get(table_key, {}).get("selection", {}).get("rows", [])
+    if len(rows) == 1 and 0 <= rows[0] < len(codes):
+        # Map against the rendered table snapshot, never a subsequently filtered row position.
+        st.session_state[pending_key] = codes[rows[0]]
+
+
+def _use_browser_choice(row, pending_key) -> None:
+    code = st.session_state.get(pending_key)
+    labels = { _code_from_label(label): label for label in row["_valid_choices"] }
+    if code not in labels:
+        return
+    number = int(row["#"])
+    label = labels[code]
+    if st.session_state.get(_choice_key(number)) != label:
+        st.session_state[_manual_apply_key(number)] = False
+    st.session_state[_choice_key(number)] = label
+    st.session_state[_document_reviewed_key(row["Document"])] = False
+    st.session_state["sanitization_keep_document_open"] = row["Document"]
+
+
+@st.fragment
+def _render_bm25_candidate_browser(row) -> None:
+    candidates = row["_bm25_candidates"]
+    ranks = {candidate.code: rank for candidate, rank in zip(candidates, _candidate_ranks(candidates))}
+    base = _browser_identity(row)
+    pending_key = base + "_selected_code"
+    with st.expander(f"Browse BM25 candidates ({len(candidates)}) — #{row['#']} · {row['Source code']}", expanded=False):
+        st.caption(f"Annotation: {row['Covered text']}")
+        ties = _bm25_tie_count(candidates)
+        qualifier = "At least " if row["_retrieval_limits"] else ""
+        st.info(f"{qualifier}{ties} candidates share the top score. No clear lexical leader; extra wording is not distinguished by this query.")
+        if row["_retrieval_limits"]:
+            st.warning("Retrieval limits reached; additional candidates may exist: " + ", ".join(row["_retrieval_limits"]))
+        query = st.text_input("Search SCTID or FSN", key=base + "_query").strip().casefold()
+        shown = [candidate for candidate in candidates if not query or query in candidate.code.casefold() or query in candidate.fsn.casefold()]
+        st.caption(f"Showing {len(shown)} of {len(candidates)} saved candidates. Scroll to inspect more; equal rank is not clinical equivalence.")
+        if shown:
+            snapshot = [(candidate.code, candidate.fsn, candidate.score) for candidate in shown]
+            table_key = base + "_table_" + hashlib.sha256(json.dumps(snapshot).encode()).hexdigest()[:16]
+            st.dataframe(
+                pd.DataFrame([{"Rank": ranks[item.code], "SCTID": item.code, "FSN": item.fsn, "BM25 score": item.score} for item in shown]),
+                key=table_key, hide_index=True, width="stretch", height=240,
+                selection_mode="single-row",
+                on_select=partial(_stage_browser_selection, table_key, tuple(item.code for item in shown), pending_key),
+                column_config={"Rank": st.column_config.NumberColumn("Rank", format="%d",
+                                   help="Equal scores share the same rank (1, 1, 3). Filtering does not renumber candidates."),
+                               "SCTID": st.column_config.TextColumn("SCTID"),
+                               "FSN": st.column_config.TextColumn("FSN", width="large"),
+                               "BM25 score": st.column_config.NumberColumn("BM25 score", format="%.9f",
+                                   help="Ties use full-precision scores with numerical tolerance, not rounded display values.")},
+            )
+        else:
+            st.info("No saved candidates match this filter.")
+        labels = {_code_from_label(label): label for label in row["_valid_choices"]}
+        selected = st.session_state.get(pending_key)
+        if selected in labels:
+            st.caption("Selected: " + labels[selected])
+        if st.button(
+            "Use selected candidate", key=base + "_use", disabled=selected not in labels,
+            help="Stage this SCTID in the review form below. Save that form to apply it; no CAS files change here.",
+            on_click=_use_browser_choice, args=(row, pending_key),
+        ):
+            st.rerun()
+
+
 def _render_manual_choice_cards(rows: list[dict[str, Any]], document: str) -> list[dict[str, Any]]:
     decisions: list[dict[str, Any]] = []
     st.caption(
@@ -1082,6 +1175,9 @@ def _render_manual_choice_cards(rows: list[dict[str, Any]], document: str) -> li
         "Dropdown and checkbox edits are batched; click Save to update the page."
     )
     row_numbers = [int(row["#"]) for row in rows]
+    for row in rows:
+        if _bm25_tie_count(row.get("_bm25_candidates", ())) > 5:
+            _render_bm25_candidate_browser(row)
     with st.form(f"manual_choice_form_{_safe_key(document)}"):
         for row in rows:
             row_number = int(row["#"])
@@ -1089,6 +1185,12 @@ def _render_manual_choice_cards(rows: list[dict[str, Any]], document: str) -> li
             if not options:
                 options = [NO_REPLACEMENT_LABEL]
             current_choice = st.session_state.get(_choice_key(row_number), row.get("Suggested replacement"))
+            ties = _bm25_tie_count(row.get("_bm25_candidates", ()))
+            if ties > 1:
+                if ties > 5:
+                    # Keep the form compact; the outside-form browser can stage any saved SCTID.
+                    options = [current_choice] if current_choice in options else []
+                options = [NO_REPLACEMENT_LABEL] + [item for item in options if item != NO_REPLACEMENT_LABEL]
             if current_choice not in options:
                 current_choice = options[0]
             previous_choice_key = _previous_choice_key(row_number)
@@ -1105,12 +1207,18 @@ def _render_manual_choice_cards(rows: list[dict[str, Any]], document: str) -> li
                 )
                 if row.get("Original FSN"):
                     st.caption(f"Original FSN: {row['Original FSN']}")
+                if ties > 1:
+                    st.caption(f"{ties} saved candidates tie for first place; no replacement is selected by default.")
+                if ties > 5:
+                    st.caption("Use the candidate browser above, then save choices in this form.")
+                if row.get("_retrieval_limits"):
+                    st.warning("Retrieval limits reached; additional BM25 candidates may exist.")
                 choice_hints = row.get("_choice_hints", {})
                 choice = st.selectbox(
                     "Replacement candidate",
                     options=options,
-                    index=options.index(current_choice),
                     key=_choice_key(row_number),
+                    **({"index": options.index(current_choice)} if _choice_key(row_number) not in st.session_state else {}),
                     format_func=lambda option, hints=choice_hints: _format_choice_option(option, hints),
                     help="Choose a selectable target, then save this form. Diagnostic candidates are not offered.",
                 )
@@ -1118,21 +1226,23 @@ def _render_manual_choice_cards(rows: list[dict[str, Any]], document: str) -> li
                     st.caption(f"Selected candidate rationale: {choice_hint}")
                 manual_edit = st.checkbox(
                     "Needs manual edit",
-                    value=bool(row.get("Needs manual edit")),
                     key=_manual_edit_key(row_number),
+                    **({"value": bool(row.get("Needs manual edit"))} if _manual_edit_key(row_number) not in st.session_state else {}),
                     help="Keep the original annotation and add a marker on the manual-review layer in the sanitized project.",
                 )
                 delete_annotation = st.checkbox(
                     "Delete this annotation",
-                    value=bool(row.get("Delete annotation")) and not manual_edit,
                     key=_manual_delete_key(row_number),
+                    **({"value": bool(row.get("Delete annotation")) and not manual_edit}
+                       if _manual_delete_key(row_number) not in st.session_state else {}),
                     disabled=manual_edit,
                     help="Remove this annotation from the sanitized project copy instead of replacing its concept ID.",
                 )
                 apply = st.checkbox(
                     "Apply this replacement",
-                    value=bool(row.get("Apply")) and choice != NO_REPLACEMENT_LABEL and not delete_annotation and not manual_edit,
                     key=_manual_apply_key(row_number),
+                    **({"value": bool(row.get("Apply")) and choice != NO_REPLACEMENT_LABEL and not delete_annotation and not manual_edit}
+                       if _manual_apply_key(row_number) not in st.session_state else {}),
                     disabled=choice == NO_REPLACEMENT_LABEL or delete_annotation or manual_edit,
                     help="Include the chosen replacement in the next sanitization export/upload. Save this form to retain the choice.",
                 )
@@ -1409,7 +1519,8 @@ def _suggestions_to_review_rows(
         selected_label = st.session_state.get(
             _choice_key(row_number),
             restored_decision.get("replacement_choice")
-            or (replacement_options[0] if replacement_options else NO_REPLACEMENT_LABEL),
+            or (NO_REPLACEMENT_LABEL if hasattr(suggestion, "score")
+                and _bm25_tie_count(getattr(suggestion, "candidates", ()) or ()) > 1 else (replacement_options[0] if replacement_options else NO_REPLACEMENT_LABEL)),
         )
         manual_edit_selected = bool(
             st.session_state.get(
@@ -1458,6 +1569,8 @@ def _suggestions_to_review_rows(
                 "_valid_choices": tuple(replacement_options),
                 "_choice_hints": replacement_hints,
                 "_needs_choice": needs_choice,
+                "_bm25_candidates": tuple(getattr(suggestion, "candidates", ())) if hasattr(suggestion, "score") else (),
+                "_retrieval_limits": tuple(getattr(suggestion, "retrieval_limits", ())),
             }
         )
     return rows
@@ -1541,7 +1654,8 @@ def _replacement_options_and_hints(suggestion: Any) -> tuple[list[str], dict[str
     # ``context_candidates`` are diagnostic/provenance context only, e.g.
     # ancestors rejected because they are outside the configured distance limit.
     # They must not be selectable replacement choices.
-    for rank, candidate in enumerate(getattr(suggestion, "candidates", ()) or (), start=1):
+    candidates = getattr(suggestion, "candidates", ()) or ()
+    for candidate, rank in zip(candidates, _candidate_ranks(candidates)):
         add_label(
             _code_fsn_label(getattr(candidate, "code", None), getattr(candidate, "fsn", None)),
             _candidate_rationale(candidate, rank=rank),

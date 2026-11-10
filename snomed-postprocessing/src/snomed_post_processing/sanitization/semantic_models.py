@@ -44,6 +44,7 @@ class SemanticBm25Suggestion:
     candidate_count: int = 0
     candidates: tuple[SemanticBm25Candidate, ...] = ()
     context_candidates: tuple[SanitizationCandidate | SemanticBm25Candidate, ...] = ()
+    retrieval_limits: tuple[str, ...] = ()
 
 
 @dataclasses.dataclass(frozen=True)

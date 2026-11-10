@@ -22,6 +22,22 @@ from .semantic_models import SemanticBm25Candidate, SemanticBm25Suggestion
 from .semantic_text import _fsn_text, _query_text, _semantic_tag, _tokenize
 from .snogit_sidecar import SnogitSidecarBm25Searcher, validate_snogit_sidecar_compatibility
 
+MAX_TIED_CANDIDATES = 2000
+
+
+def _retain_cutoff_ties(scored, limit):
+    """Treat the requested count as a soft limit, never silently splitting a score tie."""
+    if limit <= 0 or not scored:
+        return (), ()
+    end = min(limit, len(scored))
+    cutoff = scored[end - 1].score
+    while end < len(scored) and math.isclose(scored[end].score, cutoff, rel_tol=1e-9, abs_tol=1e-9):
+        end += 1
+    hard_limit = max(limit, MAX_TIED_CANDIDATES)
+    limits = (f"candidate tie limit ({hard_limit})",) if end > hard_limit else ()
+    return tuple(scored[:min(end, hard_limit)]), limits
+
+
 class SemanticBm25Resolver:
     """Suggest policy-acceptable replacements using BM25 over concept labels.
 
@@ -66,6 +82,7 @@ class SemanticBm25Resolver:
         self.runtime_blacklist_indices = frozenset(int(idx) for idx in runtime_blacklist_indices)
         self._snogit_searcher: Optional[SnogitSidecarBm25Searcher] = None
         self._snogit_query_cache = {}
+        self._snogit_retrieval_limits = ()
         self.semantic_tag_boost_percent = float(semantic_tag_boost_percent)
         if not math.isfinite(self.semantic_tag_boost_percent) or not 0 <= self.semantic_tag_boost_percent <= 100:
             raise ValueError("Semantic-tag boost must be a finite percentage between 0 and 100.")
@@ -121,12 +138,14 @@ class SemanticBm25Resolver:
             )
 
         scored = self._score(query_tokens, source_code=finding.code, snogit_query_tokens=snogit_query_tokens)
-        candidates = tuple(scored[: self.max_candidates])
+        candidates, limits = _retain_cutoff_ties(scored, self.max_candidates)
+        retrieval_limits = tuple(sorted(set(limits + self._snogit_retrieval_limits)))
         if not candidates:
             return SemanticBm25Suggestion(
                 finding=finding,
                 status=SanitizationStatus.NO_REPLACEMENT,
                 reason=f"no {self.target_view}-acceptable BM25 candidate found",
+                retrieval_limits=retrieval_limits,
             )
 
         best = candidates[0]
@@ -140,6 +159,7 @@ class SemanticBm25Resolver:
                 ),
                 score=best.score,
                 context_candidates=candidates,
+                retrieval_limits=retrieval_limits,
             )
 
         tied = [candidate for candidate in candidates if math.isclose(candidate.score, best.score, rel_tol=1e-9, abs_tol=1e-9)]
@@ -151,6 +171,7 @@ class SemanticBm25Resolver:
                 score=best.score,
                 candidate_count=len(candidates),
                 candidates=candidates,
+                retrieval_limits=retrieval_limits,
             )
 
         return SemanticBm25Suggestion(
@@ -163,6 +184,7 @@ class SemanticBm25Resolver:
             score=best.score,
             candidate_count=len(candidates),
             candidates=candidates,
+            retrieval_limits=retrieval_limits,
         )
 
     def suggest_all(self, findings: Sequence[CriticalFinding]) -> list[SemanticBm25Suggestion]:
@@ -224,6 +246,7 @@ class SemanticBm25Resolver:
         *,
         snogit_query_tokens: Sequence[str] = (),
     ) -> list[SemanticBm25Candidate]:
+        self._snogit_retrieval_limits = ()
         query_terms = list(dict.fromkeys(query_tokens))
         query_set = set(query_tokens)
         snogit_query_terms = list(dict.fromkeys(snogit_query_tokens))
@@ -288,8 +311,10 @@ class SemanticBm25Resolver:
                     max_hits=max(self.max_candidates * 20, 50),
                 )
             )
+            cached = (cached, self._snogit_searcher.last_search_limits)
             self._snogit_query_cache[cache_key] = cached
-        return cached
+        hits, self._snogit_retrieval_limits = cached
+        return hits
 
     def _candidate_from_hit(
         self,

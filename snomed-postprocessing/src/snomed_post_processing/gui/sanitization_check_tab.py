@@ -266,7 +266,7 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
             )
             sanitize_bm25_max_candidates = st.number_input(
                 "Maximum retained candidates", min_value=1, max_value=50, value=5, step=1,
-                help="Maximum BM25 targets saved per finding. Automatic BM25 selection needs at least three distinct targets.",
+                help="Soft maximum BM25 targets per finding; cutoff ties are retained together, subject to explicit safety caps. Automatic selection needs at least three distinct targets.",
             )
             sanitize_bm25_semantic_tag_boost_percent = st.number_input(
                 "Matching semantic-tag boost (%)", min_value=0.0, max_value=100.0, value=10.0, step=1.0,
@@ -748,6 +748,8 @@ def _render_suggestion_overview(suggestions: list[Any]) -> None:
             "Replacement code": st.column_config.TextColumn("Replacement code", width="small"),
             "Replacement FSN": st.column_config.TextColumn("Replacement FSN", width="large"),
             "Reason": st.column_config.TextColumn("Reason", width="large"),
+            "Retrieval limits": st.column_config.TextColumn("Retrieval limits", width="medium",
+                help="A reached limit means further BM25 matches may exist; candidate counts are not complete totals."),
             "Top candidates": st.column_config.TextColumn(
                 "Top candidates", width="large", help="Leading selectable proposals; not automatically approved replacements.",
             ),
@@ -765,6 +767,7 @@ def _suggestion_overview_row(index: int, suggestion: Any) -> dict[str, Any]:
         "#": index,
         "Document": finding.document,
         "Annotator": finding.annotator,
+        "Retrieval limits": ", ".join(getattr(suggestion, "retrieval_limits", ())),
         "Source code": finding.code or "",
         "Covered text": finding.covered_text,
         "Issue": policy_label(getattr(finding, "list_type", "")),
@@ -819,7 +822,7 @@ def _render_active_settings_notice(
     ancestor_text = "on" + (f" ({', '.join(ancestor_bits)})" if ancestor_bits else "") if historical_ancestor_fallback else "off"
     bm25_text = (
         f"on (score ≥{bm25_min_score:.2f}, lexical ≥{bm25_min_lexical_score:.2f}, "
-        f"{bm25_max_candidates} candidate(s), tag boost {bm25_semantic_tag_boost_percent:g}%)"
+        f"{bm25_max_candidates} candidates + cutoff ties, tag boost {bm25_semantic_tag_boost_percent:g}%)"
         if semantic_bm25_fallback
         else "off"
     )

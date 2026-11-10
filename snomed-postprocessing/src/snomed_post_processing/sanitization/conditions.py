@@ -78,6 +78,9 @@ def bm25_assessments(suggestions, min_dominance=2 / 3, min_relative_lead=0.20):
         if suggestion.status not in (SanitizationStatus.SEMANTIC_BM25_REPLACEMENT, SanitizationStatus.AMBIGUOUS_REPLACEMENT):
             assessment["reason"] = "No selectable BM25 proposal passed generation thresholds."
             continue
+        if suggestion.retrieval_limits:
+            assessment["reason"] = "Retrieval limits reached; additional BM25 candidates may exist."
+            continue
         candidates = suggestion.candidates
         if not candidates or any(not isinstance(item, SemanticBm25Candidate) for item in candidates):
             assessment["reason"] = "Missing BM25 candidates."

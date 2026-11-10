@@ -79,7 +79,7 @@ Policy rules restrict replacement targets to the stored inclusion list, which ma
 | semantic BM25 | optional lexical fallback over SNOMED FSNs |
 | processed SNOGIT cache | optional extra BM25 evidence from SNOGIT terms |
 
-BM25 and SNOGIT are suggestion-only evidence. Candidates must still pass the selected target-view gates. The original INCEpTION ZIP is not modified.
+BM25 and SNOGIT are suggestion-only evidence. Candidates must still pass the selected target-view gates. The candidate maximum is a soft limit: ties at the cutoff are retained together, subject to explicit safety caps. Large first-place ties can be searched by SCTID/FSN in **Review & apply → Browse BM25 candidates**; select a row, click **Use selected candidate**, then save the review form. No tied candidate is preselected. Reached retrieval limits are reported because more candidates may exist; incomplete results cannot be automatically accepted. Regenerate suggestions to recover ties previously truncated by the old limit. The original INCEpTION ZIP is not modified.
 
 ## CLI usage
 

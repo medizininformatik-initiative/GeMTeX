@@ -96,6 +96,7 @@ def sanitization_suggestion_to_dict(suggestion: SanitizationSuggestion | Semanti
     ]
     if isinstance(suggestion, SemanticBm25Suggestion):
         payload["score"] = float(suggestion.score)
+        payload["retrieval_limits"] = list(suggestion.retrieval_limits)
     return payload
 
 
@@ -120,6 +121,7 @@ def sanitization_suggestion_from_dict(data: dict[str, Any]) -> SanitizationSugge
             candidate_count=int(data.get("candidate_count", len(candidates))),
             candidates=tuple(candidate for candidate in candidates if isinstance(candidate, SemanticBm25Candidate)),
             context_candidates=context_candidates,
+            retrieval_limits=tuple(str(limit) for limit in data.get("retrieval_limits", [])),
         )
     return SanitizationSuggestion(
         finding=critical_finding_from_dict(data["finding"]),

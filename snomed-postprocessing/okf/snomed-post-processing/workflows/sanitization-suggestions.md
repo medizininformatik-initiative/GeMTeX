@@ -37,6 +37,8 @@ Release mode (**Active release** in the sidebar) deliberately has no inclusion-l
 
 Both structured and BM25 suggestions separate `candidates` (selectable) from `context_candidates` (diagnostic only). `candidate_count` counts selectable candidates. Rejected historical targets, ancestors rejected by distance limits, and BM25 hits below thresholds are context, not replacement choices. Overview/report displays explicitly label diagnostics as not selectable.
 
+BM25 retention uses a soft maximum and includes all ties at the score cutoff, subject to explicit safety caps. A first-place tie is ambiguous even with maximum 1; no replacement is preferred. `retrieval_limits` records reached guards and is preserved in JSON/reporting; partial retrieval cannot qualify for automatic BM25 acceptance. Review offers a searchable browser for large tied sets. See [BM25 tie and coverage details](/snomed-post-processing/workflows/snogit-bm25.md).
+
 JSON serialization preserves this separation. BM25 fallback preserves diagnostic historical/ancestor context when it supplies a replacement. Regenerate suggestions after changing target settings; review and export use the generated candidates rather than adding another HDF5 validation layer. There is no legacy-file normalization or status-based selection allowlist.
 
 # Release-view blacklist modes
