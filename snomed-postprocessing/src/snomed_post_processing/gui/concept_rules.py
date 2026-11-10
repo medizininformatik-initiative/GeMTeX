@@ -19,6 +19,10 @@ from .sidebar import GuiInputs
 
 
 ACTION_LABELS = {"clear_id": "Remove ID only", "replace": "Replace with concept"}
+POLICY_OVERRIDE_HELP = (
+    "Allow replacements outside the inclusion list or on an exclusion list. Targets must exist and be active. "
+    "Does not override existing review decisions. No effect for Remove ID only."
+)
 
 
 def _file_signature(source):
@@ -110,11 +114,16 @@ def _render_concept_rules_form(inputs: GuiInputs) -> None:
             key=f"concept_rules_editor_{st.session_state.get('concept_rules_editor_revision', 0)}",
             num_rows="dynamic", hide_index=True, width="stretch",
             column_config={
-                "enabled": st.column_config.CheckboxColumn("Enabled", default=True, required=True),
+                "enabled": st.column_config.CheckboxColumn(
+                    "Enabled", default=True, required=True,
+                    help="Include this rule when applying rules to review.",
+                ),
                 "rule_id": st.column_config.TextColumn(
                     "Rule ID", required=True, help="Unique, stable identifier for this rule; not a SNOMED concept ID.",
                 ),
-                "name": st.column_config.TextColumn("Name"),
+                "name": st.column_config.TextColumn(
+                    "Name", help="Optional descriptive label; matching uses Source SCTID, not this name.",
+                ),
                 "source_code": st.column_config.TextColumn(
                     "Source SCTID", required=True, help="Match this concept ID on the original annotation, before any changes.",
                 ),
@@ -127,9 +136,13 @@ def _render_concept_rules_form(inputs: GuiInputs) -> None:
                 ),
                 "override_policy": st.column_config.CheckboxColumn(
                     "Override policy", default=True, required=True,
-                    help="Allow this rule to bypass inclusion/exclusion restrictions. Replacement targets must still exist and be active.",
+                    help=POLICY_OVERRIDE_HELP,
                 ),
             },
+        )
+        st.caption(
+            "Override policy bypasses list restrictions—not existing review decisions "
+            "or target existence/activity checks."
         )
         st.caption("Apply stages review decisions; only export/upload changes CAS files. Manual decisions are protected.")
         apply = st.form_submit_button(
@@ -222,9 +235,18 @@ def render_rule_review(inputs: GuiInputs) -> tuple[list[dict[str, Any]], bool]:
             pd.DataFrame(_decision_rows(decisions)), hide_index=True, width="stretch",
             key=f"concept_rule_review_editor_{st.session_state.get('concept_rule_review_revision', 0)}",
             disabled=[key for key in _decision_rows(decisions)[0] if key != "Apply"],
-            column_config={"Apply": st.column_config.CheckboxColumn(
-                "Apply", help="Include this rule action in the next export/upload. Uncheck to leave the annotation unchanged.",
-            )},
+            column_config={
+                "Apply": st.column_config.CheckboxColumn(
+                    "Apply", help="Include this staged action in export/upload; no project changes happen now. Uncheck to leave the annotation unchanged.",
+                ),
+                "Override policy": st.column_config.CheckboxColumn(
+                    "Override policy", help=POLICY_OVERRIDE_HELP,
+                ),
+                "Policy actually overridden": st.column_config.CheckboxColumn(
+                    "Policy actually overridden",
+                    help="Checked only when this replacement needed the permitted exception to list restrictions. Permission alone does not mean it was used.",
+                ),
+            },
         )
         save = st.form_submit_button(
             "Save rule decisions", help="Save Apply-checkbox choices for these rule decisions; CAS files are unchanged.",

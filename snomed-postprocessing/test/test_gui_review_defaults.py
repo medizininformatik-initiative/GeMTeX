@@ -55,6 +55,17 @@ class GuiReviewDefaultsTest(unittest.TestCase):
         self.assertFalse(any("Association type meanings" in item.value for item in self.app.markdown))
         self.assertFalse(any("explanations are listed below" in item.value for item in self.app.caption))
 
+    def test_snogit_defaults_on_and_can_be_disabled_persistently(self):
+        label = "Use SNOGIT/interface terms for BM25 candidates"
+        self.assertTrue(self.widget("checkbox", label).value)
+        advanced = next(item for item in self.app.expander if item.label == "Advanced suggestion settings")
+        self.assertTrue(advanced.proto.expanded)
+        self.widget("checkbox", label).uncheck()
+        self.widget("button", "Apply suggestion settings").click().run()
+        self.app.run()
+        self.assertFalse(self.app.exception, str(self.app.exception))
+        self.assertFalse(self.widget("checkbox", label).value)
+
     def test_no_human_is_not_selected_by_default(self):
         self.assertEqual(
             self.widget("text_area", "Ignore faulty target annotations overlapping these types").value,

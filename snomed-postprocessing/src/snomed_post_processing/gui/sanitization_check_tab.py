@@ -208,7 +208,7 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
         selected_snogit_source_from_dir = None
         selected_snogit_members = []
 
-        with st.expander("Advanced suggestion settings"):
+        with st.expander("Advanced suggestion settings", expanded=True):
             st.markdown("#### Historical associations")
             sanitization_association_types = st.multiselect(
                 "Allowed historical association types",
@@ -271,7 +271,7 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
             st.markdown("#### Optional SNOGIT/interface terms")
             use_snogit_bm25 = st.checkbox(
                 "Use SNOGIT/interface terms for BM25 candidates",
-                value=False,
+                value=True,
                 help=(
                     "Use a processed SNOGIT cache if available. This setting is used only when Semantic BM25 fallback is enabled. "
                     "If no cache is available, create one from a SNOGIT ZIP or .dat file first; suggestion generation starts only after you explicitly run it with a cache."

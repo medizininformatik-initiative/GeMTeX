@@ -1,5 +1,6 @@
 """Concept-rule form and rule-only review, without network or CAS write actions."""
 import dataclasses
+import json
 import unittest
 
 from streamlit.testing.v1 import AppTest
@@ -106,6 +107,27 @@ class GuiConceptRulesTest(unittest.TestCase):
         self.assertEqual(self.app.session_state["concept_rule_decisions"], [])
         self.assertFalse(any(item.value == "Explicit concept rule decisions" for item in self.app.subheader))
         self.assertTrue(self.widget("button", "Clear all pending rule decisions").disabled)
+        self.assertEqual(self.fixture.project.read_bytes(), source)
+
+    def test_override_help_distinguishes_permission_use_and_review_protection(self):
+        rules_columns = json.loads(self.app.dataframe[0].proto.columns)
+        self.assertTrue(rules_columns["enabled"]["help"])
+        self.assertIn("Optional", rules_columns["name"]["help"])
+        override_help = rules_columns["override_policy"]["help"]
+        self.assertIn("Does not override existing review decisions", override_help)
+        self.assertIn("No effect for Remove ID only", override_help)
+        self.assertTrue(any("not existing review decisions" in item.value for item in self.app.caption))
+        source = self.fixture.project.read_bytes()
+        self.apply_rules()
+        review = next(item for item in self.app.dataframe if "Policy actually overridden" in item.value.columns)
+        review_columns = json.loads(review.proto.columns)
+        self.assertEqual(review_columns["Override policy"]["help"], override_help)
+        self.assertIn("Permission alone", review_columns["Policy actually overridden"]["help"])
+        self.assertIn("staged action", review_columns["Apply"]["help"])
+        self.assertTrue(review_columns["Override policy"]["disabled"])
+        self.assertTrue(review_columns["Policy actually overridden"]["disabled"])
+        self.assertTrue(review.value["Override policy"].all())
+        self.assertEqual(set(review.value["Policy actually overridden"]), {False, True})
         self.assertEqual(self.fixture.project.read_bytes(), source)
 
     def test_upload_loads_configuration_once_without_applying_rules(self):

@@ -62,10 +62,15 @@ Output:
 
 Suggestion generation supports two target views and several fallback levels:
 
-| Target view | Candidate rule |
-|---|---|
-| policy | active AND in inclusion list AND not in exclusion list |
-| release | active in the selected release; optional exclusion-list rules |
+| Replacement requirement | Policy rules (`policy`) | Active release (`release`) |
+|---|---|---|
+| Concept exists and is active | Required | Required |
+| Inclusion-list membership | Required | Not required |
+| Exclusion-list enforcement | Required | Optional |
+
+Both modes use the same materialized concept state in the loaded HDF5. For RF2 Full input, `--policy-date` determines that state, not just inclusion-list membership; switching modes does not load newer concepts from the source release. If omitted, the date defaults to the RF2 release date. RF2 Snapshot input only supports its snapshot date.
+
+Policy rules restrict replacement targets to the stored inclusion list, which may contain selected subtrees. Active release also permits active concepts outside those subtrees. The policy check itself still uses the stored inclusion/exclusion lists in either mode.
 
 | Suggestion source | Purpose |
 |---|---|

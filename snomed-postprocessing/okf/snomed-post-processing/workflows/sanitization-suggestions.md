@@ -76,6 +76,8 @@ In a new GUI session:
 
 - Historical ancestor fallback and semantic BM25 fallback are enabled.
 - BM25 also considers exclusion-list findings. This does not relax target-candidate validity gates.
+- **Advanced suggestion settings** opens by default so SNOGIT cache selection is visible.
+- **Use SNOGIT/interface terms for BM25 candidates** is selected by default. A compatible processed cache must be selected or created before generating suggestions with SNOGIT enabled. An explicit opt-out persists across reruns; CLI/API defaults are unchanged.
 - All supported historical association types except `MOVED_FROM` and `REFERS_TO` are selected.
 - Minimum lexical overlap ratio is `0.0`; minimum BM25 score remains `1.5`.
 - Association meanings appear inline in the selection options, not in a separate explanation section.
