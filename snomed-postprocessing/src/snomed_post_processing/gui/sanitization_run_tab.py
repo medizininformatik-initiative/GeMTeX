@@ -36,6 +36,7 @@ from snomed_post_processing.sanitization.conditions import (
 from snomed_post_processing.pipelines import apply_decisions_and_upload_to_inception
 from snomed_post_processing.pipelines.sanitization_run import run_sanitization
 from snomed_post_processing.uima_processing.io import (
+    _annotator_name_from_cas_path,
     _load_cas_from_zip_member,
     _load_typesystem_from_zip,
     _read_project,
@@ -45,6 +46,8 @@ from snomed_post_processing.uima_processing.io import (
 from .file_sources import render_file_source_selector
 from .files import save_uploaded_file
 from .sidebar import GuiInputs
+from .annotator_scope import sync_annotator_scope, reset_generic_review_for_new_suggestions
+from ..uima_processing.scope import annotator_in_scope, normalize_annotators, scope_covers
 from .concept_rules import render_rule_review, protect_manual_decisions
 from snomed_post_processing.sanitization.concept_rules import decision_key
 
@@ -60,11 +63,24 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
     st.subheader("Sources")
     _render_suggestion_source_selector(inputs)
     _render_decision_source_selector(inputs)
+    inputs.annotators = sync_annotator_scope(inputs.annotators)
+    if st.session_state.get("sanitization_review_reset_message"):
+        st.warning(st.session_state.pop("sanitization_review_reset_message"))
 
     if st.session_state.get("sanitization_last_load_message"):
         st.success(st.session_state.pop("sanitization_last_load_message"))
 
     suggestions = st.session_state.get("sanitization_suggestions") or []
+    try:
+        _validate_restored_suggestion_indices(list(st.session_state.get("sanitization_restored_decisions_by_index", {}).values()), suggestions)
+    except ValueError as exc:
+        st.error(str(exc))
+        st.button("Run sanitization", disabled=True)
+        return
+    produced_for = (st.session_state.get("sanitization_suggestions_metadata") or {}).get("annotators", ())
+    if not scope_covers(produced_for, inputs.annotators):
+        st.warning("Suggestions were generated for a narrower annotator scope. Regenerate suggestions or load matching suggestions JSON.")
+        suggestions = []
     _prepare_automatic_condition_source(suggestions)
     rule_decisions, rule_invalid = render_rule_review(inputs)
     rule_decisions, rule_conflicts = protect_manual_decisions(rule_decisions)
@@ -86,7 +102,8 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
         st.button("Run sanitization", type="primary", disabled=True)
         return
 
-    st.caption(f"Loaded {len(suggestions)} generic suggestion(s) and {len(rule_decisions)} explicit concept-rule decision(s).")
+    in_scope_count = sum(annotator_in_scope(item.finding.annotator, inputs.annotators) for item in suggestions)
+    st.caption(f"Loaded {in_scope_count} in-scope generic suggestion(s) and {len(rule_decisions)} explicit concept-rule decision(s).")
     json_path = st.session_state.get("sanitization_suggestions_json_path")
     if json_path:
         st.caption(f"Suggestions JSON: `{json_path}`")
@@ -94,12 +111,12 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
     if report_path:
         st.caption(f"Suggestion report: `{report_path}`")
 
-    document_texts = _project_document_text_lookup(st.session_state.get("zip_file"))
+    document_texts = _project_document_text_lookup(st.session_state.get("zip_file"), annotators=inputs.annotators)
     metadata_contexts = _metadata_finding_context_lookup(
         st.session_state.get("sanitization_suggestions_metadata") or {}
     )
-    _log_missing_context_documents(suggestions, document_texts, metadata_contexts)
-    rows = _suggestions_to_review_rows(suggestions, document_texts, metadata_contexts)
+    _log_missing_context_documents([item for item in suggestions if annotator_in_scope(item.finding.annotator, inputs.annotators)], document_texts, metadata_contexts)
+    rows = _suggestions_to_review_rows(suggestions, document_texts, metadata_contexts, annotators=inputs.annotators)
     # Preserve original suggestion indices; explicit rules reserve their annotations
     # even when deselected, rather than exposing an unrelated fallback candidate.
     rule_keys = {decision_key(item) for item in rule_decisions}
@@ -135,6 +152,7 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
     st.session_state["sanitization_review_decisions"] = reviewed_decisions
 
     decisions_metadata = _decisions_metadata(rows)
+    decisions_metadata["annotators"] = list(inputs.annotators)
     decisions_metadata["concept_rule_scope"] = st.session_state.get("concept_rule_scope", {})
     decisions_metadata["concept_rules"] = (
         [dataclasses.asdict(rule) for rule in st.session_state["concept_rules"]]
@@ -179,6 +197,7 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
         manual_review_layer=manual_review_layer,
         id_prefix=inputs.id_prefix,
         id_feature=inputs.id_feature,
+        annotators=inputs.annotators,
     )
 
 
@@ -224,6 +243,7 @@ def _render_suggestion_source_selector(inputs: GuiInputs) -> None:
         suggestions, metadata = read_sanitization_suggestions_json_with_metadata(
             suggestions_selection.value
         )
+        reset_generic_review_for_new_suggestions(suggestions)
         st.session_state["sanitization_suggestions"] = suggestions
         st.session_state["sanitization_suggestions_metadata"] = metadata
         st.session_state["sanitization_suggestions_report_path"] = None
@@ -260,13 +280,16 @@ def _render_decision_source_selector(inputs: GuiInputs) -> None:
         help="Load a previously saved review state after loading/generating matching suggestions.",
     )
     if decisions_selection.value is None:
+        st.session_state.pop("loaded_sanitization_decisions_upload_key", None)
         return
     upload_key = _selected_file_key(decisions_selection.value)
     if st.session_state.get("loaded_sanitization_decisions_upload_key") == upload_key:
         return
     try:
         decisions, metadata = read_sanitization_decisions_json(decisions_selection.value)
-        _restore_decision_state(decisions, metadata)
+        if not scope_covers(metadata.get("annotators", ()), inputs.annotators):
+            raise ValueError("Reviewed decisions were saved for a narrower annotator scope. Select matching annotators in tab 1 before loading them.")
+        _restore_decision_state(decisions, metadata, annotators=inputs.annotators)
         st.session_state["loaded_sanitization_decisions_upload_key"] = upload_key
         _bump_review_state_revision()
         st.session_state["sanitization_last_load_message"] = (
@@ -315,7 +338,11 @@ def _render_sanitization_run_controls(
     manual_review_layer: str = "webanno.custom.ManualReview",
     id_prefix: str = "http://snomed.info/id/",
     id_feature: str = "id",
+    annotators=(),
 ) -> None:
+    if any(not annotator_in_scope(item.get("annotator", ""), annotators) for item in reviewed_decisions):
+        st.error("Review contains decisions outside the current annotator scope. Reload or regenerate matching decisions.")
+        return
     st.subheader("Run")
     project_source = st.session_state.get("zip_file")
     run_disabled = project_source is None or selected_count == 0 or has_invalid_selected_rows
@@ -355,6 +382,7 @@ def _render_sanitization_run_controls(
         manual_review_layer=manual_review_layer,
         id_prefix=id_prefix,
         id_feature=id_feature,
+        annotators=annotators,
     )
 
     if not run_clicked:
@@ -374,6 +402,7 @@ def _render_sanitization_run_controls(
                 manual_review_layer=manual_review_layer.strip() or "webanno.custom.ManualReview",
                 id_prefix=id_prefix,
                 id_feature=id_feature,
+                annotator_filter=set(annotators) or None,
             )
             st.write("Preparing sanitized project ZIP for download...")
             status.update(
@@ -407,7 +436,11 @@ def _render_inception_apply_upload_controls(
     manual_review_layer: str,
     id_prefix: str,
     id_feature: str,
+    annotators=(),
 ) -> None:
+    if any(not annotator_in_scope(item.get("annotator", ""), annotators) for item in reviewed_decisions):
+        st.error("Deployment contains decisions outside the current annotator scope.")
+        return
     st.subheader("Apply decisions and upload to INCEpTION")
     st.caption(
         "One-step deployment workflow: original project ZIP + reviewed decisions → schema shell ZIP "
@@ -506,6 +539,7 @@ def _render_inception_apply_upload_controls(
                 check_connection=bool(check_connection),
                 verify_tls=not no_verify_tls,
                 force=force,
+                annotator_filter=tuple(annotators),
             )
             status.update(label="INCEpTION deployment pipeline finished.", state="complete", expanded=False)
         issue_count = sum(artifact.remote_upload_issue_count for artifact in result.artifacts_result.artifacts)
@@ -576,11 +610,11 @@ def _selected_file_name(selected_file: Any) -> str:
     return getattr(selected_file, "name", "")
 
 
-def _project_document_text_lookup(project_source: Any) -> dict[str, str]:
+def _project_document_text_lookup(project_source: Any, *, annotators=()) -> dict[str, str]:
     if project_source is None:
         logger.debug("Context extraction skipped: no project ZIP selected.")
         return {}
-    upload_key = _selected_file_key(project_source)
+    upload_key = (_selected_file_key(project_source), normalize_annotators(annotators))
     cache_key = "sanitization_project_text_lookup_key"
     if st.session_state.get(cache_key) == upload_key:
         return st.session_state.get("sanitization_project_text_lookup", {})
@@ -591,7 +625,7 @@ def _project_document_text_lookup(project_source: Any) -> dict[str, str]:
         else:
             data = project_source.getvalue()
             source_name = getattr(project_source, "name", None)
-        lookup = _extract_project_document_texts(data, source_name)
+        lookup = _extract_project_document_texts(data, source_name, annotators=annotators)
     except Exception:
         logger.exception("Could not extract review context from the selected project ZIP.")
         lookup = {}
@@ -605,7 +639,8 @@ def _project_document_text_lookup(project_source: Any) -> dict[str, str]:
     return lookup
 
 
-def _extract_project_document_texts(project_zip_bytes: bytes, file_name: str | None) -> dict[str, str]:
+def _extract_project_document_texts(project_zip_bytes: bytes, file_name: str | None, *, annotators=()) -> dict[str, str]:
+    annotators = normalize_annotators(annotators)
     lookup: dict[str, str] = {}
     documents_seen = documents_loaded = cas_failures = empty_texts = 0
     with zipfile.ZipFile(io.BytesIO(project_zip_bytes)) as zip_file:
@@ -616,6 +651,10 @@ def _extract_project_document_texts(project_zip_bytes: bytes, file_name: str | N
             file_name=file_name,
             allowed_extensions=[".json", ".xmi"],
         ):
+            cas_paths = [path for path in cas_paths if annotator_in_scope(
+                _annotator_name_from_cas_path(path, fallback_flat_layout=project_documents is None), annotators)]
+            if not cas_paths:
+                continue
             documents_seen += 1
             for cas_path in cas_paths:
                 stage = "typesystem loading"
@@ -1011,7 +1050,9 @@ def _render_automatic_conditions(suggestions, rows, rule_decisions) -> None:
             "Apply Conditions",
             help="Stage matching inclusion-list selections, preserving manual choices. Earlier selections are not cleared; CAS files are unchanged.",
         )
-    assessments = bm25_assessments(suggestions, min_dominance, min_relative_lead)
+    visible_indices = sorted(int(row["#"]) - 1 for row in rows)
+    assessments = {visible_indices[index]: item for index, item in bm25_assessments(
+        [suggestions[index] for index in visible_indices], min_dominance, min_relative_lead).items()}
     if assessments:
         with st.expander("BM25 score-gap assessment", expanded=False):
             st.caption("Qualifies indicates the score/source condition only, before manual-choice protection. BM25 selection is opt-in.")
@@ -1425,7 +1466,25 @@ def _decisions_metadata(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _restore_decision_state(decisions: list[dict[str, Any]], metadata: dict[str, Any]) -> None:
+def _validate_restored_suggestion_indices(decisions, suggestions):
+    if not suggestions:
+        return
+    for item in decisions:
+        if "suggestion_index" not in item:
+            continue
+        index = int(item["suggestion_index"])
+        if not 0 <= index < len(suggestions):
+            raise ValueError("Reviewed decisions do not match these suggestions. Load their matching suggestions JSON before restoring review.")
+        finding = suggestions[index].finding
+        identity = (finding.document, finding.annotator, finding.layer, tuple(finding.offset), finding.code or "")
+        if decision_key(item) != identity:
+            raise ValueError("Reviewed decisions do not match these suggestions. Load their matching suggestions JSON before restoring review.")
+
+
+def _restore_decision_state(decisions: list[dict[str, Any]], metadata: dict[str, Any], *, annotators=()) -> None:
+    annotators = normalize_annotators(annotators)
+    decisions = [item for item in decisions if annotator_in_scope(item.get("annotator", ""), annotators)]
+    _validate_restored_suggestion_indices(decisions, st.session_state.get("sanitization_suggestions") or [])
     from snomed_post_processing.sanitization.concept_rules import ConceptRule, validate_rules
     documents = {item["document"] for item in decisions} | {
         item["document"] for item in st.session_state.get("sanitization_review_decisions", [])
@@ -1450,7 +1509,8 @@ def _restore_decision_state(decisions: list[dict[str, Any]], metadata: dict[str,
         int(item["suggestion_index"]): item for item in decisions
         if "suggestion_index" in item and item.get("automatic_condition")
     }
-    st.session_state["sanitization_automatic_reviewed_documents"] = set(metadata.get("automatic_reviewed_documents", []))
+    included_documents = {item.get("document") for item in decisions}
+    st.session_state["sanitization_automatic_reviewed_documents"] = set(metadata.get("automatic_reviewed_documents", [])) & included_documents
     st.session_state["sanitization_conditions_source"] = _condition_source(st.session_state.get("sanitization_suggestions") or [])
     st.session_state["sanitization_review_decisions"] = decisions
     st.session_state["sanitization_restored_decisions_by_index"] = {
@@ -1480,7 +1540,8 @@ def _restore_decision_state(decisions: list[dict[str, Any]], metadata: dict[str,
         st.session_state["sanitization_pending_id_settings"] = pending_ids
     reviewed_documents = metadata.get("reviewed_documents", []) if isinstance(metadata, dict) else []
     for document in reviewed_documents:
-        st.session_state[_document_reviewed_key(str(document))] = True
+        if document in included_documents:
+            st.session_state[_document_reviewed_key(str(document))] = True
     st.session_state["sanitization_decisions_metadata"] = metadata
 
 
@@ -1491,6 +1552,7 @@ def _render_suggestion_settings(metadata: dict[str, Any]) -> None:
         return
     st.json(
         {
+            "annotators": metadata.get("annotators", []),
             "hdf5_file_name": metadata.get("hdf5_file_name"),
             "hdf5_release_date": metadata.get("hdf5_release_date"),
             "hdf5_policy_date": metadata.get("hdf5_policy_date"),
@@ -1506,10 +1568,13 @@ def _suggestions_to_review_rows(
     suggestions: list[Any],
     document_texts: dict[str, str] | None = None,
     metadata_contexts: dict[tuple[str, str, str, tuple[int, int]], str] | None = None,
+    *, annotators=(),
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     restored_by_index = st.session_state.get("sanitization_restored_decisions_by_index", {})
     for idx, suggestion in enumerate(suggestions):
+        if not annotator_in_scope(suggestion.finding.annotator, annotators):
+            continue
         row_number = idx + 1
         restored_decision = restored_by_index.get(idx, {})
         replacement_options, replacement_hints = _replacement_options_and_hints(suggestion)

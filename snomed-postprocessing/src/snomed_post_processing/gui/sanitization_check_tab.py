@@ -12,7 +12,7 @@ import h5py
 import pandas as pd
 import streamlit as st
 
-from snomed_post_processing.findings_io import read_critical_findings_json
+from snomed_post_processing.findings_io import read_critical_findings_json_with_metadata
 from snomed_post_processing.terminology import policy_label
 from snomed_post_processing.hdf5_handling.metadata import inspect_hdf5_metadata
 from snomed_post_processing.hdf5_handling.policy import (
@@ -31,6 +31,8 @@ from snomed_post_processing.sanitization import (
 )
 
 from .downloads import download_json_report, download_md_report
+from .annotator_scope import sync_annotator_scope, reset_generic_review_for_new_suggestions
+from ..uima_processing.scope import annotator_in_scope, scope_covers
 from .file_sources import list_server_files, render_file_source_selector
 from .files import save_uploaded_file
 from .sanitization_run_tab import _finding_context_label, _project_document_text_lookup
@@ -73,8 +75,8 @@ def _uses_custom_blacklist(release_blacklist_mode: str) -> bool:
     return release_blacklist_mode in {"custom", "embedded+custom"}
 
 
-def _suggestion_context_metadata(suggestions: list[Any]) -> list[dict[str, Any]]:
-    document_texts = _project_document_text_lookup(st.session_state.get("zip_file"))
+def _suggestion_context_metadata(suggestions: list[Any], *, annotators=()) -> list[dict[str, Any]]:
+    document_texts = _project_document_text_lookup(st.session_state.get("zip_file"), annotators=annotators)
     if not document_texts:
         return []
     contexts = []
@@ -122,6 +124,7 @@ def _resolve_custom_blacklist_indices(
 
 
 def render_sanitization_check_tab(inputs: GuiInputs) -> None:
+    inputs.annotators = sync_annotator_scope(inputs.annotators)
     if inputs.target_view == "release":
         st.info(
             "Release-view normalization suggestions are enabled. Replacement candidates only need to be active "
@@ -133,6 +136,9 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
         "policy/view date used for checking; release suggestions target active release concepts."
     )
     session_findings_available = st.session_state.get("critical_findings") is not None
+    if session_findings_available and not scope_covers(st.session_state.get("critical_findings_annotators", ()), inputs.annotators):
+        st.warning("Current findings were checked for a narrower annotator scope. Rerun the policy check or load matching findings JSON.")
+        session_findings_available = False
     uploaded_findings_file = None
     if session_findings_available:
         findings_source = st.segmented_control(
@@ -492,6 +498,8 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
     if _uses_custom_blacklist(inputs.release_blacklist_mode) and inputs.runtime_blacklist_file is None:
         st.warning("Custom exclusion-list mode is selected. Select or upload a custom exclusion-list rule file before generating suggestions.")
 
+    if any(not item.get("concept_rule") for item in st.session_state.get("sanitization_review_decisions", [])):
+        st.caption("Generating different suggestions resets generic review choices. Download reviewed decisions first if you need to retain them.")
     if st.button(
         "Generate sanitization suggestions",
         help="Generate replacement proposals using the current settings. Review and select actions separately; no CAS files change.",
@@ -530,7 +538,10 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                     findings = st.session_state["critical_findings"]
                 else:
                     findings_path = save_uploaded_file(uploaded_findings_file, ".json")
-                    findings = read_critical_findings_json(findings_path)
+                    findings, findings_metadata = read_critical_findings_json_with_metadata(findings_path)
+                    if not scope_covers(findings_metadata.get("annotators", ()), inputs.annotators):
+                        raise ValueError("Findings JSON was produced for a narrower annotator scope. Recheck with the requested scope.")
+                findings = [finding for finding in findings if annotator_in_scope(finding.annotator, inputs.annotators)]
 
                 st.write("Creating resolver and loading SNOMED lookup data...")
                 resolver = SanitizationResolver(
@@ -661,13 +672,14 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
             }
             sanitization_metadata = {
                 "source": "streamlit_sanitization_check_tab",
+                "annotators": list(inputs.annotators),
                 "hdf5_file_name": getattr(inputs.hdf5_file, "name", None),
                 "hdf5_release_date": hdf5_summary.concepts_release_date,
                 "hdf5_policy_date": hdf5_summary.concepts_policy_date,
                 "hdf5_rf2_view": hdf5_summary.concepts_rf2_view,
                 "finding_count": len(findings),
                 "suggestion_count": len(suggestions),
-                "finding_contexts": _suggestion_context_metadata(suggestions),
+                "finding_contexts": _suggestion_context_metadata(suggestions, annotators=inputs.annotators),
                 "settings": sanitization_settings,
             }
             with output_sanitization_md.open("w", encoding="utf-8") as sanitization_fi:
@@ -688,6 +700,7 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                 expanded=False,
             )
 
+            reset_generic_review_for_new_suggestions(suggestions)
             st.session_state["sanitization_suggestions"] = suggestions
             st.session_state["sanitization_suggestions_metadata"] = sanitization_metadata
             st.session_state["sanitization_suggestions_report_path"] = str(output_sanitization_md)

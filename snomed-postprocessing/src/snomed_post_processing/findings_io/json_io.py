@@ -43,6 +43,10 @@ def write_critical_findings_json(
 
 
 def read_critical_findings_json(input_: Union[str, Path, TextIO]) -> list[CriticalFinding]:
+    return read_critical_findings_json_with_metadata(input_)[0]
+
+
+def read_critical_findings_json_with_metadata(input_: Union[str, Path, TextIO]) -> tuple[list[CriticalFinding], dict[str, Any]]:
     if hasattr(input_, "read"):
         payload = json.load(input_)
     else:
@@ -59,7 +63,10 @@ def read_critical_findings_json(input_: Union[str, Path, TextIO]) -> list[Critic
     findings = payload.get("findings")
     if not isinstance(findings, list):
         raise ValueError("Critical findings JSON payload must contain a findings list.")
-    return [critical_finding_from_dict(finding) for finding in findings]
+    metadata = payload.get("metadata") or {}
+    if not isinstance(metadata, dict):
+        raise ValueError("Critical findings metadata must be an object.")
+    return [critical_finding_from_dict(finding) for finding in findings], metadata
 
 
 def critical_findings_json_text(

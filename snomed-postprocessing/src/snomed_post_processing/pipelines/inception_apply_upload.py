@@ -6,7 +6,9 @@ import dataclasses
 import datetime
 import json
 import pathlib
-from typing import Optional
+from typing import Iterable, Optional
+
+from ..uima_processing.scope import annotator_in_scope, normalize_annotators
 
 from ..sanitization.decisions_json import read_sanitization_decisions_json
 from .inception_deployment import InceptionDeploymentResult, deploy_inception_sanitized_project
@@ -71,6 +73,7 @@ def apply_decisions_and_upload_to_inception(
     check_connection: bool = False,
     verify_tls: bool = True,
     force: bool = False,
+    annotator_filter: Optional[Iterable[str]] = None,
 ) -> InceptionApplyUploadResult:
     """Apply reviewed decisions to a corpus and prepare/deploy it to INCEpTION.
 
@@ -100,6 +103,9 @@ def apply_decisions_and_upload_to_inception(
     pipeline_report_path = pathlib.Path(pipeline_report or output_dir / DEFAULT_PIPELINE_REPORT_NAME)
 
     decisions, decisions_metadata = read_sanitization_decisions_json(decisions_path)
+    annotators = normalize_annotators(decisions_metadata.get("annotators", ()) if annotator_filter is None else annotator_filter)
+    decisions = [item for item in decisions if annotator_in_scope(item.get("annotator", ""), annotators)]
+    decisions_metadata["annotators"] = list(annotators)
 
     shell_result = build_inception_shell_project(
         source_project=source_project,
@@ -123,6 +129,7 @@ def apply_decisions_and_upload_to_inception(
         manual_review_layer=manual_review_layer,
         force=force,
         repair_for_remote_upload=repair_for_remote_upload,
+        annotator_filter=annotators,
     )
     deployment_result = deploy_inception_sanitized_project(
         shell_project=shell_result.output_project,

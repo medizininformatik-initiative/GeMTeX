@@ -319,7 +319,7 @@ def build_inception_upload_artifacts_cli(
     no_repair_for_remote_upload: bool,
 ):
     """Build offline flattened sanitized CAS upload artifacts."""
-    decisions, _ = read_sanitization_decisions_json(decisions_path)
+    decisions, metadata = read_sanitization_decisions_json(decisions_path)
     result = build_inception_upload_artifacts(
         source_project=source_project,
         decisions=decisions,
@@ -329,6 +329,7 @@ def build_inception_upload_artifacts_cli(
         manual_review_layer=manual_review_layer,
         force=force,
         repair_for_remote_upload=not no_repair_for_remote_upload,
+        annotator_filter=metadata.get("annotators"),
     )
     click.echo(f"Artifacts written to: {result.output_dir.resolve()}")
     click.echo(f"Report written to: {result.report_path.resolve()}")

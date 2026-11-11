@@ -365,6 +365,8 @@ uv run deploy-inception-sanitized-project \
 
 ## GUI usage
 
+**The annotator selection in tab 1 applies throughout the pipeline**, including concept rules, suggestions, review and export/upload—not just the policy check. Empty means all annotators. Excluded annotators' CAS stays unchanged in a local sanitized ZIP and is omitted from upload artifacts. Saved artifact metadata carries the scope. Changing it discards excluded pending choices and resets review progress; narrower-scope artifacts require rechecking/regeneration before broadening. Save reviewed decisions before replacing suggestions, which resets generic index-based choices to prevent applying them to different annotations.
+
 Start the Streamlit app locally:
 
 ```bash

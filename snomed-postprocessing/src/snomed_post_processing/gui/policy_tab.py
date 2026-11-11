@@ -14,6 +14,8 @@ from .downloads import download_json_report, download_md_report
 from .files import save_uploaded_file
 from .report_generation import generate_report
 from .sidebar import GuiInputs
+from .annotator_scope import sync_annotator_scope
+from ..uima_processing.scope import normalize_annotators
 
 
 def render_policy_tab(inputs: GuiInputs) -> None:
@@ -31,7 +33,7 @@ def render_policy_tab(inputs: GuiInputs) -> None:
             "inclusion list or are in the exclusion list for the materialized policy/view "
             "date stored in the uploaded HDF5."
         )
-    annotator_selection = None
+    annotator_selection = list(normalize_annotators(getattr(inputs, "annotators", ())))
     zip_temp_path = None
 
     if zip_file := st.session_state.get("zip_file"):
@@ -50,16 +52,22 @@ def render_policy_tab(inputs: GuiInputs) -> None:
                     st.session_state["zip_file"] = None
                     st.rerun()
                 elif annotators:
+                    labels = {name.lower(): name for name in annotators}
                     annotator_selection = st.multiselect(
                         "Select annotators to include",
-                        options=annotators,
-                        default=[],
-                        help="Leave empty to include all annotators.",
+                        options=sorted(set(labels) | set(annotator_selection)),
+                        format_func=lambda name: labels.get(name, name),
+                        default=annotator_selection,
+                        key="processing_annotators_selector",
+                        help="Shared scope for all tabs, including concept rules and export/upload. Empty means all. Changing scope discards out-of-scope decisions and resets review progress.",
                     )
                 else:
                     st.info("No annotators found in ZIP.")
             except Exception as exc:
                 st.warning(f"Could not load annotators: {exc}")
+
+    inputs.annotators = sync_annotator_scope(annotator_selection)
+    st.caption("Processing scope for all tabs: " + (", ".join(inputs.annotators) if inputs.annotators else "all annotators"))
 
     if st.button(
         "Run policy check",
@@ -76,11 +84,7 @@ def render_policy_tab(inputs: GuiInputs) -> None:
                     inputs.hdf5_temp_path = save_uploaded_file(inputs.hdf5_file, ".hdf5")
 
                 st.write("Preparing annotator and annotation-layer filters...")
-                annotator_filter = (
-                    [name.lower() for name in annotator_selection]
-                    if annotator_selection
-                    else None
-                )
+                annotator_filter = list(inputs.annotators) or None
                 annotation_types = [
                     line.strip()
                     for line in inputs.annotation_types_text.splitlines()
@@ -123,11 +127,13 @@ def render_policy_tab(inputs: GuiInputs) -> None:
             findings_json_text = output_path_findings_json.read_text(encoding="utf-8")
 
             st.session_state["critical_findings"] = critical_findings
+            st.session_state["critical_findings_annotators"] = inputs.annotators
             st.session_state["critical_findings_json_text"] = findings_json_text
             st.session_state["critical_findings_json_name"] = output_path_findings_json.name
 
             st.session_state["policy_check_result"] = {
                 "critical_findings": critical_findings,
+                "annotators": list(inputs.annotators),
                 "critical_documents_found": erroneous_doc_count,
                 "report_folder": str(output_path_md.parent.resolve()),
                 "markdown_text": report_text,
@@ -144,13 +150,16 @@ def render_policy_tab(inputs: GuiInputs) -> None:
         except Exception as exc:
             st.error(f"Policy check failed: {exc}")
 
-    render_policy_check_result()
+    render_policy_check_result(inputs.annotators)
 
 
-def render_policy_check_result() -> None:
+def render_policy_check_result(annotators=()) -> None:
     """Render the last successful check on every rerun, including filter changes."""
     result = st.session_state.get("policy_check_result")
     if not result:
+        return
+    if normalize_annotators(result.get("annotators", ())) != normalize_annotators(annotators):
+        st.warning("Annotator scope changed. Run the policy check again before viewing or downloading its reports.")
         return
 
     st.caption("Results from the last successful policy check; changed inputs require a new check.")

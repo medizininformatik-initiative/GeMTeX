@@ -59,6 +59,10 @@ non-numeric line   -> exclude concepts by FSN semantic tag
 
 Runtime SCTID descendant blacklist rules require compact ancestor arrays in the HDF5.
 
+# Shared annotator scope
+
+Before generation, the GUI filters both session and uploaded findings using the shared annotator selection in tab 1 (empty = all). The same scope is passed to concept-rule scanning and used again for imported decisions, review and write-back. Artifact metadata records `annotators`; narrower-source findings/suggestions cannot silently cover a broadened scope. Filtering review preserves original suggestion indices, and regeneration invalidates old generic choices rather than reassigning them to different annotations. See [GUI scope semantics](/snomed-post-processing/interfaces/gui.md).
+
 # Resolver order
 
 For each finding, `SanitizationResolver.suggest` proceeds as follows:

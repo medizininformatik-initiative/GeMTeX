@@ -35,6 +35,12 @@ Precedence during application:
 manual_edit > delete > clear_id / replacement apply > keep unchanged
 ```
 
+# Annotator scope
+
+The GUI's tab-1 annotator selection governs all checks, suggestions, rules, review and exports. Saved findings/suggestions/decisions record `metadata.annotators`; imported records are filtered against current scope. Narrower-source artifacts cannot silently cover a broadened scope. Review keeps original suggestion indices after filtering, and excluded selections/automatic Undo/review progress are invalidated on scope changes. Different regenerated/loaded suggestions reset generic choices with a notice, preventing old index-based selections from targeting another annotation.
+
+Local ZIP write-back receives the annotator filter and leaves excluded CAS contents unchanged. Deployment filters both decisions and CAS extraction, so excluded annotators are not uploaded merely because their unchanged CAS is present in the source ZIP. Standalone deployment/artifact creation honors saved decision scope unless explicitly overridden by the caller. With no scope restriction, default behavior remains all annotators.
+
 # Explicit concept rules
 
 The reusable engine is `sanitization/concept_rules.py`. The GUI form is above fallback settings in **Suggest policy sanitization**:
@@ -43,7 +49,7 @@ The reusable engine is `sanitization/concept_rules.py`. The GUI form is above fa
 - Date `410671006`: replace with Date property `410672004`.
 - Both rules are enabled initially; per-rule `override_policy` defaults to true, including new rows.
 
-The form can add/edit/disable/remove rules and download/load separate concept-rules JSON (`snomed-post-processing.concept-rules`, version 1). The collapsible form uses the sidebar's target annotation layers and covers all documents and annotators; there are no separate rule-scope input boxes. Older saved scope filters are not reused for new GUI rule applications. It scans original JSONCAS/XMI annotations directly, including annotations absent from policy findings. It does not alter source CAS files or chain rules.
+The form can add/edit/disable/remove rules and download/load separate concept-rules JSON (`snomed-post-processing.concept-rules`, version 1). The collapsible form uses the sidebar's target annotation layers and covers all documents within the shared annotator selection from tab 1 (empty = all); there are no separate rule-scope input boxes. Older saved scope filters are not reused for new GUI rule applications. It scans original JSONCAS/XMI annotations directly, including annotations absent from policy findings. It does not alter source CAS files or chain rules.
 
 Workflow: **Apply rules to review → review/save choices → explicit export/upload**. The single submit saves and validates rules, scans the original annotations, and selects rule decisions without a separate preview/accept step. A summary shows ID removals, replacements, actual policy overrides, and manual conflicts. JSON uploads automatically load configuration once per file content, without applying decisions; download remains a separate button. Applying rules to review or rerunning Streamlit does not write CAS files. The review works without generic suggestions. Rule decisions reserve their annotation identities, so generic fallback choices cannot replace them. The inherited annotation-layer selection is shared by all rules. The engine API still supports document/annotator filters for programmatic callers.
 

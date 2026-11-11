@@ -7,7 +7,9 @@ import json
 import pathlib
 import re
 import zipfile
-from typing import Any, Optional
+from typing import Any, Iterable, Optional
+
+from ..uima_processing.scope import annotator_in_scope, normalize_annotators
 
 from ..uima_processing.io import (
     _annotator_name_from_cas_path,
@@ -67,6 +69,7 @@ def build_inception_upload_artifacts(
     manual_review_layer: str = "webanno.custom.ManualReview",
     force: bool = False,
     repair_for_remote_upload: bool = True,
+    annotator_filter: Optional[Iterable[str]] = None,
 ) -> InceptionUploadArtifactsResult:
     """Create flattened sanitized JSONCAS/XMI files and a deployment report.
 
@@ -78,6 +81,8 @@ def build_inception_upload_artifacts(
     so sentence-based editor rows remain usable after deployment.
     """
 
+    annotators = normalize_annotators(annotator_filter)
+    decisions = [item for item in decisions if annotator_in_scope(item.get("annotator", ""), annotators)]
     source_project = pathlib.Path(source_project)
     output_dir = pathlib.Path(output_dir)
     if not source_project.exists() or not source_project.is_file():
@@ -115,6 +120,8 @@ def build_inception_upload_artifacts(
                 annotator = _annotator_name_from_cas_path(
                     member_name, fallback_flat_layout=fallback_flat_layout
                 )
+                if not annotator_in_scope(annotator, annotators):
+                    continue
                 cas_format = _cas_format_from_member(member_name)
                 parent = str(pathlib.PurePosixPath(member_name).parent)
                 cas_typesystem = typesystem_by_parent.get(parent)

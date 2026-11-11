@@ -119,6 +119,9 @@ def run_sanitization(
 
     manual_review_layer = str(manual_review_layer or "").strip() or "webanno.custom.ManualReview"
     sanitized_project_suffix = str(sanitized_project_suffix or "").strip() or "sanitized"
+    if annotator_filter is not None:
+        annotator_filter = {str(name).lower() for name in annotator_filter}
+        decisions = [decision for decision in decisions if str(decision.get("annotator", "")).lower() in annotator_filter]
     applicable_decisions = [decision for decision in decisions if _is_applicable_decision(decision)]
     skipped_decisions = [decision for decision in decisions if not _is_applicable_decision(decision)]
     decisions_by_key = _group_decisions_by_document_annotator(applicable_decisions)

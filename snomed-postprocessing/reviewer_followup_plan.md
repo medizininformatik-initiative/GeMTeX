@@ -116,7 +116,7 @@ Vorgeschlagene Felder je Regel:
 | Aktion | Auswahl zwischen **Remove ID only** und **Replace with concept** |
 | Ziel-SCTID | Nur bei Ersetzung erforderlich; bei `clear_id` nicht zulässig |
 
-Der Geltungsbereich wird nicht über zusätzliche Eingabeboxen konfiguriert: Die Regeln übernehmen die Ziel-Annotation-Layer aus der Sidebar und berücksichtigen alle Dokumente und Annotatoren. Frühere gespeicherte Regel-Scope-Filter werden bei neuen GUI-Regelanwendungen nicht angewandt.
+Der Geltungsbereich wird nicht über zusätzliche Eingabeboxen konfiguriert: Die Regeln übernehmen die Ziel-Annotation-Layer aus der Sidebar und berücksichtigen alle Dokumente innerhalb der gemeinsamen Annotator-Auswahl aus Tab 1 (leer = alle). Frühere gespeicherte Regel-Scope-Filter werden bei neuen GUI-Regelanwendungen nicht angewandt.
 
 `literal`-Erhalt ist eine feste Eigenschaft beider Aktionen und **keine abschaltbare Option**.
 
@@ -145,7 +145,7 @@ Der Geltungsbereich wird nicht über zusätzliche Eingabeboxen konfiguriert: Die
 
 ### 6.5 Abnahmekriterien
 
-**Offline geprüft:** Regel-/Decisions-JSON-Roundtrips, JSONCAS/XMI mit unverändertem `literal` (einschließlich leer/null/fehlendem Feature), weitere Features und Offsets, gemeinsamer ZIP-/Upload-Artefaktpfad mit und ohne Reparatur, Override an/aus, aktive Ziele, Scopes, keine Regelverkettung, Mehrdeutigkeiten, GUI-Reruns, manuelle Konflikte und Clear. Die GUI übernimmt für alle Regeln die Annotation-Layer aus der Sidebar und bearbeitet alle Dokumente/Annotatoren; separate Regel-Scope-Boxen entfallen. Die Engine-API unterstützt weiterhin explizite Filter. Angenommene Regeln reservieren ihre Annotationen im Review; generische Fallback-Zeilen für dieselben Annotationen werden dort ausgeblendet. Die generische Vorschlagserzeugung selbst bleibt unabhängig.
+**Offline geprüft:** Regel-/Decisions-JSON-Roundtrips, JSONCAS/XMI mit unverändertem `literal` (einschließlich leer/null/fehlendem Feature), weitere Features und Offsets, gemeinsamer ZIP-/Upload-Artefaktpfad mit und ohne Reparatur, Override an/aus, aktive Ziele, Scopes, keine Regelverkettung, Mehrdeutigkeiten, GUI-Reruns, manuelle Konflikte und Clear. Die GUI übernimmt für alle Regeln die Annotation-Layer aus der Sidebar und bearbeitet alle Dokumente innerhalb der gemeinsamen Annotator-Auswahl aus Tab 1; separate Regel-Scope-Boxen entfallen. Die Engine-API unterstützt weiterhin explizite Filter. Angenommene Regeln reservieren ihre Annotationen im Review; generische Fallback-Zeilen für dieselben Annotationen werden dort ausgeblendet. Die generische Vorschlagserzeugung selbst bleibt unabhängig.
 
 **Offen:** Live-INCEpTION-Reimport; weitere Auto-Apply-Bedingungen aus Abschnitt 7.
 
@@ -354,6 +354,7 @@ Fehlschläge sollen den betroffenen Verarbeitungsschritt und eine verständliche
 - [x] Date `410671006` wird deterministisch durch `410672004` ersetzt.
 - [x] Beide Aktionen erhalten `literal` exakt sowie alle übrigen Features, Layer, Offsets und Annotation-Anzahl (offline JSONCAS/XMI).
 - [x] Regeln respektieren Scope und manuelle Entscheidungen; Ziel-Policy-Konflikte, Wiederholbarkeit und Clear sind geprüft.
+- [x] Gemeinsame Annotator-Auswahl gilt für Policy-Check, Findings/Suggestions, Regeln, Review und Export/Upload. Ausgeschlossene CAS bleiben im lokalen ZIP unverändert und werden nicht als Upload-Artefakte erzeugt. Scope-Wechsel verwerfen ausgeschlossene Auswahlen und setzen Review-Fortschritt/Undo zurück; enger erzeugte Artefakte dürfen einen erweiterten Scope nicht stillschweigend abdecken. Neue Suggestions setzen generische, indexgebundene Review-Auswahlen mit sichtbarem Hinweis zurück.
 - [x] `override policy` ist pro Regel standardmäßig aktiviert, editierbar und exportierbar; Tests prüfen beide Zustände und dokumentierte tatsächliche Policy-Overrides.
 - [x] Apply Conditions wählt ausschließlich inclusion-list-Quellfindings; exclusion-list-Findings bleiben auch bei eindeutigen historischen Zielen oder hohen BM25-Scores manuell.
 - [x] Mehrere unterschiedliche Ziele innerhalb der gewählten historischen Beziehungstypen werden nicht automatisch gewählt.

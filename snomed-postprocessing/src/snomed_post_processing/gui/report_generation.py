@@ -74,6 +74,7 @@ def generate_report(
         output_findings_json,
         metadata={
             "source": "streamlit-policy-check",
+            "annotators": sorted(anno_filter or []),
             "lists_path": str(lists_path),
             "annotation_types": annotation_types or [],
             "ignore_overlap_types": ignore_overlap_types or [],

@@ -87,7 +87,7 @@ Remote writes require explicit `--apply`; otherwise the deployment step validate
 
 # Flattened upload artifacts
 
-`build_inception_upload_artifacts` extracts real annotation/curation JSONCAS/XMI members from the original project, skips `INITIAL_CAS.*` and `.ser`, applies decisions with `sanitize_cas_bytes`, repairs CAS for remote upload by default, and writes one file per original document/annotator CAS.
+`build_inception_upload_artifacts` extracts real annotation/curation JSONCAS/XMI members from the original project, skips `INITIAL_CAS.*` and `.ser`, applies decisions with `sanitize_cas_bytes`, repairs CAS for remote upload by default, and writes one file per included document/annotator CAS. Its optional `annotator_filter` applies to both decisions and CAS extraction, not just edits: excluded annotator/curation CAS is not uploaded unchanged. The one-step pipeline and artifact CLI honor `metadata.annotators` from reviewed decisions; an explicit pipeline filter takes precedence. GUI deployment passes the current shared scope from tab 1. Empty/absent scope means all, preserving unscoped CLI/API defaults.
 
 Flattened remote naming:
 

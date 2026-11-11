@@ -28,6 +28,7 @@ class GuiInputs:
     release_blacklist_mode: str = "none"
     runtime_blacklist_file: Any = None
     hdf5_temp_path: pathlib.Path | None = None
+    annotators: tuple[str, ...] = ()
 
 
 def render_sidebar() -> GuiInputs:
@@ -39,7 +40,7 @@ def render_sidebar() -> GuiInputs:
         st.header("Inputs")
         load_annotators = st.checkbox(
             "Load annotators from ZIP", value=True,
-            help="Read annotator names to enable filtering. Without a filter, all annotators are checked.",
+            help="Read annotator names for the shared selection in tab 1. That scope applies to checking, rules, suggestions, review and export/upload.",
         )
         use_api = st.toggle(
             "Use INCEpTION API", value=False,
@@ -146,6 +147,7 @@ def render_sidebar() -> GuiInputs:
         target_view=target_view,
         release_blacklist_mode=release_blacklist_mode,
         runtime_blacklist_file=runtime_blacklist_file,
+        annotators=tuple(st.session_state.get("processing_annotators", ())),
     )
 
 

@@ -71,6 +71,14 @@ User-facing labels and messages use **inclusion list** / **exclusion list** acro
 
 This is a presentation change only: Python names, CLI flags, HDF5 paths, and JSON identifiers retain `whitelist`/`blacklist` where established. Actual storage paths shown in metadata are explicitly identified as HDF5 paths. Existing artifacts do not need migration; original clinical text and FSNs are not rewritten.
 
+# Shared annotator scope
+
+**Tab 1 → Select annotators to include** is the processing scope for every tab, not just a policy-table filter. Empty means all; names are matched case-insensitively. It applies to policy checks, session/uploaded findings, suggestion generation, concept-rule scans, restored decisions, review/automatic conditions, decision downloads, local write-back and deployment artifacts. Rules still scan all documents in the selected layers, including annotations absent from findings, but only for included annotators; **Override policy** never bypasses this scope. Context extraction/cache is scoped as well. Policy results produced for another scope cannot be displayed/downloaded as current reports. Findings, suggestions or reviewed decisions produced for a narrower scope cannot silently be reused after broadening it.
+
+Review rows retain original suggestion indices when filtered. Scope changes discard excluded annotators' pending selections, clear automatic Undo and reset document-review progress; previously excluded choices do not silently reappear if the scope is broadened. Included choices remain, but stale rule scans require reapplication. Replacing suggestions resets generic review choices to avoid index reassignment; a visible notice asks users to save review JSON first. Explicit rule choices are retained. Imported decisions are filtered against current scope rather than changing it. Restored generic decision indices must match annotation identities in the loaded suggestions; a differently filtered/reordered source cannot silently reuse them. JSON metadata records `annotators` (empty = all).
+
+Local sanitized ZIPs retain excluded CAS members unchanged. Upload preparation omits excluded annotator/curation CAS entirely, including otherwise unchanged ones; filtering only decisions would not be sufficient. Saved decision scope is also honored by standalone artifact/deployment pipelines. Without a scope, CLI/API defaults remain all annotators. Remote validation still requires an approved test project.
+
 # Policy-check results
 
 The policy-check tab displays the last successful check from `st.session_state["policy_check_result"]` on every rerun. Filtering or downloading does not rerun the check. Results persist within the current session, not across server restarts; changed project/HDF5 inputs require an explicit new check. A caption identifies results as the last successful check.
@@ -99,7 +107,7 @@ Suggestion generation puts selectable replacements in `candidates` and rejected 
 
 # Concept rules
 
-The **Suggest policy sanitization** tab includes a **Concept rules** form in a collapsed-by-default expander above fallback settings. It defaults to Number `410680006` → remove ID only, and Date `410671006` → Date property `410672004`. Rules and per-rule **Override policy** are enabled by default. The form supports dynamic rows and separate rule JSON import/export. It uses the sidebar's target annotation layers across all documents and annotators; there are no separate rule-scope input boxes.
+The **Suggest policy sanitization** tab includes a **Concept rules** form in a collapsed-by-default expander above fallback settings. It defaults to Number `410680006` → remove ID only, and Date `410671006` → Date property `410672004`. Rules and per-rule **Override policy** are enabled by default. The form supports dynamic rows and separate rule JSON import/export. It uses the sidebar's target annotation layers across all documents within the shared annotator selection from tab 1; there are no separate rule-scope input boxes.
 
 Column-header tooltips explain **Enabled**, **Name**, and the rule fields. **Override policy** is permission to bypass list restrictions, not permission to replace existing review decisions or bypass target existence/activity checks; it has no effect for **Remove ID only**. This distinction also appears as a visible note below configuration. In tab 3, **Override policy** and **Policy actually overridden** are read-only columns with tooltips distinguishing permission from an exception actually needed for that replacement. **Apply** stages an action for later export/upload; changing it does not immediately modify the project.
 

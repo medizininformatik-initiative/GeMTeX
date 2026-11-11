@@ -16,6 +16,7 @@ from snomed_post_processing.sanitization.concept_rules import (
 )
 from .files import save_uploaded_file
 from .sidebar import GuiInputs
+from ..uima_processing.scope import normalize_annotators
 
 
 ACTION_LABELS = {"clear_id": "Remove ID only", "replace": "Replace with concept"}
@@ -45,6 +46,7 @@ def source_signature(inputs: GuiInputs):
         inputs.target_view, inputs.release_blacklist_mode, _file_signature(inputs.runtime_blacklist_file),
         rules_json_text(st.session_state.get("concept_rules", DEFAULT_CONCEPT_RULES)),
         tuple(sorted(st.session_state.get("concept_rule_scope", {}).items())),
+        normalize_annotators(inputs.annotators),
     )
 
 
@@ -86,7 +88,7 @@ def render_concept_rules_form(inputs: GuiInputs) -> None:
 
 def _render_concept_rules_form(inputs: GuiInputs) -> None:
     st.caption(
-        "Rules match original annotations across all documents and annotators in the sidebar's target layers. "
+        "Rules match original annotations across all documents in the selected layers and shared annotator scope (tab 1). "
         "Only IDs change; literal and other features are preserved. Rules never chain."
     )
     rules = st.session_state.get("concept_rules", DEFAULT_CONCEPT_RULES)
@@ -155,7 +157,7 @@ def _render_concept_rules_form(inputs: GuiInputs) -> None:
             if not _lines(layers):
                 raise ValueError("Select at least one annotation layer.")
             st.session_state["concept_rules"] = rules
-            st.session_state["concept_rule_scope"] = {"layers": layers, "documents": "", "annotators": ""}
+            st.session_state["concept_rule_scope"] = {"layers": layers, "documents": "", "annotators": "\n".join(inputs.annotators)}
             # Import lazily to avoid coupling the rule engine to suggestion generation.
             from .sanitization_check_tab import _enforce_embedded_blacklist, _uses_custom_blacklist, _resolve_custom_blacklist_indices
             with st.spinner("Scanning original annotations for concept rules..."):
@@ -167,7 +169,7 @@ def _render_concept_rules_form(inputs: GuiInputs) -> None:
                         raise ValueError("Select a custom exclusion-list rule file first.")
                     _, runtime = _resolve_custom_blacklist_indices(hdf5, inputs.runtime_blacklist_file)
                 decisions = preview_concept_rules(
-                    project, hdf5, rules, annotation_types=_lines(layers),
+                    project, hdf5, rules, annotation_types=_lines(layers), annotators=inputs.annotators,
                     id_prefix=inputs.id_prefix, id_feature=inputs.id_feature,
                     target_view=inputs.target_view,
                     release_exclude_blacklist=_enforce_embedded_blacklist(inputs.release_blacklist_mode),
