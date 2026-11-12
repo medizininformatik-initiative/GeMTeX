@@ -133,7 +133,7 @@ and does not install the optional extra automatically.
 
 - `app.py`: NiceGUI bootstrap, also accessible directly as a module.
 - `transport.py`: Socket.IO ASGI early-disconnect and response-header guard.
-- `page.py`: three workflow tabs and vertically stacked, full-width Community AG Grid findings/candidate sections. Candidates sit below findings at every screen size; compact rank/score columns leave more room for FSNs, with internal horizontal scrolling on very narrow screens.
+- `page.py`: three workflow tabs and vertically stacked, full-width Community AG Grid findings/candidate sections. Candidates sit below findings at every screen size; compact rank/score columns leave more room for FSNs, with internal horizontal scrolling on very narrow screens. Selected-finding annotation details and rationale/retrieval warnings use two columns (stacking on phones). Table scores display two decimal places only; sorting, competition ranks, raw candidate evidence and JSON retain full precision.
 - `state.py`: framework-independent, per-page navigation state with stable row IDs.
 - `suggestions.py`: read-only backend-reader adapter and safe import errors.
 - `review.py`: page-local staging/save commands and backend-compatible JSON adapter.

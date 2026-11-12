@@ -143,11 +143,28 @@ class NiceGuiBootstrapTest(unittest.TestCase):
         from test.test_nicegui_suggestions import fake_ui
         ui, grids, _ = fake_ui()
         columns = [call.args[0] for call in ui.column.return_value.classes.call_args_list]
-        self.assertEqual(columns, ["w-full min-w-0 gap-4", "w-full min-w-0", "w-full min-w-0"])
+        self.assertEqual(columns[:3], ["w-full min-w-0 gap-4", "w-full min-w-0", "w-full min-w-0"])
+        self.assertEqual(columns[3:], ["w-full min-w-0 gap-1", "w-full min-w-0 gap-1"])
+        ui.element.return_value.classes.assert_any_call("grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 w-full min-w-0")
         candidates = {column["field"]: column for column in grids[1].options["columnDefs"]}
         self.assertEqual(candidates["fsn"]["minWidth"], 240)
         self.assertEqual(candidates["rank"]["width"], 80)
         self.assertGreater(candidates["fsn"]["flex"], 0)
+
+    def test_score_formatting_is_display_only_with_full_precision_row_values(self):
+        from test.test_nicegui_suggestions import fake_ui, payload, encoded
+        from snomed_post_processing.gui.nicegui.page import _candidate_rows
+        from snomed_post_processing.gui.nicegui.suggestions import load_suggestions_preview
+        _, grids, _ = fake_ui()
+        score = next(column for column in grids[1].options["columnDefs"] if column["field"] == "score")
+        self.assertEqual(score[":valueFormatter"], "params => params.value == null ? '' : params.value.toFixed(2)")
+        self.assertEqual(score["filter"], "agNumberColumnFilter")
+        source = load_suggestions_preview(encoded(payload()))
+        rows = _candidate_rows(source.findings[0])
+        self.assertEqual(rows[0]["score"], 9.0000000001)
+        self.assertIsInstance(rows[0]["score"], float)
+        self.assertEqual([row["rank"] for row in rows[:3]], [1, 1, 3])
+        self.assertEqual(dict(source.findings[0].candidates[0].details)["Lexical score"], 0.123456789012345)
 
     def test_registers_page_and_starts_one_server_without_reload_or_browser(self):
         ui = MagicMock()

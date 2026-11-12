@@ -83,16 +83,23 @@ def build_page(ui) -> None:
                 with ui.column().classes("w-full min-w-0"):
                     ui.label("Selected finding").classes("text-lg")
                     identity = ui.label("Select a finding. Nothing is preselected.")
-                    covered_text = ui.label().classes("whitespace-pre-wrap")
-                    finding_details = ui.label().classes("text-sm whitespace-pre-wrap")
-                    rationale = ui.label().classes("text-sm whitespace-pre-wrap")
-                    limits = ui.label().classes("text-amber-900 whitespace-pre-wrap")
+                    with ui.element("div").classes("grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 w-full min-w-0"):
+                        with ui.column().classes("w-full min-w-0 gap-1"):
+                            ui.label("Annotation").classes("text-sm font-medium")
+                            covered_text = ui.label().classes("whitespace-pre-wrap break-words")
+                            finding_details = ui.label().classes("text-sm whitespace-pre-wrap break-words")
+                        with ui.column().classes("w-full min-w-0 gap-1"):
+                            ui.label("Suggestion rationale & retrieval").classes("text-sm font-medium")
+                            rationale = ui.label().classes("text-sm whitespace-pre-wrap break-words")
+                            limits = ui.label().classes("text-amber-900 whitespace-pre-wrap break-words")
                     candidate_grid = ui.aggrid({
                         "columnDefs": [
                             {"field": "rank", "headerName": "Rank", "width": 80, "filter": "agNumberColumnFilter"},
                             {"field": "code", "headerName": "SCTID", "width": 180},
                             {"field": "fsn", "headerName": "FSN", "flex": 2, "minWidth": 240},
-                            {"field": "score", "headerName": "Score", "width": 120, "filter": "agNumberColumnFilter"},
+                            {"field": "score", "headerName": "Score", "width": 120, "filter": "agNumberColumnFilter",
+                             ":valueFormatter": "params => params.value == null ? '' : params.value.toFixed(2)",
+                             "headerTooltip": "Displayed to two decimal places only. Sorting, ranks and saved JSON retain full precision; raw scores remain in candidate evidence."},
                             {"field": "role", "headerName": "Candidate role", "width": 200},
                         ],
                         "defaultColDef": {"sortable": True, "filter": "agTextColumnFilter", "resizable": True, "editable": False},
