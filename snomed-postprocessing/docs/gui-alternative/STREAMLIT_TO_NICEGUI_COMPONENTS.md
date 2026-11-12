@@ -1,9 +1,9 @@
 # SNOMED-PP: Streamlit → NiceGUI replacement candidates
 
-**Status:** migration design plus initial synthetic read-only NiceGUI prototype; real server startup/page construction checked; production workflows and browser interactions remain unvalidated. See [`gui/nicegui/README.md`](../../src/snomed_post_processing/gui/nicegui/README.md) for isolated setup and limitations.
+**Status:** migration design plus read-only NiceGUI demo/suggestions-JSON preview; real server startup/page construction checked; production workflows and browser interactions remain unvalidated. See [`gui/nicegui/README.md`](../../src/snomed_post_processing/gui/nicegui/README.md) for isolated setup and limitations.
 **Documentation snapshot:** 2026-11-11; see [download manifest](references/nicegui/manifest.json).  
 **Application inspected:** `C:/Users/fra3066mat/PycharmProjects/GeMTeX/snomed-postprocessing`.  
-**Source paths below:** relative to `src/snomed_post_processing/`, unless stated otherwise. The original inventory predates the package relocation: all listed Streamlit `gui/*.py` modules now live under `gui/streamlit/*.py` (`snomed_post_processing.gui.streamlit`). The parallel `gui/nicegui/` package now contains the initial synthetic read-only frontend prototype. A new framework-neutral `gui/app.py` is the stable Python launcher; it defaults to Streamlit and selects NiceGUI with `--frontend nicegui`, using the same Python 3.11 project environment.
+**Source paths below:** relative to `src/snomed_post_processing/`, unless stated otherwise. The original inventory predates the package relocation: all listed Streamlit `gui/*.py` modules now live under `gui/streamlit/*.py` (`snomed_post_processing.gui.streamlit`). The parallel `gui/nicegui/` package contains a read-only frontend for synthetic data or explicitly uploaded suggestions JSON. A new framework-neutral `gui/app.py` is the stable Python launcher; it defaults to Streamlit and selects NiceGUI with `--frontend nicegui`, using the same Python 3.11 project environment.
 
 ## 1. Goal and boundaries
 
@@ -316,8 +316,23 @@ No backend algorithm changes are required by this plan. Existing blocking calls 
 - NiceGUI 4.0.0 pinned in the project's optional `nicegui` extra; standalone `requirements.txt` retains the reference pin. Both frontends are installed in the same `.venv-py311`, with real startup/page construction verified and 280 regression tests passing (3 baseline GUI-default failures remain).
 - Three workflow tabs; Community AG Grid findings and candidate preview with stable IDs, literal string SCTIDs, numeric scores, competition-rank ties and diagnostic-only targets.
 - Per-page presentation state; read-only grids and in-place detail updates. Selection is navigation, not decision approval.
-- Synthetic in-memory data only; no clinical fixture/project reads. Processing, scope, rules, staging and export/deployment remain disconnected, with action buttons disabled.
+- Initially synthetic in-memory data only. The subsequent read-only import increment below adds explicitly uploaded suggestions JSON; project/HDF5 processing, shared-scope controls, rules, staging and export/deployment remain disconnected, with action buttons disabled.
 - Offline state/bootstrap/dispatch tests plus actual loopback server/page smoke check. Browser JavaScript/visual interaction and backend adapter integration remain open prerequisites before enabling real workflows.
+
+### Read-only suggestions import implemented
+
+- Upload up to 50 MiB through **Review & apply → Load suggestions JSON**; existing backend reader/schema used unchanged. Full parsed suggestions and metadata retained server-side.
+- Inherit saved annotator scope without broadening; keep original unfiltered suggestion indices. No HDF5 validation, retrieval, scoring, processing or staging is invoked.
+- Snapshot/index IDs for findings; additional role/ordinal IDs for candidates. Duplicate findings/SCTIDs/channels are not merged, context stays non-selectable/unranked, saved proposals are not preselected, and stale events are rejected.
+- Preserve saved scores/order, competition ties, rationale, text/FSNs/spans, ignored state, proposed targets, counts, retrieval limits and candidate evidence. Use text rendering only and avoid echoing content in import errors.
+- Atomic imports and per-page state; invalid/unreadable/oversized files retain the previous preview. Worker parsing with revision guards prevents late uploads overriding newer imports or explicit demo reset. No application persistence/export; framework upload spooling may occur.
+- 67 focused tests pass. Real local NiceGUI multipart upload verified the Alice-scoped synthetic fixture with original indices and preservation after an invalid upload. No real clinical project or external service was used; owned test server stopped. Full-suite and browser/visual interaction checks were not rerun for this increment.
+
+### Socket.IO transport boundary verified
+
+HTTP-only page/upload smoke checks did not exercise a live browser connection. Follow-up testing reproduced an Engine.IO `REQUEST_METHOD` KeyError for an initial ASGI disconnect and mixed-case response headers causing duplicate gzip compression of larger polling updates through Starlette. A mount-local application guard now handles initial disconnects and ASGI response-header casing, preserving healthy frames, bodies, compression and downstream errors. No installed SDK patch or dependency downgrade is used.
+
+61 focused checks pass, including actual Engine.IO and Starlette gzip regressions. Real polling and WebSocket clients completed NiceGUI handshakes, scope-aware synthetic JSON upload, live UI updates and invalid-upload feedback without ASGI errors. Owned loopback servers stopped; no clinical/external-service inputs. Full-suite and visual/browser-JavaScript checks were not rerun for this follow-up. Restart the server to apply the guard.
 
 ## 11. Sources and local references
 

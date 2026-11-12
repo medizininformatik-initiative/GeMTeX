@@ -43,6 +43,18 @@ Both direct-file and module shared-launcher forms started temporary, owned NiceG
 
 After adding launcher tests, the full suite reports **280 passed, the same 3 failures listed above, 2 warnings**. No failures were suppressed or defaults changed. Keep `--extra nicegui` on uv run/sync commands for the shared environment; plain base-only sync may uninstall it.
 
+### Read-only NiceGUI suggestions import
+
+The next frontend increment connects uploaded suggestions JSON through the existing backend reader, with a 50 MiB limit, inherited artifact scope, original indices, retained backend data/evidence and snapshot/role-specific row IDs. No decision staging, processing, HDF5 validation or export is enabled. Failed loads preserve prior state, and per-page revision guards protect concurrent imports/reset. Text is not rendered as HTML and uploaded content is not echoed in errors.
+
+67 focused checks pass, including existing scope/synthetic workflow coverage. A real loopback NiceGUI multipart check loaded the Alice-scoped synthetic fixture with original indices and confirmed a later invalid upload left it intact. No clinical data/live API/Docker action was involved; the owned test server was stopped. The full suite was not rerun for this increment. Next: browser interaction checks, then deliberate decision staging/import/export with existing protection semantics.
+
+### NiceGUI connection regression
+
+An installed Engine.IO adapter bug raised `KeyError('REQUEST_METHOD')` on initial ASGI disconnects. Mixed-case ASGI response headers also caused duplicate gzip compression through Starlette, breaking larger polling updates. Both were reproduced. The application now installs a mount-local ASGI guard before startup (`nicegui/transport.py`): skip already-disconnected requests, replay healthy first frames, and normalize response header names without changing values/body/stream semantics. Other routes and errors remain untouched; packages/compression settings are not patched or downgraded.
+
+61 focused tests pass, including real Engine.IO and gzip middleware regressions. Real polling and WebSocket page handshakes, synthetic scope-aware JSON uploads, live UI updates and invalid-upload feedback passed on an owned loopback server with no ASGI errors. Servers were stopped; no clinical/external-service activity or full-suite rerun. Restart the NiceGUI process, not just the browser page, to apply the change.
+
 ## End-to-end option tests
 
 Add CLI/pipeline tests for release-view behavior:

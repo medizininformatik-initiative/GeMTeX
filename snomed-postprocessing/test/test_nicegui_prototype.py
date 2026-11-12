@@ -17,14 +17,14 @@ class PreviewStateTest(unittest.TestCase):
 
     def test_no_finding_or_candidate_preselected(self):
         self.assertIsNone(self.state.selected_finding)
-        self.assertIsNone(self.state.selected_candidate_code)
+        self.assertIsNone(self.state.selected_candidate_id)
 
     def test_page_states_are_independent(self):
         other = create_demo_state()
         self.state.select_finding(self.state.findings[0].row_id)
-        self.state.preview_candidate("990000201")
+        self.state.preview_candidate("demo:0:selectable:0")
         self.assertIsNone(other.selected_finding_id)
-        self.assertIsNone(other.selected_candidate_code)
+        self.assertIsNone(other.selected_candidate_id)
 
     def test_navigation_uses_stable_identity_not_visible_position(self):
         visible = list(reversed(self.state.findings))
@@ -34,16 +34,16 @@ class PreviewStateTest(unittest.TestCase):
 
     def test_changing_finding_clears_candidate_preview(self):
         self.state.select_finding(self.state.findings[0].row_id)
-        self.state.preview_candidate("990000201")
+        self.state.preview_candidate("demo:0:selectable:0")
         self.state.select_finding(self.state.findings[1].row_id)
-        self.assertIsNone(self.state.selected_candidate_code)
+        self.assertIsNone(self.state.selected_candidate_id)
 
     def test_repeated_navigation_preserves_candidate_preview(self):
         row_id = self.state.findings[0].row_id
         self.state.select_finding(row_id)
-        self.state.preview_candidate("990000201")
+        self.state.preview_candidate("demo:0:selectable:0")
         self.state.select_finding(row_id)
-        self.assertEqual(self.state.selected_candidate_code, "990000201")
+        self.assertEqual(self.state.selected_candidate_id, "demo:0:selectable:0")
 
     def test_unknown_identity_does_not_change_selection(self):
         row_id = self.state.findings[0].row_id
@@ -54,15 +54,15 @@ class PreviewStateTest(unittest.TestCase):
 
     def test_candidate_must_belong_to_current_finding(self):
         with self.assertRaises(ValueError):
-            self.state.preview_candidate("990000201")
+            self.state.preview_candidate("demo:0:selectable:0")
         self.state.select_finding(self.state.findings[1].row_id)
         with self.assertRaises(ValueError):
-            self.state.preview_candidate("990000201")
-        self.assertIsNone(self.state.selected_candidate_code)
+            self.state.preview_candidate("demo:0:selectable:0")
+        self.assertIsNone(self.state.selected_candidate_id)
 
     def test_diagnostic_context_can_be_inspected_but_remains_nonselectable(self):
         self.state.select_finding(self.state.findings[1].row_id)
-        candidate = self.state.preview_candidate("990000301")
+        candidate = self.state.preview_candidate("demo:1:context:0")
         self.assertFalse(candidate.selectable)
 
     def test_string_codes_numeric_scores_and_competition_ranks_survive(self):
@@ -128,7 +128,7 @@ class NiceGuiBootstrapTest(unittest.TestCase):
         select(SimpleNamespace(args={"data": original_rows[1]}))
         candidate_rows = candidates.options["rowData"]
         self.assertEqual([row["rank"] for row in candidate_rows[:3]], [1, 1, 3])
-        preview(SimpleNamespace(args={"data": {"code": "990000301"}}))
+        preview(SimpleNamespace(args={"data": {"row_id": "demo:1:context:0"}}))
         preview_label = next(element for text, element in labels if text.startswith("Candidate clicks"))
         self.assertIn("Diagnostic context only", preview_label.set_text.call_args[0][0])
         select(SimpleNamespace(args={"data": original_rows[1]}))
@@ -136,7 +136,7 @@ class NiceGuiBootstrapTest(unittest.TestCase):
         self.assertIs(findings.options["rowData"], original_rows)
         select(SimpleNamespace(args={"data": original_rows[2]}))
         self.assertEqual(candidates.options["rowData"], [])
-        preview(SimpleNamespace(args={"data": {"code": "990000301"}}))
+        preview(SimpleNamespace(args={"data": {"row_id": "demo:1:context:0"}}))
         ui.notify.assert_called_once()
 
     def test_registers_page_and_starts_one_server_without_reload_or_browser(self):

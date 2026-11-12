@@ -1,7 +1,7 @@
 """Presentation-only preview state; no decisions, storage or pipeline calls."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional, Tuple
 
 
@@ -9,9 +9,11 @@ from typing import Optional, Tuple
 class CandidatePreview:
     code: str
     fsn: str
+    row_id: str
     rank: Optional[int] = None
     score: Optional[float] = None
     selectable: bool = True
+    details: Tuple[Tuple[str, object], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -24,6 +26,15 @@ class FindingPreview:
     text: str
     reason: str
     candidates: Tuple[CandidatePreview, ...] = ()
+    status: str = ""
+    policy_issue: str = ""
+    source_fsn: str = ""
+    layer: str = ""
+    offset: Optional[Tuple[int, int]] = None
+    ignored: bool = False
+    candidate_count: int = 0
+    retrieval_limits: Tuple[str, ...] = ()
+    proposed_code: str = ""
 
 
 @dataclass
@@ -32,7 +43,12 @@ class PreviewState:
 
     findings: Tuple[FindingPreview, ...]
     selected_finding_id: Optional[str] = None
-    selected_candidate_code: Optional[str] = None
+    selected_candidate_id: Optional[str] = None
+    source_name: str = "Synthetic demo"
+    is_demo: bool = True
+    source_suggestions: Tuple[object, ...] = ()
+    metadata: dict[str, object] = field(default_factory=dict)
+    source_annotators: Tuple[str, ...] = ()
 
     @property
     def selected_finding(self) -> Optional[FindingPreview]:
@@ -43,14 +59,14 @@ class PreviewState:
         if finding is None:
             raise ValueError("Unknown finding; select a row from the current preview.")
         if row_id != self.selected_finding_id:
-            self.selected_candidate_code = None
+            self.selected_candidate_id = None
         self.selected_finding_id = row_id
         return finding
 
-    def preview_candidate(self, code: str) -> CandidatePreview:
+    def preview_candidate(self, row_id: str) -> CandidatePreview:
         finding = self.selected_finding
-        candidate = next((item for item in finding.candidates if item.code == code), None) if finding else None
+        candidate = next((item for item in finding.candidates if item.row_id == row_id), None) if finding else None
         if candidate is None:
             raise ValueError("Unknown candidate for the selected finding.")
-        self.selected_candidate_code = code
+        self.selected_candidate_id = row_id
         return candidate

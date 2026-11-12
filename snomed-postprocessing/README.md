@@ -383,13 +383,15 @@ uv run deploy-inception-sanitized-project \
 
 **The annotator selection in tab 1 applies throughout the pipeline**, including concept rules, suggestions, review and export/upload—not just the policy check. Empty means all annotators. Excluded annotators' CAS stays unchanged in a local sanitized ZIP and is omitted from upload artifacts. Saved artifact metadata carries the scope. Changing it discards excluded pending choices and resets review progress; narrower-scope artifacts require rechecking/regeneration before broadening. Save reviewed decisions before replacing suggestions, which resets generic index-based choices to prevent applying them to different annotations.
 
-The stable launcher is `gui/app.py`. Both frontends share `.venv-py311`; Streamlit remains the default, while NiceGUI is currently a synthetic, read-only prototype—not a production replacement. See its [setup and limitations](src/snomed_post_processing/gui/nicegui/README.md).
+The stable launcher is `gui/app.py`. Both frontends share `.venv-py311`; Streamlit remains the default, while NiceGUI is a read-only preview for synthetic data or uploaded suggestions JSON—not a production review/export replacement. See its [setup and limitations](src/snomed_post_processing/gui/nicegui/README.md).
 
 Start NiceGUI locally (Windows):
 
 ```bash
 .venv-py311/Scripts/python src/snomed_post_processing/gui/app.py --frontend nicegui --show
 ```
+
+In NiceGUI, open **3. Review & apply → Load suggestions JSON** to inspect an existing suggestions artifact (up to 50 MiB). Its saved annotator scope is inherited; original indices, ties, diagnostic targets and evidence are retained. Upload errors leave the last preview intact. **Use synthetic demo** returns to artificial examples. This loads saved results only—it does not generate suggestions, stage decisions, validate HDF5 or change CAS files.
 
 Omit `--frontend nicegui` to start Streamlit, or select `--frontend streamlit` explicitly. Backend options are forwarded unchanged: `--port 8081` for NiceGUI, `--server.port 8502` for Streamlit. The module form `python -m snomed_post_processing.gui.app` is also supported. In an IDE, select `.venv-py311/Scripts/python.exe` and set script parameters to `--frontend nicegui --show`.
 

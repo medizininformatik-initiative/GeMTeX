@@ -1,6 +1,7 @@
-# NiceGUI frontend — first prototype
+# NiceGUI frontend — read-only suggestions preview
 
-This is a **synthetic, read-only prototype**, not a replacement production GUI.
+This previews **synthetic data or uploaded suggestions JSON**; review staging,
+processing and export are not yet connected.
 Both frontends now use the same Python 3.11 project environment, `.venv-py311`.
 The shared `gui/app.py` defaults to Streamlit; select NiceGUI explicitly.
 
@@ -28,6 +29,37 @@ Do not launch this file using `streamlit run`.
 
 For Streamlit, omit `--frontend` or use `--frontend streamlit`.
 Its options remain unchanged, e.g. `--server.port 8502`.
+
+## Load saved suggestions
+
+In **3. Review & apply**, use **Load suggestions JSON** (one file, up to **50 MiB**).
+Use the suggestions JSON produced by the existing CLI/Streamlit workflow, not
+CriticalFindings or reviewed-decisions JSON. **Use synthetic demo** resets only
+this page's preview.
+
+The adapter uses `read_sanitization_suggestions_json_with_metadata` unchanged.
+It preserves backend objects/metadata server-side and inherits the saved
+`metadata.annotators` scope (empty/missing = all); there is no broader scope
+selector yet. Original zero-based `suggestion_index` values survive filtering.
+Grid filters change display only, not the artifact or scope.
+
+Candidate rows have snapshot/finding/role/ordinal IDs, not SCTID identities:
+duplicate SCTIDs/evidence channels and diagnostic-only targets remain distinct.
+Saved score precision/order, competition ranks, rationale, proposed targets,
+source/member/matched-term evidence, ignored flags and retrieval-limit warnings
+are retained. Diagnostic context is unranked and cannot become selectable.
+A saved proposal is displayed as provenance, never automatically selected.
+
+Successful imports clear navigation; stale row/candidate clicks are rejected.
+Parsing runs in a NiceGUI worker; newer uploads/demo reset supersede older
+pending loads. Invalid, oversized or unreadable files leave the active preview
+unchanged, with a safe error that does not echo file contents. No metadata paths
+are followed and no HDF5/retrieval/policy pipeline is run.
+
+State is page-local and discarded on reload; the application adds no persistent
+store or export. NiceGUI may temporarily spool uploads itself. Imported text is
+rendered as text, not HTML. Real suggestions may contain clinical text: upload
+only data you intend to show in this browser session.
 
 ## Install/update the shared environment
 
@@ -60,8 +92,10 @@ and does not install the optional extra automatically.
 ## Prototype contents and limits
 
 - `app.py`: NiceGUI bootstrap, also accessible directly as a module.
+- `transport.py`: Socket.IO ASGI early-disconnect and response-header guard.
 - `page.py`: three workflow tabs and Community AG Grid findings/candidate panes.
 - `state.py`: framework-independent, per-page navigation state with stable row IDs.
+- `suggestions.py`: read-only backend-reader adapter and safe import errors.
 - `demo.py`: three artificial findings, toy string SCTIDs, tied ranks `1,1,3`,
   diagnostic-only context and a no-candidate example.
 - `requirements.txt`: standalone reference pin; prefer the project extra above.
@@ -71,10 +105,10 @@ different finding updates details/candidates, not the main grid. Text renders as
 text, not HTML; filters are display-only. Reloading discards per-page preview
 state. There is no persistent/global review state or cookie secret.
 
-**Not connected:** project/HDF5/file loading, processing scope, policy checks,
-rules, generation, conditions, decision staging/import/export, reviewed flags,
-ZIP sanitization or INCEpTION. Action buttons are disabled. No clinical project
-files are read to build this prototype.
+**Not connected:** project ZIP/HDF5 loading, shared processing-scope controls,
+policy checks, rules, generation, conditions, decision staging/import/export,
+reviewed flags, ZIP sanitization or INCEpTION. Action buttons remain disabled.
+Only explicitly uploaded suggestions JSON is read; startup uses artificial data.
 
 ## Verification
 
@@ -98,8 +132,40 @@ The full regression suite reports **280 passed, 3 pre-existing GUI-default failu
 2 warnings**. The same failures were previously reproduced under Python 3.9.
 No live INCEpTION requests or clinical fixture reads were used for the startup check.
 
-Continue with browser interaction checks, then connect existing backend artifacts
-and explicit commands without changing scope, provenance, scoring or JSON/ZIP semantics.
+The subsequent read-only import increment passes **67 focused checks**, including
+existing reader/scope/synthetic workflow regressions. A real NiceGUI multipart
+upload test used only the synthetic fixture: an Alice-scoped artifact loaded with
+original indices, and a subsequent invalid upload preserved the prior data. The
+owned loopback test server was stopped. No live INCEpTION, clinical project or
+HDF5 was used for that integration check; the full suite was not rerun.
+
+### Socket.IO transport regression
+
+The installed Engine.IO adapter returns an empty environment if its first ASGI
+frame is an already-closed HTTP/WebSocket connection, then accesses
+`REQUEST_METHOD`. Its mixed-case response header names also prevent Starlette
+recognizing existing gzip encoding, producing duplicate gzip encodings for larger
+polling updates and disconnecting clients.
+
+`transport.py` wraps only NiceGUI's `/_nicegui_ws` mount before server startup:
+it ignores initial disconnects, replays valid first frames exactly once, and
+lowercases response header names as ASGI requires (preserving values/order/repeats
+and body bytes). Other routes, uploads, valid handshakes and downstream exceptions
+are unchanged. Installation is idempotent; no installed packages are patched or
+downgraded, and compression is not disabled.
+
+61 focused tests pass, including real Engine.IO disconnect and Starlette gzip
+regressions. Real polling **and** WebSocket clients completed page handshakes,
+uploaded the scoped synthetic fixture, received live UI updates and safe invalid-
+upload feedback without server ASGI errors. Owned loopback servers were stopped;
+no clinical inputs or external services were used. This is protocol-level testing,
+not visual/browser JavaScript testing; the full suite was not rerun.
+
+After updating, stop/restart the NiceGUI process and refresh the browser; a page
+refresh alone cannot update an already-running server with reload disabled.
+
+Continue with browser interaction checks and deliberate decision staging without
+changing scope, provenance, scoring or JSON/ZIP semantics.
 
 References: `docs/gui-alternative/references/nicegui/` and
 `docs/gui-alternative/STREAMLIT_TO_NICEGUI_COMPONENTS.md`.
