@@ -55,6 +55,14 @@ An installed Engine.IO adapter bug raised `KeyError('REQUEST_METHOD')` on initia
 
 61 focused tests pass, including real Engine.IO and gzip middleware regressions. Real polling and WebSocket page handshakes, synthetic scope-aware JSON uploads, live UI updates and invalid-upload feedback passed on an owned loopback server with no ASGI errors. Servers were stopped; no clinical/external-service activity or full-suite rerun. Restart the NiceGUI process, not just the browser page, to apply the change.
 
+### NiceGUI explicit manual review JSON
+
+Implemented per-page `review.py` command/state adapter plus `review_ui.py` controls: selectable replacement or explicit Keep staging, Save/discard, staged document flags, backend-version-1 JSON download and replacing import. Navigation is not approval; dirty state blocks download. Document confirmation conservatively protects human-reviewed Keep rows, while unmarking flags does not undo manual decisions. Source scope/indices remain authoritative; imports check coverage/identity/candidate membership and exported suggestion fingerprints. Manual ordinal/evidence preserves duplicate channels. Imported rule/deletion/manual-edit/ID-removal decisions are retained read-only and rule/manual conflicts rejected. No HDF5 revalidation, new rule/condition commands or CAS/deployment application is connected.
+
+All imports publish atomically. Invalid/oversized/read failures preserve review; new source/demo resets it. Latest-load tokens plus edit revisions prevent stale imports overwriting new artifacts or manual work. Unrelated saves retain imported provenance; explicit human confirmation removes automatic ownership. Explicit downloads may contain clinical text; reload loses local state.
+
+97 focused checks pass (including scope/synthetic regressions and exact existing Streamlit fixture round-trip). Actual polling and WebSocket clients passed real NiceGUI listener-event staging/Keep/Save, flags, binary JSON download, replacing import and failed-import retention with no ASGI errors. Owned loopback servers stopped. No clinical, live external service or full-suite run; visual/browser JavaScript, focus/scroll and existing baseline failures remain pending. Next: browser review checks/artifact equivalence, then explicit processing adapters, not automatic input-triggered processing.
+
 ## End-to-end option tests
 
 Add CLI/pipeline tests for release-view behavior:

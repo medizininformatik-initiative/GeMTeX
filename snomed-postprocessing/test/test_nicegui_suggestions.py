@@ -228,7 +228,7 @@ class SuggestionsUploadPageTest(unittest.IsolatedAsyncioTestCase):
         ui.markdown.assert_not_called()
         for call in ui.button.call_args_list:
             if call.args[0] == "Use candidate":
-                self.assertNotIn("on_click", call.kwargs)
+                self.assertIn("on_click", call.kwargs)  # Explicit staging; candidate inspection alone remains read-only.
 
     async def test_bad_upload_keeps_previous_preview_and_metadata(self):
         ui, grids, labels = fake_ui()

@@ -1,7 +1,8 @@
-# NiceGUI frontend — read-only suggestions preview
+# NiceGUI frontend — suggestions and explicit manual review
 
-This previews **synthetic data or uploaded suggestions JSON**; review staging,
-processing and export are not yet connected.
+Preview **synthetic data or uploaded suggestions JSON**, then deliberately stage
+and save manual choices and download/restore reviewed-decisions JSON.
+Processing, CAS write-back and deployment are not connected.
 Both frontends now use the same Python 3.11 project environment, `.venv-py311`.
 The shared `gui/app.py` defaults to Streamlit; select NiceGUI explicitly.
 
@@ -57,9 +58,48 @@ unchanged, with a safe error that does not echo file contents. No metadata paths
 are followed and no HDF5/retrieval/policy pipeline is run.
 
 State is page-local and discarded on reload; the application adds no persistent
-store or export. NiceGUI may temporarily spool uploads itself. Imported text is
+store. Review JSON export is an explicit download. NiceGUI may temporarily spool uploads itself. Imported text is
 rendered as text, not HTML. Real suggestions may contain clinical text: upload
 only data you intend to show in this browser session.
+
+## Stage, save and restore review
+
+Load suggestions first; staging/import/export are disabled for the synthetic demo.
+
+1. Click a finding and inspect candidates/evidence. Navigation never approves a target.
+2. **Use candidate** stages the inspected selectable target, or **Keep original**
+   stages an explicit human-reviewed unchanged annotation. Context targets cannot be used.
+3. Optionally **Mark document reviewed** / **Unmark document reviewed**. Flags are
+   progress, not proof of replacement for every finding.
+4. **Save choices** commits pending choices/flags in this page only. Like Streamlit,
+   confirming a document protects its unchanged rows as human-reviewed Keeps; it
+   removes automatic ownership, not the chosen targets. **Discard pending changes**
+   leaves saved choices and flags intact. Unmarking does not undo manual choices.
+5. **Download reviewed decisions JSON** uses the backend version-1 format and is
+   blocked until pending changes are saved or discarded. Reload loses page state;
+   download explicitly to retain review. Download serialization runs in a worker;
+   a concurrent review change invalidates that download. Downloads may contain clinical text.
+6. **Load reviewed decisions JSON (replaces current review)** restores matching
+   choices, provenance and flags atomically (50 MiB limit). Import replaces rather
+   than merges prior saved/pending review. Invalid/read-error imports leave it intact.
+
+Saved scope cannot silently cover broader suggestions. Original indices and source
+identities are checked; NiceGUI exports also bind the full suggestions content by
+SHA-256. Manual candidate ordinal/evidence distinguishes duplicate SCTIDs/channels.
+Legacy Streamlit artifacts without this fingerprint use index/identity and current
+selectable-candidate checks. Only write-back settings are copied from suggestions
+metadata into review exports, not full-document clinical contexts; imported context
+records, if present, are filtered to artifact scope. Metadata paths are not followed and HDF5 is not opened.
+Imported rules are retained and reserve their source identities; imported deletions,
+manual edits and ID removals are protected from generic edits. Rule/target policy
+revalidation is **not** done here: edit/revalidate these actions in Streamlit. Rule-
+manual conflicts are rejected rather than silently dropping protected manual work.
+Unchanged automatic provenance survives unrelated manual saves; explicit human
+confirmation removes automatic ownership for the affected choices/documents.
+
+New suggestions or **Use synthetic demo** reset all review state. Latest upload/reset
+wins; a pending decision import cannot overwrite subsequent manual edits. Filtering
+is display-only and never limits decision export. No CAS files are changed.
 
 ## Install/update the shared environment
 
@@ -96,6 +136,8 @@ and does not install the optional extra automatically.
 - `page.py`: three workflow tabs and Community AG Grid findings/candidate panes.
 - `state.py`: framework-independent, per-page navigation state with stable row IDs.
 - `suggestions.py`: read-only backend-reader adapter and safe import errors.
+- `review.py`: page-local staging/save commands and backend-compatible JSON adapter.
+- `review_ui.py`: event adapters, explicit review controls and guarded async import.
 - `demo.py`: three artificial findings, toy string SCTIDs, tied ranks `1,1,3`,
   diagnostic-only context and a no-candidate example.
 - `requirements.txt`: standalone reference pin; prefer the project extra above.
@@ -106,9 +148,9 @@ text, not HTML; filters are display-only. Reloading discards per-page preview
 state. There is no persistent/global review state or cookie secret.
 
 **Not connected:** project ZIP/HDF5 loading, shared processing-scope controls,
-policy checks, rules, generation, conditions, decision staging/import/export,
-reviewed flags, ZIP sanitization or INCEpTION. Action buttons remain disabled.
-Only explicitly uploaded suggestions JSON is read; startup uses artificial data.
+policy checks, rule editing/application, generation, conditions, new deletion/manual-
+edit/ID-removal choices, ZIP sanitization or INCEpTION. Those actions remain disabled.
+Only explicitly uploaded suggestions/review JSON is read; startup uses artificial data.
 
 ## Verification
 
@@ -164,8 +206,19 @@ not visual/browser JavaScript testing; the full suite was not rerun.
 After updating, stop/restart the NiceGUI process and refresh the browser; a page
 refresh alone cannot update an already-running server with reload disabled.
 
-Continue with browser interaction checks and deliberate decision staging without
-changing scope, provenance, scoring or JSON/ZIP semantics.
+### Manual review increment
+
+97 focused tests pass, including scope/synthetic workflows, exact Streamlit fixture
+round-trip, protected imports, duplicate-channel evidence, atomic failures and races.
+Real polling and WebSocket clients exercised actual NiceGUI listener events through
+scope-aware staging, Keep, Save, document flags, binary JSON download, replacing
+import and safe failed import without ASGI errors. Owned loopback servers stopped;
+no clinical/external-service inputs. Full-suite and visual/browser-JavaScript checks
+were not performed for this increment. The three documented baseline failures remain
+unresolved, not suppressed.
+
+Continue with browser interaction validation and synthetic artifact comparisons before
+connecting explicit processing commands or CAS write-back.
 
 References: `docs/gui-alternative/references/nicegui/` and
 `docs/gui-alternative/STREAMLIT_TO_NICEGUI_COMPONENTS.md`.

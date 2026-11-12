@@ -1,11 +1,17 @@
-"""Read-only NiceGUI workspace for demo data or uploaded suggestions JSON."""
+"""NiceGUI suggestions inspection and explicit manual review; no CAS write-back."""
 from .demo import create_demo_state
+from .review_ui import ReviewControls
 from .suggestions import MAX_SUGGESTIONS_BYTES, SuggestionsPreviewError, load_suggestions_preview
 
 
-def _finding_rows(state):
+def _finding_rows(state, session=None):
     keys = ("row_id", "suggestion_index", "document", "annotator", "code", "text", "status", "policy_issue", "ignored")
-    return [{key: getattr(row, key) for key in keys} for row in state.findings]
+    rows = [{key: getattr(row, key) for key in keys} for row in state.findings]
+    if session is not None:
+        for values, row in zip(rows, state.findings):
+            values["review"] = session.status(row)
+            values["document_reviewed"] = session.draft_reviewed.get(row.document, row.document in session.reviewed_documents)
+    return rows
 
 
 def _candidate_rows(finding):
@@ -20,6 +26,12 @@ def build_page(ui) -> None:
     """Build once per visitor; imports replace state only after successful parsing."""
     state = create_demo_state()
     load_revision = 0
+
+    def begin_load():
+        nonlocal load_revision
+        load_revision += 1
+        return load_revision
+
     with ui.header():
         ui.label("SNOMED Postprocessing — NiceGUI prototype").classes("text-xl")
     banner = ui.label().classes("text-amber-900 bg-amber-100 p-3 rounded w-full")
@@ -60,6 +72,8 @@ def build_page(ui) -> None:
                             {"field": "status", "headerName": "Status"},
                             {"field": "policy_issue", "headerName": "Policy check"},
                             {"field": "ignored", "headerName": "Ignored"},
+                            {"field": "review", "headerName": "Manual review"},
+                            {"field": "document_reviewed", "headerName": "Document reviewed"},
                         ],
                         "defaultColDef": {"sortable": True, "filter": "agTextColumnFilter", "floatingFilter": True, "resizable": True, "editable": False},
                         "rowData": [],
@@ -88,26 +102,28 @@ def build_page(ui) -> None:
                     }).classes("w-full h-64")
                     preview = ui.label("Candidate clicks only preview; they do not approve anything.")
                     evidence = ui.label().classes("text-sm whitespace-pre-wrap")
-                    ui.button("Use candidate").tooltip("Disabled until backend decision staging is connected.").disable()
-            ui.label("Decision staging, reviewed flags, JSON export, ZIP write-back and deployment are not connected.")
+                    controls = ReviewControls(ui, lambda: state, lambda: load_revision, begin_load,
+                                              lambda session: finding_grid.options.__setitem__("rowData", _finding_rows(state, session)))
+            ui.label("Review JSON only. Generation, rules/conditions, ZIP write-back and deployment remain disconnected.")
 
             def show_source():
                 banner.set_text(
-                    ("Synthetic preview only. " if state.is_demo else "Read-only suggestions JSON preview. ")
-                    + "No project/CAS is changed and no decisions are staged."
+                    ("Synthetic preview only — load suggestions JSON to enable review. " if state.is_demo else "Suggestions and manual review. ")
+                    + "No project/CAS is changed. Review is page-local until downloaded as JSON."
                 )
                 source.set_text(f"Source: {state.source_name}")
                 saved_mode = state.metadata.get("target_view")
                 mode = {"policy": "Policy rules", "release": "Active release"}.get(saved_mode, "not recorded") if isinstance(saved_mode, str) else "not recorded"
                 scope.set_text(f"Saved annotator scope: {', '.join(state.source_annotators) or 'all annotators'} · Saved replacement mode: {mode}")
                 total = len(state.findings) if state.is_demo else len(state.source_suggestions)
-                counts.set_text(f"{total} saved suggestions · {len(state.findings)} in artifact scope before grid filters · read-only")
+                counts.set_text(f"{total} saved suggestions · {len(state.findings)} in artifact scope before grid filters · explicit review only")
                 finding_grid.options["rowData"] = _finding_rows(state)
                 candidate_grid.options["rowData"] = []
                 identity.set_text("Select a finding. Nothing is preselected.")
                 for label in (covered_text, finding_details, rationale, limits, evidence):
                     label.set_text("")
                 preview.set_text("No candidate selected. Inspecting a candidate stages no decision.")
+                controls.reset()
 
             def select_finding(event):
                 previous_id = state.selected_finding_id
@@ -130,6 +146,7 @@ def build_page(ui) -> None:
                 candidate_grid.options["rowData"] = _candidate_rows(finding)
                 preview.set_text("No candidate selected. Inspecting a candidate stages no decision.")
                 evidence.set_text("")
+                controls.refresh(update_grid=False)
 
             def select_candidate(event):
                 try:
@@ -140,6 +157,7 @@ def build_page(ui) -> None:
                 role = "Selectable candidate" if candidate.selectable else "Diagnostic context only — not selectable"
                 preview.set_text(f"{role}: {candidate.code} — {candidate.fsn}. No decision staged.")
                 evidence.set_text("\n".join(f"{key}: {value}" for key, value in candidate.details))
+                controls.refresh(update_grid=False)
 
             async def load_upload(event):
                 nonlocal state, load_revision
@@ -166,7 +184,7 @@ def build_page(ui) -> None:
                     return  # A newer upload or explicit demo reset superseded this load.
                 state = loaded
                 show_source()
-                upload_status.set_text("Suggestions loaded for this page only. No decisions staged.")
+                upload_status.set_text("Suggestions loaded. Previous review choices and flags reset; no decisions staged.")
                 uploader.reset()
 
             def use_demo():

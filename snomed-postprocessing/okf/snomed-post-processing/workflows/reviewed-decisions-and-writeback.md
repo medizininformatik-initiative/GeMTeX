@@ -71,6 +71,25 @@ Existing selected manual replacements, deletions, manual-edit markers, saved/rev
 
 **Undo Automatic Conditions** restores the last changed run's decision state and newly set reviewed flags, but skips later manual changes. Its snapshot is session-only; identical repeated applications preserve it, while changed suggestions or explicitly loading another reviewed state discard it. Conditions add/update matching choices; stricter settings or disabling a condition do not silently remove previously selected choices. Automatic selections and owned document-review flags are cleared when suggestion content changes. The ordinary JSON decisions export/import preserves automatic provenance and reviewed state (`automatic_reviewed_documents` metadata), not the undo history. Explicitly loading a review state replaces prior local review-progress flags.
 
+# Parallel NiceGUI review increment
+
+NiceGUI now supports explicit selectable replacement/Keep staging, Save/discard,
+document progress flags and version-1 decisions JSON download/restore using the
+existing backend reader/writer. Presentation/navigation remain separate. Keep is
+non-applying but human-reviewed; confirming a document protects its unchanged rows
+from later automation. Pending edits block download. Metadata annotator coverage,
+original indices, source identity/text and current selectable membership guard
+imports; NiceGUI exports additionally bind full suggestions content by SHA-256.
+Manual candidate ordinal/evidence preserves duplicate channels.
+
+Imports replace review atomically, preserve existing provenance, and cannot
+supersede newer uploads, demo reset or manual edits. Imported rule/deletion/manual-
+edit/ID-removal actions are retained read-only, not revalidated against HDF5;
+rule/manual conflicts fail rather than overwriting protected work. No CAS write-back,
+conditions, rule application or deployment is connected in NiceGUI. JSON downloads
+may contain clinical data and are the only application-level persisted review;
+reload otherwise loses page state. See the GUI interface OKF for tests/limits.
+
 # Matching semantics
 
 Decisions are matched conservatively by document, annotator, annotation layer, span/offset, source code, and optionally covered text. A decision that cannot be matched is reported as unmatched. Matching is planned against original IDs before modifications, preventing accidental chaining. Ambiguous concept-rule matches and multiple decisions targeting one annotation are rejected.
