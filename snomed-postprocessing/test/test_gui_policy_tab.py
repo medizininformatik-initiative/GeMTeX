@@ -3,7 +3,7 @@ import unittest
 
 from streamlit.testing.v1 import AppTest
 
-from snomed_post_processing.gui.policy_tab import (
+from snomed_post_processing.gui.streamlit.policy_tab import (
     _check_label,
     _finding_count_summary,
     _finding_matches_filters,
@@ -24,8 +24,8 @@ import pathlib
 from types import SimpleNamespace
 from unittest.mock import patch
 import streamlit as st
-from snomed_post_processing.gui.policy_tab import render_policy_tab
-from snomed_post_processing.gui.sidebar import GuiInputs
+from snomed_post_processing.gui.streamlit.policy_tab import render_policy_tab
+from snomed_post_processing.gui.streamlit.sidebar import GuiInputs
 from test.test_gui_policy_tab import FINDINGS
 
 st.session_state.setdefault("zip_file", pathlib.Path("project.zip"))
@@ -48,8 +48,8 @@ def generate(**kwargs):
         report_path("findings.json", "[]"),
         2, [] if st.session_state.get("test_empty") else FINDINGS,
     )
-with patch("snomed_post_processing.gui.policy_tab.save_uploaded_file", return_value=pathlib.Path("project.zip")), \\
-     patch("snomed_post_processing.gui.policy_tab.generate_report", side_effect=generate):
+with patch("snomed_post_processing.gui.streamlit.policy_tab.save_uploaded_file", return_value=pathlib.Path("project.zip")), \\
+     patch("snomed_post_processing.gui.streamlit.policy_tab.generate_report", side_effect=generate):
     render_policy_tab(inputs)
 '''
 

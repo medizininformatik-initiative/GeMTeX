@@ -8,7 +8,7 @@ from test import test_concept_rules as fixtures
 from test.test_gui_concept_rules import APP
 from test.test_automatic_conditions import candidate, suggestion
 from test.test_bm25_conditions import bm25_suggestion
-from snomed_post_processing.gui.sanitization_run_tab import _document_reviewed_key
+from snomed_post_processing.gui.streamlit.sanitization_run_tab import _document_reviewed_key
 
 
 CONDITIONS_APP = APP.replace(

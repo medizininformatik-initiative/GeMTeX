@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from snomed_post_processing.gui.sanitization_run_tab import (
+from snomed_post_processing.gui.streamlit.sanitization_run_tab import (
     _finding_context_label,
     _metadata_finding_context_lookup,
     _needs_row_specific_choice,

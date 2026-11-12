@@ -10,7 +10,7 @@ from streamlit.testing.v1 import AppTest
 
 from snomed_post_processing.cli.app import create_concept_id_dump, suggest_sanitization_cli
 from snomed_post_processing.findings_io.mapping import critical_finding_to_dict
-from snomed_post_processing.gui.sanitization_run_tab import _policy_issue_label, _status_label
+from snomed_post_processing.gui.streamlit.sanitization_run_tab import _policy_issue_label, _status_label
 from snomed_post_processing.hdf5_handling.metadata import (
     BlacklistMetadata, Hdf5MetadataSummary, format_hdf5_metadata_summary,
 )
@@ -129,10 +129,10 @@ RELEASE_APP = '''
 from types import SimpleNamespace
 from unittest.mock import patch
 import streamlit as st
-from snomed_post_processing.gui.sidebar import render_sidebar
-from snomed_post_processing.gui.sanitization_check_tab import render_sanitization_check_tab
+from snomed_post_processing.gui.streamlit.sidebar import render_sidebar
+from snomed_post_processing.gui.streamlit.sanitization_check_tab import render_sanitization_check_tab
 with patch("streamlit.segmented_control", side_effect=lambda label, **kwargs: "Active release" if label == "Allowed replacement concepts" else kwargs["default"]):
-    with patch("snomed_post_processing.gui.sidebar.render_file_source_selector", return_value=SimpleNamespace(value=None)):
+    with patch("snomed_post_processing.gui.streamlit.sidebar.render_file_source_selector", return_value=SimpleNamespace(value=None)):
         inputs = render_sidebar()
     st.session_state["observed_mode"] = inputs.release_blacklist_mode
     st.session_state["critical_findings"] = []

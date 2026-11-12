@@ -160,8 +160,8 @@ class TestSanitizationResolver(unittest.TestCase):
         self.assertTrue(suggestion.context_candidates[0].in_blacklist)
 
     def test_diagnostics_roundtrip_without_becoming_review_choices(self):
-        from snomed_post_processing.gui.sanitization_check_tab import _suggestion_overview_row
-        from snomed_post_processing.gui.sanitization_run_tab import _replacement_options_and_hints
+        from snomed_post_processing.gui.streamlit.sanitization_check_tab import _suggestion_overview_row
+        from snomed_post_processing.gui.streamlit.sanitization_run_tab import _replacement_options_and_hints
         from snomed_post_processing.sanitization.json_io import (
             sanitization_suggestion_from_dict,
             sanitization_suggestion_to_dict,

@@ -268,7 +268,7 @@ class TestSemanticBm25Sanitization(unittest.TestCase):
         self.assertIn("threshold", suggestion.reason)
         restored = sanitization_suggestion_from_dict(sanitization_suggestion_to_dict(suggestion))
         self.assertEqual(restored, suggestion)
-        from snomed_post_processing.gui.sanitization_run_tab import _replacement_options_and_hints
+        from snomed_post_processing.gui.streamlit.sanitization_run_tab import _replacement_options_and_hints
         self.assertEqual(_replacement_options_and_hints(restored), ([], {}))
 
     def test_blacklist_findings_remain_disabled_by_default(self):
@@ -367,7 +367,7 @@ class TestSemanticBm25Sanitization(unittest.TestCase):
         self.assertEqual(
             sanitization_suggestion_from_dict(sanitization_suggestion_to_dict(suggestions[0])), suggestions[0],
         )
-        from snomed_post_processing.gui.sanitization_run_tab import _replacement_options_and_hints
+        from snomed_post_processing.gui.streamlit.sanitization_run_tab import _replacement_options_and_hints
         options, _ = _replacement_options_and_hints(suggestions[0])
         self.assertTrue(options)
         self.assertFalse(any("300" in option for option in options))

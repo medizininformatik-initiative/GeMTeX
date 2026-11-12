@@ -6,7 +6,7 @@ import unittest
 from streamlit.testing.v1 import AppTest
 
 from test import test_concept_rules as fixtures
-from snomed_post_processing.gui.concept_rules import _rules_from_editor, ACTION_LABELS
+from snomed_post_processing.gui.streamlit.concept_rules import _rules_from_editor, ACTION_LABELS
 from snomed_post_processing.sanitization.concept_rules import DEFAULT_CONCEPT_RULES, rules_json_text
 from snomed_post_processing.sanitization.models import SanitizationSuggestion, SanitizationStatus
 from snomed_post_processing.uima_processing import CriticalFinding
@@ -16,9 +16,9 @@ APP = '''
 import io
 from unittest.mock import patch
 import streamlit as st
-from snomed_post_processing.gui.sidebar import GuiInputs
-from snomed_post_processing.gui.concept_rules import render_concept_rules_form
-from snomed_post_processing.gui.sanitization_run_tab import render_sanitization_run_tab, _restore_decision_state
+from snomed_post_processing.gui.streamlit.sidebar import GuiInputs
+from snomed_post_processing.gui.streamlit.concept_rules import render_concept_rules_form
+from snomed_post_processing.gui.streamlit.sanitization_run_tab import render_sanitization_run_tab, _restore_decision_state
 inputs = GuiInputs(
     load_annotators=False, hdf5_file=st.session_state["test_hdf5"],
     annotation_types_text=st.session_state.get("test_annotation_types", "gemtex.Concept"), ignore_overlap_types_text="",
@@ -254,10 +254,10 @@ class GuiConceptRulesTest(unittest.TestCase):
 from types import SimpleNamespace
 from unittest.mock import patch
 import streamlit as st
-from snomed_post_processing.gui.sidebar import render_sidebar
-from snomed_post_processing.gui.sanitization_run_tab import _restore_decision_state
+from snomed_post_processing.gui.streamlit.sidebar import render_sidebar
+from snomed_post_processing.gui.streamlit.sanitization_run_tab import _restore_decision_state
 with patch("streamlit.segmented_control", side_effect=lambda *args, **kwargs: kwargs["default"]), \\
-     patch("snomed_post_processing.gui.sidebar.render_file_source_selector", return_value=SimpleNamespace(value=None)):
+     patch("snomed_post_processing.gui.streamlit.sidebar.render_file_source_selector", return_value=SimpleNamespace(value=None)):
     inputs = render_sidebar()
 if st.button("Restore ID settings"):
     _restore_decision_state([], {"id_prefix": "", "id_feature": "conceptId"})

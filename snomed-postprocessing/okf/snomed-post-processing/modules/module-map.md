@@ -37,7 +37,9 @@ Console scripts are declared in `/pyproject.toml` and implemented in `/src/snome
 | Package/module | Responsibility |
 |---|---|
 | `cli/` | Click commands, reusable option decorators, logging setup, custom Click parameter types. |
-| `gui/` | Streamlit app tabs, file source selectors, report downloads, review state, deployment form. |
+| `gui/app.py` | Stable framework-neutral launcher: `python -m snomed_post_processing.gui.app` or `python src/snomed_post_processing/gui/app.py`. Delegates to Streamlit with the current interpreter, forwarded arguments and propagated exit status; switch the backend here later. |
+| `gui/streamlit/` | Existing Streamlit app tabs, file source selectors, report downloads, review state, deployment form. Started by the shared launcher; direct `streamlit run src/snomed_post_processing/gui/streamlit/app.py` remains supported. |
+| `gui/nicegui/` | Reserved package for the replacement frontend; no runnable implementation yet. |
 | `findings_io/` | CriticalFindings JSON serialization/deserialization and mapping helpers. |
 | `hdf5_handling/` | HDF5 policy layout readers, candidate validity gates, metadata summaries, compact ancestor dump helpers. |
 | `release_ingestion/` | RF2 member discovery, RF2 row readers, materialized HDF5 writer. |

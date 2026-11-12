@@ -3,7 +3,7 @@ import unittest
 
 from streamlit.testing.v1 import AppTest
 
-from snomed_post_processing.gui.sanitization_check_tab import DEFAULT_GUI_ASSOCIATION_TYPES
+from snomed_post_processing.gui.streamlit.sanitization_check_tab import DEFAULT_GUI_ASSOCIATION_TYPES
 from snomed_post_processing.sanitization.models import (
     DEFAULT_ALLOWED_ASSOCIATION_TYPES,
     SUPPORTED_ASSOCIATION_TYPES,
@@ -14,13 +14,13 @@ APP = '''
 from types import SimpleNamespace
 from unittest.mock import patch
 import streamlit as st
-from snomed_post_processing.gui.sidebar import render_sidebar
-from snomed_post_processing.gui.sanitization_check_tab import render_sanitization_check_tab
+from snomed_post_processing.gui.streamlit.sidebar import render_sidebar
+from snomed_post_processing.gui.streamlit.sanitization_check_tab import render_sanitization_check_tab
 
 # AppTest's button-group serializer does not round-trip single-value segmented controls
 # in the installed Streamlit version; these unrelated selectors stay at their defaults.
 with patch("streamlit.segmented_control", side_effect=lambda *args, **kwargs: kwargs["default"]):
-    with patch("snomed_post_processing.gui.sidebar.render_file_source_selector",
+    with patch("snomed_post_processing.gui.streamlit.sidebar.render_file_source_selector",
                return_value=SimpleNamespace(value=None)):
         inputs = render_sidebar()
     st.session_state["critical_findings"] = []

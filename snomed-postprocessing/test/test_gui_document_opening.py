@@ -4,12 +4,12 @@ from unittest.mock import patch
 
 from streamlit.testing.v1 import AppTest
 
-from snomed_post_processing.gui import sanitization_run_tab as tab
+from snomed_post_processing.gui.streamlit import sanitization_run_tab as tab
 
 APP = '''
 import streamlit as st
 from test.test_automatic_conditions import suggestion, candidate
-from snomed_post_processing.gui.sanitization_run_tab import (
+from snomed_post_processing.gui.streamlit.sanitization_run_tab import (
     _suggestions_to_review_rows, _render_document_review_sections, _document_reviewed_key,
 )
 st.session_state.setdefault(_document_reviewed_key("reviewed.txt"), True)

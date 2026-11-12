@@ -3,7 +3,7 @@
 **Status:** migration design draft; no application migration implemented or browser-tested.  
 **Documentation snapshot:** 2026-11-11; see [download manifest](references/nicegui/manifest.json).  
 **Application inspected:** `C:/Users/fra3066mat/PycharmProjects/GeMTeX/snomed-postprocessing`.  
-**Source paths below:** relative to `src/snomed_post_processing/`, unless stated otherwise.
+**Source paths below:** relative to `src/snomed_post_processing/`, unless stated otherwise. The original inventory predates the package relocation: all listed Streamlit `gui/*.py` modules now live under `gui/streamlit/*.py` (`snomed_post_processing.gui.streamlit`). The parallel `gui/nicegui/` package is reserved for the replacement frontend. A new framework-neutral `gui/app.py` is the stable Python launcher; it currently starts Streamlit and can switch to NiceGUI later without changing user/Docker startup commands.
 
 ## 1. Goal and boundaries
 

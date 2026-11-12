@@ -11,7 +11,7 @@ from snomed_post_processing.sanitization.conditions import DEFAULT_CONDITION_ASS
 
 
 REVIEW_APP = '''
-from snomed_post_processing.gui.sanitization_run_tab import (
+from snomed_post_processing.gui.streamlit.sanitization_run_tab import (
     _render_automatic_conditions, _render_inception_apply_upload_controls,
 )
 _render_automatic_conditions([], [], [])
@@ -79,7 +79,7 @@ class GuiHelpTextTest(unittest.TestCase):
 import pathlib
 from unittest.mock import patch
 import streamlit as st
-from snomed_post_processing.gui.file_sources import render_file_source_selector
+from snomed_post_processing.gui.streamlit.file_sources import render_file_source_selector
 with patch("streamlit.segmented_control", side_effect=lambda *args, **kwargs: kwargs["default"]):
     for index, mode in enumerate(["Upload", "Data directory", "Server path"]):
         render_file_source_selector(
@@ -96,7 +96,7 @@ with patch("streamlit.segmented_control", side_effect=lambda *args, **kwargs: kw
     def test_report_downloads_explain_format_and_masking_limits(self):
         app = self.healthy(AppTest.from_string('''
 import streamlit as st
-from snomed_post_processing.gui.policy_tab import render_policy_check_result
+from snomed_post_processing.gui.streamlit.policy_tab import render_policy_check_result
 st.session_state["policy_check_result"] = {
     "critical_documents_found": 0, "critical_findings": [], "report_folder": "test-output",
     "findings_json_text": "{}", "findings_json_name": "findings.json",
@@ -117,17 +117,17 @@ import pathlib
 import runpy
 from unittest.mock import patch
 import streamlit as st
-from snomed_post_processing.gui.sidebar import GuiInputs
+from snomed_post_processing.gui.streamlit.sidebar import GuiInputs
 inputs = GuiInputs(
     load_annotators=False, hdf5_file=None, annotation_types_text="gemtex.Concept",
     ignore_overlap_types_text="", ignore_overlap_mode="overlap", id_prefix="", id_feature="id",
     data_dir=pathlib.Path("."), target_view=st.session_state["test_target_view"],
 )
-with patch("snomed_post_processing.gui.sidebar.render_sidebar", return_value=inputs), \\
-     patch("snomed_post_processing.gui.policy_tab.render_policy_tab"), \\
-     patch("snomed_post_processing.gui.sanitization_check_tab.render_sanitization_check_tab"), \\
-     patch("snomed_post_processing.gui.sanitization_run_tab.render_sanitization_run_tab"):
-    runpy.run_module("snomed_post_processing.gui.app", run_name="__main__")
+with patch("snomed_post_processing.gui.streamlit.sidebar.render_sidebar", return_value=inputs), \\
+     patch("snomed_post_processing.gui.streamlit.policy_tab.render_policy_tab"), \\
+     patch("snomed_post_processing.gui.streamlit.sanitization_check_tab.render_sanitization_check_tab"), \\
+     patch("snomed_post_processing.gui.streamlit.sanitization_run_tab.render_sanitization_run_tab"):
+    runpy.run_module("snomed_post_processing.gui.streamlit.app", run_name="__main__")
 ''')
         for mode, description in (
             ("policy", "active concepts in the inclusion list and outside the exclusion list"),

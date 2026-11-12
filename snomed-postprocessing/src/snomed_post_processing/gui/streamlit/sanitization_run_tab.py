@@ -47,7 +47,7 @@ from .file_sources import render_file_source_selector
 from .files import save_uploaded_file
 from .sidebar import GuiInputs
 from .annotator_scope import sync_annotator_scope, reset_generic_review_for_new_suggestions
-from ..uima_processing.scope import annotator_in_scope, normalize_annotators, scope_covers
+from snomed_post_processing.uima_processing.scope import annotator_in_scope, normalize_annotators, scope_covers
 from .concept_rules import render_rule_review, protect_manual_decisions
 from snomed_post_processing.sanitization.concept_rules import decision_key
 

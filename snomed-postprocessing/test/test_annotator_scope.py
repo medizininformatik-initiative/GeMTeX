@@ -14,9 +14,9 @@ from streamlit.testing.v1 import AppTest
 from test import test_concept_rules as fixtures
 from test.test_automatic_conditions import suggestion, decision
 from snomed_post_processing.findings_io import read_critical_findings_json_with_metadata
-from snomed_post_processing.gui.annotator_scope import sync_annotator_scope, reset_generic_review_for_new_suggestions
-from snomed_post_processing.gui import sanitization_run_tab as run_tab
-from snomed_post_processing.gui.sanitization_run_tab import _suggestions_to_review_rows, _restore_decision_state
+from snomed_post_processing.gui.streamlit.annotator_scope import sync_annotator_scope, reset_generic_review_for_new_suggestions
+from snomed_post_processing.gui.streamlit import sanitization_run_tab as run_tab
+from snomed_post_processing.gui.streamlit.sanitization_run_tab import _suggestions_to_review_rows, _restore_decision_state
 from snomed_post_processing.pipelines.inception_apply_upload import apply_decisions_and_upload_to_inception
 from snomed_post_processing.pipelines.inception_upload_artifacts import build_inception_upload_artifacts
 from snomed_post_processing.pipelines.sanitization_run import run_sanitization
@@ -27,10 +27,10 @@ from snomed_post_processing.uima_processing.scope import annotator_in_scope, nor
 APP = '''
 from unittest.mock import patch
 import streamlit as st
-from snomed_post_processing.gui.sidebar import GuiInputs
-from snomed_post_processing.gui.policy_tab import render_policy_tab
-from snomed_post_processing.gui.sanitization_check_tab import render_sanitization_check_tab
-from snomed_post_processing.gui.sanitization_run_tab import render_sanitization_run_tab
+from snomed_post_processing.gui.streamlit.sidebar import GuiInputs
+from snomed_post_processing.gui.streamlit.policy_tab import render_policy_tab
+from snomed_post_processing.gui.streamlit.sanitization_check_tab import render_sanitization_check_tab
+from snomed_post_processing.gui.streamlit.sanitization_run_tab import render_sanitization_run_tab
 from snomed_post_processing.sanitization.models import SanitizationSuggestion, SanitizationStatus
 from snomed_post_processing.pipelines.sanitization_run import run_sanitization
 inputs = GuiInputs(
@@ -47,8 +47,8 @@ def write_local(*args, **kwargs):
     return run_sanitization(*args, **kwargs)
 with patch("streamlit.segmented_control", side_effect=lambda *args, **kwargs: kwargs["default"]), \\
      patch("streamlit.pills", side_effect=lambda *args, **kwargs: kwargs["default"]), \\
-     patch("snomed_post_processing.gui.sanitization_check_tab.SanitizationResolver") as structured, \\
-     patch("snomed_post_processing.gui.sanitization_run_tab.run_sanitization", side_effect=write_local):
+     patch("snomed_post_processing.gui.streamlit.sanitization_check_tab.SanitizationResolver") as structured, \\
+     patch("snomed_post_processing.gui.streamlit.sanitization_run_tab.run_sanitization", side_effect=write_local):
     structured.return_value.suggest_all.side_effect = suggest_all
     check, suggest, review = st.tabs(["Check", "Suggest", "Review"])
     with check:

@@ -8,7 +8,7 @@ from unittest.mock import patch
 from streamlit.testing.v1 import AppTest
 
 from test.test_bm25_ties import write_tied_hdf5, finding
-from snomed_post_processing.gui.sanitization_run_tab import (
+from snomed_post_processing.gui.streamlit.sanitization_run_tab import (
     NO_REPLACEMENT_LABEL, _browser_identity, _stage_browser_selection,
     _candidate_ranks, _replacement_options_and_hints,
 )
@@ -17,7 +17,7 @@ from snomed_post_processing.sanitization.semantic_bm25 import SemanticBm25Resolv
 
 APP = '''
 import streamlit as st
-from snomed_post_processing.gui.sanitization_run_tab import (
+from snomed_post_processing.gui.streamlit.sanitization_run_tab import (
     _suggestions_to_review_rows, _render_manual_choice_cards, _restore_decision_state,
 )
 if st.session_state.get("restore"):

@@ -32,7 +32,7 @@ from snomed_post_processing.sanitization import (
 
 from .downloads import download_json_report, download_md_report
 from .annotator_scope import sync_annotator_scope, reset_generic_review_for_new_suggestions
-from ..uima_processing.scope import annotator_in_scope, scope_covers
+from snomed_post_processing.uima_processing.scope import annotator_in_scope, scope_covers
 from .file_sources import list_server_files, render_file_source_selector
 from .files import save_uploaded_file
 from .sanitization_run_tab import _finding_context_label, _project_document_text_lookup

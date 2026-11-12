@@ -26,14 +26,21 @@ The Streamlit GUI wraps the same pipeline functions as the CLI. It is intended f
 
 | File | Role |
 |---|---|
-| `/src/snomed_post_processing/gui/app.py` | Main Streamlit page setup and tab orchestration. |
-| `/src/snomed_post_processing/gui/sidebar.py` | Shared input/sidebar controls, target-view selection, blacklist mode selection, INCEpTION API controls. |
-| `/src/snomed_post_processing/gui/file_sources.py` | Shared file selector supporting Upload, Data directory, and Server path. |
-| `/src/snomed_post_processing/gui/policy_tab.py` | Policy checks, persistent findings tables, and report downloads. |
-| `/src/snomed_post_processing/gui/sanitization_check_tab.py` | Suggestion generation UI and settings metadata. |
-| `/src/snomed_post_processing/gui/concept_rules.py` | Explicit concept-rule form, one-step application to review, and rule-decision review/clearing. |
-| `/src/snomed_post_processing/gui/sanitization_run_tab.py` | Review/apply UI and INCEpTION deployment form. |
-| `/src/snomed_post_processing/gui/downloads.py` | Markdown/JSON download helpers. |
+| `/src/snomed_post_processing/gui/app.py` | Framework-neutral Python launcher; currently delegates to Streamlit, later switchable to NiceGUI. |
+| `/src/snomed_post_processing/gui/streamlit/app.py` | Main Streamlit page setup and tab orchestration. |
+| `/src/snomed_post_processing/gui/streamlit/sidebar.py` | Shared input/sidebar controls, target-view selection, blacklist mode selection, INCEpTION API controls. |
+| `/src/snomed_post_processing/gui/streamlit/file_sources.py` | Shared file selector supporting Upload, Data directory, and Server path. |
+| `/src/snomed_post_processing/gui/streamlit/policy_tab.py` | Policy checks, persistent findings tables, and report downloads. |
+| `/src/snomed_post_processing/gui/streamlit/sanitization_check_tab.py` | Suggestion generation UI and settings metadata. |
+| `/src/snomed_post_processing/gui/streamlit/concept_rules.py` | Explicit concept-rule form, one-step application to review, and rule-decision review/clearing. |
+| `/src/snomed_post_processing/gui/streamlit/sanitization_run_tab.py` | Review/apply UI and INCEpTION deployment form. |
+| `/src/snomed_post_processing/gui/streamlit/downloads.py` | Markdown/JSON download helpers. |
+
+Launch with `python src/snomed_post_processing/gui/app.py` or `python -m snomed_post_processing.gui.app` (prefix with `uv run` in the project environment). This stable launcher starts `sys.executable -m streamlit run <absolute-path-to-streamlit/app.py>`, forwards extra arguments and propagates the exit code. Importing the launcher starts no server and imports neither GUI framework. Change this launcher when NiceGUI is ready; Docker and user startup commands remain stable. Direct backend startup remains available with `streamlit run src/snomed_post_processing/gui/streamlit/app.py`. Imports and AppTest mock targets use `snomed_post_processing.gui.streamlit.*`. `gui/__init__.py` remains framework-neutral, with no legacy module aliases or re-exports. The sibling `gui/nicegui/` package is reserved for migration and has no runnable UI yet. The relocation changes paths only, not processing, defaults, state semantics or artifact formats.
+
+## Relocation verification
+
+Offline relocation checks cover the script-file entry point, framework-neutral `gui` namespace, relocated imports/mock targets, per-tab AppTests, shared scope and synthetic write-back workflow. Of 134 focused checks, 131 pass. Three existing assertions fail because the GUI currently initialises both BM25 automatic selection and **Disable TLS verification** to `True`, whereas the tests expect `False`. Both values were already present in `HEAD` before relocation; they were deliberately left unchanged in this path-only migration. In particular, current GUI TLS opt-out is preselected even though the deployment API still defaults to verification enabled. Resolve these defaults separately rather than hiding the failures or altering them during relocation. No network, live deployment or browser validation was performed.
 
 # Contextual help
 

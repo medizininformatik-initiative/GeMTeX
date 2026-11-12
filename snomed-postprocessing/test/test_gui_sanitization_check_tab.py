@@ -10,7 +10,7 @@ from streamlit.testing.v1 import AppTest
 from test.test_semantic_bm25_sanitization import _finding, _write_compact_hdf5
 from snomed_post_processing.sanitization.semantic_bm25 import suggest_semantic_bm25
 
-from snomed_post_processing.gui.sanitization_check_tab import (
+from snomed_post_processing.gui.streamlit.sanitization_check_tab import (
     _enforce_embedded_blacklist,
     _resolve_custom_blacklist_indices,
     _uses_custom_blacklist,
@@ -74,8 +74,8 @@ class GuiSanitizationCheckHelpersTest(unittest.TestCase):
 from types import SimpleNamespace
 from unittest.mock import patch
 import streamlit as st
-from snomed_post_processing.gui.sidebar import GuiInputs
-from snomed_post_processing.gui.sanitization_check_tab import render_sanitization_check_tab
+from snomed_post_processing.gui.streamlit.sidebar import GuiInputs
+from snomed_post_processing.gui.streamlit.sanitization_check_tab import render_sanitization_check_tab
 from snomed_post_processing.sanitization.models import SanitizationSuggestion, SanitizationStatus
 from test.test_semantic_bm25_sanitization import _finding
 inputs = GuiInputs(
@@ -85,9 +85,9 @@ inputs = GuiInputs(
 )
 st.session_state["critical_findings"] = [_finding()]
 with patch("streamlit.segmented_control", side_effect=lambda *args, **kwargs: kwargs["default"]), \\
-     patch("snomed_post_processing.gui.sanitization_check_tab.render_file_source_selector",
+     patch("snomed_post_processing.gui.streamlit.sanitization_check_tab.render_file_source_selector",
            return_value=SimpleNamespace(value=None, source="none", path=None)), \\
-     patch("snomed_post_processing.gui.sanitization_check_tab.SanitizationResolver") as structured:
+     patch("snomed_post_processing.gui.streamlit.sanitization_check_tab.SanitizationResolver") as structured:
     structured.return_value.suggest_all.return_value = [
         SanitizationSuggestion(_finding(), SanitizationStatus.NO_HISTORICAL_ASSOCIATION)
     ]

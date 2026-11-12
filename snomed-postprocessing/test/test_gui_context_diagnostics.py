@@ -5,7 +5,7 @@ import zipfile
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from snomed_post_processing.gui import sanitization_run_tab as tab
+from snomed_post_processing.gui.streamlit import sanitization_run_tab as tab
 
 
 class TestContextDiagnostics(unittest.TestCase):

@@ -16,7 +16,7 @@ from snomed_post_processing.sanitization.concept_rules import (
 )
 from .files import save_uploaded_file
 from .sidebar import GuiInputs
-from ..uima_processing.scope import normalize_annotators
+from snomed_post_processing.uima_processing.scope import normalize_annotators
 
 
 ACTION_LABELS = {"clear_id": "Remove ID only", "replace": "Replace with concept"}

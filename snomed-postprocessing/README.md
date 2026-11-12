@@ -367,11 +367,15 @@ uv run deploy-inception-sanitized-project \
 
 **The annotator selection in tab 1 applies throughout the pipeline**, including concept rules, suggestions, review and export/upload—not just the policy check. Empty means all annotators. Excluded annotators' CAS stays unchanged in a local sanitized ZIP and is omitted from upload artifacts. Saved artifact metadata carries the scope. Changing it discards excluded pending choices and resets review progress; narrower-scope artifacts require rechecking/regeneration before broadening. Save reviewed decisions before replacing suggestions, which resets generic index-based choices to prevent applying them to different annotations.
 
-Start the Streamlit app locally:
+The stable launcher is `gui/app.py`. It currently starts the app in `gui/streamlit/`; `gui/nicegui/` is reserved for the replacement frontend and is not yet runnable. Switching frontends later only requires changing the launcher, not these startup commands.
+
+Start the GUI locally:
 
 ```bash
-uv run streamlit run src/snomed_post_processing/gui/app.py
+uv run python src/snomed_post_processing/gui/app.py
 ```
+
+Alternatively, use `uv run python -m snomed_post_processing.gui.app`. Extra options are currently forwarded to Streamlit, e.g. `--server.port 8502`. The launcher uses the same Python interpreter and returns the frontend's exit code.
 
 With Docker, the GUI can be started as:
 

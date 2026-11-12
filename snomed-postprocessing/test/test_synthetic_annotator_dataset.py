@@ -26,10 +26,10 @@ FIXTURE = pathlib.Path(__file__).parent / "projects" / "synthetic-annotator-scop
 APP = '''
 from unittest.mock import patch
 import streamlit as st
-from snomed_post_processing.gui.sidebar import GuiInputs
-from snomed_post_processing.gui.policy_tab import render_policy_tab
-from snomed_post_processing.gui.sanitization_check_tab import render_sanitization_check_tab
-from snomed_post_processing.gui.sanitization_run_tab import render_sanitization_run_tab
+from snomed_post_processing.gui.streamlit.sidebar import GuiInputs
+from snomed_post_processing.gui.streamlit.policy_tab import render_policy_tab
+from snomed_post_processing.gui.streamlit.sanitization_check_tab import render_sanitization_check_tab
+from snomed_post_processing.gui.streamlit.sanitization_run_tab import render_sanitization_run_tab
 inputs = GuiInputs(load_annotators=True, hdf5_file=st.session_state["policy"],
     annotation_types_text="webanno.custom.Concept", ignore_overlap_types_text="",
     ignore_overlap_mode="overlap", id_prefix="http://snomed.info/id/", id_feature="id",

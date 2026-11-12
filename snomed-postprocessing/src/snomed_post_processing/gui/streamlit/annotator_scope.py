@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from ..uima_processing.scope import annotator_in_scope, normalize_annotators
+from snomed_post_processing.uima_processing.scope import annotator_in_scope, normalize_annotators
 
 
 def reset_generic_review_for_new_suggestions(suggestions):

@@ -15,7 +15,7 @@ from .files import save_uploaded_file
 from .report_generation import generate_report
 from .sidebar import GuiInputs
 from .annotator_scope import sync_annotator_scope
-from ..uima_processing.scope import normalize_annotators
+from snomed_post_processing.uima_processing.scope import normalize_annotators
 
 
 def render_policy_tab(inputs: GuiInputs) -> None:
