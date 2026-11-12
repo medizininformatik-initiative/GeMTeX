@@ -1,0 +1,344 @@
+# Binding Properties | NiceGUI
+
+[Button: icon:menu]
+
+[](/)
+
+[Installation](/#installation)
+
+[Features](/#features)
+
+[Demos](/#demos)
+
+[Documentation](/documentation)
+
+[Examples](/examples)
+
+[Why?](/#why)
+
+[Button]
+
+[Button]
+
+[Button]
+
+[](https://github.com/zauberzeug/nicegui/)
+
+[Button: icon:more_vert]
+
+# *Binding* Properties
+
+## Bindings
+
+NiceGUI is able to directly bind UI elements to models.
+Binding is possible for UI element properties like text, value or visibility and for model properties that are (nested) class attributes.
+Each element provides methods like `bind_value` and `bind_visibility` to create a two-way binding with the corresponding property.
+To define a one-way binding use the `_from` and `_to` variants of these methods.
+Just pass a property of the model as parameter to these methods to create the binding.
+The values will be updated immediately and whenever one of them changes.
+
+main.py
+
+[Button]
+
+````python
+from nicegui import ui
+
+class Demo:
+    def __init__(self):
+        self.number = 1
+
+demo = Demo()
+v = ui.checkbox('visible', value=True)
+with ui.column().bind_visibility_from(v, 'value'):
+    ui.slider(min=1, max=3).bind_value(demo, 'number')
+    ui.toggle({1: 'A', 2: 'B', 3: 'C'}).bind_value(demo, 'number')
+    ui.number().bind_value(demo, 'number')
+
+ui.run()
+````
+
+## Transformation functions
+
+You can use ``forward`` and ``backward`` transformation functions to convert the value
+when propagating it from one object to another.
+These functions are called whenever the source attribute changes,
+or - in case of active links (see below) - whenever the source attribute is checked for changes.
+
+Note:
+NiceGUI 2.16.0 improved efficiency of binding propagation by strictly adhering to a Depth-First-Search approach,
+updating every affected node once and executing the transformation function once.
+If you are migrating from NiceGUI 2.15.0 or older, there may be extra runs on transformation functions,
+especially ones in the opposite direction to the current propagation direction,
+which are no-longer ran in NiceGUI 2.16.0.
+As a result, you would need to change your code appropriately.
+
+We would also like to mention that, for the most stable behaviour across releases,
+it is best-practice that transform functions have no side-effects and do basic transform operations only.
+This way, it will not matter how NiceGUI chooses to call them in what order and by how many times.
+
+main.py
+
+[Button]
+
+````python
+from nicegui import ui
+
+i = ui.input(value='Lorem ipsum')
+ui.label().bind_text_from(i, 'value',
+                          backward=lambda text: f'{len(text)} characters')
+
+ui.run()
+````
+
+## Bind to dictionary
+
+Here we are binding the text of labels to a dictionary.
+
+main.py
+
+[Button]
+
+````python
+from nicegui import ui
+
+data = {'name': 'Bob', 'age': 17}
+
+ui.label().bind_text_from(data, 'name', backward=lambda n: f'Name: {n}')
+ui.label().bind_text_from(data, 'age', backward=lambda a: f'Age: {a}')
+
+ui.button('Turn 18', on_click=lambda: data.update(age=18))
+
+ui.run()
+````
+
+## Bind to nested properties
+
+The binding methods also accept a tuple of strings for nested keys.
+This allows you to bind to nested properties of complex data structures, like dictionaries of dictionaries or nested dataclasses.
+
+*Added in version 3.10.0*
+
+main.py
+
+[Button]
+
+````python
+from nicegui import ui
+
+data = {'user': {'name': 'Bob', 'age': 17}}
+
+ui.label().bind_text_from(data, ('user', 'name'), backward=lambda n: f'Name: {n}')
+ui.label().bind_text_from(data, ('user', 'age'), backward=lambda a: f'Age: {a}')
+
+ui.button('Turn 18', on_click=lambda: data['user'].update(age=18))
+
+ui.run()
+````
+
+## Bind to variable
+
+Here we are binding the value from the datepicker to a bare variable.
+Therefore we use the dictionary `globals()` which contains all global variables.
+This demo is based on the [official datepicker example](/documentation/date#input_element_with_date_picker).
+
+main.py
+
+[Button]
+
+````python
+from nicegui import ui
+
+date = '2023-01-01'
+
+with ui.input('Date').bind_value(globals(), 'date') as date_input:
+    with ui.menu() as menu:
+        ui.date(on_change=lambda: ui.notify(f'Date: {date}')).bind_value(date_input, forward=lambda v: v or '')
+    with date_input.add_slot('append'):
+        ui.icon('edit_calendar').on('click', menu.open).classes('cursor-pointer')
+
+ui.run()
+````
+
+## Bind to storage
+
+Bindings also work with [`app.storage`](/documentation/storage).
+Here we are storing the value of a textarea between visits.
+The note is also shared between all tabs of the same user.
+
+main.py
+
+[Button]
+
+````python
+from nicegui import app, ui
+
+ui.textarea('This note is kept between visits').classes('w-full') \
+    .bind_value(app.storage.user, 'note')
+
+ui.run()
+````
+
+## Check for non-existing bound attributes
+
+Before a binding is created, the involved attributes are checked for existence.
+Although binding to a non-existing attribute is possible, it is usually not done on purpose.
+For example, when renaming object attributes during refactoring,
+the attribute name in a binding definition might easily be missed.
+
+This behavior can be customized with the `strict` parameter.
+By default, object attributes are checked for existence, but dictionary keys are not.
+If the attribute is not found, a warning is logged, but the binding is created nonetheless.
+
+The following demo shows how binding to a non-existing object attribute causes a warning,
+unless `strict` is set to `False`.
+Binding to a possibly empty storage dictionary, does not cause any warnings,
+unless `strict` is set to `True`.
+
+*Added in version 3.0.0*
+
+main.py
+
+[Button]
+
+````python
+from nicegui import app, binding, ui
+
+@binding.bindable_dataclass
+class Data:
+    name: str
+
+data = Data('Alice')
+
+ui.input().bind_value(data, 'name')  # no warning
+ui.number().bind_value(data, 'age')  # warning
+ui.input().bind_value(data, 'address', strict=False)  # no warning
+
+ui.input().bind_value(app.storage.general, 'name')  # no warning
+ui.number().bind_value(app.storage.general, 'age')  # no warning
+ui.input().bind_value(app.storage.general, 'address', strict=True)  # warning
+
+ui.run()
+````
+
+## Bindable properties for maximum performance
+
+There are two types of bindings:
+
+1. "Bindable properties" automatically detect write access and trigger the value propagation.
+    Most NiceGUI elements use these bindable properties, like `value` in `ui.input` or `text` in `ui.label`.
+    Basically all properties with `bind()` methods support this type of binding.
+2. All other bindings are sometimes called "active links".
+    If you bind a label text to some dictionary entry or an attribute of a custom data model,
+    NiceGUI's binding module has to actively check if the value changed.
+    This is done in a `refresh_loop()` which runs every 0.1 seconds.
+    The interval can be configured via `binding_refresh_interval` in `ui.run()`.
+
+The "bindable properties" are very efficient and don't cost anything as long as the values don't change.
+But the "active links" need to check all bound values 10 times per second.
+This can get costly, especially if you bind to complex objects like lists or dictionaries.
+
+Because it is crucial not to block the main thread for too long,
+we show a warning if one step of the `refresh_loop()` takes too long.
+You can configure the threshold via `binding.MAX_PROPAGATION_TIME` which defaults to 0.01 seconds.
+But often the warning is a valuable indicator for a performance or memory issue.
+If your CPU would be busy updating bindings a significant duration,
+nothing else could happen on the main thread and the UI "hangs".
+
+The following demo shows how to define and use bindable properties for a `Demo` class like in the first demo.
+The `number` property is now a `BindableProperty`,
+which allows NiceGUI to detect write access and trigger the value propagation immediately.
+
+main.py
+
+[Button]
+
+````python
+from nicegui import binding, ui
+
+class Demo:
+    number = binding.BindableProperty()
+
+    def __init__(self):
+        self.number = 1
+
+demo = Demo()
+ui.slider(min=1, max=3).bind_value(demo, 'number')
+ui.toggle({1: 'A', 2: 'B', 3: 'C'}).bind_value(demo, 'number')
+ui.number(min=1, max=3).bind_value(demo, 'number')
+
+ui.run()
+````
+
+## Bindable dataclass
+
+The `bindable_dataclass` decorator provides a convenient way to create classes with bindable properties.
+It extends the functionality of Python's standard `dataclasses.dataclass` decorator
+by automatically making all dataclass fields bindable.
+This eliminates the need to manually declare each field as a `BindableProperty`
+while retaining all the benefits of regular dataclasses.
+
+*Added in version 2.11.0*
+
+main.py
+
+[Button]
+
+````python
+from nicegui import binding, ui
+
+@binding.bindable_dataclass
+class Demo:
+    number: int = 1
+
+demo = Demo()
+ui.slider(min=1, max=3).bind_value(demo, 'number')
+ui.toggle({1: 'A', 2: 'B', 3: 'C'}).bind_value(demo, 'number')
+ui.number(min=1, max=3).bind_value(demo, 'number')
+
+ui.run()
+````
+
+**Nice**GUI
+
+The Python UI framework that shows up in your browser.
+
+[](https://github.com/zauberzeug/nicegui/)
+
+[](https://discord.gg/TEpFeAaF4f)
+
+[](https://www.reddit.com/r/nicegui/)
+
+Resources
+
+[Documentation](/documentation)
+
+[Examples](/examples)
+
+[LLM reference](/llms.txt)
+
+[GitHub](https://github.com/zauberzeug/nicegui/)
+
+[PyPI](https://pypi.org/project/nicegui/)
+
+Community
+
+[Discussions](https://github.com/zauberzeug/nicegui/discussions)
+
+[Discord](https://discord.gg/TEpFeAaF4f)
+
+[Reddit](https://www.reddit.com/r/nicegui/)
+
+[Contributing](https://github.com/zauberzeug/nicegui/blob/main/CONTRIBUTING.md)
+
+[Sponsors](https://github.com/sponsors/zauberzeug)
+
+Legal
+
+[Imprint](/imprint_privacy#imprint)
+
+[Privacy](/imprint_privacy#privacy)
+
+Made with NiceGUI by [Zauberzeug](https://zauberzeug.com)
+
+© 2026 [Zauberzeug GmbH](https://zauberzeug.com)

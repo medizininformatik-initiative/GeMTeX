@@ -1,0 +1,174 @@
+{
+  "retrieved_at_utc": "2026-11-11T11:46:06.261608+00:00",
+  "note": "Live documentation snapshot; not a version-pinned API contract.",
+  "pages": [
+    {
+      "file": "llms.md",
+      "url": "https://nicegui.io/llms.txt",
+      "final_url": "https://nicegui.io/llms.txt",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 68295,
+      "sha256": "ebf90ec77c1bf3d315ad4abe5db15353eb5a1448be209165e53ab319c58c3b02"
+    },
+    {
+      "file": "aggrid.md",
+      "url": "https://nicegui.io/documentation/aggrid",
+      "final_url": "https://nicegui.io/documentation/aggrid",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 37818,
+      "sha256": "9c547ce0efe5724ad67ce1705d5bce86e3a69bdff7b85da363e78c66322ab11f"
+    },
+    {
+      "file": "table.md",
+      "url": "https://nicegui.io/documentation/table",
+      "final_url": "https://nicegui.io/documentation/table",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 43927,
+      "sha256": "8b6314c99db2e637bc8e2fa76e296192f537afe8b22358490c1c12ac0a9d9b96"
+    },
+    {
+      "file": "section_action_events.md",
+      "url": "https://nicegui.io/documentation/section_action_events",
+      "final_url": "https://nicegui.io/documentation/section_action_events",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 25718,
+      "sha256": "45aa105f6f691af55b94c5cc1880e3837c646babbec7ea44d0fa62ba3429b526"
+    },
+    {
+      "file": "section_binding_properties.md",
+      "url": "https://nicegui.io/documentation/section_binding_properties",
+      "final_url": "https://nicegui.io/documentation/section_binding_properties",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 9795,
+      "sha256": "0bc91fc6844a374c515f73c26c4bb56cfa861638fc3f488a667e845d132aa518"
+    },
+    {
+      "file": "refreshable.md",
+      "url": "https://nicegui.io/documentation/refreshable",
+      "final_url": "https://nicegui.io/documentation/refreshable",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 8602,
+      "sha256": "089dd769489d8f408fdd6536b9104fee2d00364e4272eeff365d54ee8209382e"
+    },
+    {
+      "file": "storage.md",
+      "url": "https://nicegui.io/documentation/storage",
+      "final_url": "https://nicegui.io/documentation/storage",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 10564,
+      "sha256": "c5e7371c5ca93e8101e53be23fd8145ea38812053a8127b43f0f1de656687d5f"
+    },
+    {
+      "file": "section_page_layout.md",
+      "url": "https://nicegui.io/documentation/section_page_layout",
+      "final_url": "https://nicegui.io/documentation/section_page_layout",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 29492,
+      "sha256": "2daca7b6ef15dd0b809b5fcf8fc58ff2f8805ec387cb1834cbd379cea7cf4b59"
+    },
+    {
+      "file": "section_controls.md",
+      "url": "https://nicegui.io/documentation/section_controls",
+      "final_url": "https://nicegui.io/documentation/section_controls",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 33319,
+      "sha256": "f1609e6b50331f17c812b44ac7642738b4e64dc3685ff864140894df9f79c8f0"
+    },
+    {
+      "file": "section_text_elements.md",
+      "url": "https://nicegui.io/documentation/section_text_elements",
+      "final_url": "https://nicegui.io/documentation/section_text_elements",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 7438,
+      "sha256": "e660adb6816ea69047733c9bbee940ad666a8cab9c6a5e0517e581ea1154b33e"
+    },
+    {
+      "file": "select.md",
+      "url": "https://nicegui.io/documentation/select",
+      "final_url": "https://nicegui.io/documentation/select",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 28717,
+      "sha256": "2fe0a1af30e4ad948267659b58395f2c9039ab8e34f18e59febf4d6b79a413ad"
+    },
+    {
+      "file": "toggle.md",
+      "url": "https://nicegui.io/documentation/toggle",
+      "final_url": "https://nicegui.io/documentation/toggle",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 21423,
+      "sha256": "4bcdc6a7f471777977b92ca275eae1e47314871256503ebf445a33c278d4be23"
+    },
+    {
+      "file": "upload.md",
+      "url": "https://nicegui.io/documentation/upload",
+      "final_url": "https://nicegui.io/documentation/upload",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 26457,
+      "sha256": "f4d0693c46914f60d83b1fdce422971f94b59819ed1438d88c8c9b630eb202b1"
+    },
+    {
+      "file": "download.md",
+      "url": "https://nicegui.io/documentation/download",
+      "final_url": "https://nicegui.io/documentation/download",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 3462,
+      "sha256": "edd6eacab35bf0e3881976bdedf754bd93a9d9675385eb8dd235c1e7733f772a"
+    },
+    {
+      "file": "keyboard.md",
+      "url": "https://nicegui.io/documentation/keyboard",
+      "final_url": "https://nicegui.io/documentation/keyboard",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 17783,
+      "sha256": "7f12cd4ebcdba49721e7ede5edf7480e0be686b24b00e0baa9eeee39c6dbebac"
+    },
+    {
+      "file": "dialog.md",
+      "url": "https://nicegui.io/documentation/dialog",
+      "final_url": "https://nicegui.io/documentation/dialog",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 19730,
+      "sha256": "f159926c56f2958ce1034d3f0ad054447ef5d5d4cf538001fb5f61b8276c7d5c"
+    },
+    {
+      "file": "menu.md",
+      "url": "https://nicegui.io/documentation/menu",
+      "final_url": "https://nicegui.io/documentation/menu",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 35098,
+      "sha256": "2199912986c26f2fbe957df902be4a3ae4993e283406bb16a103c24d68916c6d"
+    },
+    {
+      "file": "tabs.md",
+      "url": "https://nicegui.io/documentation/tabs",
+      "final_url": "https://nicegui.io/documentation/tabs",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 67399,
+      "sha256": "19d855bd5bee49b51caf89e4cc709882a59f1673350ea90d896fb8d7ecd06640"
+    },
+    {
+      "file": "input.md",
+      "url": "https://nicegui.io/documentation/input",
+      "final_url": "https://nicegui.io/documentation/input",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 31341,
+      "sha256": "a1cf7cb6a3c6b6da8475caff8124320b946c8dadc79eae02f9dbed685d15d824"
+    },
+    {
+      "file": "number.md",
+      "url": "https://nicegui.io/documentation/number",
+      "final_url": "https://nicegui.io/documentation/number",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 27688,
+      "sha256": "e66125e8de3fbec16aef033e460aa503ff13893d578c2a29196023362b9a6114"
+    },
+    {
+      "file": "tooltip.md",
+      "url": "https://nicegui.io/documentation/tooltip",
+      "final_url": "https://nicegui.io/documentation/tooltip",
+      "content_type": "text/markdown; charset=utf-8",
+      "bytes": 18047,
+      "sha256": "2b5c86a58a4f5e43e2d2a9773fa0b70ddb3f4f78742d4fec786157e593452bc3"
+    }
+  ]
+}
