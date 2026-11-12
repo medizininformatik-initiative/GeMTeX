@@ -110,8 +110,12 @@ The original multi-annotator structure is intentionally flattened: annotator ide
 
 Compatibility handling accounts for pycaprio version differences:
 
-- installed `Pycaprio` may not accept a `verify` constructor parameter;
+- installed `Pycaprio` may not accept a `verify` constructor parameter; `_pycaprio_client()` therefore also configures the actual `client.api.client.session`;
 - installed `create_document(...)` may not accept `filename`.
+
+TLS verification disabled by default in GUI. GUI **Disable TLS verification** / CLI `--no-verify-tls` affects only the created deployment client. For opt-out, its session receives explicit per-request `verify=False` as well as `session.verify=False`, so `REQUESTS_CA_BUNDLE` cannot silently re-enable verification and pycaprio's multipart request path is covered. When verification is enabled, Requests' configured CA bundle remains usable. An SDK exposing neither constructor verification nor the HTTP session fails explicitly on opt-out instead of silently ignoring it. No global SSL settings or warning filters are changed.
+
+Reported `certificate verify failed` / `unable to get local issuer certificate` errors indicate certificate-chain/trust validation, not proof of missing CAS layers. Prefer configuring the correct trusted CA/server chain rather than disabling checks. Offline regression tests intercept HTTP sends for normal and multipart requests, test CA-environment interaction and client isolation, and make no network calls. Successful reviewer deployment/reimport and safe partial-failure retries remain unverified live.
 
 # CAS remote-upload repair
 

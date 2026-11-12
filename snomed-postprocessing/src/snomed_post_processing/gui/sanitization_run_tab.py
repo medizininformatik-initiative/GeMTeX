@@ -487,7 +487,7 @@ def _render_inception_apply_upload_controls(
             )
             no_verify_tls = st.checkbox(
                 "Disable TLS verification",
-                value=False,
+                value=True,
                 key="inception_pipeline_no_verify_tls",
                 help="Skip HTTPS certificate checks. This weakens connection security; prefer configuring trusted certificates.",
             )

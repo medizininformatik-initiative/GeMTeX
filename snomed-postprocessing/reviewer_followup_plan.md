@@ -16,10 +16,17 @@ Umgesetzt und mit fokussierten Tests geprüft:
 - Explizite Einstellungen bleiben über Reruns erhalten. Eine leere Auswahl historischer Beziehungstypen wird nicht mehr stillschweigend durch Standardwerte ersetzt.
 - Die nach außen sichtbare Terminologie verwendet „inclusion list“ / „exclusion list“ in GUI, CLI-Hilfetexten, Konsolenmeldungen, generierten Markdown-Reports und README (Abschnitt 4). Technische Bezeichner und Artefaktformate bleiben unverändert.
 - Konzeptregeln für Number und Date mit einklappbarer Regelform, gemeinsamem **Apply rules to review**-Button, Override-Option, Review/Clear und `literal`-erhaltendem Write-back sind offline umgesetzt (Abschnitt 6).
+- Historische und BM25-Bedingung, gemeinsame Zustandsverwaltung, Schutz manueller Entscheidungen und Undo sind offline umgesetzt (Abschnitt 7/9); die BM25-Schwellen sind weiterhin nicht empirisch validiert.
+- Gemeinsamer Annotator-Scope über Check, Regeln, Suggestions, Review und Export/Upload sowie verständlich beschriftete Öffnungssteuerung mit Hover-Hilfe sind umgesetzt. Ein vollständig synthetischer Zwei-Annotatoren-Datensatz prüft den Offline-Workflow.
+- **Disable TLS verification** wird jetzt am tatsächlichen HTTP-Client wirksam, einschließlich Multipart-Uploads und gesetztem CA-Bundle. Verifikation bleibt standardmäßig aktiviert; nur der ausdrücklich konfigurierte Deployment-Client ist betroffen (Abschnitt 10).
 
 Zusätzlich wurde die MIE-Ergebnisdarstellung aus `../../snomed-annotation-audit/` übernommen (Abschnitt 2): gruppierte Datentabellen, Kennzahlen, Filter mit Reset und sitzungsinterne Speicherung des letzten erfolgreichen Checks. Report-Downloads und Übergabe an die Sanitization bleiben erhalten. Filter ändern weder Exporte noch die gespeicherten Findings.
 
-Die funktionalen Änderungen betreffen die GUI; die Terminologieumstellung umfasst zusätzlich Reports und CLI-Hilfetexte. CLI-/API-Standardwerte bleiben unverändert. Die übrigen Arbeitspakete und die Upload-Fehlerbehebung sind noch offen.
+Die funktionalen Änderungen umfassen GUI, Review-Logik und gemeinsame Write-back-/Deployment-Pfade; die Terminologieumstellung zusätzlich Reports und CLI-Hilfetexte. Die TLS-Korrektur verändert keine CLI-/API-Standardwerte und deaktiviert keine systemweiten Zertifikatsprüfungen.
+
+**Noch offen:** empirische BM25-Kalibrierung, erfolgreicher Live-INCEpTION-Reimport/Upload beim Reviewer sowie Prüfung von Teilfehlern und sicherer Wiederholung mit einem freigegebenen Testprojekt. Die TLS-Ursache ist lokal eingegrenzt und korrigiert, der Reviewer-Erfolg aber noch nicht live bestätigt.
+
+**Zusätzlicher Regressionstest-Befund:** Der derzeitige GUI-Code initialisiert die BM25-Automatik mit `value=True`, während der vorhandene Help-Test und die Opt-in-Anforderung in Abschnitt 7 `False` erwarten. Diese bereits vor der TLS-Korrektur vorhandene Abweichung bleibt unverändert und ist gesondert abzugleichen; sie ist kein TLS-Fehler.
 
 ## 2. Policy-Check-Ergebnisse als interaktive Tabelle
 
@@ -147,7 +154,7 @@ Der Geltungsbereich wird nicht über zusätzliche Eingabeboxen konfiguriert: Die
 
 **Offline geprüft:** Regel-/Decisions-JSON-Roundtrips, JSONCAS/XMI mit unverändertem `literal` (einschließlich leer/null/fehlendem Feature), weitere Features und Offsets, gemeinsamer ZIP-/Upload-Artefaktpfad mit und ohne Reparatur, Override an/aus, aktive Ziele, Scopes, keine Regelverkettung, Mehrdeutigkeiten, GUI-Reruns, manuelle Konflikte und Clear. Die GUI übernimmt für alle Regeln die Annotation-Layer aus der Sidebar und bearbeitet alle Dokumente innerhalb der gemeinsamen Annotator-Auswahl aus Tab 1; separate Regel-Scope-Boxen entfallen. Die Engine-API unterstützt weiterhin explizite Filter. Angenommene Regeln reservieren ihre Annotationen im Review; generische Fallback-Zeilen für dieselben Annotationen werden dort ausgeblendet. Die generische Vorschlagserzeugung selbst bleibt unabhängig.
 
-**Offen:** Live-INCEpTION-Reimport; weitere Auto-Apply-Bedingungen aus Abschnitt 7.
+**Offen:** Live-INCEpTION-Reimport. Die historische und BM25-Bedingung aus Abschnitt 7 sind implementiert; die empirische BM25-Kalibrierung bleibt offen.
 
 - Number `410680006`: ausschließlich die ID ist nach Anwendung leer.
 - Date `410671006`: die ID verweist nach Anwendung auf `410672004`, nicht auf einen Fallback-Kandidaten.
@@ -316,14 +323,18 @@ Beispiele:
 
 ## 10. Bug: Upload sanitizierter Daten nach INCEpTION scheitert beim Reviewer
 
-**Beobachtung:** Der Upload sanitizierter Daten nach INCEpTION funktionierte beim Reviewer nicht, beim Entwickler jedoch schon. Als erster Debug-Hinweis wurde eine Meldung zu **fehlenden Layern** genannt; der genaue Wortlaut muss noch gesichert werden. Die Ursache ist noch nicht bestimmt; weder ein allgemeiner Defekt der Sanitization noch ein reines Berechtigungsproblem ist damit nachgewiesen.
+**Aktualisierte Beobachtung:** Der Reviewer beschreibt die Meldungen sinngemäß als **certificate verify failed** und **unable to get local issuer certificate**. Das weist auf eine fehlgeschlagene TLS-Zertifikatsprüfung hin. Der frühere Hinweis auf fehlende Layer ist damit nicht als Ursache bestätigt; ein exakter Traceback der Reviewer-Sitzung liegt weiterhin nicht vor.
+
+**Offline bestätigter Fehler und Korrektur:** Die GUI übergibt bei aktivem **Disable TLS verification** korrekt `verify_tls=False`. `_pycaprio_client()` übergab bisher `verify` jedoch nur bei passendem Konstruktorparameter. Die installierte Pycaprio-Version besitzt diesen nicht; ihr tatsächliches `client.api.client.session.verify` blieb daher `True`. Der Deployment-Client konfiguriert jetzt die eigene HTTP-Session und bei deaktivierter Prüfung zusätzlich explizit `verify=False` für ihre Requests. Dadurch greift die Auswahl auch bei Multipart-Uploads und trotz `REQUESTS_CA_BUNDLE`. Konstruktorbasierte Varianten bleiben unterstützt; eine nicht unterstützte Deaktivierung wird als Fehler gemeldet statt still ignoriert. Standardverifikation, andere Sessions und globale TLS-Einstellungen bleiben unverändert; Warnungen werden nicht unterdrückt.
+
+**Sicherheits-/Validierungsgrenze:** Bevorzugt die Server-Zertifikatskette bzw. vertrauenswürdige Root-/Intermediate-CA korrekt konfigurieren. Deaktivierung nur bewusst zum Testen verwenden. Regressionstests fangen die HTTP-Sendeschicht ab; es wurden keine Netzwerkaufrufe, produktiven Uploads oder Änderungen am Zertifikatsspeicher durchgeführt. Der konkrete Reviewer-Fall bleibt live zu bestätigen.
 
 ### Diagnose und Reproduktion
 
 - Den genauen fehlgeschlagenen Schritt bestimmen: Erstellen der Upload-Artefakte, Verbindung/Authentifizierung, Projekt-/Dokumentanlage oder CAS-Import. Fehlermeldung, Zeitpunkt und vorhandene Logs sichern.
 - Prüfen, ob beide Personen dieselbe App-Version, dieselben Eingabeartefakte, denselben Workflow und dieselbe INCEpTION-Instanz verwenden. Vergleiche mit einem freigegebenen Testprojekt durchführen, nicht mit produktiven Projekten.
 - Unterschiede erfassen: INCEpTION-Version, Zielprojekt, Benutzerrolle/Projektberechtigungen, Netzwerk/VPN/Proxy, URL und TLS-Konfiguration. Keine Passwörter, Tokens oder Authentifizierungsheader protokollieren.
-- **Priorität aufgrund des ersten Debug-Hinweises:** Die konkret als fehlend gemeldeten Layer anhand ihrer vollständigen CAS-Typnamen identifizieren. Quellprojekt, sanitisiertes Exportartefakt und Zielprojekt hinsichtlich Layer-/Feature-Konfiguration und TypeSystem vergleichen. Prüfen, ob benötigte Layer im Zielprojekt fehlen oder anders benannt sind und ob gegebenenfalls erzeugte Zusatzlayer wie `webanno.custom.ManualReview` korrekt in die Projektkonfiguration übernommen werden. Dies sind zu prüfende Hypothesen, keine bestätigten Ursachen.
+- **Priorität nach Fehlerpräzisierung:** TLS-Kette und Vertrauenskonfiguration im tatsächlichen Streamlit-/Python-Prozess prüfen; gegebenenfalls Proxy-/Organisations-CA berücksichtigen. Die nun wirksame Checkbox mit einem freigegebenen Testprojekt prüfen. Scheitert danach ein CAS-/Layer-Import, die vollständigen Typnamen sowie Quellprojekt, Zielprojekt, TypeSystem und Zusatzlayer wie `webanno.custom.ManualReview` vergleichen. TLS- und Layer-Fehler nicht gleichsetzen.
 - Falls der CAS-Import scheitert: JSONCAS-/XMI-Format, TypeSystem, Annotation-Layer, Dokumentnamen und den konkreten abgewiesenen Payload-Typ untersuchen. Falls zulässig, einen manuellen Import desselben Artefakts in ein Testprojekt vergleichen.
 - Auch einen partiell erfolgreichen Upload prüfen: Welche Projekte/Dokumente wurden bereits angelegt oder geändert? Wiederholungen dürfen nicht unbemerkt Duplikate erzeugen oder bestehende Inhalte überschreiben.
 
@@ -361,7 +372,9 @@ Fehlschläge sollen den betroffenen Verarbeitungsschritt und eine verständliche
 - [x] BM25-Gleichstand auf Platz 1, weniger als drei unterschiedliche Ziele, ungültige oder nicht vergleichbare Scores bleiben manuell; alle gespeicherten späteren Score-Lücken werden geprüft.
 - [x] Historische und optionale BM25-Bedingung setzen Zielauswahl, `resolved` und Dokument-Review-Fortschritt konsistent; gemischte/offene Dokumente bleiben unreviewed.
 - [x] Undo Automatic Conditions stellt den letzten ändernden Lauf zurück, ohne spätere manuelle Arbeit zu verlieren; Snapshot und automatische Markierungen sind gegen geänderte Suggestions abgesichert.
-- [ ] JSONCAS-/XMI-Write-back, Decisions-Export/-Import und INCEpTION-Reimport funktionieren.
+- [x] JSONCAS-/XMI-Write-back und Decisions-Export/-Import funktionieren offline, einschließlich synthetischem Zwei-Annotatoren-Workflow.
+- [x] TLS-Opt-out erreicht die HTTP-Session und gewöhnliche/Multipart-Requests; CA-Bundle überschreibt das explizite Opt-out nicht. Sichere Standardwerte und Isolation anderer Sessions sind geprüft.
+- [ ] Live-INCEpTION-Reimport bestätigt die Nutzbarkeit der exportierten Annotationen.
 - [ ] Sanitized Upload funktioniert auch im Reviewer-Szenario; Fehler-/Teilfehlerdiagnose und sichere Wiederholung sind geprüft.
 
 ## 13. Verwendete Quellen
