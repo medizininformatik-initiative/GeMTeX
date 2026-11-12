@@ -6,3 +6,4 @@ tmp-inception
 okf/inception
 okf/pycaprio
 /*.sqlite
+/.venv-py311/

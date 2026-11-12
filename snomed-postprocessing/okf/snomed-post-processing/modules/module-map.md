@@ -37,9 +37,9 @@ Console scripts are declared in `/pyproject.toml` and implemented in `/src/snome
 | Package/module | Responsibility |
 |---|---|
 | `cli/` | Click commands, reusable option decorators, logging setup, custom Click parameter types. |
-| `gui/app.py` | Stable framework-neutral launcher: `python -m snomed_post_processing.gui.app` or `python src/snomed_post_processing/gui/app.py`. Delegates to Streamlit with the current interpreter, forwarded arguments and propagated exit status; switch the backend here later. |
+| `gui/app.py` | Stable framework-neutral launcher: `python -m snomed_post_processing.gui.app` or `python src/snomed_post_processing/gui/app.py`. Defaults to Streamlit; `--frontend nicegui` lazily dispatches to NiceGUI in-process. Backend options/exit status preserved; neither framework loads on launcher import. |
 | `gui/streamlit/` | Existing Streamlit app tabs, file source selectors, report downloads, review state, deployment form. Started by the shared launcher; direct `streamlit run src/snomed_post_processing/gui/streamlit/app.py` remains supported. |
-| `gui/nicegui/` | Reserved package for the replacement frontend; no runnable implementation yet. |
+| `gui/nicegui/` | Separate synthetic read-only frontend prototype: `app.py` bootstrap, `page.py` Community AG Grid workspace, `state.py` per-page presentation model, `demo.py` artificial data. Shared Python 3.11 environment via optional `nicegui` extra pinned to 4.0.0. Shared launcher supports explicit selection; HTTP startup/page-construction smoke check passes. Backend adapters and browser interaction validation pending. |
 | `findings_io/` | CriticalFindings JSON serialization/deserialization and mapping helpers. |
 | `hdf5_handling/` | HDF5 policy layout readers, candidate validity gates, metadata summaries, compact ancestor dump helpers. |
 | `release_ingestion/` | RF2 member discovery, RF2 row readers, materialized HDF5 writer. |

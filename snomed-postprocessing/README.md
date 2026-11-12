@@ -81,6 +81,20 @@ Policy rules restrict replacement targets to the stored inclusion list, which ma
 
 BM25 and SNOGIT are suggestion-only evidence. Candidates must still pass the selected target-view gates. The candidate maximum is a soft limit: ties at the cutoff are retained together, subject to explicit safety caps. Large first-place ties can be searched by SCTID/FSN in **Review & apply → Browse BM25 candidates**; select a row, click **Use selected candidate**, then save the review form. No tied candidate is preselected. Reached retrieval limits are reported because more candidates may exist; incomplete results cannot be automatically accepted. Regenerate suggestions to recover ties previously truncated by the old limit. The original INCEpTION ZIP is not modified.
 
+## Python runtime
+
+The project targets **Python 3.11.x** (`requires-python = "~=3.11.0"`). `.python-version`, `uv.lock` and the Docker base image are aligned to 3.11. Core dependency versions are retained; the optional NiceGUI extra updates only certifi, idna and Pygments among existing packages.
+
+The shared **`.venv-py311` (Python 3.11.13)** has both Streamlit and NiceGUI installed via the project's `nicegui` extra. The lock contains 100 packages across platforms (99 installed on Windows). The full regression run reports **280 passed, 3 failed** (2 warnings); all three failures are existing GUI BM25/TLS-default mismatches, reproduced in the preserved Python 3.9 environment. Core imports, all 11 CLI help commands and the installed dependency check pass. No new Python-3.11-specific failure was identified; the suite is not fully green.
+
+The original Python 3.9 `.venv` remains unchanged. Point your IDE at `.venv-py311/Scripts/python.exe`, or launch the GUI on Windows with:
+
+```bash
+.venv-py311/Scripts/python -m snomed_post_processing.gui.app
+```
+
+For uv commands, set `UV_PROJECT_ENVIRONMENT=.venv-py311` and include `--extra nicegui` on run/sync commands to retain the optional frontend. Avoid plain `uv sync`/`uv run` against the old `.venv`, since uv may replace it. Both file and module NiceGUI launches returned HTTP 200 in loopback startup/page-construction checks. Browser JavaScript/visual interactions, Docker builds and live deployment remain unverified.
+
 ## CLI usage
 
 The installed console commands are:
@@ -107,6 +121,8 @@ uv run log-critical-documents \
   --lists-path /path/to/gemtex_snomedct_codes.hdf5 \
   /path/to/inception-export.zip
 ```
+
+For projects with multiple annotators, the interactive CLI asks whether to include all (default: no). Otherwise, it shows a sorted numbered list; enter comma-separated numbers such as `1,3`. Empty/invalid selections are retried, and EOF/Ctrl+C aborts rather than processing everyone. Zero or one annotator needs no prompt. This uses the existing Click dependency, not PyInquirer.
 
 Non-interactive use, for example in Docker or CI:
 
@@ -367,15 +383,17 @@ uv run deploy-inception-sanitized-project \
 
 **The annotator selection in tab 1 applies throughout the pipeline**, including concept rules, suggestions, review and export/upload—not just the policy check. Empty means all annotators. Excluded annotators' CAS stays unchanged in a local sanitized ZIP and is omitted from upload artifacts. Saved artifact metadata carries the scope. Changing it discards excluded pending choices and resets review progress; narrower-scope artifacts require rechecking/regeneration before broadening. Save reviewed decisions before replacing suggestions, which resets generic index-based choices to prevent applying them to different annotations.
 
-The stable launcher is `gui/app.py`. It currently starts the app in `gui/streamlit/`; `gui/nicegui/` is reserved for the replacement frontend and is not yet runnable. Switching frontends later only requires changing the launcher, not these startup commands.
+The stable launcher is `gui/app.py`. Both frontends share `.venv-py311`; Streamlit remains the default, while NiceGUI is currently a synthetic, read-only prototype—not a production replacement. See its [setup and limitations](src/snomed_post_processing/gui/nicegui/README.md).
 
-Start the GUI locally:
+Start NiceGUI locally (Windows):
 
 ```bash
-uv run python src/snomed_post_processing/gui/app.py
+.venv-py311/Scripts/python src/snomed_post_processing/gui/app.py --frontend nicegui --show
 ```
 
-Alternatively, use `uv run python -m snomed_post_processing.gui.app`. Extra options are currently forwarded to Streamlit, e.g. `--server.port 8502`. The launcher uses the same Python interpreter and returns the frontend's exit code.
+Omit `--frontend nicegui` to start Streamlit, or select `--frontend streamlit` explicitly. Backend options are forwarded unchanged: `--port 8081` for NiceGUI, `--server.port 8502` for Streamlit. The module form `python -m snomed_post_processing.gui.app` is also supported. In an IDE, select `.venv-py311/Scripts/python.exe` and set script parameters to `--frontend nicegui --show`.
+
+For uv, set `UV_PROJECT_ENVIRONMENT=.venv-py311`, install with `uv sync --locked --extra nicegui`, and launch with `uv run --locked --extra nicegui python -m snomed_post_processing.gui.app --frontend nicegui --show`. Keep the extra selected to prevent uv removing its packages. NiceGUI defaults to `http://127.0.0.1:8080`; the launcher starts only the selected frontend, in the same Python environment.
 
 With Docker, the GUI can be started as:
 

@@ -1,9 +1,9 @@
 # SNOMED-PP: Streamlit → NiceGUI replacement candidates
 
-**Status:** migration design draft; no application migration implemented or browser-tested.  
+**Status:** migration design plus initial synthetic read-only NiceGUI prototype; real server startup/page construction checked; production workflows and browser interactions remain unvalidated. See [`gui/nicegui/README.md`](../../src/snomed_post_processing/gui/nicegui/README.md) for isolated setup and limitations.
 **Documentation snapshot:** 2026-11-11; see [download manifest](references/nicegui/manifest.json).  
 **Application inspected:** `C:/Users/fra3066mat/PycharmProjects/GeMTeX/snomed-postprocessing`.  
-**Source paths below:** relative to `src/snomed_post_processing/`, unless stated otherwise. The original inventory predates the package relocation: all listed Streamlit `gui/*.py` modules now live under `gui/streamlit/*.py` (`snomed_post_processing.gui.streamlit`). The parallel `gui/nicegui/` package is reserved for the replacement frontend. A new framework-neutral `gui/app.py` is the stable Python launcher; it currently starts Streamlit and can switch to NiceGUI later without changing user/Docker startup commands.
+**Source paths below:** relative to `src/snomed_post_processing/`, unless stated otherwise. The original inventory predates the package relocation: all listed Streamlit `gui/*.py` modules now live under `gui/streamlit/*.py` (`snomed_post_processing.gui.streamlit`). The parallel `gui/nicegui/` package now contains the initial synthetic read-only frontend prototype. A new framework-neutral `gui/app.py` is the stable Python launcher; it defaults to Streamlit and selects NiceGUI with `--frontend nicegui`, using the same Python 3.11 project environment.
 
 ## 1. Goal and boundaries
 
@@ -25,7 +25,7 @@ This is **not** a backend optimisation project. Preserve existing SNOMED checks,
 - **Design candidate:** a suggested composition or interaction; not a drop-in API equivalent.
 - **Prototype check:** event ordering, edit preservation, grid configuration or visual behaviour that needs verification against a pinned NiceGUI version.
 
-The live documentation is not version-pinned and includes underlying Quasar/AG Grid options. Pin the implementation dependencies before treating examples as an API contract. No NiceGUI runtime or application tests were run for this draft.
+The live documentation is not version-pinned and includes underlying Quasar/AG Grid options. Pin the implementation dependencies before treating examples as an API contract. NiceGUI 4.0.0 is now installed as a project extra. Real loopback server/page-construction checks through both file and module forms of the shared launcher returned HTTP 200. Offline presentation-model/bootstrap/dispatch tests also pass; browser JavaScript and visual/interaction behavior still need verification.
 
 ## 2. The important replacement: reruns → events
 
@@ -301,7 +301,7 @@ Update loops need care: programmatic grid/model updates can trigger more events.
 
 ## 10. Suggested implementation order
 
-1. Pin a compatible Python/NiceGUI environment separately; the current project declares Python 3.9, while the previously checked NiceGUI 4.0.0 release requires Python 3.11+. Resolve this before application integration.
+1. Pin and validate a compatible Python/NiceGUI environment. The project is now configured for Python 3.11.x, matching NiceGUI 4.0.0's Python 3.11+ minimum. The `nicegui` project extra installs NiceGUI 4.0.0 alongside Streamlit in `.venv-py311`. The 100-package cross-platform lock updates certifi/idna/Pygments only among retained versions (99 installed on Windows). Full regression: 280 passed, 3 pre-existing GUI-default failures, 2 warnings. Dependency consistency and a real shared-launcher HTTP 200 startup/page check pass. Browser interactions and backend adapters still need validation. The preserved 3.9 environment is untouched.
 2. Prototype the suggestion overview and candidate browser against **synthetic data or explicitly approved fixtures**. Do not load clinical project contents just to build a visual mockup.
 3. Establish stable row identities and a framework-independent staged review model, reusing existing decision validation/serialisation helpers.
 4. Migrate review controls and prove edit/selection/provenance correctness before removing the corresponding Streamlit Save buttons.
@@ -309,6 +309,15 @@ Update loops need care: programmatic grid/model updates can trigger more events.
 6. Retain the existing Streamlit app until no-form interaction and export equivalence are verified.
 
 No backend algorithm changes are required by this plan. Existing blocking calls may need a thin execution adapter so they do not freeze NiceGUI's shared UI event loop; that is frontend integration plumbing, not a scoring/performance redesign.
+
+### First increment implemented
+
+- Direct `gui/nicegui/app.py` entry point plus shared launcher `--frontend nicegui`; Streamlit remains the default and Docker behavior is unchanged.
+- NiceGUI 4.0.0 pinned in the project's optional `nicegui` extra; standalone `requirements.txt` retains the reference pin. Both frontends are installed in the same `.venv-py311`, with real startup/page construction verified and 280 regression tests passing (3 baseline GUI-default failures remain).
+- Three workflow tabs; Community AG Grid findings and candidate preview with stable IDs, literal string SCTIDs, numeric scores, competition-rank ties and diagnostic-only targets.
+- Per-page presentation state; read-only grids and in-place detail updates. Selection is navigation, not decision approval.
+- Synthetic in-memory data only; no clinical fixture/project reads. Processing, scope, rules, staging and export/deployment remain disconnected, with action buttons disabled.
+- Offline state/bootstrap/dispatch tests plus actual loopback server/page smoke check. Browser JavaScript/visual interaction and backend adapter integration remain open prerequisites before enabling real workflows.
 
 ## 11. Sources and local references
 

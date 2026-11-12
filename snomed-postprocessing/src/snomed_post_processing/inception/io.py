@@ -6,8 +6,8 @@ import logging
 import pathlib
 from typing import Optional, Union
 
+import click
 import yaspin
-from PyInquirer import prompt
 from pycaprio import Pycaprio
 
 
@@ -109,33 +109,33 @@ def get_project_zip(
     return project_zip
 
 
-def prompt_for_names(annotator_names: set[str]):
+def prompt_for_names(annotator_names: set[str]) -> Optional[list[str]]:
+    """Return selected original names, or None for all; cancellation aborts."""
     if len(annotator_names) <= 1:
         return None
 
-    return_all_name = "return_all"
-    return_all = prompt(
-        [
-            {
-                "type": "confirm",
-                "name": return_all_name,
-                "message": "There are multiple annotators in the project. Do you want to log all of them?",
-                "default": False,
-            }
-        ]
-    )
-    if return_all.get(return_all_name):
+    if click.confirm(
+        "There are multiple annotators in the project. Do you want to log all of them?",
+        default=False,
+    ):
         return None
 
-    annotator_choice_name = "menu_entry"
-    annotator_names_chosen = prompt(
-        [
-            {
-                "type": "checkbox",
-                "name": annotator_choice_name,
-                "message": "Please choose the annotators you want to log:",
-                "choices": [{"name": _name} for _name in sorted(annotator_names)],
-            }
-        ]
+    names = sorted(annotator_names)
+    for number, name in enumerate(names, start=1):
+        click.echo(f"{number}. {name}")
+
+    def parse_selection(value: str) -> list[str]:
+        parts = [part.strip() for part in value.split(",")]
+        if not all(parts):
+            raise click.BadParameter("Choose at least one annotator; separate numbers with commas.")
+        try:
+            numbers = [int(part) for part in parts]
+        except ValueError:
+            raise click.BadParameter("Enter whole numbers separated by commas.") from None
+        if any(number < 1 or number > len(names) for number in numbers):
+            raise click.BadParameter(f"Choose numbers between 1 and {len(names)}.")
+        return [names[number - 1] for number in dict.fromkeys(numbers)]
+
+    return click.prompt(
+        "Select annotators, separated by commas", value_proc=parse_selection,
     )
-    return annotator_names_chosen.get(annotator_choice_name)
