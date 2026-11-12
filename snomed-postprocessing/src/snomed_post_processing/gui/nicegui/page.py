@@ -58,8 +58,8 @@ def build_page(ui) -> None:
             upload_controls = ui.row().classes("w-full items-start")
             upload_status = ui.label().classes("text-sm")
             counts = ui.label().classes("text-sm")
-            with ui.row().classes("w-full items-start"):
-                with ui.column().classes("w-full lg:w-7/12"):
+            with ui.column().classes("w-full min-w-0 gap-4"):
+                with ui.column().classes("w-full min-w-0"):
                     ui.label("Findings — click a row to inspect").classes("text-lg")
                     finding_grid = ui.aggrid({
                         "columnDefs": [
@@ -80,7 +80,7 @@ def build_page(ui) -> None:
                         ":getRowId": "params => params.data.row_id",
                         "rowSelection": {"mode": "singleRow", "checkboxes": False, "enableClickSelection": True},
                     }).classes("w-full h-80")
-                with ui.column().classes("w-full lg:flex-1"):
+                with ui.column().classes("w-full min-w-0"):
                     ui.label("Selected finding").classes("text-lg")
                     identity = ui.label("Select a finding. Nothing is preselected.")
                     covered_text = ui.label().classes("whitespace-pre-wrap")
@@ -89,11 +89,11 @@ def build_page(ui) -> None:
                     limits = ui.label().classes("text-amber-900 whitespace-pre-wrap")
                     candidate_grid = ui.aggrid({
                         "columnDefs": [
-                            {"field": "rank", "headerName": "Rank", "filter": "agNumberColumnFilter"},
-                            {"field": "code", "headerName": "SCTID"},
-                            {"field": "fsn", "headerName": "FSN", "flex": 2},
-                            {"field": "score", "headerName": "Score", "filter": "agNumberColumnFilter"},
-                            {"field": "role", "headerName": "Candidate role"},
+                            {"field": "rank", "headerName": "Rank", "width": 80, "filter": "agNumberColumnFilter"},
+                            {"field": "code", "headerName": "SCTID", "width": 180},
+                            {"field": "fsn", "headerName": "FSN", "flex": 2, "minWidth": 240},
+                            {"field": "score", "headerName": "Score", "width": 120, "filter": "agNumberColumnFilter"},
+                            {"field": "role", "headerName": "Candidate role", "width": 200},
                         ],
                         "defaultColDef": {"sortable": True, "filter": "agTextColumnFilter", "resizable": True, "editable": False},
                         "rowData": [],

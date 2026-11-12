@@ -139,6 +139,16 @@ class NiceGuiBootstrapTest(unittest.TestCase):
         preview(SimpleNamespace(args={"data": {"row_id": "demo:1:context:0"}}))
         ui.notify.assert_called_once()
 
+    def test_tables_are_stacked_full_width_and_candidate_text_cannot_collapse(self):
+        from test.test_nicegui_suggestions import fake_ui
+        ui, grids, _ = fake_ui()
+        columns = [call.args[0] for call in ui.column.return_value.classes.call_args_list]
+        self.assertEqual(columns, ["w-full min-w-0 gap-4", "w-full min-w-0", "w-full min-w-0"])
+        candidates = {column["field"]: column for column in grids[1].options["columnDefs"]}
+        self.assertEqual(candidates["fsn"]["minWidth"], 240)
+        self.assertEqual(candidates["rank"]["width"], 80)
+        self.assertGreater(candidates["fsn"]["flex"], 0)
+
     def test_registers_page_and_starts_one_server_without_reload_or_browser(self):
         ui = MagicMock()
         with patch.object(app, "_load_ui", return_value=ui):
