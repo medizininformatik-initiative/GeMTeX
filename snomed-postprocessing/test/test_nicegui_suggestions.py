@@ -202,6 +202,23 @@ class SuggestionsPreviewTest(unittest.TestCase):
 
 
 class SuggestionsUploadPageTest(unittest.IsolatedAsyncioTestCase):
+    async def test_detail_cleanup_hides_internal_counts_and_places_proposal_with_rationale(self):
+        ui, grids, labels = fake_ui()
+        self.assertNotIn("suggestion_index", [column["field"] for column in grids[0].options["columnDefs"]])
+        with patch("nicegui.run.io_bound", new=AsyncMock(side_effect=lambda function, *args: function(*args))):
+            await ui.upload.call_args.kwargs["on_upload"](upload_event(encoded(payload())))
+        row = grids[0].options["rowData"][0]
+        self.assertEqual(row["suggestion_index"], 0)  # Identity/export index is retained internally.
+        grids[0].on.call_args.args[1](SimpleNamespace(args={"data": row}))
+        self.assertFalse(any("Original index" in label.text or "Saved candidate count" in label.text for label in labels))
+        heading = next(index for index, label in enumerate(labels) if label.text == "Suggestion rationale & retrieval")
+        proposal = labels[heading + 1]
+        self.assertEqual(proposal.text, "Saved proposed SCTID: 1234567890123456789012345 (not selected or approved)")
+        self.assertEqual(labels[heading + 2].text, "Original saved rationale")
+        reset = next(call.kwargs["on_click"] for call in ui.button.call_args_list if call.args[0] == "Use synthetic demo")
+        reset()
+        self.assertEqual(proposal.text, "")
+
     async def test_upload_replaces_data_and_stale_clicks_are_rejected(self):
         ui, grids, labels = fake_ui()
         findings, candidates = grids

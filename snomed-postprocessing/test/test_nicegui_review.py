@@ -241,6 +241,41 @@ class ReviewUiTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(data["decisions"][0]["reviewed_by_human"])
         self.assertEqual(data["metadata"]["reviewed_documents"], ["toy.txt"])
 
+    async def test_import_restores_saved_document_color_and_failed_import_retains_it(self):
+        ui, grids, labels, _, handler, _ = await self.setup_page()
+        review = ReviewSession(state())
+        review.mark_document(review.source.findings[0].row_id, True); review.save()
+        content = review.export_text().encode()
+        with patch("nicegui.run.io_bound", new=AsyncMock(side_effect=lambda function, *args: function(*args))):
+            await handler(upload_event(content))
+            self.assertTrue(grids[0].options["rowData"][0]["document_reviewed"])
+            await handler(upload_event(b"invalid"))
+            self.assertTrue(grids[0].options["rowData"][0]["document_reviewed"])
+
+    async def test_document_color_uses_saved_flags_not_pending_changes(self):
+        ui, grids, labels, source_handler, _, buttons = await self.setup_page()
+        definitions = grids[0].options["columnDefs"]
+        self.assertEqual(definitions[-1]["field"], "ignored")
+        self.assertNotIn("document_reviewed", [column["field"] for column in definitions])
+        document = next(column for column in definitions if column["field"] == "document")
+        self.assertIn("document_reviewed === true", document[":cellStyle"])
+        self.assertIn("'inherit'", document[":cellStyle"])  # Reset styling when review is unmarked.
+        grids[0].on.call_args.args[1](SimpleNamespace(args={"data": grids[0].options["rowData"][0]}))
+        buttons["Mark document reviewed"]()
+        self.assertFalse(grids[0].options["rowData"][0]["document_reviewed"])
+        buttons["Save choices"]()
+        self.assertTrue(grids[0].options["rowData"][0]["document_reviewed"])
+        buttons["Unmark document reviewed"]()
+        self.assertTrue(grids[0].options["rowData"][0]["document_reviewed"])
+        buttons["Discard pending changes"]()
+        self.assertTrue(grids[0].options["rowData"][0]["document_reviewed"])
+        buttons["Unmark document reviewed"](); buttons["Save choices"]()
+        self.assertFalse(grids[0].options["rowData"][0]["document_reviewed"])
+        buttons["Mark document reviewed"](); buttons["Save choices"]()
+        with patch("nicegui.run.io_bound", new=AsyncMock(side_effect=lambda function, *args: function(*args))):
+            await source_handler(upload_event(encoded(payload()), "new.json"))
+        self.assertFalse(grids[0].options["rowData"][0]["document_reviewed"])
+
     async def test_bad_import_and_new_source_reset(self):
         ui, grids, labels, source_handler, review_handler, buttons = await self.setup_page()
         grids[0].on.call_args.args[1](SimpleNamespace(args={"data": grids[0].options["rowData"][0]}))

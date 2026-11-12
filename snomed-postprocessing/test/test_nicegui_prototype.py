@@ -146,6 +146,9 @@ class NiceGuiBootstrapTest(unittest.TestCase):
         self.assertEqual(columns[:3], ["w-full min-w-0 gap-4", "w-full min-w-0", "w-full min-w-0"])
         self.assertEqual(columns[3:], ["w-full min-w-0 gap-1", "w-full min-w-0 gap-1"])
         ui.element.return_value.classes.assert_any_call("grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 w-full min-w-0")
+        covered_text = next(column for column in grids[0].options["columnDefs"] if column["field"] == "text")
+        self.assertEqual(covered_text["minWidth"], 400)
+        self.assertGreater(covered_text["flex"], 0)
         candidates = {column["field"]: column for column in grids[1].options["columnDefs"]}
         self.assertEqual(candidates["fsn"]["minWidth"], 240)
         self.assertEqual(candidates["rank"]["width"], 80)

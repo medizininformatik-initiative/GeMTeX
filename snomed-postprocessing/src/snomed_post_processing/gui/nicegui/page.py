@@ -10,7 +10,7 @@ def _finding_rows(state, session=None):
     if session is not None:
         for values, row in zip(rows, state.findings):
             values["review"] = session.status(row)
-            values["document_reviewed"] = session.draft_reviewed.get(row.document, row.document in session.reviewed_documents)
+            values["document_reviewed"] = row.document in session.reviewed_documents
     return rows
 
 
@@ -63,17 +63,17 @@ def build_page(ui) -> None:
                     ui.label("Findings — click a row to inspect").classes("text-lg")
                     finding_grid = ui.aggrid({
                         "columnDefs": [
-                            {"field": "suggestion_index", "headerName": "Original index", "filter": "agNumberColumnFilter",
-                             "headerTooltip": "Original zero-based suggestion_index in the uploaded JSON, before scope filtering."},
-                            {"field": "document", "headerName": "Document"},
+                            {"field": "document", "headerName": "Document",
+                             ":cellStyle": "params => ({color: params.data?.document_reviewed === true ? '#15803d' : 'inherit', fontWeight: params.data?.document_reviewed === true ? '600' : 'inherit'})",
+                             ":tooltipValueGetter": "params => params.data?.document_reviewed === true ? 'Review saved for this document.' : 'Document review is not marked as saved.'",
+                             "headerTooltip": "Green means the document-reviewed flag is saved, not that every finding has a replacement. Pending flags take effect after Save choices."},
                             {"field": "annotator", "headerName": "Annotator"},
                             {"field": "code", "headerName": "Source SCTID"},
-                            {"field": "text", "headerName": "Covered text", "flex": 2},
+                            {"field": "text", "headerName": "Covered text", "flex": 2, "minWidth": 400},
                             {"field": "status", "headerName": "Status"},
                             {"field": "policy_issue", "headerName": "Policy check"},
-                            {"field": "ignored", "headerName": "Ignored"},
                             {"field": "review", "headerName": "Manual review"},
-                            {"field": "document_reviewed", "headerName": "Document reviewed"},
+                            {"field": "ignored", "headerName": "Ignored"},
                         ],
                         "defaultColDef": {"sortable": True, "filter": "agTextColumnFilter", "floatingFilter": True, "resizable": True, "editable": False},
                         "rowData": [],
@@ -90,6 +90,7 @@ def build_page(ui) -> None:
                             finding_details = ui.label().classes("text-sm whitespace-pre-wrap break-words")
                         with ui.column().classes("w-full min-w-0 gap-1"):
                             ui.label("Suggestion rationale & retrieval").classes("text-sm font-medium")
+                            proposed = ui.label().classes("text-sm whitespace-pre-wrap break-words")
                             rationale = ui.label().classes("text-sm whitespace-pre-wrap break-words")
                             limits = ui.label().classes("text-amber-900 whitespace-pre-wrap break-words")
                     candidate_grid = ui.aggrid({
@@ -127,7 +128,7 @@ def build_page(ui) -> None:
                 finding_grid.options["rowData"] = _finding_rows(state)
                 candidate_grid.options["rowData"] = []
                 identity.set_text("Select a finding. Nothing is preselected.")
-                for label in (covered_text, finding_details, rationale, limits, evidence):
+                for label in (covered_text, finding_details, proposed, rationale, limits, evidence):
                     label.set_text("")
                 preview.set_text("No candidate selected. Inspecting a candidate stages no decision.")
                 controls.reset()
@@ -144,10 +145,10 @@ def build_page(ui) -> None:
                 identity.set_text(f"{finding.document} · {finding.annotator} · SCTID {finding.code}")
                 covered_text.set_text(finding.text)
                 finding_details.set_text(
-                    f"Original index: {finding.suggestion_index} · Layer: {finding.layer or 'not recorded'} · Span: {finding.offset}\n"
-                    f"Source FSN: {finding.source_fsn}\nSaved candidate count: {finding.candidate_count} · Ignored: {finding.ignored}\n"
-                    f"Saved proposed SCTID: {finding.proposed_code or 'none'} (not selected or approved)"
+                    f"Layer: {finding.layer or 'not recorded'} · Span: {finding.offset}\n"
+                    f"Source FSN: {finding.source_fsn}\nIgnored: {finding.ignored}"
                 )
+                proposed.set_text(f"Saved proposed SCTID: {finding.proposed_code or 'none'} (not selected or approved)")
                 rationale.set_text(finding.reason)
                 limits.set_text("Retrieval limits — candidate evidence may be incomplete:\n" + "\n".join(finding.retrieval_limits) if finding.retrieval_limits else "")
                 candidate_grid.options["rowData"] = _candidate_rows(finding)
