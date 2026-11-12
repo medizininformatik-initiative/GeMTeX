@@ -150,6 +150,60 @@ class GuiBm25BrowserTest(unittest.TestCase):
         self.assertTrue(any("No saved candidates" in item.value for item in self.app.info))
         self.assertEqual(self.app.selectbox[0].value, NO_REPLACEMENT_LABEL)
 
+    def test_dropdown_and_apply_can_be_submitted_in_one_form_batch(self):
+        small = dataclasses.replace(self.suggestion, candidates=self.suggestion.candidates[:3], candidate_count=3)
+        app = self.new_app(small)
+        apply = next(box for box in app.checkbox if box.label == "Apply this replacement")
+        self.assertFalse(apply.disabled)  # No selection yet; a form cannot update this dynamically.
+        self.assertFalse(apply.value)
+        app.selectbox[0].select_index(2)
+        apply.check()
+        next(button for button in app.button if button.label == "Save choices").click().run()
+        self.healthy(app)
+        decision = app.session_state["sanitization_review_decisions"][0]
+        self.assertEqual(decision["replacement_code"], small.candidates[1].code)
+        self.assertTrue(decision["apply"])
+        self.assertEqual(decision["action"], "replace")
+
+    def test_apply_without_target_is_cleared_on_save(self):
+        small = dataclasses.replace(self.suggestion, candidates=self.suggestion.candidates[:3], candidate_count=3)
+        app = self.new_app(small)
+        next(box for box in app.checkbox if box.label == "Apply this replacement").check()
+        next(button for button in app.button if button.label == "Save choices").click().run()
+        self.healthy(app)
+        self.assertFalse(app.session_state["sanitization_review_decisions"][0]["apply"])
+        self.assertEqual(app.session_state["sanitization_review_decisions"][0]["action"], "none")
+
+    def test_other_action_can_be_cleared_and_replacement_applied_in_one_batch(self):
+        small = dataclasses.replace(self.suggestion, candidates=self.suggestion.candidates[:3], candidate_count=3)
+        previous = self.app.session_state["sanitization_review_decisions"][0]
+        for action, label in (("delete", "Delete this annotation"), ("manual_edit", "Needs manual edit")):
+            with self.subTest(action=action):
+                saved = dict(previous, action=action, apply=False,
+                             delete_annotation=action == "delete", manual_edit=action == "manual_edit")
+                app = self.new_app(small, restore=[saved])
+                apply = next(box for box in app.checkbox if box.label == "Apply this replacement")
+                self.assertFalse(apply.disabled)
+                next(box for box in app.checkbox if box.label == label).uncheck()
+                app.selectbox[0].select_index(1)
+                apply.check()
+                next(button for button in app.button if button.label == "Save choices").click().run()
+                self.healthy(app)
+                decision = app.session_state["sanitization_review_decisions"][0]
+                self.assertTrue(decision["apply"])
+                self.assertEqual(decision["action"], "replace")
+                self.assertFalse(decision["manual_edit"])
+                self.assertFalse(decision["delete_annotation"])
+                # Keeping the competing action selected must still override Apply.
+                app = self.new_app(small, restore=[saved])
+                app.selectbox[0].select_index(1)
+                next(box for box in app.checkbox if box.label == "Apply this replacement").check()
+                next(button for button in app.button if button.label == "Save choices").click().run()
+                self.healthy(app)
+                decision = app.session_state["sanitization_review_decisions"][0]
+                self.assertFalse(decision["apply"])
+                self.assertEqual(decision["action"], action)
+
     def test_small_ties_keep_dropdown_and_retrieval_limits_are_visible(self):
         small = dataclasses.replace(self.suggestion, candidates=self.suggestion.candidates[:3], candidate_count=3)
         app = self.new_app(small)

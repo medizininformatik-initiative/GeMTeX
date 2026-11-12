@@ -1292,8 +1292,10 @@ def _render_manual_choice_cards(rows: list[dict[str, Any]], document: str) -> li
                     key=_manual_apply_key(row_number),
                     **({"value": bool(row.get("Apply")) and choice != NO_REPLACEMENT_LABEL and not delete_annotation and not manual_edit}
                        if _manual_apply_key(row_number) not in st.session_state else {}),
-                    disabled=choice == NO_REPLACEMENT_LABEL or delete_annotation or manual_edit,
-                    help="Include the chosen replacement in the next sanitization export/upload. Save this form to retain the choice.",
+                    # Form edits do not rerun Python: enabled state must not
+                    # depend on an earlier dropdown/action value in this batch.
+                    disabled=not row.get("_valid_choices"),
+                    help="Select a candidate and check Apply, then save this form. A valid target is required; deletion or manual edit takes precedence. CAS files change only during export/upload.",
                 )
             decisions.extend(
                 _review_rows_to_decisions(
