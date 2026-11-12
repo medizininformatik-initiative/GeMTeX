@@ -5,5 +5,17 @@
 !/fixtures/
 !/fixtures/*.json
 
+# Only the explicitly synthetic workflow fixture; real project exports stay ignored.
+!/projects/
+!/projects/synthetic-annotator-scope/
+!/projects/synthetic-annotator-scope/README.md
+!/projects/synthetic-annotator-scope/project.zip
+!/projects/synthetic-annotator-scope/policy.hdf5
+!/projects/synthetic-annotator-scope/critical-findings.json
+!/projects/synthetic-annotator-scope/suggestions.json
+!/projects/synthetic-annotator-scope/concept-rules.json
+!/projects/synthetic-annotator-scope/staged-decisions.json
+!/projects/synthetic-annotator-scope/expected.json
+
 __pycache__/
 *.pyc

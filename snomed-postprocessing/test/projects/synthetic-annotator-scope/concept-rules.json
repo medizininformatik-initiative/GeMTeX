@@ -1,0 +1,24 @@
+{
+  "schema": "snomed-post-processing.concept-rules",
+  "schema_version": 1,
+  "rules": [
+    {
+      "rule_id": "number-clear-id",
+      "name": "Number (attribute)",
+      "source_code": "410680006",
+      "action": "clear_id",
+      "target_code": "",
+      "enabled": true,
+      "override_policy": true
+    },
+    {
+      "rule_id": "date-property",
+      "name": "Date (attribute)",
+      "source_code": "410671006",
+      "action": "replace",
+      "target_code": "410672004",
+      "enabled": true,
+      "override_policy": true
+    }
+  ]
+}

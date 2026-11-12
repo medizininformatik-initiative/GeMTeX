@@ -1,0 +1,372 @@
+{
+  "schema": "snomed-post-processing.sanitization-decisions",
+  "schema_version": 1,
+  "created_at": "2026-11-12T08:09:27.443566+00:00",
+  "metadata": {
+    "synthetic": true,
+    "fixture": "synthetic-annotator-scope",
+    "annotators": [],
+    "annotation_types": [
+      "webanno.custom.Concept"
+    ],
+    "id_prefix": "http://snomed.info/id/",
+    "id_feature": "id",
+    "concept_rules": [
+      {
+        "rule_id": "number-clear-id",
+        "name": "Number (attribute)",
+        "source_code": "410680006",
+        "action": "clear_id",
+        "target_code": "",
+        "enabled": true,
+        "override_policy": true
+      },
+      {
+        "rule_id": "date-property",
+        "name": "Date (attribute)",
+        "source_code": "410671006",
+        "action": "replace",
+        "target_code": "410672004",
+        "enabled": true,
+        "override_policy": true
+      }
+    ],
+    "concept_rule_scope": {
+      "layers": "webanno.custom.Concept",
+      "documents": "",
+      "annotators": ""
+    },
+    "reviewed_documents": [
+      "automatic.txt"
+    ],
+    "automatic_reviewed_documents": [
+      "automatic.txt"
+    ],
+    "manual_review_layer": "webanno.custom.ManualReview",
+    "note": "Rules and historical condition staged; negative controls deliberately remain unreviewed."
+  },
+  "decisions": [
+    {
+      "suggestion_index": 1,
+      "document": "automatic.txt",
+      "annotator": "alice",
+      "layer": "webanno.custom.Concept",
+      "offset": [
+        16,
+        28
+      ],
+      "source_code": "990000101",
+      "covered_text": "Legacy amber",
+      "action": "replace",
+      "apply": true,
+      "delete_annotation": false,
+      "manual_edit": false,
+      "reviewed_by_human": false,
+      "resolved": true,
+      "valid_choice": true,
+      "replacement_code": "990000201",
+      "replacement_fsn": "SYNTHETIC current amber (finding)",
+      "replacement_choice": "990000201 — SYNTHETIC current amber (finding)",
+      "automatic_condition": {
+        "kind": "historical_association",
+        "source_list_type": "whitelist",
+        "target_code": "990000201",
+        "association_types": [
+          "REPLACED_BY"
+        ],
+        "allowed_association_types": [
+          "ALTERNATIVE",
+          "REPLACED_BY",
+          "SAME_AS",
+          "SIMILAR_TO",
+          "WAS_A"
+        ]
+      }
+    },
+    {
+      "suggestion_index": 2,
+      "document": "manual-controls.txt",
+      "annotator": "alice",
+      "layer": "webanno.custom.Concept",
+      "offset": [
+        16,
+        29
+      ],
+      "source_code": "990000102",
+      "covered_text": "Legacy cobalt",
+      "action": "none",
+      "apply": false,
+      "delete_annotation": false,
+      "manual_edit": false,
+      "reviewed_by_human": false,
+      "resolved": false,
+      "valid_choice": false,
+      "replacement_code": null,
+      "replacement_fsn": null,
+      "replacement_choice": "— no replacement selected —"
+    },
+    {
+      "suggestion_index": 3,
+      "document": "manual-controls.txt",
+      "annotator": "alice",
+      "layer": "webanno.custom.Concept",
+      "offset": [
+        47,
+        61
+      ],
+      "source_code": "990000404",
+      "covered_text": "Unknown silver",
+      "action": "none",
+      "apply": false,
+      "delete_annotation": false,
+      "manual_edit": false,
+      "reviewed_by_human": false,
+      "resolved": false,
+      "valid_choice": false,
+      "replacement_code": null,
+      "replacement_fsn": null,
+      "replacement_choice": "— no replacement selected —"
+    },
+    {
+      "suggestion_index": 5,
+      "document": "automatic.txt",
+      "annotator": "bob",
+      "layer": "webanno.custom.Concept",
+      "offset": [
+        16,
+        28
+      ],
+      "source_code": "990000101",
+      "covered_text": "Legacy amber",
+      "action": "replace",
+      "apply": true,
+      "delete_annotation": false,
+      "manual_edit": false,
+      "reviewed_by_human": false,
+      "resolved": true,
+      "valid_choice": true,
+      "replacement_code": "990000201",
+      "replacement_fsn": "SYNTHETIC current amber (finding)",
+      "replacement_choice": "990000201 — SYNTHETIC current amber (finding)",
+      "automatic_condition": {
+        "kind": "historical_association",
+        "source_list_type": "whitelist",
+        "target_code": "990000201",
+        "association_types": [
+          "REPLACED_BY"
+        ],
+        "allowed_association_types": [
+          "ALTERNATIVE",
+          "REPLACED_BY",
+          "SAME_AS",
+          "SIMILAR_TO",
+          "WAS_A"
+        ]
+      }
+    },
+    {
+      "suggestion_index": 6,
+      "document": "manual-controls.txt",
+      "annotator": "bob",
+      "layer": "webanno.custom.Concept",
+      "offset": [
+        16,
+        29
+      ],
+      "source_code": "990000102",
+      "covered_text": "Legacy cobalt",
+      "action": "none",
+      "apply": false,
+      "delete_annotation": false,
+      "manual_edit": false,
+      "reviewed_by_human": false,
+      "resolved": false,
+      "valid_choice": false,
+      "replacement_code": null,
+      "replacement_fsn": null,
+      "replacement_choice": "— no replacement selected —"
+    },
+    {
+      "suggestion_index": 7,
+      "document": "manual-controls.txt",
+      "annotator": "bob",
+      "layer": "webanno.custom.Concept",
+      "offset": [
+        47,
+        61
+      ],
+      "source_code": "990000404",
+      "covered_text": "Unknown silver",
+      "action": "none",
+      "apply": false,
+      "delete_annotation": false,
+      "manual_edit": false,
+      "reviewed_by_human": false,
+      "resolved": false,
+      "valid_choice": false,
+      "replacement_code": null,
+      "replacement_fsn": null,
+      "replacement_choice": "— no replacement selected —"
+    },
+    {
+      "suggestion_index": 8,
+      "document": "manual-controls.txt",
+      "annotator": "alice",
+      "layer": "webanno.custom.Concept",
+      "offset": [
+        31,
+        45
+      ],
+      "source_code": "990000301",
+      "covered_text": "Blocked violet",
+      "action": "none",
+      "apply": false,
+      "delete_annotation": false,
+      "manual_edit": false,
+      "reviewed_by_human": false,
+      "resolved": false,
+      "valid_choice": false,
+      "replacement_code": null,
+      "replacement_fsn": null,
+      "replacement_choice": "— no replacement selected —"
+    },
+    {
+      "suggestion_index": 9,
+      "document": "manual-controls.txt",
+      "annotator": "bob",
+      "layer": "webanno.custom.Concept",
+      "offset": [
+        31,
+        45
+      ],
+      "source_code": "990000301",
+      "covered_text": "Blocked violet",
+      "action": "none",
+      "apply": false,
+      "delete_annotation": false,
+      "manual_edit": false,
+      "reviewed_by_human": false,
+      "resolved": false,
+      "valid_choice": false,
+      "replacement_code": null,
+      "replacement_fsn": null,
+      "replacement_choice": "— no replacement selected —"
+    },
+    {
+      "action": "clear_id",
+      "apply": true,
+      "valid_choice": true,
+      "document": "rules.txt",
+      "annotator": "alice",
+      "layer": "webanno.custom.Concept",
+      "offset": [
+        23,
+        25
+      ],
+      "covered_text": "42",
+      "source_code": "410680006",
+      "replacement_code": null,
+      "replacement_fsn": null,
+      "suggestion_status": "Explicit concept rule",
+      "resolved": true,
+      "concept_rule": {
+        "rule_id": "number-clear-id",
+        "name": "Number (attribute)",
+        "source_code": "410680006",
+        "action": "clear_id",
+        "target_code": "",
+        "enabled": true,
+        "override_policy": true
+      },
+      "policy_overridden": false,
+      "review_note": "Explicit concept rule: number-clear-id; preserve literal and all other features."
+    },
+    {
+      "action": "replace",
+      "apply": true,
+      "valid_choice": true,
+      "document": "rules.txt",
+      "annotator": "alice",
+      "layer": "webanno.custom.Concept",
+      "offset": [
+        32,
+        42
+      ],
+      "covered_text": "2026-01-15",
+      "source_code": "410671006",
+      "replacement_code": "410672004",
+      "replacement_fsn": "Date property (qualifier value)",
+      "suggestion_status": "Explicit concept rule",
+      "resolved": true,
+      "concept_rule": {
+        "rule_id": "date-property",
+        "name": "Date (attribute)",
+        "source_code": "410671006",
+        "action": "replace",
+        "target_code": "410672004",
+        "enabled": true,
+        "override_policy": true
+      },
+      "policy_overridden": true,
+      "review_note": "Explicit concept rule: date-property; preserve literal and all other features."
+    },
+    {
+      "action": "clear_id",
+      "apply": true,
+      "valid_choice": true,
+      "document": "rules.txt",
+      "annotator": "bob",
+      "layer": "webanno.custom.Concept",
+      "offset": [
+        23,
+        25
+      ],
+      "covered_text": "42",
+      "source_code": "410680006",
+      "replacement_code": null,
+      "replacement_fsn": null,
+      "suggestion_status": "Explicit concept rule",
+      "resolved": true,
+      "concept_rule": {
+        "rule_id": "number-clear-id",
+        "name": "Number (attribute)",
+        "source_code": "410680006",
+        "action": "clear_id",
+        "target_code": "",
+        "enabled": true,
+        "override_policy": true
+      },
+      "policy_overridden": false,
+      "review_note": "Explicit concept rule: number-clear-id; preserve literal and all other features."
+    },
+    {
+      "action": "replace",
+      "apply": true,
+      "valid_choice": true,
+      "document": "rules.txt",
+      "annotator": "bob",
+      "layer": "webanno.custom.Concept",
+      "offset": [
+        32,
+        42
+      ],
+      "covered_text": "2026-01-15",
+      "source_code": "410671006",
+      "replacement_code": "410672004",
+      "replacement_fsn": "Date property (qualifier value)",
+      "suggestion_status": "Explicit concept rule",
+      "resolved": true,
+      "concept_rule": {
+        "rule_id": "date-property",
+        "name": "Date (attribute)",
+        "source_code": "410671006",
+        "action": "replace",
+        "target_code": "410672004",
+        "enabled": true,
+        "override_policy": true
+      },
+      "policy_overridden": true,
+      "review_note": "Explicit concept rule: date-property; preserve literal and all other features."
+    }
+  ]
+}

@@ -790,17 +790,20 @@ def _render_document_review_sections(rows: list[dict[str, Any]]) -> list[dict[st
         1 for document in grouped_rows if st.session_state.get(_document_reviewed_key(document), False)
     )
     st.caption(f"Reviewed {reviewed_count} of {len(grouped_rows)} document section(s).")
-    focus = st.pills(
-        "Focus documents",
-        options=["All", "Needs choice", "No replacement", "Unreviewed"],
-        default="All",
-        key="sanitization_review_focus",
-        help=(
-            "Controls which document sections open by default. Other sections stay "
-            "available so hidden edits are not lost."
-        ),
-        width="stretch",
-    ) or "All"
+    st.markdown("**Open document sections**")
+    st.caption("Opening controls only—not filters. All documents and review choices remain available.")
+    focus = st.session_state.get("sanitization_review_focus", "Collapse all")
+    opening_help = {
+        "All": "Open every document section, including reviewed sections. Does not select or apply any decisions.",
+        "Needs choice": "Open unreviewed sections with an unresolved multi-choice row. Applied replacements, deletions and manual-edit selections count as resolved choices.",
+        "No replacement": "Open unreviewed sections with a row showing 'no replacement selected'. Candidates may still be available; this is not a zero-candidate filter.",
+        "Unreviewed": "Open sections not marked as reviewed. Reviewed sections remain available but closed.",
+        "Collapse all": "Close every document section without removing documents or changing review choices.",
+    }
+    for column, (label, help_text) in zip(st.columns(len(opening_help)), opening_help.items()):
+        column.button(label, key=f"sanitization_open_sections_{label}", help=help_text,
+                      type="primary" if focus == label else "secondary", width="stretch",
+                      on_click=_set_document_section_focus, args=(label,))
 
     for document, document_rows in grouped_rows.items():
         reviewed_key = _document_reviewed_key(document)
@@ -808,7 +811,12 @@ def _render_document_review_sections(rows: list[dict[str, Any]]) -> list[dict[st
         focus_match = _document_matches_focus(document, document_rows, focus)
         keep_open = st.session_state.get("sanitization_keep_document_open") == document
         title = _document_review_title(document, document_rows, reviewed)
-        with st.expander(title, expanded=(focus_match or keep_open) and not reviewed):
+        # A new keyed container reapplies expansion even after a manual toggle or
+        # repeated button click. Inner widget keys stay stable, preserving choices.
+        revision = st.session_state.get("sanitization_section_opening_revision", 0)
+        with st.container(key=f"sanitization_section_{_safe_key(document)}_{revision}"), st.expander(
+            title, expanded=focus_match or (keep_open and not reviewed)
+        ):
             if reviewed:
                 st.success("This document section is marked as reviewed.")
             _render_document_metrics(document_rows)
@@ -1025,7 +1033,7 @@ def _render_automatic_conditions(suggestions, rows, rule_decisions) -> None:
             help="Select when chosen relationships yield one distinct target. Leave empty to disable the historical condition.",
         )
         bm25_enabled = st.checkbox(
-            "Enable BM25 automatic selection (heuristic)", value=False, key="sanitization_condition_bm25",
+            "Enable BM25 automatic selection (heuristic)", value=True, key="sanitization_condition_bm25",
             help="Select a leading BM25 target when both gap thresholds pass. Requires at least three distinct, comparable targets.",
         )
         threshold_columns = st.columns(2)
@@ -1314,21 +1322,32 @@ def _render_manual_choice_cards(rows: list[dict[str, Any]], document: str) -> li
     return decisions
 
 
+def _set_document_section_focus(focus: str) -> None:
+    st.session_state["sanitization_review_focus"] = focus
+    st.session_state["sanitization_section_opening_revision"] = st.session_state.get("sanitization_section_opening_revision", 0) + 1
+    st.session_state.pop("sanitization_keep_document_open", None)
+
+
 def _document_matches_focus(
     document: str, document_rows: list[dict[str, Any]], focus: str
 ) -> bool:
     if focus == "All":
+        return True
+    if focus == "Collapse all":
         return False
+    reviewed = bool(st.session_state.get(_document_reviewed_key(document), False))
     if focus == "Needs choice":
-        return any(row.get("_needs_choice") for row in document_rows)
+        return not reviewed and any(row.get("_needs_choice") and not _row_manual_choice_resolved(row) for row in document_rows)
     if focus == "No replacement":
+        if reviewed:
+            return False
         return any(
             row.get("Suggested replacement") == NO_REPLACEMENT_LABEL
             for row in document_rows
         )
     if focus == "Unreviewed":
-        return not bool(st.session_state.get(_document_reviewed_key(document), False))
-    return True
+        return not reviewed
+    return False
 
 
 def _document_review_title(

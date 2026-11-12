@@ -144,6 +144,12 @@ No selection means keep unchanged. Action precedence in write-back is:
 manual_edit > delete > apply > keep unchanged
 ```
 
+# Document section opening controls
+
+In review, **Open document sections** replaces the misleading **Focus documents** pills. These are expansion controls, not filters: every document and its decision widgets remain rendered, and opening/collapsing never changes selections or export scope. Each button has its own hover help. The default is **Collapse all**; **All** opens even reviewed sections, while **Unreviewed** opens only sections not marked reviewed. **Needs choice** opens unreviewed sections with at least one unresolved multi-choice row, using the same resolution predicate as the review counters (applied replacement, deletion or manual-edit selection). Already resolved choices no longer match. **No replacement** opens unreviewed sections with a row displaying no selected replacement; selectable candidates may still exist, as its tooltip explains.
+
+Explicit button clicks clear the temporary keep-document-open override and increment a separate opening revision. A keyed wrapper reapplies expansion even on repeated clicks/manual expander toggles, without changing inner widget keys or the review-state revision. Choices remain stable; no widgets are hidden or removed merely to focus the display.
+
 # INCEpTION deployment UI
 
 The one-step deployment workflow is exposed under:

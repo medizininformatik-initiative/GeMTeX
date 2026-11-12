@@ -1,0 +1,177 @@
+{
+  "schema": "snomed-post-processing.critical-findings",
+  "schema_version": 1,
+  "created_at": "2026-11-12T08:09:27.392886+00:00",
+  "metadata": {
+    "synthetic": true,
+    "fixture": "synthetic-annotator-scope",
+    "annotators": [],
+    "annotation_types": [
+      "webanno.custom.Concept"
+    ],
+    "id_prefix": "http://snomed.info/id/",
+    "id_feature": "id"
+  },
+  "findings": [
+    {
+      "annotator": "alice",
+      "document": "rules.txt",
+      "code": "410680006",
+      "covered_text": "42",
+      "offset": [
+        23,
+        25
+      ],
+      "list_type": "whitelist",
+      "reason": "not_in_whitelist",
+      "layer": "webanno.custom.Concept",
+      "fsn": null,
+      "ignored": false,
+      "ignore_overlaps": []
+    },
+    {
+      "annotator": "alice",
+      "document": "automatic.txt",
+      "code": "990000101",
+      "covered_text": "Legacy amber",
+      "offset": [
+        16,
+        28
+      ],
+      "list_type": "whitelist",
+      "reason": "not_in_whitelist",
+      "layer": "webanno.custom.Concept",
+      "fsn": null,
+      "ignored": false,
+      "ignore_overlaps": []
+    },
+    {
+      "annotator": "alice",
+      "document": "manual-controls.txt",
+      "code": "990000102",
+      "covered_text": "Legacy cobalt",
+      "offset": [
+        16,
+        29
+      ],
+      "list_type": "whitelist",
+      "reason": "not_in_whitelist",
+      "layer": "webanno.custom.Concept",
+      "fsn": null,
+      "ignored": false,
+      "ignore_overlaps": []
+    },
+    {
+      "annotator": "alice",
+      "document": "manual-controls.txt",
+      "code": "990000404",
+      "covered_text": "Unknown silver",
+      "offset": [
+        47,
+        61
+      ],
+      "list_type": "whitelist",
+      "reason": "not_in_whitelist",
+      "layer": "webanno.custom.Concept",
+      "fsn": null,
+      "ignored": false,
+      "ignore_overlaps": []
+    },
+    {
+      "annotator": "bob",
+      "document": "rules.txt",
+      "code": "410680006",
+      "covered_text": "42",
+      "offset": [
+        23,
+        25
+      ],
+      "list_type": "whitelist",
+      "reason": "not_in_whitelist",
+      "layer": "webanno.custom.Concept",
+      "fsn": null,
+      "ignored": false,
+      "ignore_overlaps": []
+    },
+    {
+      "annotator": "bob",
+      "document": "automatic.txt",
+      "code": "990000101",
+      "covered_text": "Legacy amber",
+      "offset": [
+        16,
+        28
+      ],
+      "list_type": "whitelist",
+      "reason": "not_in_whitelist",
+      "layer": "webanno.custom.Concept",
+      "fsn": null,
+      "ignored": false,
+      "ignore_overlaps": []
+    },
+    {
+      "annotator": "bob",
+      "document": "manual-controls.txt",
+      "code": "990000102",
+      "covered_text": "Legacy cobalt",
+      "offset": [
+        16,
+        29
+      ],
+      "list_type": "whitelist",
+      "reason": "not_in_whitelist",
+      "layer": "webanno.custom.Concept",
+      "fsn": null,
+      "ignored": false,
+      "ignore_overlaps": []
+    },
+    {
+      "annotator": "bob",
+      "document": "manual-controls.txt",
+      "code": "990000404",
+      "covered_text": "Unknown silver",
+      "offset": [
+        47,
+        61
+      ],
+      "list_type": "whitelist",
+      "reason": "not_in_whitelist",
+      "layer": "webanno.custom.Concept",
+      "fsn": null,
+      "ignored": false,
+      "ignore_overlaps": []
+    },
+    {
+      "annotator": "alice",
+      "document": "manual-controls.txt",
+      "code": "990000301",
+      "covered_text": "Blocked violet",
+      "offset": [
+        31,
+        45
+      ],
+      "list_type": "blacklist",
+      "reason": "blacklisted",
+      "layer": "webanno.custom.Concept",
+      "fsn": "SYNTHETIC blocked violet (finding)",
+      "ignored": false,
+      "ignore_overlaps": []
+    },
+    {
+      "annotator": "bob",
+      "document": "manual-controls.txt",
+      "code": "990000301",
+      "covered_text": "Blocked violet",
+      "offset": [
+        31,
+        45
+      ],
+      "list_type": "blacklist",
+      "reason": "blacklisted",
+      "layer": "webanno.custom.Concept",
+      "fsn": "SYNTHETIC blocked violet (finding)",
+      "ignored": false,
+      "ignore_overlaps": []
+    }
+  ]
+}
