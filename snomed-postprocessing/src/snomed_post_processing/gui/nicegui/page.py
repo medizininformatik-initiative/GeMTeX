@@ -24,13 +24,26 @@ def _candidate_rows(finding):
     ]
 
 
-def build_page(ui) -> None:
+def build_page(ui, events) -> None:
     """Build once per visitor; imports replace state only after successful parsing."""
     state = create_demo_state()
     review_context = ReviewContext()
     load_revision = 0
     active_document = None
     document_slides = {}
+
+
+    def keyboard_active(n: str, k: ui.keyboard):
+        k.active = False
+        if n == "review":
+            k.active = True
+
+    def handle_key(e: events.KeyEventArguments):
+        if len(document_slides) < 1:
+            return
+        ui.notify(e)
+
+    keyboard = ui.keyboard(on_key=handle_key)
 
     def refresh_documents(session):
         finding_grid.options["rowData"] = [row for row in _finding_rows(state, session)
@@ -65,6 +78,7 @@ def build_page(ui) -> None:
         ui.label("Grid filters affect display only, not the source artifact or its annotator scope.")
 
     with ui.tabs().classes("w-full") as tabs:
+        tabs.on_value_change(lambda event: keyboard_active(event.value, keyboard))
         check = ui.tab("check", label="1. Check policy")
         suggest = ui.tab("suggest", label="2. Suggest")
         review = ui.tab("review", label="3. Review & apply")
@@ -80,7 +94,7 @@ def build_page(ui) -> None:
             upload_status = ui.label().classes("text-sm")
             counts = ui.label().classes("text-sm")
             # Do not keep-alive slides: cached panels retain stale DOM for the moved grid.
-            documents = ui.carousel(arrows=True, navigation=True).props(
+            documents = ui.carousel(arrows=False, navigation=True).props(
                 "height=auto navigation-position=top control-color=primary"
             ).classes("w-full")
             empty = ui.label("No findings in the current artifact scope.")
@@ -277,20 +291,20 @@ def build_page(ui) -> None:
                 upload_status.set_text("Suggestions loaded. Previous review choices and flags reset; no decisions staged.")
                 uploader.reset()
 
-            def use_demo():
-                nonlocal state, load_revision
-                load_revision += 1
-                state = create_demo_state()
-                show_source()
-                upload_status.set_text("Synthetic demo restored; uploaded data is no longer the active preview.")
-                uploader.reset()
+            # def use_demo():
+            #     nonlocal state, load_revision
+            #     load_revision += 1
+            #     state = create_demo_state()
+            #     show_source()
+            #     upload_status.set_text("Synthetic demo restored; uploaded data is no longer the active preview.")
+            #     uploader.reset()
 
             with upload_controls:
                 uploader = ui.upload(label="Load suggestions JSON", on_upload=load_upload,
                                      auto_upload=True, multiple=False, max_file_size=MAX_SUGGESTIONS_BYTES,
                                      on_rejected=lambda: upload_status.set_text("Upload rejected. Choose one JSON file up to 50 MiB; current preview unchanged.")) \
                     .props("accept=.json").classes("max-w-full")
-                ui.button("Use synthetic demo", on_click=use_demo).tooltip("Replace this page's preview with artificial data; no files are changed.")
+                # ui.button("Use synthetic demo", on_click=use_demo).tooltip("Replace this page's preview with artificial data; no files are changed.")
             # Native DOM right-clicks provide coordinates and immutable rendered row IDs;
             # AG Grid's serialized cellContextMenu event omits pointer coordinates.
             context_handler = """event => {

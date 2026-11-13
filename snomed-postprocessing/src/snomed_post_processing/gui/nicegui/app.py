@@ -19,10 +19,10 @@ def _load_ui():
         raise RuntimeError("Enable the nicegui extra in the project environment: uv sync --locked --extra nicegui (set UV_PROJECT_ENVIRONMENT=.venv-py311).") from exc
     if version != NICEGUI_VERSION:
         raise RuntimeError(f"This prototype targets nicegui=={NICEGUI_VERSION}; found {version}.")
-    from nicegui import app, ui
+    from nicegui import app, ui, events
     from snomed_post_processing.gui.nicegui.transport import guard_socketio_disconnects
     guard_socketio_disconnects(app)
-    return ui
+    return ui, events
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
@@ -34,14 +34,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if not 1 <= arguments.port <= 65535:
         parser.error("--port must be between 1 and 65535")
     try:
-        ui = _load_ui()
+        ui, events = _load_ui()
     except RuntimeError as exc:
         parser.exit(2, f"{exc}\n")
     from snomed_post_processing.gui.nicegui.page import build_page
 
     @ui.page("/")
     def index():
-        build_page(ui)
+        build_page(ui, events)
 
     # One server, no reload worker, no implicit browser launch.
     ui.run(host=arguments.host, port=arguments.port, show=arguments.show,
