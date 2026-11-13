@@ -95,6 +95,10 @@ CLI/API defaults remain conservative: association types `SAME_AS` and `REPLACED_
 
 The GUI sidebar starts with no overlap-ignore layer selected. Users may explicitly add `webanno.custom.No_Human` if desired.
 
+# NiceGUI workflow
+
+NiceGUI tab 2 uses these same GUI defaults and backend gates via `pipelines/suggestion_generation.py`, sharing tab 1 inputs/scope. It accepts current-session or saved findings, exposes both replacement views/custom exclusions and all ancestor/BM25 settings, and provides explicit SNOGIT member inspection/cache creation. Cache creation never starts generation; generated caches are session-temporary unless downloaded. Generation produces an overview plus JSON/Markdown without replacing review. A separate load-in-review action resets generic choices while retaining same-input rule choices. Concept-rule Apply stages validated original-annotation decisions for tab-3 Save, with manual conflicts and stale-source export protection. No CLI defaults, scoring algorithms, generic target revalidation, CAS write-back or deployment change. See [NiceGUI controls and safety](/snomed-post-processing/interfaces/gui.md).
+
 # Conditional review selection
 
 **Apply Conditions** in the review GUI implements historical-association selection and an opt-in BM25 gap condition, combined using OR. Both are restricted to source findings from the inclusion-list check (`finding.list_type == "whitelist"`). Exclusion-list findings (`list_type == "blacklist"`) remain manual regardless of score gaps or unique historical targets. An annotation with an exclusion-list finding must not be automatically approved through a second inclusion-list finding either. Open exclusion-list findings prevent automatic document-review completion.

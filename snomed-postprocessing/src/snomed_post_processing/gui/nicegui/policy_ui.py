@@ -39,6 +39,8 @@ class PolicyCheckControls:
         self.result = self.completed_sources = self.completed_stamps = None
         self.result_revision = None
         self.project_path = None
+        self.listeners = []
+        self.result_listeners = []
         ui.label("Check inclusion/exclusion-list policy. No annotations are changed.").classes("text-sm")
         with ui.expansion("Project and policy inputs", value=True).classes("w-full"):
             with ui.row().classes("w-full items-center"):
@@ -49,7 +51,7 @@ class PolicyCheckControls:
                 self.lists = FileSource(ui, "SNOMED HDF5", (".hdf5", ".h5"), self.data_dir, self.changed)
             with ui.row().classes("w-full items-center"):
                 self.annotators = ui.select({}, label="Annotators (empty = all)", multiple=True,
-                                            value=[], on_change=self.changed).classes("grow")
+                                            new_value_mode="add-unique", value=[], on_change=self.changed).classes("grow")
                 self.load_names = ui.button("Load annotators", on_click=self.load_annotators)
             with ui.expansion("Annotation settings").classes("w-full"):
                 self.layers = ui.textarea("Target annotation types (one per line)",
@@ -104,6 +106,8 @@ class PolicyCheckControls:
         self.revision += 1
         self.status.set_text("Inputs changed. Run policy check to obtain current results.")
         self.refresh()
+        for listener in self.listeners:
+            listener()
 
     def project_changed(self):
         if self.ready and not self.closed:
@@ -150,8 +154,9 @@ class PolicyCheckControls:
         try:
             names = await run.io_bound(_annotators, project)
             if not self.closed and revision == self.revision:
-                selected = [name for name in self.annotators.value if name in names]
-                self.annotators.set_options(names, value=selected)
+                selected = list(normalize_annotators(self.annotators.value or ()))
+                options = {**{name: name for name in selected}, **names}
+                self.annotators.set_options(options, value=selected)
                 self.status.set_text("Annotators loaded. Empty selection includes all annotators.")
         except Exception:
             if not self.closed and revision == self.revision:
@@ -192,6 +197,8 @@ class PolicyCheckControls:
                 f"{len({f.annotator for f in result.findings})} annotators · "
                 f"{result.critical_documents} critical document/annotator pairs")
             self.status.set_text("Policy check finished. No annotations changed.")
+            for listener in self.result_listeners:
+                listener()
         except Exception:
             if not self.closed and revision == self.revision:
                 self.status.set_text("Policy check failed. Check the ZIP (JSON CAS/XMI), HDF5 and annotation settings. Previous successful result retained.")

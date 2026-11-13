@@ -33,7 +33,7 @@ class FileSource:
         self.uploaded = None
         self.uploading = self.closed = False
         self.generation = 0
-        with ui.column().classes("w-full min-w-0 gap-2"):
+        with ui.column().classes("w-full min-w-0 gap-2") as self.container:
             ui.label(label).classes("font-medium")
             self.mode = ui.toggle(["Upload", "Data directory", "Server path"], value="Upload",
                                   on_change=lambda _: self.change_mode()).props("dense no-caps")
@@ -107,7 +107,7 @@ class FileSource:
             if suffix not in self.suffixes or event.file.size() > MAX_UPLOAD_BYTES:
                 raise ValueError("Unsupported upload.")
             owner = TemporaryDirectory(prefix="snomed-policy-upload-")
-            target = Path(owner.name) / ("upload" + suffix)
+            target = Path(owner.name) / Path(event.file.name).name
             await event.file.save(target)
             if target.stat().st_size > MAX_UPLOAD_BYTES:
                 raise ValueError("Upload too large.")

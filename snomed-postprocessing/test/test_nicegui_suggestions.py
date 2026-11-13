@@ -93,9 +93,10 @@ def fake_ui(state=None):
     ui.aggrid.side_effect = grid
     ui.label.side_effect = label
     with patch("snomed_post_processing.gui.nicegui.page.PolicyCheckControls"), \
+            patch("snomed_post_processing.gui.nicegui.page.SuggestionControls"), \
             patch("snomed_post_processing.gui.nicegui.review_panel.PreviewState", return_value=state) if state is not None else nullcontext():
         build_page(ui, MagicMock())
-    return ui, grids, labels
+    return ui, grids[:2], labels
 
 
 def switch_document(ui, index):

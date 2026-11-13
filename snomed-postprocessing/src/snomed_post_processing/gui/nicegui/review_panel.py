@@ -94,7 +94,24 @@ class ReviewPanelControls:
                 self.evidence = ui.label().classes("text-sm whitespace-pre-wrap")
                 self.controls = ReviewControls(ui, lambda: self.state, lambda: self.load_revision,
                                                self.begin_load, self.refresh_documents)
-        ui.label("Review JSON only. Generation, rules/conditions, ZIP write-back and deployment remain disconnected.")
+        ui.label("Review JSON only. ZIP write-back and deployment remain disconnected.")
+        with ui.expansion("Explicit concept rule decisions", value=True).classes("w-full") as self.rule_area:
+            self.rule_summary = ui.label().classes("text-sm")
+            self.rule_grid = ui.aggrid({
+                "columnDefs": [{"field": "apply", "headerName": "Apply", "cellDataType": "boolean",
+                                ":editable": "params => params.data.editable", "width": 90}]
+                              + [{"field": field} for field in ("document", "annotator", "layer", "offset", "source", "action", "target", "rule")]
+                              + [{"field": "override_allowed", "headerName": "Override policy"},
+                                 {"field": "override", "headerName": "Policy actually overridden"}],
+                "defaultColDef": {"sortable": True, "filter": True, "resizable": True, "editable": False},
+                "rowData": [], ":getRowId": "params => params.data.row_id",
+            }).classes("w-full h-64 overflow-auto overscroll-contain")
+            self.rule_grid.on("cellValueChanged", self.toggle_rule, args=["data"])
+            ui.button("Keep manual decisions for conflicts", on_click=self.keep_manual_rules).props("flat dense")
+            ui.button("Clear all pending rule decisions", on_click=self.clear_rules).props("flat dense")
+            self.rule_source_download = ui.button("Download rule-only review source JSON", on_click=self.download_rule_source).props("flat dense")
+            self.rule_source_download.tooltip("Save alongside reviewed decisions to restore a rule-only review after reload.")
+            ui.label("Apply choices are staged. Save choices commits them; clearing rules leaves definitions and CAS unchanged.").classes("text-sm")
         self.documents.on_value_change(lambda event: self.change_document(event.value))
         with upload_controls:
             self.uploader = ui.upload(label="Load suggestions JSON", on_upload=self.load_upload,
@@ -116,6 +133,76 @@ class ReviewPanelControls:
         self.candidate_grid.on("rowClicked", self.select_candidate, args=["data"])
         self.show_source()
 
+    def publish_generated(self, state):
+        """Explicitly replace generic review; retain same-input rule choices only."""
+        import copy
+        previous = self.controls.session
+        binding = state.metadata.get("nicegui_generation_binding")
+        keep_rules = binding is not None and previous.active_rule_binding == binding
+        self.begin_load()
+        self.state = state
+        self.show_source()
+        if keep_rules:
+            session = self.controls.session
+            for name in ("rules", "draft_rules", "rule_binding", "draft_rule_binding", "rules_stale", "draft_rules_stale"):
+                setattr(session, name, copy.deepcopy(getattr(previous, name)))
+            self.controls.refresh()
+
+    def refresh_rules(self, session):
+        binding = session.active_rule_binding
+        self.rule_source_download.set_visibility(not self.state.source_suggestions)
+        self.rule_rows = {f"{self.load_revision}:{session.revision}:{index}": index
+                          for index, _ in enumerate(session.effective_rules)}
+        self.rule_grid.options["rowData"] = [dict(
+            row_id=key, apply=bool(item.get("apply")), editable=binding is not None,
+            document=item["document"], annotator=item["annotator"], layer=item["layer"], offset=str(item["offset"]),
+            source=item["source_code"], action=item["action"], target=item.get("replacement_code") or "",
+            rule=item["concept_rule"]["rule_id"], override_allowed=bool(item["concept_rule"].get("override_policy")),
+            override=bool(item.get("policy_overridden")))
+            for key, index in self.rule_rows.items() for item in (session.effective_rules[index],)]
+        self.rule_grid.update()
+        self.rule_area.set_visibility(bool(session.effective_rules) or session.draft_rules is not None)
+        self.rule_summary.set_text(f"{len(session.effective_rules)} rules · {len(session.rule_conflicts()[1])} manual conflicts"
+                                   + (" · inputs changed; reapply or clear" if session.invalid_rules else "")
+                                   + (" · imported rules are read-only" if binding is None else ""))
+
+    def toggle_rule(self, event):
+        import copy
+        from .review import ReviewError
+        try:
+            data = event.args["data"]
+            session = self.controls.session
+            index = self.rule_rows.get(data["row_id"])
+            if index is None or session.active_rule_binding is None or session.invalid_rules or type(data["apply"]) is not bool:
+                raise ReviewError("This rule is read-only or from an older review. Reapply rules first.")
+            rules = copy.deepcopy(session.effective_rules)
+            item = rules[index]
+            item["rule_reviewed_by_human"] = bool(item.get("rule_reviewed_by_human")) or item.get("apply") != data["apply"]
+            item["apply"] = item["resolved"] = data["apply"]
+            session.stage_rules(rules, session.active_rule_binding)
+            self.controls.refresh()
+        except (KeyError, TypeError, ReviewError) as error:
+            self.ui.notify(str(error) if isinstance(error, ReviewError) else "Select a current rule Apply checkbox.", type="warning")
+
+    def download_rule_source(self):
+        if self.state.source_name is not None and not self.state.source_suggestions:
+            from snomed_post_processing.sanitization.json_io import sanitization_suggestions_json_text
+            keys = ("annotators", "id_prefix", "id_feature", "nicegui_generation_binding", "target_view")
+            metadata = {key: self.state.metadata[key] for key in keys if key in self.state.metadata}
+            self.ui.download.content(sanitization_suggestions_json_text([], metadata=metadata), "rule-only-suggestions.json")
+
+    def clear_rules(self):
+        if self.state.source_name is not None:
+            self.controls.session.stage_rules([], self.controls.session.active_rule_binding)
+            self.controls.refresh()
+
+    def keep_manual_rules(self):
+        session = self.controls.session
+        safe, conflicts = session.rule_conflicts()
+        if conflicts:
+            session.stage_rules(safe, session.active_rule_binding)
+            self.controls.refresh()
+
     def handle_key(self, event):
         if self.document_slides:
             self.ui.notify(event)
@@ -127,6 +214,8 @@ class ReviewPanelControls:
     def refresh_documents(self, session):
         self.finding_grid.options["rowData"] = [row for row in _finding_rows(self.state, session)
                                               if row["document"] == self.active_document]
+        if hasattr(self, "rule_grid"):
+            self.refresh_rules(session)
         for document, _, heading, toggle, tip in self.document_slides.values():
             reviewed = document in session.reviewed_documents
             pending = document in session.draft_reviewed

@@ -10,6 +10,7 @@ class ReviewControls:
         self.get_revision, self.begin_load = get_revision, begin_load
         self.refresh_grid = refresh_grid
         self.session = ReviewSession(get_state())
+        self.before_export = None
         self.status = ui.label().classes("text-sm whitespace-pre-wrap")
         self.menu = ui.context_menu().props("no-parent-event")
         self.menu_target = None
@@ -20,7 +21,7 @@ class ReviewControls:
         with ui.row():
             self.export = ui.button("Download reviewed decisions JSON", on_click=self.download)
         ui.label("Save document flags with Save choices. Reviewed is progress, not proof of replacements for all findings.")
-        ui.label("Import replaces current review. Imported rule/deletion/manual-edit decisions are retained, not revalidated; edit them in Streamlit.")
+        ui.label("Import replaces current review. Imported deletions/manual edits remain protected. Reapply imported rules against current inputs in tab 2 to edit their Apply choices.")
         self.upload = ui.upload(label="Load reviewed decisions JSON (replaces current review)", on_upload=self.load,
                                 auto_upload=True, multiple=False, max_file_size=MAX_DECISIONS_BYTES,
                                 on_rejected=lambda: self.status.set_text("Decisions upload rejected; current review unchanged.")) \
@@ -38,11 +39,13 @@ class ReviewControls:
         self.menu_target = None
         self.save.set_enabled(enabled and self.session.dirty)
         self.discard.set_enabled(enabled and self.session.dirty)
-        self.export.set_enabled(enabled and not self.session.dirty)
+        self.export.set_enabled(enabled and not self.session.dirty and not self.session.invalid_rules)
         self.upload.set_enabled(enabled)
         self.status.set_text((self.session.status(row) + " · " if row else "")
                              + f"{len(self.session.drafts)} pending choices · {len(self.session.draft_reviewed)} pending document flags · "
-                             + f"{len(self.session.reviewed_documents)} saved reviewed documents · {len(self.session.rules)} protected imported rules.")
+                             + f"{len(self.session.reviewed_documents)} saved reviewed documents · {len(self.session.effective_rules)} rule decisions"
+                             + (" · pending rule changes" if self.session.draft_rules is not None else "")
+                             + (" · rule inputs changed; reapply or clear rules" if self.session.invalid_rules else ""))
         if update_grid:
             self.refresh_grid(self.session)
 
@@ -121,12 +124,15 @@ class ReviewControls:
         try:
             if original_session.dirty:
                 raise ReviewError("Save choices or discard pending changes before exporting reviewed decisions.")
+            if self.before_export is not None:
+                await self.before_export()
             # Copy only review data, not the immutable source tuple or navigation.
             # The worker must never iterate dictionaries being changed by a UI save.
             snapshot = ReviewSession(original_state, saved=copy.deepcopy(original_session.saved),
                                      rules=copy.deepcopy(original_session.rules),
                                      reviewed_documents=set(original_session.reviewed_documents),
-                                     imported_metadata=copy.deepcopy(original_session.imported_metadata))
+                                     imported_metadata=copy.deepcopy(original_session.imported_metadata),
+                                     rules_stale=original_session.rules_stale)
             from nicegui import run
             text = await run.io_bound(snapshot.export_text)
             if self.get_state() is not original_state or self.session is not original_session or self.session.revision != revision:

@@ -1,6 +1,6 @@
 """Framework-neutral document extraction and display context for annotation review.
 
-Accepts explicitly supplied ZIP bytes/maps/metadata only. No caching, session state,
+Accepts explicitly supplied ZIP bytes/paths/maps/metadata only. No caching, session state,
 metadata-path access, database access or network operations are performed here.
 """
 from __future__ import annotations
@@ -64,6 +64,11 @@ class ReviewContext:
         texts = _extract_project_document_texts(data, file_name, annotators=annotators)
         return cls.from_metadata(metadata or {}, document_texts=texts)
 
+    @classmethod
+    def from_project_path(cls, path: pathlib.Path, *, annotators=()) -> ReviewContext:
+        """Read an explicitly selected local ZIP without loading its bytes into memory."""
+        return cls(document_texts=_extract_project_document_texts(path, path.name, annotators=annotators))
+
     def document_text(self, document: str) -> str:
         for alias in (document, _strip_known_suffix(document)):
             if alias in self.document_texts:
@@ -99,11 +104,12 @@ class ReviewContext:
                        and not self.finding_contexts.get(self.finding_key(finding))})
 
 
-def _extract_project_document_texts(project_zip_bytes: bytes, file_name: str | None, *, annotators=()) -> dict[str, str]:
+def _extract_project_document_texts(project_zip_bytes: bytes | pathlib.Path, file_name: str | None, *, annotators=()) -> dict[str, str]:
     annotators = normalize_annotators(annotators)
     lookup: dict[str, str] = {}
     documents_seen = documents_loaded = cas_failures = empty_texts = 0
-    with zipfile.ZipFile(io.BytesIO(project_zip_bytes)) as zip_file:
+    source = io.BytesIO(project_zip_bytes) if isinstance(project_zip_bytes, bytes) else project_zip_bytes
+    with zipfile.ZipFile(source) as zip_file:
         project_documents = _read_project(zip_file, file_name or "uploaded project")
         for document_name, cas_paths in _yield_matching_files(
             project_documents, zip_file, file_name=file_name, allowed_extensions=[".json", ".xmi"],

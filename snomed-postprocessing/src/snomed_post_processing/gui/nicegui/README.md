@@ -2,7 +2,8 @@
 
 Preview **synthetic data or uploaded suggestions JSON**, then deliberately stage
 and save manual choices and download/restore reviewed-decisions JSON.
-Suggestion generation, CAS write-back and deployment are not connected.
+Policy checking, explicit concept rules and suggestion generation are connected.
+CAS write-back and deployment are not connected.
 Both frontends now use the same Python 3.11 project environment, `.venv-py311`.
 The shared `gui/app.py` defaults to Streamlit; select NiceGUI explicitly.
 
@@ -51,7 +52,54 @@ last successful result. File identity/size/mtime checks detect changed source fi
 during analysis and before download. No application persistence is added.
 
 Policy checking does not alter loaded suggestions or their saved review scope.
-Generation and INCEpTION API fetching/deployment remain separate future work.
+INCEpTION API fetching/deployment remain separate future work.
+
+## Rules and suggestion generation
+
+**2. Suggest** shares tab 1's project/HDF5/annotation settings and annotator scope.
+Use current successful policy findings, or select saved CriticalFindings JSON via
+Upload / Data directory / Server path (50 MiB processing limit). Narrower source
+scope and mismatching saved ID settings are rejected rather than silently reused.
+
+The settings mirror Streamlit: Policy rules / Active release, all four release
+exclusion modes, historical associations (including an explicitly empty selection),
+ancestor limits, semantic BM25, exclusion-finding BM25, lexical/score thresholds,
+retention limit and 0–100% tag boost. GUI defaults are unchanged. SNOGIT defaults on
+and requires a compatible processed cache, or an explicit opt-out. Cache/source
+selectors default to Data directory; all three file modes work. Inspect members,
+then explicitly create a cache; neither action starts generation. Raw `.dat`
+uploads retain their basename for source-kind detection. Cache outputs are owned
+session-temporary files; download to keep them after leaving the page.
+
+**Generate sanitization suggestions** runs the existing resolver/BM25 engine in a
+separate process and produces an overview and JSON/Markdown downloads. A thread
+alone cannot protect Socket.IO heartbeats when native HDF5/BM25 code holds the GIL.
+Process inputs contain paths/data only; upload owners stay in the awaiting page,
+and unused policy-report bodies are not transferred. Windows-style spawn, returned
+review artifacts and event-loop responsiveness have synthetic regression coverage. It does not reset
+review. **Load generated suggestions in review (replaces review)** is separate;
+it resets generic choices/flags and preserves same-input saved/pending rule choices.
+No candidate is automatically accepted. Source/settings/edit revisions and file
+stamps reject stale worker results, downloads and handoffs. Failed runs retain the
+last successful generation; edited inputs require an explicit fresh run.
+
+The collapsed **Concept rules** editor supports add/remove/edit, JSON import/export
+and **Apply rules to review**. Loading definitions never applies them. Rules scan
+original annotations, including those without findings; only IDs may change and
+rules do not chain. Targets must exist and be active, including policy overrides.
+Applying stages decisions in tab 3 (or starts an empty rule-only review); **Save
+choices** commits them. For rule-only runs, download the rule-only source JSON
+alongside reviewed decisions; load that matching source first when restoring. Apply checkboxes, Discard, Clear and **Keep manual decisions
+for conflicts** preserve manual ownership; conflicts block Save/export. Changed
+rule inputs block export until reapply/clear. Imported rules stay read-only until
+explicit reapplication validates preserved manual choices against original CAS
+identities/text/definitions and active targets. Unrelated loaded review is not
+silently reused: first load matching generated suggestions. Policy checks and
+rules never overwrite input files. Generated metadata uses scoped snippets from
+the explicitly selected ZIP, never paths embedded in metadata.
+
+Conditions, ZIP write-back and deployment remain disconnected. Testing uses the
+artificial fixture and installed SDK, not live clinical projects/browser rendering.
 
 ## Load saved suggestions
 
@@ -182,8 +230,8 @@ different finding updates details/candidates, not the main grid. Text renders as
 text, not HTML; filters are display-only. Reloading discards per-page preview
 state. There is no persistent/global review state or cookie secret.
 
-**Not connected:** rule editing/application, suggestion generation, conditions,
-ID-removal choices, ZIP sanitization or INCEpTION API fetching/deployment.
+**Not connected:** automatic conditions, generic ID-removal choices, ZIP sanitization
+or INCEpTION API fetching/deployment. Explicit concept-rule ID removal is connected.
 Startup is empty. Only explicitly selected policy inputs and uploaded
 suggestions/review JSON are read.
 
