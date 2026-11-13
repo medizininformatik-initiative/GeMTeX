@@ -68,6 +68,21 @@ def fake_ui():
         ui.context_items.append(element)
         return element
 
+    ui.document_buttons = []
+
+    def button(*args, **kwargs):
+        element = MagicMock()
+        element.props.return_value = element.classes.return_value = element.tooltip.return_value = element
+        element.props_data = {}
+        element.props.__setitem__.side_effect = element.props_data.__setitem__
+        element.set_enabled.side_effect = lambda value: setattr(element, "enabled", value)
+        if "icon" in kwargs:
+            element.callback = kwargs["on_click"]
+            ui.document_buttons.append(element)
+        return element
+
+    ui.button.side_effect = button
+    ui.tooltip.side_effect = label
     carousel = MagicMock()
     carousel.props.return_value = carousel.classes.return_value = carousel
     carousel.set_value.side_effect = lambda value: setattr(carousel, "value", value)
@@ -301,7 +316,7 @@ class SuggestionsUploadPageTest(unittest.IsolatedAsyncioTestCase):
         proposal = labels[heading + 1]
         self.assertEqual(proposal.text, "Saved proposed SCTID: 1234567890123456789012345 (not automatically accepted)")
         self.assertEqual(labels[heading + 2].text, "Original saved rationale")
-        reset = next(call.kwargs["on_click"] for call in ui.button.call_args_list if call.args[0] == "Use synthetic demo")
+        reset = next(call.kwargs["on_click"] for call in ui.button.call_args_list if call.args and call.args[0] == "Use synthetic demo")
         reset()
         self.assertEqual(proposal.text, "")
 
@@ -329,7 +344,7 @@ class SuggestionsUploadPageTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(any(" 0042 ± <script>toy</script> " == label.text for label in labels))
         ui.html.assert_not_called()
         ui.markdown.assert_not_called()
-        self.assertNotIn("Use candidate", [call.args[0] for call in ui.button.call_args_list])
+        self.assertNotIn("Use candidate", [call.args[0] for call in ui.button.call_args_list if call.args])
         actions = open_context(ui, candidates, selected)
         self.assertFalse(actions["Apply"].enabled)  # Diagnostic context remains non-selectable.
         self.assertEqual(findings.options["rowData"][0]["review"], "Unreviewed")
@@ -416,7 +431,7 @@ class SuggestionsUploadPageTest(unittest.IsolatedAsyncioTestCase):
         with patch("nicegui.run.io_bound", side_effect=reader):
             pending = asyncio.create_task(handler(upload_event(encoded(payload()))))
             await asyncio.wait_for(started.wait(), timeout=2)
-            reset = next(call.kwargs["on_click"] for call in ui.button.call_args_list if call.args[0] == "Use synthetic demo")
+            reset = next(call.kwargs["on_click"] for call in ui.button.call_args_list if call.args and call.args[0] == "Use synthetic demo")
             reset()
             finish.set()
             await pending

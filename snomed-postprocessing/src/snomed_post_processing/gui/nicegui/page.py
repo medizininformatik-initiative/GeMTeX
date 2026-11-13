@@ -35,8 +35,16 @@ def build_page(ui) -> None:
     def refresh_documents(session):
         finding_grid.options["rowData"] = [row for row in _finding_rows(state, session)
                                           if row["document"] == active_document]
-        for document, _, heading in document_slides.values():
+        for document, _, heading, toggle, tip in document_slides.values():
             reviewed = document in session.reviewed_documents
+            pending = document in session.draft_reviewed
+            effective = session.draft_reviewed.get(document, reviewed)
+            action = "Unmark document reviewed" if effective else "Mark document reviewed"
+            toggle.props["icon"] = "check_circle" if effective else "check_circle_outline"
+            toggle.props["color"] = "amber-8" if pending else "green-7" if reviewed else "grey-6"
+            toggle.props["aria-label"] = action
+            toggle.set_enabled(not state.is_demo)
+            tip.set_text(action + (" (pending; Save choices)" if pending else ""))
             heading.classes(add="text-green-700 font-semibold" if reviewed else "",
                             remove="" if reviewed else "text-green-700 font-semibold")
 
@@ -174,9 +182,14 @@ def build_page(ui) -> None:
                     for index, document in enumerate(names):
                         token = f"{load_revision}:{index}"
                         with ui.carousel_slide(name=token).classes("w-full min-w-0 px-12 pt-12") as slide:
-                            heading = ui.label(document).classes("text-xl")
-                            heading.tooltip("Green means document review is saved; it does not imply every finding has a replacement.")
-                        document_slides[token] = (document, slide, heading)
+                            with ui.row().classes("items-center gap-2 flex-nowrap"):
+                                toggle = ui.button(icon="check_circle_outline", on_click=lambda _, document=document, source=state:
+                                                   controls.toggle_document(document, source)).props("flat round dense")
+                                with toggle:
+                                    tip = ui.tooltip("Mark document reviewed")
+                                heading = ui.label(document).classes("text-xl min-w-0 break-words")
+                                heading.tooltip("Green means document review is saved; it does not imply every finding has a replacement.")
+                        document_slides[token] = (document, slide, heading, toggle, tip)
                 documents.set_visibility(bool(names))
                 empty.set_visibility(not names)
                 if names:

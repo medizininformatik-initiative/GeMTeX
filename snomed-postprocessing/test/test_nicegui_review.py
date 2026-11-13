@@ -288,7 +288,7 @@ class ReviewUiTest(unittest.IsolatedAsyncioTestCase):
         review_handler = next(call.kwargs["on_upload"] for call in ui.upload.call_args_list if call.kwargs["label"].startswith("Load reviewed"))
         with patch("nicegui.run.io_bound", new=AsyncMock(side_effect=lambda function, *args: function(*args))):
             await source_handler(upload_event(encoded(payload())))
-        buttons = {call.args[0]: call.kwargs.get("on_click") for call in ui.button.call_args_list}
+        buttons = {call.args[0]: call.kwargs.get("on_click") for call in ui.button.call_args_list if call.args}
         return ui, grids, labels, source_handler, review_handler, buttons
 
     async def test_click_stage_save_flags_and_download_are_deliberate(self):
@@ -302,7 +302,7 @@ class ReviewUiTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Pending replacement", grids[0].options["rowData"][0]["review"])
         await buttons["Download reviewed decisions JSON"]()
         ui.download.content.assert_not_called()
-        buttons["Mark document reviewed"](); buttons["Save choices"]()
+        ui.document_buttons[-1].callback(None); buttons["Save choices"]()
         await buttons["Download reviewed decisions JSON"]()
         data = json.loads(ui.download.content.call_args.args[0])
         self.assertTrue(data["decisions"][0]["reviewed_by_human"])
@@ -464,21 +464,52 @@ class ReviewUiTest(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("document", [column["field"] for column in definitions])
         heading = next(label for label in reversed(labels) if label.text == "toy.txt")
         grids[0].on.call_args.args[1](SimpleNamespace(args={"data": grids[0].options["rowData"][0]}))
-        buttons["Mark document reviewed"]()
+        toggle = ui.document_buttons[-1]
+        self.assertEqual(toggle.props_data["icon"], "check_circle_outline")
+        toggle.callback(None)
+        self.assertEqual(toggle.props_data["color"], "amber-8")
+        self.assertEqual(toggle.props_data["icon"], "check_circle")
+        self.assertFalse(grids[0].options["rowData"][0]["document_reviewed"])
+        buttons["Save choices"]()
+        self.assertEqual(toggle.props_data["color"], "green-7")
+        self.assertTrue(grids[0].options["rowData"][0]["document_reviewed"])
+        self.assertIn("text-green-700", heading.classes.call_args.kwargs["add"])
+        toggle.callback(None)
+        self.assertEqual(toggle.props_data["color"], "amber-8")
+        self.assertEqual(toggle.props_data["icon"], "check_circle_outline")
+        self.assertTrue(grids[0].options["rowData"][0]["document_reviewed"])
+        buttons["Discard pending changes"]()
+        self.assertEqual(toggle.props_data["color"], "green-7")
+        self.assertTrue(grids[0].options["rowData"][0]["document_reviewed"])
+        toggle.callback(None); buttons["Save choices"]()
+        self.assertEqual(toggle.props_data["color"], "grey-6")
+        self.assertFalse(grids[0].options["rowData"][0]["document_reviewed"])
+        self.assertIn("text-green-700", heading.classes.call_args.kwargs["remove"])
+        toggle.callback(None); buttons["Save choices"]()
+        with patch("nicegui.run.io_bound", new=AsyncMock(side_effect=lambda function, *args: function(*args))):
+            await source_handler(upload_event(encoded(payload()), "new.json"))
+        self.assertFalse(grids[0].options["rowData"][0]["document_reviewed"])
+
+    async def test_header_toggle_works_without_selecting_finding_and_rejects_old_source(self):
+        ui, grids, labels, source_handler, _, buttons = await self.setup_page()
+        toggle = ui.document_buttons[-1]
+        self.assertTrue(toggle.enabled)
+        self.assertNotIn("Mark document reviewed", buttons)
+        self.assertNotIn("Unmark document reviewed", buttons)
+        toggle.callback(None)
+        self.assertEqual(toggle.props_data["color"], "amber-8")
+        self.assertTrue(any("pending; Save choices" in label.text for label in labels))
         self.assertFalse(grids[0].options["rowData"][0]["document_reviewed"])
         buttons["Save choices"]()
         self.assertTrue(grids[0].options["rowData"][0]["document_reviewed"])
-        self.assertIn("text-green-700", heading.classes.call_args.kwargs["add"])
-        buttons["Unmark document reviewed"]()
-        self.assertTrue(grids[0].options["rowData"][0]["document_reviewed"])
-        buttons["Discard pending changes"]()
-        self.assertTrue(grids[0].options["rowData"][0]["document_reviewed"])
-        buttons["Unmark document reviewed"](); buttons["Save choices"]()
-        self.assertFalse(grids[0].options["rowData"][0]["document_reviewed"])
-        self.assertIn("text-green-700", heading.classes.call_args.kwargs["remove"])
-        buttons["Mark document reviewed"](); buttons["Save choices"]()
         with patch("nicegui.run.io_bound", new=AsyncMock(side_effect=lambda function, *args: function(*args))):
-            await source_handler(upload_event(encoded(payload()), "new.json"))
+            await source_handler(upload_event(encoded(payload())))
+        toggle.callback(None)
+        self.assertIn("older upload", ui.notify.call_args.args[0])
+        self.assertFalse(grids[0].options["rowData"][0]["document_reviewed"])
+        ui, grids, _ = fake_ui()
+        self.assertTrue(all(not button.enabled for button in ui.document_buttons))
+        ui.document_buttons[0].callback(None)
         self.assertFalse(grids[0].options["rowData"][0]["document_reviewed"])
 
     async def test_bad_import_and_new_source_reset(self):

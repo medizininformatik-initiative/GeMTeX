@@ -81,8 +81,11 @@ Load suggestions first; staging/import/export are disabled for the synthetic dem
    exclusive, and locally saved actions stay editable. Separate Use candidate and
    Keep original buttons are removed. Shift + right-click retains the browser menu.
    Menus target the clicked immutable row ID, not a visible row number; stale menus are rejected.
-3. Optionally **Mark document reviewed** / **Unmark document reviewed**. Flags are
-   progress, not proof of replacement for every finding.
+3. Use the compact circle icon before the document name to mark/unmark review,
+   without selecting a finding. Outlined grey means unreviewed; filled green means
+   saved reviewed; amber means a pending change. Hover for the action tooltip.
+   The old mark/unmark buttons are removed. Flags are progress, not proof of
+   replacement for every finding; **Save choices** still commits them.
 4. **Save choices** commits pending choices/flags in this page only. Like Streamlit,
    confirming a document protects its unchanged rows as human-reviewed Keeps; it
    removes automatic ownership, not the chosen targets. **Discard pending changes**

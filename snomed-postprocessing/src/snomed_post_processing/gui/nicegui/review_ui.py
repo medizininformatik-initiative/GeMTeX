@@ -18,8 +18,6 @@ class ReviewControls:
             self.save = ui.button("Save choices", on_click=lambda: self.command("save"))
             self.discard = ui.button("Discard pending changes", on_click=lambda: self.command("discard"))
         with ui.row():
-            self.mark = ui.button("Mark document reviewed", on_click=lambda: self.command("reviewed"))
-            self.unmark = ui.button("Unmark document reviewed", on_click=lambda: self.command("unreviewed"))
             self.export = ui.button("Download reviewed decisions JSON", on_click=self.download)
         ui.label("Save document flags with Save choices. Reviewed is progress, not proof of replacements for all findings.")
         ui.label("Import replaces current review. Imported rule/deletion/manual-edit decisions are retained, not revalidated; edit them in Streamlit.")
@@ -40,8 +38,6 @@ class ReviewControls:
         self.menu_target = None
         self.save.set_enabled(enabled and self.session.dirty)
         self.discard.set_enabled(enabled and self.session.dirty)
-        self.mark.set_enabled(enabled and bool(row))
-        self.unmark.set_enabled(enabled and bool(row))
         self.export.set_enabled(enabled and not self.session.dirty)
         self.upload.set_enabled(enabled)
         self.status.set_text((self.session.status(row) + " · " if row else "")
@@ -49,6 +45,20 @@ class ReviewControls:
                              + f"{len(self.session.reviewed_documents)} saved reviewed documents · {len(self.session.rules)} protected imported rules.")
         if update_grid:
             self.refresh_grid(self.session)
+
+    def toggle_document(self, document, source):
+        if self.get_state() is not source:
+            self.ui.notify("This document is from an older upload.", type="warning")
+            return
+        row = next((row for row in source.findings if row.document == document), None)
+        if row is None:
+            return
+        try:
+            reviewed = self.session.draft_reviewed.get(document, document in self.session.reviewed_documents)
+            self.session.mark_document(row.row_id, not reviewed)
+            self.refresh()
+        except ReviewError as error:
+            self.ui.notify(str(error), type="warning")
 
     def open_menu(self, event, *, candidates=False):
         state = self.get_state()
@@ -101,8 +111,6 @@ class ReviewControls:
                 self.session.save()
             elif command == "discard":
                 self.session.discard()
-            elif command in ("reviewed", "unreviewed"):
-                self.session.mark_document(state.selected_finding_id, command == "reviewed")
             self.refresh()
         except ReviewError as error:
             self.ui.notify(str(error), type="warning")
