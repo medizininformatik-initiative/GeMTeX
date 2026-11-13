@@ -67,8 +67,20 @@ only data you intend to show in this browser session.
 Load suggestions first; staging/import/export are disabled for the synthetic demo.
 
 1. Click a finding and inspect candidates/evidence. Navigation never approves a target.
-2. **Use candidate** stages the inspected selectable target, or **Keep original**
-   stages an explicit human-reviewed unchanged annotation. Context targets cannot be used.
+2. The **Findings** right-click menu offers **Accept Suggestion**, **Delete**,
+   **Manual Review**, and **Keep Original**, with no Apply action. Accept Suggestion
+   uses the saved proposed SCTID only if exactly one selectable candidate matches it;
+   missing, unavailable, context-only or duplicate-channel proposals are disabled.
+   It never chooses the inspected/first candidate instead. The **Selected finding**
+   candidate-table menu offers only **Apply**, targeting the right-clicked selectable
+   candidate; diagnostic context cannot be applied.
+   **Delete** stages annotation removal, not ID clearing. **Manual Review** stages
+   `manual_edit`: preserve the original and add a ManualReview marker during later
+   backend write-back; this remains unresolved, not a completed fix. **Keep Original**
+   resets an action to a human-reviewed unchanged annotation. Actions are mutually
+   exclusive, and locally saved actions stay editable. Separate Use candidate and
+   Keep original buttons are removed. Shift + right-click retains the browser menu.
+   Menus target the clicked immutable row ID, not a visible row number; stale menus are rejected.
 3. Optionally **Mark document reviewed** / **Unmark document reviewed**. Flags are
    progress, not proof of replacement for every finding.
 4. **Save choices** commits pending choices/flags in this page only. Like Streamlit,

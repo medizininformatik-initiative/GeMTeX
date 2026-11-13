@@ -73,14 +73,22 @@ Existing selected manual replacements, deletions, manual-edit markers, saved/rev
 
 # Parallel NiceGUI review increment
 
-NiceGUI now supports explicit selectable replacement/Keep staging, Save/discard,
+NiceGUI now supports explicit selectable replacement/Keep/deletion/manual-edit staging, Save/discard,
 document progress flags and version-1 decisions JSON download/restore using the
 existing backend reader/writer. Presentation/navigation remain separate. Keep is
 non-applying but human-reviewed; confirming a document protects its unchanged rows
 from later automation. Pending edits block download. Metadata annotator coverage,
 original indices, source identity/text and current selectable membership guard
 imports; NiceGUI exports additionally bind full suggestions content by SHA-256.
-Manual candidate ordinal/evidence preserves duplicate channels.
+Manual candidate ordinal/evidence preserves duplicate channels. Right-click Findings
+for Accept Suggestion / Delete / Manual Review / Keep Original, or the Selected
+finding candidate grid for Apply only. Accept Suggestion uses only a unique selectable
+match for the saved proposed SCTID; otherwise choose a specific candidate and Apply.
+Delete stages annotation removal, and Manual Review stages a later ManualReview
+marker without resolving the finding. Opening a menu never stages. The separate
+Keep original button is removed. Local saved actions can be changed or reset with
+the Keep Original menu item; imported protected
+actions remain read-only. No context-menu command itself writes CAS.
 
 Imports replace review atomically, preserve existing provenance, and cannot
 supersede newer uploads, demo reset or manual edits. Imported rule/deletion/manual-

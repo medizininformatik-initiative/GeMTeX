@@ -38,6 +38,12 @@ def _fingerprint(state):
     return hashlib.sha256(encoded).hexdigest()
 
 
+@dataclass(frozen=True)
+class ReviewChoice:
+    action: str
+    candidate_id: str | None = None
+
+
 @dataclass
 class ReviewSession:
     source: PreviewState
@@ -48,6 +54,7 @@ class ReviewSession:
     draft_reviewed: dict = field(default_factory=dict)
     imported_metadata: dict = field(default_factory=dict)
     revision: int = 0
+    locally_edited: set = field(default_factory=set)
 
     @property
     def dirty(self):
@@ -67,19 +74,35 @@ class ReviewSession:
     def protected(self, row):
         item = self.saved.get(row.suggestion_index, {})
         return (any(_identity(rule) == _finding_identity(row) for rule in self.rules)
-                or item.get("concept_rule") or item.get("manual_edit") or item.get("delete_annotation")
-                or item.get("action") in ("manual_edit", "delete", "delete_annotation", "clear_id"))
+                or item.get("concept_rule") or (row.suggestion_index not in self.locally_edited and (
+                    item.get("manual_edit") or item.get("delete_annotation")
+                    or item.get("action") in ("manual_edit", "delete", "delete_annotation", "clear_id"))))
 
-    def stage(self, row_id, candidate_id=None):
+    def stage(self, row_id, candidate_id=None, *, action=None):
         row = self._row(row_id)
         if self.protected(row):
             raise ReviewError("This imported rule, deletion or manual-edit decision is protected. Edit it in Streamlit.")
-        if candidate_id is not None:
+        action = action or ("replace" if candidate_id is not None else "none")
+        if action not in ("replace", "none", "delete", "manual_edit") or (action != "replace" and candidate_id is not None):
+            raise ReviewError("Select one review action for this finding.")
+        if action == "replace":
             candidate = next((item for item in row.candidates if item.row_id == candidate_id and item.selectable), None)
             if candidate is None:
                 raise ReviewError("Select a selectable candidate from this finding; context targets cannot be staged.")
-        self.drafts[row_id] = candidate_id  # None is an explicit Keep, not missing input.
+        self.drafts[row_id] = ReviewChoice(action, candidate_id)
         self.revision += 1
+
+    def proposed_candidate(self, row_id):
+        row = self._row(row_id)
+        matches = [candidate for candidate in row.candidates
+                   if candidate.selectable and row.proposed_code and candidate.code == row.proposed_code]
+        return matches[0] if len(matches) == 1 else None
+
+    def accept_suggestion(self, row_id):
+        candidate = self.proposed_candidate(row_id)
+        if candidate is None:
+            raise ReviewError("No unique selectable saved proposal. Choose a candidate in Selected finding and use Apply.")
+        self.stage(row_id, candidate.row_id)
 
     def mark_document(self, row_id, reviewed):
         row = self._row(row_id)
@@ -91,12 +114,14 @@ class ReviewSession:
         self.draft_reviewed.clear()
         self.revision += 1
 
-    def _decision(self, row, candidate_id=None, *, human=False):
+    def _decision(self, row, candidate_id=None, *, human=False, action=None):
         candidate = next((item for item in row.candidates if item.row_id == candidate_id and item.selectable), None)
+        action = action or ("replace" if candidate else "none")
         decision = dict(suggestion_index=row.suggestion_index, document=row.document, annotator=row.annotator,
                     layer=row.layer, offset=list(row.offset or ()), source_code=row.code, covered_text=row.text,
-                    action="replace" if candidate else "none", apply=bool(candidate), delete_annotation=False,
-                    manual_edit=False, reviewed_by_human=human, valid_choice=bool(candidate), resolved=bool(candidate),
+                    action=action, apply=bool(candidate), delete_annotation=action == "delete",
+                    manual_edit=action == "manual_edit", reviewed_by_human=human, valid_choice=bool(candidate),
+                    resolved=bool(candidate) or action == "delete",
                     replacement_code=candidate.code if candidate else None,
                     replacement_fsn=candidate.fsn if candidate else None,
                     replacement_choice=f"{candidate.code} — {candidate.fsn}".strip() if candidate else NO_REPLACEMENT,
@@ -112,13 +137,13 @@ class ReviewSession:
         self._require_source()
         # Validate the entire batch before publishing; never partially save.
         changes = {}
-        for row_id, candidate_id in self.drafts.items():
+        for row_id, choice in self.drafts.items():
             row = self._row(row_id)
             if self.protected(row):
                 raise ReviewError("A protected imported decision cannot be overwritten.")
-            if candidate_id is not None and not any(c.row_id == candidate_id and c.selectable for c in row.candidates):
+            if choice.action == "replace" and not any(c.row_id == choice.candidate_id and c.selectable for c in row.candidates):
                 raise ReviewError("A pending candidate no longer matches this finding.")
-            changes[row.suggestion_index] = self._decision(row, candidate_id, human=True)
+            changes[row.suggestion_index] = self._decision(row, choice.candidate_id, human=True, action=choice.action)
         # Like Streamlit's document save, human confirmation conservatively protects
         # unchanged/Keep rows in that document from later automatic conditions.
         for row in self.source.findings:
@@ -128,6 +153,7 @@ class ReviewSession:
                 item.pop("automatic_condition", None)
                 changes[row.suggestion_index] = item
         self.saved.update(changes)
+        self.locally_edited.update(changes)
         automatic = set(self.imported_metadata.get("automatic_reviewed_documents", []))
         self.imported_metadata["automatic_reviewed_documents"] = sorted(automatic - set(self.draft_reviewed))
         for document, reviewed in self.draft_reviewed.items():
@@ -139,12 +165,17 @@ class ReviewSession:
 
     def status(self, row):
         if row.row_id in self.drafts:
-            candidate_id = self.drafts[row.row_id]
-            candidate = next((c for c in row.candidates if c.row_id == candidate_id), None)
-            return f"Pending replacement: {candidate.code}" if candidate else "Pending Keep"
+            choice = self.drafts[row.row_id]
+            candidate = next((c for c in row.candidates if c.row_id == choice.candidate_id), None)
+            return (f"Pending replacement: {candidate.code}" if candidate else
+                    {"delete": "Pending deletion", "manual_edit": "Pending manual review", "none": "Pending Keep"}[choice.action])
         if self.protected(row):
             return "Protected imported decision"
         item = self.saved.get(row.suggestion_index, {})
+        if item.get("delete_annotation"):
+            return "Saved deletion"
+        if item.get("manual_edit"):
+            return "Saved manual review"
         if item.get("apply"):
             return f"Saved replacement: {item.get('replacement_code')}"
         return "Saved Keep" if item.get("reviewed_by_human") else "Unreviewed"

@@ -141,20 +141,21 @@ def build_page(ui) -> None:
                     ui.notify("Select a valid finding from this preview.", type="warning")
                     return
                 if finding.row_id == previous_id:
-                    return
+                    return finding
                 identity.set_text(f"{finding.document} · {finding.annotator} · SCTID {finding.code}")
                 covered_text.set_text(finding.text)
                 finding_details.set_text(
                     f"Layer: {finding.layer or 'not recorded'} · Span: {finding.offset}\n"
                     f"Source FSN: {finding.source_fsn}\nIgnored: {finding.ignored}"
                 )
-                proposed.set_text(f"Saved proposed SCTID: {finding.proposed_code or 'none'} (not selected or approved)")
+                proposed.set_text(f"Saved proposed SCTID: {finding.proposed_code or 'none'} (not automatically accepted)")
                 rationale.set_text(finding.reason)
                 limits.set_text("Retrieval limits — candidate evidence may be incomplete:\n" + "\n".join(finding.retrieval_limits) if finding.retrieval_limits else "")
                 candidate_grid.options["rowData"] = _candidate_rows(finding)
                 preview.set_text("No candidate selected. Inspecting a candidate stages no decision.")
                 evidence.set_text("")
                 controls.refresh(update_grid=False)
+                return finding
 
             def select_candidate(event):
                 try:
@@ -166,6 +167,15 @@ def build_page(ui) -> None:
                 preview.set_text(f"{role}: {candidate.code} — {candidate.fsn}. No decision staged.")
                 evidence.set_text("\n".join(f"{key}: {value}" for key, value in candidate.details))
                 controls.refresh(update_grid=False)
+                return candidate
+
+            def finding_menu(event):
+                if select_finding(event) is not None:
+                    controls.open_menu(event)
+
+            def candidate_menu(event):
+                if select_candidate(event) is not None:
+                    controls.open_menu(event, candidates=True)
 
             async def load_upload(event):
                 nonlocal state, load_revision
@@ -209,6 +219,16 @@ def build_page(ui) -> None:
                                      on_rejected=lambda: upload_status.set_text("Upload rejected. Choose one JSON file up to 50 MiB; current preview unchanged.")) \
                     .props("accept=.json").classes("max-w-full")
                 ui.button("Use synthetic demo", on_click=use_demo).tooltip("Replace this page's preview with artificial data; no files are changed.")
+            # Native DOM right-clicks provide coordinates and immutable rendered row IDs;
+            # AG Grid's serialized cellContextMenu event omits pointer coordinates.
+            context_handler = """event => {
+                const row = event.target.closest('.ag-row[row-id]');
+                if (!row || event.shiftKey) return;
+                event.preventDefault();
+                emit({data: {row_id: row.getAttribute('row-id')}, clientX: event.clientX, clientY: event.clientY});
+            }"""
+            finding_grid.on("contextmenu", finding_menu, js_handler=context_handler)
+            candidate_grid.on("contextmenu", candidate_menu, js_handler=context_handler)
             # Request row data only; unrestricted AG Grid events contain cycles.
             finding_grid.on("rowClicked", select_finding, args=["data"])
             candidate_grid.on("rowClicked", select_candidate, args=["data"])

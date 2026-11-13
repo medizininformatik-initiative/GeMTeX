@@ -11,11 +11,10 @@ class ReviewControls:
         self.refresh_grid = refresh_grid
         self.session = ReviewSession(get_state())
         self.status = ui.label().classes("text-sm whitespace-pre-wrap")
+        self.menu = ui.context_menu().props("no-parent-event")
+        self.menu_target = None
+        ui.label("Findings: right-click for Accept Suggestion, Delete, Manual Review or Keep Original. Selected finding candidates: right-click for Apply. Save choices commits staged actions; Shift + right-click opens the browser menu.").classes("text-sm")
         with ui.row():
-            self.use = ui.button("Use candidate", on_click=lambda: self.command("candidate")) \
-                .tooltip("Stage the inspected selectable candidate; Save choices commits it. Row clicks alone never approve.")
-            self.keep = ui.button("Keep original", on_click=lambda: self.command("keep")) \
-                .tooltip("Stage an explicit human-reviewed Keep; preserves annotation and ID.")
             self.save = ui.button("Save choices", on_click=lambda: self.command("save"))
             self.discard = ui.button("Discard pending changes", on_click=lambda: self.command("discard"))
         with ui.row():
@@ -37,10 +36,8 @@ class ReviewControls:
         state = self.get_state()
         row = state.selected_finding
         enabled = not state.is_demo
-        protected = bool(row and self.session.protected(row))
-        candidate = next((c for c in row.candidates if c.row_id == state.selected_candidate_id), None) if row else None
-        self.use.set_enabled(enabled and bool(row) and not protected and bool(candidate and candidate.selectable))
-        self.keep.set_enabled(enabled and bool(row) and not protected)
+        self.menu.close()
+        self.menu_target = None
         self.save.set_enabled(enabled and self.session.dirty)
         self.discard.set_enabled(enabled and self.session.dirty)
         self.mark.set_enabled(enabled and bool(row))
@@ -53,13 +50,49 @@ class ReviewControls:
         if update_grid:
             self.refresh_grid(self.session)
 
+    def open_menu(self, event, *, candidates=False):
+        state = self.get_state()
+        row = state.selected_finding
+        if row is None:
+            return
+        target = (state, self.session, row.row_id, state.selected_candidate_id)
+        self.menu_target = target
+        candidate = next((c for c in row.candidates if c.row_id == state.selected_candidate_id), None)
+        enabled = not state.is_demo and not self.session.protected(row)
+        actions = (("Apply", "candidate", enabled and bool(candidate and candidate.selectable)),) if candidates else (
+            ("Accept Suggestion", "accept", enabled and self.session.proposed_candidate(row.row_id) is not None),
+            ("Delete", "delete", enabled),
+            ("Manual Review", "manual_edit", enabled),
+            ("Keep Original", "keep", enabled),
+        )
+        self.menu.clear()
+        with self.menu:
+            for label, command, available in actions:
+                item = self.ui.menu_item(label, on_click=lambda _, command=command: self.menu_command(target, command))
+                item.set_enabled(available)
+                if command == "accept":
+                    item.tooltip("Use the saved proposed SCTID only when it matches one selectable candidate. Otherwise choose a candidate below and use Apply.")
+        self.menu.run_method("show", {"clientX": event.args["clientX"], "clientY": event.args["clientY"]})
+
+    def menu_command(self, target, command):
+        state = self.get_state()
+        if (self.menu_target is not target or target[0] is not state or target[1] is not self.session
+                or target[2:] != (state.selected_finding_id, state.selected_candidate_id)):
+            self.ui.notify("This menu no longer matches the current finding. Right-click again.", type="warning")
+            return
+        self.command(command)
+
     def command(self, command):
         state = self.get_state()
         try:
-            if command == "candidate":
+            if command == "accept":
+                self.session.accept_suggestion(state.selected_finding_id)
+            elif command == "candidate":
                 if state.selected_candidate_id is None:
                     raise ReviewError("Inspect a selectable candidate first.")
                 self.session.stage(state.selected_finding_id, state.selected_candidate_id)
+            elif command in ("delete", "manual_edit"):
+                self.session.stage(state.selected_finding_id, action=command)
             elif command == "keep":
                 self.session.stage(state.selected_finding_id)
             elif command == "save":

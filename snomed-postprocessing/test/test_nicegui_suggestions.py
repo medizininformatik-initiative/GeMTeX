@@ -58,10 +58,27 @@ def fake_ui():
         labels.append(element)
         return element
 
+    ui.context_items = []
+
+    def menu_item(text, on_click):
+        element = MagicMock()
+        element.text, element.callback, element.enabled = text, on_click, True
+        element.set_enabled.side_effect = lambda value: setattr(element, "enabled", value)
+        ui.context_items.append(element)
+        return element
+
+    ui.menu_item.side_effect = menu_item
     ui.aggrid.side_effect = grid
     ui.label.side_effect = label
     build_page(ui)
     return ui, grids, labels
+
+
+def open_context(ui, grid, row):
+    handler = next(call.args[1] for call in grid.on.call_args_list if call.args[0] == "contextmenu")
+    previous = len(ui.context_items)
+    handler(SimpleNamespace(args={"data": row, "clientX": 50, "clientY": 100}))
+    return {item.text: item for item in ui.context_items[previous:]}
 
 
 def upload_event(content, name="suggestions.json"):
@@ -213,7 +230,7 @@ class SuggestionsUploadPageTest(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(any("Original index" in label.text or "Saved candidate count" in label.text for label in labels))
         heading = next(index for index, label in enumerate(labels) if label.text == "Suggestion rationale & retrieval")
         proposal = labels[heading + 1]
-        self.assertEqual(proposal.text, "Saved proposed SCTID: 1234567890123456789012345 (not selected or approved)")
+        self.assertEqual(proposal.text, "Saved proposed SCTID: 1234567890123456789012345 (not automatically accepted)")
         self.assertEqual(labels[heading + 2].text, "Original saved rationale")
         reset = next(call.kwargs["on_click"] for call in ui.button.call_args_list if call.args[0] == "Use synthetic demo")
         reset()
@@ -243,9 +260,10 @@ class SuggestionsUploadPageTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(any(" 0042 ± <script>toy</script> " == label.text for label in labels))
         ui.html.assert_not_called()
         ui.markdown.assert_not_called()
-        for call in ui.button.call_args_list:
-            if call.args[0] == "Use candidate":
-                self.assertIn("on_click", call.kwargs)  # Explicit staging; candidate inspection alone remains read-only.
+        self.assertNotIn("Use candidate", [call.args[0] for call in ui.button.call_args_list])
+        actions = open_context(ui, candidates, selected)
+        self.assertFalse(actions["Apply"].enabled)  # Diagnostic context remains non-selectable.
+        self.assertEqual(findings.options["rowData"][0]["review"], "Unreviewed")
 
     async def test_bad_upload_keeps_previous_preview_and_metadata(self):
         ui, grids, labels = fake_ui()

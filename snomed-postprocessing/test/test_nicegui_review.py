@@ -12,7 +12,7 @@ from snomed_post_processing.gui.nicegui.demo import create_demo_state
 from snomed_post_processing.gui.nicegui.review import ReviewError, ReviewSession, load_review
 from snomed_post_processing.gui.nicegui.suggestions import load_suggestions_preview
 from snomed_post_processing.sanitization.decisions_json import read_sanitization_decisions_json
-from test.test_nicegui_suggestions import payload, encoded, fake_ui, upload_event
+from test.test_nicegui_suggestions import payload, encoded, fake_ui, upload_event, open_context
 
 FIXTURE = Path(__file__).parent / "projects/synthetic-annotator-scope"
 
@@ -55,6 +55,73 @@ class ReviewSessionTest(unittest.TestCase):
         self.assertEqual(item["source_code"], row.code)
         self.assertEqual(item["covered_text"], row.text)
         self.assertTrue(item["apply"] and item["valid_choice"] and item["reviewed_by_human"])
+
+    def test_delete_and_manual_review_are_exclusive_saved_actions_with_backend_flags(self):
+        for action, resolved in (("delete", True), ("manual_edit", False)):
+            with self.subTest(action=action):
+                source = state(); row = source.findings[0]; review = ReviewSession(source)
+                review.stage(row.row_id, row.candidates[0].row_id)
+                review.stage(row.row_id, action=action)
+                self.assertTrue(review.dirty)
+                self.assertEqual(review.saved, {})
+                review.save()
+                item = json.loads(review.export_text())["decisions"][0]
+                self.assertEqual(item["action"], action)
+                self.assertEqual(item["delete_annotation"], action == "delete")
+                self.assertEqual(item["manual_edit"], action == "manual_edit")
+                self.assertEqual(item["resolved"], resolved)
+                self.assertFalse(item["apply"])
+                self.assertFalse(item["valid_choice"])
+                self.assertTrue(item["reviewed_by_human"])
+                self.assertIsNone(item["replacement_code"])
+                self.assertNotIn("manual_candidate", item)
+                self.assertFalse(review.protected(row))  # Local actions remain reversible.
+                restored = load_review(review.export_text().encode(), source)
+                self.assertTrue(restored.protected(row))  # Existing import protection is unchanged.
+                self.assertEqual(json.loads(restored.export_text())["decisions"][0], item)
+                review.stage(row.row_id); review.save()
+                self.assertEqual(review.saved[0]["action"], "none")
+
+    def test_accept_suggestion_uses_unique_saved_proposal_not_inspected_or_first_candidate(self):
+        data = payload(); data["suggestions"][0]["replacement_code"] = "990000202"
+        source = load_suggestions_preview(encoded(data)); row = source.findings[0]
+        source.select_finding(row.row_id); source.preview_candidate(row.candidates[2].row_id)
+        review = ReviewSession(source)
+        review.accept_suggestion(row.row_id)
+        self.assertEqual(review.saved, {})
+        review.save()
+        self.assertEqual(review.saved[0]["replacement_code"], "990000202")
+        self.assertEqual(review.saved[0]["manual_candidate_ordinal"], 1)
+        self.assertEqual(source.selected_candidate_id, row.candidates[2].row_id)
+
+    def test_accept_suggestion_rejects_missing_unavailable_context_only_and_duplicate_proposals(self):
+        for kind in ("missing", "unavailable", "context_only", "duplicate"):
+            with self.subTest(kind=kind):
+                data = payload(); suggestion = data["suggestions"][0]
+                suggestion["replacement_code"] = "990000201"
+                if kind == "missing":
+                    suggestion["replacement_code"] = None
+                elif kind == "unavailable":
+                    suggestion["replacement_code"] = "990000404"
+                elif kind == "context_only":
+                    suggestion["candidates"] = suggestion["candidates"][1:]
+                else:
+                    duplicate = copy.deepcopy(suggestion["candidates"][0])
+                    duplicate.update(source="snogit", source_member="toy.dat")
+                    suggestion["candidates"].append(duplicate)
+                source = load_suggestions_preview(encoded(data)); review = ReviewSession(source)
+                with self.assertRaisesRegex(ReviewError, "unique selectable saved proposal"):
+                    review.accept_suggestion(source.findings[0].row_id)
+                self.assertFalse(review.dirty)
+
+    def test_nonreplacement_actions_cannot_smuggle_candidate_evidence(self):
+        source = state(); row = source.findings[0]; review = ReviewSession(source)
+        for action in ("delete", "manual_edit", "none", "unsupported"):
+            with self.assertRaises(ReviewError):
+                review.stage(row.row_id, row.candidates[0].row_id, action=action)
+        with self.assertRaises(ReviewError):
+            review.stage(row.row_id, action="replace")
+        self.assertFalse(review.dirty)
 
     def test_keep_is_explicit_and_not_deletion_or_clear_id(self):
         source = state(); row = source.findings[0]; review = ReviewSession(source)
@@ -231,7 +298,7 @@ class ReviewUiTest(unittest.IsolatedAsyncioTestCase):
         candidate = grids[1].options["rowData"][0]
         grids[1].on.call_args.args[1](SimpleNamespace(args={"data": candidate}))
         self.assertEqual(grids[0].options["rowData"][0]["review"], "Unreviewed")
-        buttons["Use candidate"]()
+        open_context(ui, grids[1], candidate)["Apply"].callback(None)
         self.assertIn("Pending replacement", grids[0].options["rowData"][0]["review"])
         await buttons["Download reviewed decisions JSON"]()
         ui.download.content.assert_not_called()
@@ -240,6 +307,90 @@ class ReviewUiTest(unittest.IsolatedAsyncioTestCase):
         data = json.loads(ui.download.content.call_args.args[0])
         self.assertTrue(data["decisions"][0]["reviewed_by_human"])
         self.assertEqual(data["metadata"]["reviewed_documents"], ["toy.txt"])
+
+    async def test_context_actions_target_clicked_row_and_require_save(self):
+        ui, grids, labels, _, _, buttons = await self.setup_page()
+        row = grids[0].options["rowData"][0]
+        actions = open_context(ui, grids[0], row)
+        self.assertEqual(list(actions), ["Accept Suggestion", "Delete", "Manual Review", "Keep Original"])
+        self.assertFalse(actions["Accept Suggestion"].enabled)
+        self.assertEqual(grids[0].options["rowData"][0]["review"], "Unreviewed")
+        actions["Delete"].callback(None)
+        self.assertEqual(grids[0].options["rowData"][0]["review"], "Pending deletion")
+        buttons["Save choices"]()
+        self.assertEqual(grids[0].options["rowData"][0]["review"], "Saved deletion")
+        open_context(ui, grids[0], row)["Manual Review"].callback(None)
+        buttons["Save choices"]()
+        self.assertEqual(grids[0].options["rowData"][0]["review"], "Saved manual review")
+        candidate = grids[1].options["rowData"][0]
+        current = open_context(ui, grids[1], candidate)
+        self.assertEqual(list(current), ["Apply"])
+        self.assertTrue(current["Apply"].enabled)
+        current["Apply"].callback(None)
+        self.assertIn("Pending replacement", grids[0].options["rowData"][0]["review"])
+        actions["Delete"].callback(None)  # A previously opened menu must not target newer navigation.
+        self.assertIn("Pending replacement", grids[0].options["rowData"][0]["review"])
+        self.assertIn("no longer matches", ui.notify.call_args.args[0])
+
+    async def test_findings_accept_saved_proposal_candidates_apply_inspected_target_and_keep_is_in_menu(self):
+        ui, grids, labels, source_handler, _, buttons = await self.setup_page()
+        data = payload(); data["suggestions"][0]["replacement_code"] = "990000202"
+        with patch("nicegui.run.io_bound", new=AsyncMock(side_effect=lambda function, *args: function(*args))):
+            await source_handler(upload_event(encoded(data)))
+        row = grids[0].options["rowData"][0]
+        open_context(ui, grids[0], row)
+        first = grids[1].options["rowData"][0]
+        self.assertEqual(list(open_context(ui, grids[1], first)), ["Apply"])
+        actions = open_context(ui, grids[0], row)
+        self.assertTrue(actions["Accept Suggestion"].enabled)
+        self.assertNotIn("Apply", actions)
+        self.assertEqual(grids[0].options["rowData"][0]["review"], "Unreviewed")
+        actions["Accept Suggestion"].callback(None)
+        self.assertEqual(grids[0].options["rowData"][0]["review"], "Pending replacement: 990000202")
+        open_context(ui, grids[1], first)["Apply"].callback(None)
+        self.assertEqual(grids[0].options["rowData"][0]["review"], "Pending replacement: 990000201")
+        open_context(ui, grids[0], row)["Keep Original"].callback(None)
+        self.assertEqual(grids[0].options["rowData"][0]["review"], "Pending Keep")
+        self.assertNotIn("Keep original", buttons)
+        buttons["Save choices"]()
+        self.assertEqual(grids[0].options["rowData"][0]["review"], "Saved Keep")
+
+    async def test_context_menu_does_not_follow_navigation_to_another_finding(self):
+        ui, grids, labels, source_handler, _, _ = await self.setup_page()
+        content = (FIXTURE / "suggestions.json").read_bytes()
+        with patch("nicegui.run.io_bound", new=AsyncMock(side_effect=lambda function, *args: function(*args))):
+            await source_handler(upload_event(content))
+        first, second = grids[0].options["rowData"][:2]
+        actions = open_context(ui, grids[0], first)
+        grids[0].on.call_args.args[1](SimpleNamespace(args={"data": second}))
+        actions["Delete"].callback(None)
+        self.assertTrue(all(row["review"] == "Unreviewed" for row in grids[0].options["rowData"]))
+        open_context(ui, grids[0], second)["Delete"].callback(None)
+        self.assertEqual(grids[0].options["rowData"][0]["review"], "Unreviewed")
+        self.assertEqual(grids[0].options["rowData"][1]["review"], "Pending deletion")
+
+    async def test_demo_protected_import_and_old_snapshot_menus_cannot_stage(self):
+        ui, grids, labels = fake_ui()
+        demo = open_context(ui, grids[0], grids[0].options["rowData"][0])
+        self.assertTrue(all(not item.enabled for item in demo.values()))
+        demo["Delete"].callback(None)
+        self.assertNotIn("Pending", grids[0].options["rowData"][0]["review"])
+        ui, grids, labels, source_handler, import_handler, _ = await self.setup_page()
+        row = grids[0].options["rowData"][0]
+        actions = open_context(ui, grids[0], row)
+        data = json.loads(ReviewSession(state()).export_text())
+        data["decisions"][0].update(action="delete", delete_annotation=True)
+        with patch("nicegui.run.io_bound", new=AsyncMock(side_effect=lambda function, *args: function(*args))):
+            await import_handler(upload_event(encoded(data)))
+        actions["Delete"].callback(None)
+        protected = open_context(ui, grids[0], row)
+        self.assertTrue(all(not item.enabled for item in protected.values()))
+        with patch("nicegui.run.io_bound", new=AsyncMock(side_effect=lambda function, *args: function(*args))):
+            await source_handler(upload_event(encoded(payload())))
+        count = len(ui.context_items)
+        open_context(ui, grids[0], row)
+        self.assertEqual(len(ui.context_items), count)
+        self.assertEqual(grids[0].options["rowData"][0]["review"], "Unreviewed")
 
     async def test_import_restores_saved_document_color_and_failed_import_retains_it(self):
         ui, grids, labels, _, handler, _ = await self.setup_page()
@@ -279,7 +430,8 @@ class ReviewUiTest(unittest.IsolatedAsyncioTestCase):
     async def test_bad_import_and_new_source_reset(self):
         ui, grids, labels, source_handler, review_handler, buttons = await self.setup_page()
         grids[0].on.call_args.args[1](SimpleNamespace(args={"data": grids[0].options["rowData"][0]}))
-        buttons["Keep original"](); buttons["Save choices"]()
+        open_context(ui, grids[0], grids[0].options["rowData"][0])["Keep Original"].callback(None)
+        buttons["Save choices"]()
         with patch("nicegui.run.io_bound", new=AsyncMock(side_effect=lambda function, *args: function(*args))):
             await review_handler(upload_event(b"DO_NOT_ECHO"))
             self.assertEqual(grids[0].options["rowData"][0]["review"], "Saved Keep")
@@ -296,7 +448,8 @@ class ReviewUiTest(unittest.IsolatedAsyncioTestCase):
             pending = asyncio.create_task(buttons["Download reviewed decisions JSON"]())
             await asyncio.wait_for(started.wait(), 2)
             grids[0].on.call_args.args[1](SimpleNamespace(args={"data": grids[0].options["rowData"][0]}))
-            buttons["Keep original"](); buttons["Save choices"]()
+            open_context(ui, grids[0], grids[0].options["rowData"][0])["Keep Original"].callback(None)
+            buttons["Save choices"]()
             finish.set(); await pending
         ui.download.content.assert_not_called()
         self.assertTrue(any("Review changed while preparing" in call.args[0] for call in ui.notify.call_args_list))
@@ -359,7 +512,7 @@ class ReviewUiTest(unittest.IsolatedAsyncioTestCase):
             task = asyncio.create_task(review_handler(upload_event(content)))
             await asyncio.wait_for(started.wait(), 2)
             grids[0].on.call_args.args[1](SimpleNamespace(args={"data": grids[0].options["rowData"][0]}))
-            buttons["Keep original"]()
+            open_context(ui, grids[0], grids[0].options["rowData"][0])["Keep Original"].callback(None)
             finish.set(); await task
         self.assertEqual(grids[0].options["rowData"][0]["review"], "Pending Keep")
         self.assertTrue(any("Review changed while importing" in label.text for label in labels))
