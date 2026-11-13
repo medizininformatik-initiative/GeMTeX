@@ -35,7 +35,8 @@ from .annotator_scope import sync_annotator_scope, reset_generic_review_for_new_
 from snomed_post_processing.uima_processing.scope import annotator_in_scope, scope_covers
 from .file_sources import list_server_files, render_file_source_selector
 from .files import save_uploaded_file
-from .sanitization_run_tab import _finding_context_label, _project_document_text_lookup
+from .sanitization_run_tab import _project_document_text_lookup
+from snomed_post_processing.review_context import ReviewContext
 from .sidebar import GuiInputs
 from .concept_rules import render_concept_rules_form
 
@@ -79,6 +80,7 @@ def _suggestion_context_metadata(suggestions: list[Any], *, annotators=()) -> li
     document_texts = _project_document_text_lookup(st.session_state.get("zip_file"), annotators=annotators)
     if not document_texts:
         return []
+    review_context = ReviewContext(document_texts=document_texts)
     contexts = []
     for suggestion in suggestions:
         finding = getattr(suggestion, "finding", None)
@@ -87,7 +89,7 @@ def _suggestion_context_metadata(suggestions: list[Any], *, annotators=()) -> li
         offset = tuple(getattr(finding, "offset", ()) or ())
         if len(offset) != 2:
             continue
-        context = _finding_context_label(finding, document_texts)
+        context = review_context.label(finding)
         if not context or context.startswith("No full document context loaded:"):
             continue
         contexts.append(

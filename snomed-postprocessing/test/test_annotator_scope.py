@@ -167,8 +167,9 @@ class AnnotatorScopeTest(unittest.TestCase):
 
     def test_context_extraction_and_cache_are_scoped(self):
         state = {}
-        loader = run_tab._load_cas_from_zip_member
-        with patch("streamlit.session_state", state), patch.object(run_tab, "_load_cas_from_zip_member", wraps=loader) as load:
+        from snomed_post_processing import review_context
+        loader = review_context._load_cas_from_zip_member
+        with patch("streamlit.session_state", state), patch.object(review_context, "_load_cas_from_zip_member", wraps=loader) as load:
             alice = run_tab._project_document_text_lookup(self.fixture.project, annotators=("alice",))
             self.assertIn("two.txt", alice)
             self.assertTrue(all("alice." in call.args[1] for call in load.call_args_list))

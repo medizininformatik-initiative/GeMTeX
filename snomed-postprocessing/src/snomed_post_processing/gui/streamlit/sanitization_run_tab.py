@@ -35,13 +35,7 @@ from snomed_post_processing.sanitization.conditions import (
 )
 from snomed_post_processing.pipelines import apply_decisions_and_upload_to_inception
 from snomed_post_processing.pipelines.sanitization_run import run_sanitization
-from snomed_post_processing.uima_processing.io import (
-    _annotator_name_from_cas_path,
-    _load_cas_from_zip_member,
-    _load_typesystem_from_zip,
-    _read_project,
-    _yield_matching_files,
-)
+from snomed_post_processing.review_context import ReviewContext, compact_text
 
 from .file_sources import render_file_source_selector
 from .files import save_uploaded_file
@@ -112,11 +106,11 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
         st.caption(f"Suggestion report: `{report_path}`")
 
     document_texts = _project_document_text_lookup(st.session_state.get("zip_file"), annotators=inputs.annotators)
-    metadata_contexts = _metadata_finding_context_lookup(
-        st.session_state.get("sanitization_suggestions_metadata") or {}
+    context = ReviewContext.from_metadata(
+        st.session_state.get("sanitization_suggestions_metadata") or {}, document_texts=document_texts,
     )
-    _log_missing_context_documents([item for item in suggestions if annotator_in_scope(item.finding.annotator, inputs.annotators)], document_texts, metadata_contexts)
-    rows = _suggestions_to_review_rows(suggestions, document_texts, metadata_contexts, annotators=inputs.annotators)
+    _log_missing_context_documents([item for item in suggestions if annotator_in_scope(item.finding.annotator, inputs.annotators)], context)
+    rows = _suggestions_to_review_rows(suggestions, context, annotators=inputs.annotators)
     # Preserve original suggestion indices; explicit rules reserve their annotations
     # even when deselected, rather than exposing an unrelated fallback candidate.
     rule_keys = {decision_key(item) for item in rule_decisions}
@@ -625,7 +619,7 @@ def _project_document_text_lookup(project_source: Any, *, annotators=()) -> dict
         else:
             data = project_source.getvalue()
             source_name = getattr(project_source, "name", None)
-        lookup = _extract_project_document_texts(data, source_name, annotators=annotators)
+        lookup = ReviewContext.from_project_zip(data, source_name, annotators=annotators).document_texts
     except Exception:
         logger.exception("Could not extract review context from the selected project ZIP.")
         lookup = {}
@@ -639,82 +633,12 @@ def _project_document_text_lookup(project_source: Any, *, annotators=()) -> dict
     return lookup
 
 
-def _extract_project_document_texts(project_zip_bytes: bytes, file_name: str | None, *, annotators=()) -> dict[str, str]:
-    annotators = normalize_annotators(annotators)
-    lookup: dict[str, str] = {}
-    documents_seen = documents_loaded = cas_failures = empty_texts = 0
-    with zipfile.ZipFile(io.BytesIO(project_zip_bytes)) as zip_file:
-        project_documents = _read_project(zip_file, file_name or "uploaded project")
-        for document_name, cas_paths in _yield_matching_files(
-            project_documents,
-            zip_file,
-            file_name=file_name,
-            allowed_extensions=[".json", ".xmi"],
-        ):
-            cas_paths = [path for path in cas_paths if annotator_in_scope(
-                _annotator_name_from_cas_path(path, fallback_flat_layout=project_documents is None), annotators)]
-            if not cas_paths:
-                continue
-            documents_seen += 1
-            for cas_path in cas_paths:
-                stage = "typesystem loading"
-                try:
-                    typesystem = _load_typesystem_from_zip(zip_file, cas_path)
-                    stage = "CAS loading"
-                    cas = _load_cas_from_zip_member(zip_file, cas_path, typesystem=typesystem)
-                    stage = "sofa text extraction"
-                    text = _cas_document_text(cas)
-                except Exception:
-                    cas_failures += 1
-                    logger.exception(
-                        "Context extraction failed during %s: document=%r, CAS member=%r",
-                        stage, document_name, cas_path,
-                    )
-                    continue
-                if text:
-                    _store_document_text_aliases(lookup, document_name, cas_path, text)
-                    documents_loaded += 1
-                    break
-                empty_texts += 1
-                logger.warning("CAS has no document text: document=%r, CAS member=%r", document_name, cas_path)
-            else:
-                logger.warning("No usable context found for document=%r", document_name)
-    logger.warning(
-        "Review context extraction summary: documents discovered=%d, loaded=%d, "
-        "failed CAS attempts=%d, empty-text CAS=%d, lookup aliases=%d",
-        documents_seen, documents_loaded, cas_failures, empty_texts, len(lookup),
-    )
-    if not documents_seen:
-        logger.warning("No matching JSON/XMI documents found in the selected project ZIP; check its archive layout.")
-    return lookup
-
-
-def _cas_document_text(cas: Any) -> str:
-    text = getattr(cas, "sofa_string", None)
-    if text:
-        return str(text)
-    try:
-        sofa = cas.get_sofa()
-        text = getattr(sofa, "sofaString", None)
-        if text:
-            return str(text)
-    except Exception:
-        logger.exception("Could not read sofa text from CAS via get_sofa().")
-    return ""
-
-
 def _log_missing_context_documents(
     suggestions: list[Any],
-    document_texts: dict[str, str],
-    metadata_contexts: dict,
+    context: ReviewContext,
 ) -> None:
     """Report missing context once per distinct result, not on every rerun."""
-    missing = sorted({
-        str(getattr(suggestion.finding, "document", ""))
-        for suggestion in suggestions
-        if not _lookup_document_text(document_texts, str(getattr(suggestion.finding, "document", "")))
-        and not metadata_contexts.get(_finding_context_key(suggestion.finding))
-    })
+    missing = context.missing_documents(suggestion.finding for suggestion in suggestions)
     signature = tuple(missing)
     key = "sanitization_missing_context_log_signature"
     if st.session_state.get(key) == signature:
@@ -725,33 +649,8 @@ def _log_missing_context_documents(
             "Review context unavailable for %d document(s): %r. "
             "No matching project text or saved context snippet was found. "
             "Check the selected ZIP and exact document names (lookup aliases=%d).",
-            len(missing), missing, len(document_texts),
+            len(missing), missing, len(context.document_texts),
         )
-
-
-def _store_document_text_aliases(
-    lookup: dict[str, str], document_name: str, cas_path: str, text: str
-) -> None:
-    path = pathlib.PurePosixPath(cas_path)
-    aliases = {
-        document_name,
-        path.name,
-        path.parent.name,
-        _strip_known_suffix(document_name),
-        _strip_known_suffix(path.name),
-        _strip_known_suffix(path.parent.name),
-    }
-    for alias in aliases:
-        if alias:
-            lookup.setdefault(alias, text)
-
-
-def _strip_known_suffix(name: str) -> str:
-    lower = name.lower()
-    for suffix in (".xmi", ".json", ".zip", ".ser"):
-        if lower.endswith(suffix):
-            return name[: -len(suffix)]
-    return name
 
 
 def _keep_document_open(document: str) -> None:
@@ -1587,10 +1486,10 @@ def _render_suggestion_settings(metadata: dict[str, Any]) -> None:
 
 def _suggestions_to_review_rows(
     suggestions: list[Any],
-    document_texts: dict[str, str] | None = None,
-    metadata_contexts: dict[tuple[str, str, str, tuple[int, int]], str] | None = None,
+    context: ReviewContext | None = None,
     *, annotators=(),
 ) -> list[dict[str, Any]]:
+    context = context if context is not None else ReviewContext()
     rows: list[dict[str, Any]] = []
     restored_by_index = st.session_state.get("sanitization_restored_decisions_by_index", {})
     for idx, suggestion in enumerate(suggestions):
@@ -1638,11 +1537,7 @@ def _suggestions_to_review_rows(
                 "Source code": suggestion.finding.code or "",
                 "Covered text": suggestion.finding.covered_text,
                 "Policy issue": _policy_issue_label(suggestion.finding),
-                "Finding context": _finding_context_label(
-                    suggestion.finding,
-                    document_texts or {},
-                    metadata_contexts or {},
-                ),
+                "Finding context": context.label(suggestion.finding),
                 "Suggested replacement": selected_label if needs_choice else replacement_label,
                 "Why suggested": replacement_hints.get(
                     selected_label if needs_choice else replacement_label, ""
@@ -1766,94 +1661,6 @@ def _policy_issue_label(finding: Any) -> str:
     return f"Reason: {reason}" if reason else "Reason: policy finding"
 
 
-def _finding_context_label(
-    finding: Any,
-    document_texts: dict[str, str],
-    metadata_contexts: dict[tuple[str, str, str, tuple[int, int]], str] | None = None,
-) -> str:
-    document_text = _lookup_document_text(document_texts, str(getattr(finding, "document", "")))
-    offset = getattr(finding, "offset", None)
-    if document_text and offset and len(offset) == 2:
-        return _offset_context(document_text, int(offset[0]), int(offset[1]))
-    metadata_context = (metadata_contexts or {}).get(_finding_context_key(finding))
-    if metadata_context:
-        return metadata_context
-    covered_text = _compact_text(getattr(finding, "covered_text", ""), max_length=80)
-    if covered_text:
-        return f"No full document context loaded."
-    return "No document text context available."
-
-
-def _finding_context_key(finding: Any) -> tuple[str, str, str, tuple[int, int]]:
-    offset = tuple(int(value) for value in (getattr(finding, "offset", None) or ()))
-    if len(offset) != 2:
-        offset = (-1, -1)
-    return (
-        str(getattr(finding, "document", "") or ""),
-        str(getattr(finding, "annotator", "") or ""),
-        str(getattr(finding, "code", "") or ""),
-        offset,
-    )
-
-
-def _metadata_finding_context_lookup(metadata: dict[str, Any]) -> dict[tuple[str, str, str, tuple[int, int]], str]:
-    lookup: dict[tuple[str, str, str, tuple[int, int]], str] = {}
-    for item in metadata.get("finding_contexts", ()) or ():
-        try:
-            offset = tuple(int(value) for value in item.get("offset", ()))
-            if len(offset) != 2:
-                continue
-            key = (
-                str(item.get("document", "") or ""),
-                str(item.get("annotator", "") or ""),
-                str(item.get("code", "") or ""),
-                offset,
-            )
-            context = str(item.get("context", "") or "")
-        except Exception:
-            continue
-        if context:
-            lookup[key] = context
-    return lookup
-
-
-def _lookup_document_text(document_texts: dict[str, str], document: str) -> str:
-    for alias in (document, _strip_known_suffix(document)):
-        if alias in document_texts:
-            return document_texts[alias]
-    return ""
-
-
-def _offset_context(text: str, begin: int, end: int, *, word_window: int = 2, char_window: int = 25) -> str:
-    if begin < 0 or end < begin or begin > len(text):
-        return _character_context(text, begin, end, char_window=char_window)
-    end = min(end, len(text))
-    left_words = text[:begin].split()
-    right_words = text[end:].split()
-    target = _compact_text(text[begin:end], max_length=80)
-    if left_words or right_words:
-        left = " ".join(left_words[-word_window:])
-        right = " ".join(right_words[:word_window])
-        return f"… {left} [{target}] {right} …".replace("  ", " ").strip()
-    return _character_context(text, begin, end, char_window=char_window)
-
-
-def _character_context(text: str, begin: int, end: int, *, char_window: int) -> str:
-    begin = max(0, min(begin, len(text)))
-    end = max(begin, min(end, len(text)))
-    left = _compact_text(text[max(0, begin - char_window):begin], max_length=char_window)
-    target = _compact_text(text[begin:end], max_length=80)
-    right = _compact_text(text[end:min(len(text), end + char_window)], max_length=char_window)
-    return f"… {left} [{target}] {right} …".replace("  ", " ").strip()
-
-
-def _compact_text(value: Any, *, max_length: int) -> str:
-    text = " ".join(str(value or "").split())
-    if len(text) <= max_length:
-        return text
-    return f"{text[: max_length - 1].rstrip()}…"
-
-
 def _suggestion_rationale(suggestion: Any, *, rank: int) -> str:
     if hasattr(suggestion, "score"):
         return (
@@ -1877,7 +1684,7 @@ def _candidate_rationale(candidate: Any, *, rank: int) -> str:
             parts.append(str(semantic_tag))
         if getattr(candidate, "source", "snomed_fsn") == "snogit":
             matched_term = getattr(candidate, "matched_term", None)
-            parts.append("SNOGIT" + (f": {_compact_text(matched_term, max_length=60)}" if matched_term else ""))
+            parts.append("SNOGIT" + (f": {compact_text(matched_term, max_length=60)}" if matched_term else ""))
         return " · ".join(parts)
     association_type = getattr(candidate, "association_type", None)
     parts = [f"rank #{rank}"]

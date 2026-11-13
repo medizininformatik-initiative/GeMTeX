@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from snomed_post_processing.gui.streamlit import sanitization_run_tab as tab
+from snomed_post_processing import review_context as context
 
 
 class TestContextDiagnostics(unittest.TestCase):
@@ -13,14 +14,14 @@ class TestContextDiagnostics(unittest.TestCase):
         data = io.BytesIO()
         with zipfile.ZipFile(data, "w"):
             pass
-        with patch.object(tab, "_read_project", return_value={}), \
-             patch.object(tab, "_yield_matching_files", return_value=paths), \
-             patch.object(tab, "_load_typesystem_from_zip", return_value=None), \
-             patch.object(tab, "_load_cas_from_zip_member", side_effect=loader):
-            return tab._extract_project_document_texts(data.getvalue(), "project.zip")
+        with patch.object(context, "_read_project", return_value={}), \
+             patch.object(context, "_yield_matching_files", return_value=paths), \
+             patch.object(context, "_load_typesystem_from_zip", return_value=None), \
+             patch.object(context, "_load_cas_from_zip_member", side_effect=loader):
+            return context.ReviewContext.from_project_zip(data.getvalue(), "project.zip").document_texts
 
     def test_failed_member_is_logged_and_next_member_is_used(self):
-        with self.assertLogs(tab.logger, level="WARNING") as logs:
+        with self.assertLogs(context.logger, level="WARNING") as logs:
             lookup = self.extract(
                 [("doc.txt", ["bad.xmi", "good.xmi"])],
                 [ValueError("broken CAS"), SimpleNamespace(sofa_string="private document text")],
@@ -34,7 +35,7 @@ class TestContextDiagnostics(unittest.TestCase):
         self.assertEqual(lookup["doc.txt"], "private document text")
 
     def test_empty_sofa_is_logged(self):
-        with self.assertLogs(tab.logger, level="WARNING") as logs:
+        with self.assertLogs(context.logger, level="WARNING") as logs:
             lookup = self.extract(
                 [("doc.txt", ["empty.xmi"])],
                 [SimpleNamespace(sofa_string="", get_sofa=lambda: SimpleNamespace(sofaString=""))],
@@ -43,7 +44,7 @@ class TestContextDiagnostics(unittest.TestCase):
         self.assertIn("CAS has no document text", "\n".join(logs.output))
 
     def test_no_matching_documents_is_logged(self):
-        with self.assertLogs(tab.logger, level="WARNING") as logs:
+        with self.assertLogs(context.logger, level="WARNING") as logs:
             self.assertEqual(self.extract([], []), {})
         self.assertIn("No matching JSON/XMI", "\n".join(logs.output))
 
@@ -51,8 +52,8 @@ class TestContextDiagnostics(unittest.TestCase):
         finding = SimpleNamespace(document="missing.txt", annotator="user", code="123", offset=(1, 2))
         with patch.object(tab, "st", SimpleNamespace(session_state={})), \
              self.assertLogs(tab.logger, level="WARNING") as logs:
-            tab._log_missing_context_documents([SimpleNamespace(finding=finding)], {}, {})
-            tab._log_missing_context_documents([SimpleNamespace(finding=finding)], {}, {})
+            tab._log_missing_context_documents([SimpleNamespace(finding=finding)], context.ReviewContext())
+            tab._log_missing_context_documents([SimpleNamespace(finding=finding)], context.ReviewContext())
         self.assertEqual(len(logs.output), 1)
         self.assertIn("missing.txt", logs.output[0])
 

@@ -68,22 +68,23 @@ def build_page(ui) -> None:
             upload_controls = ui.row().classes("w-full items-start")
             upload_status = ui.label().classes("text-sm")
             counts = ui.label().classes("text-sm")
+            # Do not keep-alive slides: cached panels retain stale DOM for the moved grid.
             documents = ui.carousel(arrows=True, navigation=True).props(
-                "height=auto navigation-position=top control-color=primary keep-alive"
+                "height=auto navigation-position=top control-color=primary"
             ).classes("w-full")
             empty = ui.label("No findings in the current artifact scope.")
             with ui.column().classes("w-full min-w-0 gap-4") as workspace:
                 with ui.column().classes("w-full min-w-0"):
-                    ui.label("Findings — click a row to inspect").classes("text-lg")
+                    # ui.label("Findings — click a row to inspect").classes("text-lg")
                     finding_grid = ui.aggrid({
                         "columnDefs": [
                             {"field": "annotator", "headerName": "Annotator"},
-                            {"field": "code", "headerName": "Source SCTID"},
-                            {"field": "text", "headerName": "Covered text", "flex": 2, "minWidth": 400},
-                            {"field": "status", "headerName": "Status"},
+                            {"field": "code", "headerName": "Source SCTID", "width": 120},
+                            {"field": "text", "headerName": "Covered text", "flex": 2, "minWidth": 350},
+                            {"field": "status", "headerName": "Status", "minWidth": 220},
                             {"field": "policy_issue", "headerName": "Policy check"},
                             {"field": "review", "headerName": "Manual review"},
-                            {"field": "ignored", "headerName": "Ignored"},
+                            {"field": "ignored", "headerName": "Ignored", "maxWidth": 80},
                         ],
                         "defaultColDef": {"sortable": True, "filter": "agTextColumnFilter", "floatingFilter": True, "resizable": True, "editable": False},
                         "rowData": [],
@@ -92,7 +93,7 @@ def build_page(ui) -> None:
                     }).classes("w-full h-80 overflow-auto overscroll-contain")
                 with ui.column().classes("w-full min-w-0"):
                     ui.label("Selected finding").classes("text-lg")
-                    identity = ui.label("Select a finding. Nothing is preselected.")
+                    # identity = ui.label("Select a finding. Nothing is preselected.")
                     with ui.element("div").classes("grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 w-full min-w-0"):
                         with ui.column().classes("w-full min-w-0 gap-1"):
                             ui.label("Annotation").classes("text-sm font-medium")
@@ -102,7 +103,7 @@ def build_page(ui) -> None:
                             ui.label("Suggestion rationale & retrieval").classes("text-sm font-medium")
                             proposed = ui.label().classes("text-sm whitespace-pre-wrap break-words")
                             rationale = ui.label().classes("text-sm whitespace-pre-wrap break-words")
-                            limits = ui.label().classes("text-amber-900 whitespace-pre-wrap break-words")
+                            # limits = ui.label().classes("text-amber-900 whitespace-pre-wrap break-words")
                     candidate_grid = ui.aggrid({
                         "columnDefs": [
                             {"field": "rank", "headerName": "Rank", "width": 80, "filter": "agNumberColumnFilter"},
@@ -127,8 +128,9 @@ def build_page(ui) -> None:
                 state.selected_finding_id = None
                 state.selected_candidate_id = None
                 candidate_grid.options["rowData"] = []
-                identity.set_text("Select a finding. Nothing is preselected.")
-                for label in (covered_text, finding_details, proposed, rationale, limits, evidence):
+                # identity.set_text("Select a finding. Nothing is preselected.")
+                # for label in (covered_text, finding_details, proposed, rationale, limits, evidence):
+                for label in (covered_text, finding_details, proposed, rationale, evidence):
                     label.set_text("")
                 preview.set_text("No candidate selected. Inspecting a candidate stages no decision.")
 
@@ -190,15 +192,15 @@ def build_page(ui) -> None:
                     return
                 if finding.row_id == previous_id:
                     return finding
-                identity.set_text(f"{finding.document} · {finding.annotator} · SCTID {finding.code}")
+                # identity.set_text(f"{finding.document} · {finding.annotator} · SCTID {finding.code}")
                 covered_text.set_text(finding.text)
                 finding_details.set_text(
-                    f"Layer: {finding.layer or 'not recorded'} · Span: {finding.offset}\n"
-                    f"Source FSN: {finding.source_fsn}\nIgnored: {finding.ignored}"
+                    f"Source FSN: {finding.source_fsn}\n"
+                    f"Span: {finding.offset} · Layer: {finding.layer or 'not recorded'}"
                 )
                 proposed.set_text(f"Saved proposed SCTID: {finding.proposed_code or 'none'} (not automatically accepted)")
                 rationale.set_text(finding.reason)
-                limits.set_text("Retrieval limits — candidate evidence may be incomplete:\n" + "\n".join(finding.retrieval_limits) if finding.retrieval_limits else "")
+                # limits.set_text("Retrieval limits — candidate evidence may be incomplete:\n" + "\n".join(finding.retrieval_limits) if finding.retrieval_limits else "")
                 candidate_grid.options["rowData"] = _candidate_rows(finding)
                 preview.set_text("No candidate selected. Inspecting a candidate stages no decision.")
                 evidence.set_text("")

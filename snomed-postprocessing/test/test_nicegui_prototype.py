@@ -137,6 +137,12 @@ class NiceGuiBootstrapTest(unittest.TestCase):
         self.assertEqual(candidates["rank"]["width"], 80)
         self.assertGreater(candidates["fsn"]["flex"], 0)
 
+    def test_carousel_does_not_cache_the_moved_workspace(self):
+        from test.test_nicegui_suggestions import fake_ui
+        ui, _, _ = fake_ui()
+        props = ui.carousel.return_value.props.call_args.args[0].split()
+        self.assertNotIn("keep-alive", props)
+
     def test_tables_contain_scroll_chaining_without_disabling_internal_scrolling(self):
         from test.test_nicegui_suggestions import fake_ui
         _, grids, _ = fake_ui()

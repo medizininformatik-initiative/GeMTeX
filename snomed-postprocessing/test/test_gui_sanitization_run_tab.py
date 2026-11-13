@@ -1,8 +1,6 @@
 from types import SimpleNamespace
 
 from snomed_post_processing.gui.streamlit.sanitization_run_tab import (
-    _finding_context_label,
-    _metadata_finding_context_lookup,
     _needs_row_specific_choice,
     _replacement_options_and_hints,
     _review_rows_to_decisions,
@@ -11,6 +9,7 @@ from snomed_post_processing.gui.streamlit.sanitization_run_tab import (
     _status_label_for_suggestion,
 )
 from snomed_post_processing.sanitization.models import SanitizationStatus
+from snomed_post_processing.review_context import ReviewContext
 
 
 def test_finding_context_uses_metadata_when_project_text_is_unavailable():
@@ -33,7 +32,7 @@ def test_finding_context_uses_metadata_when_project_text_is_unavailable():
         ]
     }
 
-    assert _finding_context_label(finding, {}, _metadata_finding_context_lookup(metadata)) == "… real [covered] context …"
+    assert ReviewContext.from_metadata(metadata).label(finding) == "… real [covered] context …"
 
 
 def test_finding_context_fallback_explains_missing_full_document_text():
@@ -45,7 +44,7 @@ def test_finding_context_fallback_explains_missing_full_document_text():
         covered_text="covered",
     )
 
-    assert _finding_context_label(finding, {}) == "No full document context loaded."
+    assert ReviewContext().label(finding) == "No full document context loaded."
 
 
 def test_single_bm25_replacement_is_not_manual_choice():
