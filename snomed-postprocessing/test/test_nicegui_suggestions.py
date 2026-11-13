@@ -92,10 +92,33 @@ def fake_ui(state=None):
     ui.menu_item.side_effect = menu_item
     ui.aggrid.side_effect = grid
     ui.label.side_effect = label
+    from snomed_post_processing.gui.nicegui.review_panel import ReviewPanelControls
+    from snomed_post_processing.gui.nicegui.suggestion_ui import SuggestionControls
+    reviews = []
+    def review_panel(*args, **kwargs):
+        panel = ReviewPanelControls(*args, **kwargs)
+        reviews.append(panel)
+        return panel
     with patch("snomed_post_processing.gui.nicegui.page.PolicyCheckControls"), \
             patch("snomed_post_processing.gui.nicegui.page.SuggestionControls"), \
+            patch("snomed_post_processing.gui.nicegui.page.ReviewPanelControls", side_effect=review_panel), \
             patch("snomed_post_processing.gui.nicegui.review_panel.PreviewState", return_value=state) if state is not None else nullcontext():
         build_page(ui, MagicMock())
+    # Review-focused tests drive the real tab-2 restore and explicit handoff methods,
+    # without constructing another workspace or duplicating the import logic.
+    suggestions = SuggestionControls.__new__(SuggestionControls)
+    suggestions.ui, suggestions.get_review = ui, lambda: reviews[0]
+    suggestions.closed = suggestions.busy = False
+    suggestions.artifact_revision, suggestions.completed = 0, None
+    suggestions.status, suggestions.summary = label(), label()
+    suggestions.restore_status = suggestions.status
+    suggestions.overview, suggestions.refresh = MagicMock(options={}), MagicMock()
+    async def restore_and_handoff(event):
+        previous, token = suggestions.completed, suggestions.artifact_revision + 1
+        await suggestions.load_suggestions(event)
+        if token == suggestions.artifact_revision and suggestions.completed is not previous:
+            await suggestions.open_review()
+    suggestions.uploader = ui.upload(label="Test fixture: restore then explicit handoff", on_upload=restore_and_handoff)
     return ui, grids[:2], labels
 
 
@@ -363,7 +386,7 @@ class SuggestionsUploadPageTest(unittest.IsolatedAsyncioTestCase):
             await handler(upload_event(b"DO_NOT_ECHO", "bad.json"))
         self.assertIs(grids[0].options["rowData"], old_rows)
         self.assertTrue(any(label.text == "Source: valid.json" for label in labels))
-        self.assertTrue(any("Current preview unchanged" in label.text for label in labels))
+        self.assertTrue(any("Previous suggestions/review retained" in label.text for label in labels))
         self.assertFalse(any("DO_NOT_ECHO" in label.text for label in labels))
 
     async def test_oversized_upload_is_rejected_before_reading(self):
@@ -383,7 +406,7 @@ class SuggestionsUploadPageTest(unittest.IsolatedAsyncioTestCase):
         event.file.read.side_effect = OSError("DO_NOT_ECHO_PRIVATE_PATH")
         await ui.upload.call_args.kwargs["on_upload"](event)
         self.assertIs(grids[0].options["rowData"], rows)
-        self.assertTrue(any("Could not read" in label.text for label in labels))
+        self.assertTrue(any("Could not restore" in label.text for label in labels))
         self.assertFalse(any("DO_NOT_ECHO" in label.text for label in labels))
 
     async def test_unrecognized_metadata_mode_does_not_break_publication(self):
@@ -413,7 +436,7 @@ class SuggestionsUploadPageTest(unittest.IsolatedAsyncioTestCase):
             if name == "slow.json":
                 started.set()
                 await finish.wait()
-            return load_suggestions_preview(content, name)
+            return function(content, name)
 
         with patch("nicegui.run.io_bound", side_effect=reader):
             previous = asyncio.create_task(handler(upload_event(encoded(payload()), "slow.json")))

@@ -58,11 +58,26 @@ during analysis and before download. No application persistence is added.
 Policy checking does not alter loaded suggestions or their saved review scope.
 INCEpTION API fetching/deployment remain separate future work.
 
+## Restore computed states
+
+- **1. Check policy → Restore CriticalFindings JSON:** select Upload / Data directory /
+  Server path, then **Load saved findings** (50 MiB limit). This restores the findings
+  table and original JSON export without a ZIP/HDF5 or analysis. Full policy Markdown,
+  masked Markdown and report JSON are unavailable and disabled. Shared input edits do
+  not erase imported findings or change their scope; generation validates scope/ID
+  compatibility against the selected inputs. Restoring a different artifact or running
+  a successful new check replaces the tab-1 result; failed restores keep the old one.
+- **2. Suggest → Restore suggestions JSON:** restores its overview without HDF5,
+  retrieval or CAS access. It does not change review. Use **Load in review (replaces
+  review)** explicitly before continuing in tab 3. Original JSON and a Markdown
+  rendering of saved scoped suggestions are downloadable; no scoring is rerun.
+- **3. Review & apply:** reviewed-decisions restore stays here and requires the
+  matching suggestions already loaded into review. Save/export remain explicit.
+
 ## Rules and suggestion generation
 
 **2. Suggest** uses the shared Inputs sidebar's project/HDF5/annotation settings and annotator scope.
-Use current successful policy findings, or select saved CriticalFindings JSON via
-Upload / Data directory / Server path (50 MiB processing limit). Narrower source
+Use the findings most recently computed or restored in tab 1. Narrower source
 scope and mismatching saved ID settings are rejected rather than silently reused.
 Saved findings require HDF5, but not a project ZIP (optional for context; required
 for policy checks and rules). A live explanation beside **Generate** lists missing
@@ -87,7 +102,7 @@ alone cannot protect Socket.IO heartbeats when native HDF5/BM25 code holds the G
 Process inputs contain paths/data only; upload owners stay in the awaiting page,
 and unused policy-report bodies are not transferred. Windows-style spawn, returned
 review artifacts and event-loop responsiveness have synthetic regression coverage. It does not reset
-review. **Load generated suggestions in review (replaces review)** is separate;
+review. **Load in review (replaces review)** is separate;
 it resets generic choices/flags and preserves same-input saved/pending rule choices.
 No candidate is automatically accepted. Source/settings/edit revisions and file
 stamps reject stale worker results, downloads and handoffs. Failed runs retain the
@@ -113,7 +128,8 @@ artificial fixture and installed SDK, not live clinical projects/browser renderi
 
 ## Load saved suggestions
 
-In **3. Review & apply**, use **Load suggestions JSON** (one file, up to **50 MiB**).
+In **2. Suggest → Restore suggestions JSON**, use **Load suggestions JSON**
+(one file, up to **50 MiB**), then explicitly **Load in review (replaces review)**.
 Use the suggestions JSON produced by the existing CLI/Streamlit workflow, not
 CriticalFindings or reviewed-decisions JSON. The page starts empty until suggestions are loaded.
 
@@ -130,7 +146,8 @@ source/member/matched-term evidence, ignored flags and retrieval-limit warnings
 are retained. Diagnostic context is unranked and cannot become selectable.
 A saved proposal is displayed as provenance, never automatically selected.
 
-Successful imports clear navigation; stale row/candidate clicks are rejected.
+Only the explicit review handoff clears review/navigation; tab-2 restoration alone
+retains all review choices and flags. Stale row/candidate clicks are rejected.
 Parsing runs in a NiceGUI worker; newer uploads supersede older
 pending loads. Invalid, oversized or unreadable files leave the active preview
 unchanged, with a safe error that does not echo file contents. No metadata paths
@@ -191,7 +208,7 @@ manual conflicts are rejected rather than silently dropping protected manual wor
 Unchanged automatic provenance survives unrelated manual saves; explicit human
 confirmation removes automatic ownership for the affected choices/documents.
 
-New suggestions reset all review state. Latest upload
+Explicitly loading suggestions into review resets generic review state. Latest upload
 wins; a pending decision import cannot overwrite subsequent manual edits. Filtering
 is display-only and never limits decision export. No CAS files are changed.
 

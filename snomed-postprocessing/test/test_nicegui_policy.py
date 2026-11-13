@@ -1,6 +1,7 @@
 """Policy engine equivalence and installed-SDK controls on owned/artificial inputs."""
 import asyncio
 from contextlib import redirect_stdout
+import copy
 import gc
 import io
 from importlib.util import find_spec
@@ -96,21 +97,81 @@ class PolicyControlsTest(unittest.IsolatedAsyncioTestCase):
         p.lists.mode.set_value("Server path")
         p.lists.path.set_value(str(directory / "policy.hdf5"))
 
+    async def test_restore_findings_without_inputs_exports_only_original_json(self):
+        p = self.panel
+        p.saved_findings.mode.set_value("Server path")
+        p.saved_findings.path.set_value(str(FIXTURE / "critical-findings.json"))
+        await p.load_saved()
+        self.assertTrue(p.result_current, p.status.text)
+        self.assertEqual(len(p.grid.options["rowData"]), 10)
+        self.assertIsNone(p.project.snapshot())
+        self.assertIsNone(p.lists.snapshot())
+        self.assertTrue(p.report_buttons["critical-findings.json"].enabled)
+        self.assertTrue(all(not p.report_buttons[name].enabled for name in ("policy-report.md", "policy-report.masked.md", "policy-report.json")))
+        rows = copy.deepcopy(p.grid.options["rowData"])
+        p.prefix.set_value("")
+        self.assertTrue(p.results.visible)
+        self.assertEqual(p.grid.options["rowData"], rows)
+        with patch.object(self.ui.download, "content") as download:
+            await p.download("policy-report.md")
+            download.assert_not_called()
+            await p.download("critical-findings.json")
+            self.assertEqual(download.call_args.args[0], (FIXTURE / "critical-findings.json").read_bytes().decode("utf-8"))
+        previous = p.result
+        p.saved_findings.path.set_value(str(FIXTURE / "suggestions.json"))
+        await p.load_saved()
+        self.assertIs(p.result, previous)
+
+    async def test_restored_source_mutation_blocks_export_and_stale_load_does_not_publish(self):
+        p = self.panel
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "findings.json"
+            path.write_bytes((FIXTURE / "critical-findings.json").read_bytes())
+            p.saved_findings.mode.set_value("Server path")
+            p.saved_findings.path.set_value(str(path))
+            await p.load_saved()
+            previous = p.result
+            path.write_text(path.read_text(encoding="utf-8") + " ", encoding="utf-8")
+            with patch.object(self.ui.download, "content") as download:
+                await p.download("critical-findings.json")
+                download.assert_not_called()
+            self.assertFalse(p.result_current)
+            entered, release = asyncio.Event(), asyncio.Event()
+            async def delayed(function, *args):
+                entered.set()
+                await release.wait()
+                return function(*args)
+            with patch("nicegui.run.io_bound", side_effect=delayed):
+                task = asyncio.create_task(p.load_saved())
+                await entered.wait()
+                p.saved_findings.path.set_value(str(FIXTURE / "critical-findings.json"))
+                release.set()
+                await task
+            self.assertIs(p.result, previous)
+
     async def test_page_policy_check_does_not_change_loaded_review(self):
         from nicegui import events
         from snomed_post_processing.gui.nicegui.page import build_page
         from test.test_nicegui_suggestions import encoded, payload, upload_event
-        controls = []
+        from snomed_post_processing.gui.nicegui.suggestion_ui import SuggestionControls
+        controls, suggestions = [], []
+        def create_suggestions(*args):
+            control = SuggestionControls(*args)
+            suggestions.append(control)
+            return control
         def create(ui):
             control = PolicyCheckControls(ui)
             controls.append(control)
             return control
         with self.client, patch("snomed_post_processing.gui.nicegui.page.PolicyCheckControls", side_effect=create), \
+                patch("snomed_post_processing.gui.nicegui.page.SuggestionControls", side_effect=create_suggestions), \
                 patch.object(self.ui, "upload", wraps=self.ui.upload) as uploads:
             build_page(self.ui, events)
-            source_upload = uploads.call_args.kwargs["on_upload"]
+            source_upload = next(call.kwargs["on_upload"] for call in uploads.call_args_list
+                                 if call.kwargs.get("label") == "Load suggestions JSON")
         with self.client:
             await source_upload(upload_event(encoded(payload())))
+            await suggestions[0].open_review()
         elements = self.client.elements
         review_grid = next(element for element in elements.values()
                            if hasattr(element, "options") and isinstance(element.options, dict)

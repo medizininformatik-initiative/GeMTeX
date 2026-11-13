@@ -12,9 +12,9 @@ from snomed_post_processing.sanitization.concept_rules import (
 from .file_sources import FileSource
 from .review import ReviewError
 from .suggestion_jobs import (
-    SuggestionJob, create_cache, inspect_members, run_generation, run_rules, stamps, validate_preserved_rules,
+    SuggestionJob, create_cache, inspect_members, restore_suggestions, run_generation, run_rules, stamps, validate_preserved_rules,
 )
-from .suggestions import MAX_SUGGESTIONS_BYTES, load_suggestions_preview
+from .suggestions import MAX_SUGGESTIONS_BYTES, SuggestionsPreviewError, load_suggestions_preview
 
 
 def rule_records(rules):
@@ -37,6 +37,7 @@ class SuggestionControls:
         self.revision = self.rule_revision = self.rule_load_revision = 0
         self.ready = self.closed = self.busy = False
         self.completed = self.created_cache = self.member_stamp = None
+        self.artifact_revision = 0
         self.created_caches = []
         self.rule_job = self.rule_stamps = None
         self.records = rule_records(DEFAULT_CONCEPT_RULES)
@@ -66,9 +67,13 @@ class SuggestionControls:
             self.apply_button = ui.button("Apply rules to review", on_click=self.apply_rules)
             ui.button("Clear all pending rule decisions", on_click=self.clear_rules).props("flat dense")
             ui.label("Apply stages decisions in tab 3; Save choices commits them. Loading/editing definitions does not apply rules or change CAS.").classes("text-sm")
-        with ui.row().classes("w-full items-center"):
-            self.findings_mode = ui.toggle(["Current session", "Saved JSON"], value="Current session", on_change=self.changed)
-        self.findings = FileSource(ui, "CriticalFindings JSON", (".json",), policy.data_dir, self.changed)
+        with ui.expansion("Restore suggestions JSON", value=True).classes("w-full"):
+            self.uploader = ui.upload(label="Load suggestions JSON", on_upload=self.load_suggestions,
+                                      auto_upload=True, multiple=False, max_file_size=MAX_SUGGESTIONS_BYTES,
+                                      on_rejected=lambda: self.restore_status.set_text("Upload rejected. Choose suggestions JSON up to 50 MiB; previous state retained.")) \
+                .props("accept=.json").classes("max-w-full")
+            self.restore_status = ui.label("Restores the suggestions table without analysis or HDF5/project access. Review stays unchanged until Load in review.").classes("text-sm")
+        self.findings_source = ui.label().classes("text-sm")
         with ui.expansion("Replacement requirements", value=True).classes("w-full"):
             self.target = ui.select({"policy": "Policy rules", "release": "Active release"}, value="policy", on_change=self.requirements_changed)
             self.exclusion = ui.select({"none": "No exclusion list", "embedded": "Embedded exclusion list",
@@ -120,7 +125,7 @@ class SuggestionControls:
                 "rowData": [], ":getRowId": "params => params.data.row_id",
             }).classes("w-full h-64 overflow-auto overscroll-contain")
             with ui.row():
-                self.open_button = ui.button("Load generated suggestions in review (replaces review)", on_click=self.open_review)
+                self.open_button = ui.button("Load in review (replaces review)", on_click=self.open_review)
                 ui.button("Download suggestions JSON", on_click=lambda: self.download("json"))
                 ui.button("Download suggestions Markdown", on_click=lambda: self.download("markdown"))
             ui.label("Loading replaces generic choices and flags; same-input rule choices are retained. Download existing reviewed decisions first if needed. No target is approved automatically.").classes("text-sm")
@@ -162,13 +167,10 @@ class SuggestionControls:
         self.changed(rule_inputs=True)
 
     def policy_result_changed(self):
-        if self.findings_mode.value == "Current session":
-            self.changed()
-        else:
-            self.refresh()
+        self.changed()
 
     def shared_changed(self):
-        for source in (self.findings, self.custom, self.cache, self.snogit_source):
+        for source in (self.custom, self.cache, self.snogit_source):
             source.refresh_directory()
         self.changed(rule_inputs=True)
 
@@ -184,13 +186,8 @@ class SuggestionControls:
             blockers.append("Wait for the current generation, rule or cache task to finish.")
         if self.policy.lists.snapshot() is None:
             blockers.append("Select or finish uploading the SNOMED HDF5 in the shared Inputs sidebar.")
-        if self.findings_mode.value == "Current session":
-            if self.policy.project.snapshot() is None:
-                blockers.append("Select a project ZIP in Inputs for a policy check, or use Saved JSON findings without a ZIP.")
-            if self.policy.result is None or self.policy.result_revision != self.policy.revision:
-                blockers.append("Run Check policy with the current inputs, or select Saved JSON findings.")
-        elif self.findings.snapshot() is None:
-            blockers.append("Select or finish uploading saved CriticalFindings JSON.")
+        if not self.policy.result_current:
+            blockers.append("Run Check policy (project ZIP required), or restore CriticalFindings JSON in tab 1.")
         if self.policy.project.uploading:
             blockers.append("Wait for the project ZIP upload to finish before using it for context.")
         if self.bm25.value and self.snogit.value:
@@ -208,7 +205,11 @@ class SuggestionControls:
         custom = self.target.value == "release" and "custom" in self.exclusion.value
         self.exclusion.set_visibility(self.target.value == "release")
         self.custom.container.set_visibility(custom)
-        self.findings.container.set_visibility(self.findings_mode.value == "Saved JSON")
+        if self.policy.result_current:
+            origin = "Restored findings" if self.policy.imported_source is not None else "Current policy check"
+            self.findings_source.set_text(f"Findings from tab 1: {origin} · {len(self.policy.result.findings)} findings.")
+        else:
+            self.findings_source.set_text("No current findings. Run or restore them in tab 1.")
         available = self.policy.lists.snapshot() is not None
         blockers = self.generation_blockers()
         self.generate_button.set_enabled(not blockers)
@@ -219,7 +220,8 @@ class SuggestionControls:
         self.cache_button.set_enabled(not self.busy and available and self.member_stamp is not None and bool(self.members.value))
         self.cache_download.set_enabled(not self.busy and self.created_cache is not None)
         self.spinner.set_visibility(self.busy)
-        self.results.set_visibility(self.completed is not None and self.completed[-1] == self.version and not self.busy)
+        self.uploader.set_enabled(not self.busy)
+        self.results.set_visibility(self.artifact_current and not self.busy)
 
     def settings(self, *, rules=False):
         base = dict(target_view=self.target.value, release_blacklist_mode=self.exclusion.value)
@@ -247,15 +249,14 @@ class SuggestionControls:
         custom = self.custom.snapshot() if settings.target_view == "release" and "custom" in settings.release_blacklist_mode else None
         if settings.target_view == "release" and "custom" in settings.release_blacklist_mode and custom is None:
             raise ValueError("Select custom exclusion-list rules.")
-        findings_file = None if rules or self.findings_mode.value == "Current session" else self.findings.snapshot()
-        if not rules and self.findings_mode.value == "Saved JSON" and findings_file is None:
-            raise ValueError("Select CriticalFindings JSON.")
-        result = None if rules or self.findings_mode.value != "Current session" else self.policy.result
-        if not rules and self.findings_mode.value == "Current session" and (result is None or self.policy.result_revision != self.policy.revision):
-            raise ValueError("Run a current policy check or select saved findings JSON.")
+        findings_file = None if rules else self.policy.imported_source
+        result = None if rules or findings_file is not None else self.policy.result
+        if not rules and not self.policy.result_current:
+            raise ValueError("Run Check policy or restore CriticalFindings JSON in tab 1.")
         cache = None if rules or not (settings.semantic_bm25_fallback and settings.snogit_bm25) else self.cache.snapshot() or self.created_cache
         return SuggestionJob(self.policy.project.snapshot(), lists, self.policy.settings(), settings, custom, cache,
-                             findings_file, result, self.policy.completed_stamps)
+                             findings_file, result, self.policy.completed_stamps,
+                             self.policy.completed_stamps[0] if findings_file is not None else None)
 
     async def generate(self):
         from nicegui import run
@@ -270,6 +271,8 @@ class SuggestionControls:
             self.status.set_text(str(error))
             return
         version = self.version
+        self.artifact_revision += 1
+        token = self.artifact_revision
         self.busy = True
         self.status.set_text("Generating suggestions… No review or CAS changes.")
         self.refresh()
@@ -277,17 +280,10 @@ class SuggestionControls:
             # Native HDF5/BM25 work can hold the GIL even in a thread and starve
             # Socket.IO heartbeats. Keep the owning job here, send only data/paths.
             result, preview, snapshot = await run.cpu_bound(run_generation, job.for_process())
-            if self.closed or version != self.version:
+            if self.closed or version != self.version or token != self.artifact_revision:
                 return
             self.completed = result, preview, job, snapshot, version
-            fields = ("row_id", "document", "annotator", "code", "status", "proposed_code", "candidate_count", "text")
-            self.overview.options["rowData"] = [{name: getattr(row, name) for name in fields} for row in preview.findings]
-            self.overview.update()
-            statuses = {}
-            for finding in preview.findings:
-                name = finding.status
-                statuses[name] = statuses.get(name, 0) + 1
-            self.summary.set_text(f"{len(result.suggestions)} suggestions · " + " · ".join(f"{key}: {value}" for key, value in sorted(statuses.items())))
+            self.render_artifact()
             self.status.set_text("Suggestions ready. Load them in review separately; no decisions approved.")
         except Exception:
             if not self.closed and version == self.version:
@@ -297,15 +293,55 @@ class SuggestionControls:
             if not self.closed:
                 self.refresh()
 
+    @property
+    def artifact_current(self):
+        return self.completed is not None and (self.completed[2] is None or self.completed[-1] == self.version)
+
+    def render_artifact(self):
+        result, preview = self.completed[:2]
+        fields = ("row_id", "document", "annotator", "code", "status", "proposed_code", "candidate_count", "text")
+        self.overview.options["rowData"] = [{name: getattr(row, name) for name in fields} for row in preview.findings]
+        self.overview.update()
+        statuses = {}
+        for finding in preview.findings:
+            statuses[finding.status] = statuses.get(finding.status, 0) + 1
+        self.summary.set_text(f"Source: {preview.source_name} · {len(preview.findings)} suggestions · " +
+                              " · ".join(f"{key}: {value}" for key, value in sorted(statuses.items())))
+
+    async def load_suggestions(self, event):
+        from nicegui import run
+        if self.closed or self.busy:
+            return
+        self.artifact_revision += 1
+        token = self.artifact_revision
+        self.restore_status.set_text("Loading suggestions JSON; previous suggestions and review retained until successful restore.")
+        try:
+            if event.file.size() > MAX_SUGGESTIONS_BYTES:
+                raise SuggestionsPreviewError("Suggestions JSON exceeds the 50 MiB limit.")
+            content = await event.file.read()
+            result, preview = await run.io_bound(restore_suggestions, content, event.file.name)
+            if self.closed or token != self.artifact_revision:
+                return
+            self.completed = result, preview, None, (), None
+            self.render_artifact()
+            self.restore_status.set_text("Suggestions restored in tab 2. Review unchanged; use Load in review (replaces review) explicitly.")
+            self.refresh()
+        except Exception:
+            if not self.closed and token == self.artifact_revision:
+                self.restore_status.set_text("Could not restore suggestions JSON (limit 50 MiB). Previous suggestions/review retained.")
+        finally:
+            if not self.closed and token == self.artifact_revision:
+                self.uploader.reset()
+
     async def current_result(self):
         from nicegui import run
         completed = self.completed
-        if self.closed or self.busy or completed is None or completed[-1] != self.version:
+        if self.closed or self.busy or not self.artifact_current:
             raise ReviewError("Generation inputs changed. Generate current suggestions first.")
-        if await run.io_bound(stamps, completed[2].sources) != completed[3]:
+        if completed[2] is not None and await run.io_bound(stamps, completed[2].sources) != completed[3]:
             self.changed(rule_inputs=True)
             raise ReviewError("Generation source files changed. Generate suggestions again.")
-        if self.closed or completed is not self.completed or completed[-1] != self.version:
+        if self.closed or completed is not self.completed or not self.artifact_current:
             raise ReviewError("Inputs changed during preparation. Try again.")
         return completed
 
@@ -327,7 +363,7 @@ class SuggestionControls:
             if token != self.review_token():
                 raise ReviewError("Review changed during preparation. Load generated suggestions again if you want to replace it.")
             self.get_review().publish_generated(copy.deepcopy(completed[1]))
-            self.status.set_text("Generated suggestions loaded in tab 3. No choices approved; Save/export remain explicit.")
+            self.status.set_text("Suggestions loaded in tab 3. No choices approved; Save/export remain explicit.")
         except (ReviewError, OSError):
             self.status.set_text("Review or generation inputs changed. Review unchanged; retry with current results.")
 
@@ -518,7 +554,8 @@ class SuggestionControls:
     def close(self):
         self.closed = True
         self.revision += 1
-        for source in (self.findings, self.custom, self.cache, self.snogit_source):
+        self.artifact_revision += 1
+        for source in (self.custom, self.cache, self.snogit_source):
             source.close()
         self.completed = self.created_cache = self.rule_job = None
         self.created_caches.clear()

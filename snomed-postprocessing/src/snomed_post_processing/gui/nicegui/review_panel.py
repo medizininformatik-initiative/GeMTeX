@@ -3,7 +3,6 @@ from snomed_post_processing.review_context import ReviewContext
 
 from .state import PreviewState
 from .review_ui import ReviewControls
-from .suggestions import MAX_SUGGESTIONS_BYTES, SuggestionsPreviewError, load_suggestions_preview
 
 
 def _finding_rows(state, session=None):
@@ -36,8 +35,7 @@ class ReviewPanelControls:
         self.keyboard = ui.keyboard(on_key=self.handle_key)
         self.keyboard.active = False
 
-        upload_controls = ui.row().classes("w-full items-start")
-        self.upload_status = ui.label().classes("text-sm")
+        ui.label("Restore suggestions in tab 2, then use Load in review (replaces review). Reviewed decisions can be restored below after their matching suggestions.").classes("text-sm")
         self.counts = ui.label().classes("text-sm")
         # Do not keep-alive slides: cached panels retain stale DOM for the moved grid.
         self.documents = ui.carousel(arrows=False, navigation=True).props(
@@ -113,11 +111,6 @@ class ReviewPanelControls:
             self.rule_source_download.tooltip("Save alongside reviewed decisions to restore a rule-only review after reload.")
             ui.label("Apply choices are staged. Save choices commits them; clearing rules leaves definitions and CAS unchanged.").classes("text-sm")
         self.documents.on_value_change(lambda event: self.change_document(event.value))
-        with upload_controls:
-            self.uploader = ui.upload(label="Load suggestions JSON", on_upload=self.load_upload,
-                                      auto_upload=True, multiple=False, max_file_size=MAX_SUGGESTIONS_BYTES,
-                                      on_rejected=lambda: self.upload_status.set_text("Upload rejected. Choose one JSON file up to 50 MiB; current preview unchanged.")) \
-                .props("accept=.json").classes("max-w-full")
         # Native DOM right-clicks provide coordinates and immutable rendered row IDs;
         # AG Grid's serialized cellContextMenu event omits pointer coordinates.
         context_handler = """event => {
@@ -337,30 +330,3 @@ class ReviewPanelControls:
     def candidate_menu(self, event):
         if self.select_candidate(event) is not None:
             self.controls.open_menu(event, candidates=True)
-
-    async def load_upload(self, event):
-        self.load_revision += 1
-        revision = self.load_revision
-        self.upload_status.set_text("Loading suggestions JSON; the previous preview remains visible until loading succeeds.")
-        try:
-            if event.file.size() > MAX_SUGGESTIONS_BYTES:
-                raise SuggestionsPreviewError("Suggestions JSON exceeds the 50 MiB upload limit.")
-            content = await event.file.read()
-            from nicegui import run
-            loaded = await run.io_bound(load_suggestions_preview, content, event.file.name)
-        except SuggestionsPreviewError as error:
-            if revision == self.load_revision:
-                self.upload_status.set_text(f"{error} Current preview unchanged.")
-                self.uploader.reset()
-            return
-        except OSError:
-            if revision == self.load_revision:
-                self.upload_status.set_text("Could not read the uploaded file. Current preview unchanged.")
-                self.uploader.reset()
-            return
-        if revision != self.load_revision:
-            return  # A newer upload superseded this load.
-        self.state = loaded
-        self.show_source()
-        self.upload_status.set_text("Suggestions loaded. Previous review choices and flags reset; no decisions staged.")
-        self.uploader.reset()

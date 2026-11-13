@@ -233,15 +233,76 @@ class GenerationControlsTest(unittest.IsolatedAsyncioTestCase):
         await self.panel.open_review()
         self.assertEqual(len(self.review.state.findings), before)
 
+    async def test_restored_suggestions_show_in_tab_two_and_require_explicit_handoff(self):
+        from test.test_nicegui_suggestions import upload_event
+        content = (FIXTURE / "suggestions.json").read_bytes()
+        old_source = load_suggestions_preview(content, "old.json")
+        with self.client:
+            self.review.publish_generated(old_source)
+        session = self.review.controls.session
+        session.mark_document(old_source.findings[0].row_id, True)
+        session.save()
+        self.policy.project.path.set_value("")
+        self.policy.lists.path.set_value("")
+        await self.panel.load_suggestions(upload_event(content, "restored.json"))
+        self.assertTrue(self.panel.results.visible, self.panel.status.text)
+        self.assertEqual(len(self.panel.overview.options["rowData"]), 10)
+        self.assertIs(self.review.state, old_source)
+        self.assertIs(self.review.controls.session, session)
+        self.assertTrue(session.reviewed_documents)
+        self.policy.prefix.set_value("")
+        self.assertTrue(self.panel.results.visible)
+        with patch.object(self.ui.download, "content") as download:
+            await self.panel.download("json")
+            self.assertEqual(download.call_args.args[0], content.decode("utf-8"))
+        with self.client:
+            await self.panel.open_review()
+        self.assertEqual(self.review.state.source_name, "restored.json")
+        self.assertFalse(self.review.controls.session.saved)
+        self.assertFalse(self.review.controls.session.reviewed_documents)
+        self.assertFalse(self.review.controls.session.dirty)
+        row = self.review.state.findings[0]
+        restored_session = self.review.controls.session
+        restored_session.stage(row.row_id, action="none")
+        restored_session.save()
+        reviewed = restored_session.export_text().encode()
+        restored_session.stage(row.row_id, action="delete")
+        restored_session.save()
+        with self.client:
+            await self.review.controls.load(upload_event(reviewed, "reviewed-decisions.json"))
+        self.assertEqual(self.review.controls.session.saved[row.suggestion_index]["action"], "none")
+        self.cpu.assert_not_awaited()
+
+    async def test_suggestions_restore_failure_and_late_upload_keep_latest_artifact(self):
+        from test.test_nicegui_suggestions import upload_event
+        content = (FIXTURE / "suggestions.json").read_bytes()
+        await self.panel.load_suggestions(upload_event(content, "first.json"))
+        previous = self.panel.completed
+        await self.panel.load_suggestions(upload_event(b"not-json", "bad.json"))
+        self.assertIs(self.panel.completed, previous)
+        entered, release = asyncio.Event(), asyncio.Event()
+        async def slow_read():
+            entered.set()
+            await release.wait()
+            return content
+        event = SimpleNamespace(file=SimpleNamespace(name="older.json", size=lambda: len(content), read=slow_read))
+        task = asyncio.create_task(self.panel.load_suggestions(event))
+        await entered.wait()
+        await self.panel.load_suggestions(upload_event(content, "newer.json"))
+        release.set()
+        await task
+        self.assertEqual(self.panel.completed[1].source_name, "newer.json")
+        self.assertIsNone(self.review.state.source_name)
+
     async def test_saved_findings_explain_missing_hdf5_and_generate_without_project(self):
         self.policy.project.path.set_value("")
         self.policy.lists.path.set_value("")
-        self.panel.findings_mode.set_value("Saved JSON")
         content = (FIXTURE / "critical-findings.json").read_bytes()
         async def save(path):
             path.write_bytes(content)
-        await self.panel.findings.load(SimpleNamespace(file=SimpleNamespace(
+        await self.policy.saved_findings.load(SimpleNamespace(file=SimpleNamespace(
             name="critical-findings.json", size=lambda: len(content), save=save)))
+        await self.policy.load_saved()
         self.assertFalse(self.panel.generate_button.enabled)
         self.assertIn("SNOMED HDF5", self.panel.requirements.text)
         self.assertEqual(len(self.panel.generation_blockers()), 1)
@@ -256,10 +317,11 @@ class GenerationControlsTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(self.panel.completed[2].project)
 
     async def test_generation_requirements_follow_cache_custom_settings_and_busy_state(self):
-        self.panel.findings_mode.set_value("Saved JSON")
         self.assertIn("CriticalFindings JSON", self.panel.requirements.text)
-        self.panel.findings.mode.set_value("Server path")
-        self.panel.findings.path.set_value(str(FIXTURE / "critical-findings.json"))
+        self.policy.saved_findings.mode.set_value("Server path")
+        self.policy.saved_findings.path.set_value(str(FIXTURE / "critical-findings.json"))
+        await self.policy.load_saved()
+        read_calls = self.io.await_count
         self.panel.bm25.set_value(True)
         self.assertFalse(self.panel.generate_button.enabled)
         self.assertIn("processed SNOGIT cache", self.panel.requirements.text)
@@ -286,7 +348,7 @@ class GenerationControlsTest(unittest.IsolatedAsyncioTestCase):
         self.panel.refresh()
         self.assertTrue(self.panel.generate_button.enabled)
         self.cpu.assert_not_awaited()
-        self.io.assert_not_awaited()
+        self.assertEqual(self.io.await_count, read_calls)
 
     async def test_current_session_requirements_explain_policy_check_and_zip(self):
         self.policy.project.path.set_value("")
@@ -301,12 +363,29 @@ class GenerationControlsTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(set(self.policy.annotators.value), {"absent", "alice"})
 
     async def test_saved_findings_source_supports_server_files_without_policy_check(self):
-        self.panel.findings_mode.set_value("Saved JSON")
-        self.panel.findings.mode.set_value("Server path")
-        self.panel.findings.path.set_value(str(FIXTURE / "critical-findings.json"))
+        self.policy.saved_findings.mode.set_value("Server path")
+        self.policy.saved_findings.path.set_value(str(FIXTURE / "critical-findings.json"))
+        await self.policy.load_saved()
         await self.panel.generate()
         self.assertIsNotNone(self.panel.completed, self.panel.status.text)
-        self.assertIsNone(self.policy.result)
+        self.assertIsNotNone(self.policy.imported_source)
+        self.assertEqual(set(self.policy.result.reports), {"critical-findings.json"})
+
+    async def test_restored_findings_bom_is_supported_and_changed_source_is_not_reused(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "findings.json"
+            content = (FIXTURE / "critical-findings.json").read_bytes()
+            path.write_bytes(b"\xef\xbb\xbf" + content)
+            self.policy.saved_findings.mode.set_value("Server path")
+            self.policy.saved_findings.path.set_value(str(path))
+            await self.policy.load_saved()
+            await self.panel.generate()
+            previous = self.panel.completed
+            self.assertIsNotNone(previous, self.panel.status.text)
+            path.write_bytes(content + b" ")
+            await self.panel.generate()
+            self.assertIs(self.panel.completed, previous)
+            self.assertIn("Generation failed", self.panel.status.text)
 
     async def test_generation_failure_keeps_success_and_late_worker_is_discarded(self):
         await self.checked_generation()

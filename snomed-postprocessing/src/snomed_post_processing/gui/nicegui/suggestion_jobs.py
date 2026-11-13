@@ -1,17 +1,31 @@
 """Worker snapshots for suggestions, explicit rules and SNOGIT cache creation."""
 from dataclasses import asdict, dataclass, replace
 import hashlib
+from io import StringIO
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from snomed_post_processing.findings_io import read_critical_findings_json_with_metadata
 from snomed_post_processing.pipelines.policy_check import PolicyResult, PolicySettings
-from snomed_post_processing.pipelines.suggestion_generation import SuggestionSettings, generate_suggestions, replacement_constraints
+from snomed_post_processing.pipelines.suggestion_generation import GenerationResult, SuggestionSettings, generate_suggestions, replacement_constraints
 from snomed_post_processing.sanitization.concept_rules import preview_concept_rules, validate_rule_targets
 from snomed_post_processing.sanitization.snogit_sidecar import build_snogit_sidecar, list_snogit_zip_members
 from .file_sources import SourceFile
 from .suggestions import MAX_SUGGESTIONS_BYTES, load_suggestions_preview
+
+
+def restore_suggestions(content, filename):
+    from snomed_post_processing.sanitization import write_sanitization_markdown_report
+    from snomed_post_processing.uima_processing.scope import annotator_in_scope
+    preview = load_suggestions_preview(content, filename)
+    suggestions = tuple(item for item in preview.source_suggestions
+                        if annotator_in_scope(item.finding.annotator, preview.source_annotators))
+    report = StringIO()
+    write_sanitization_markdown_report(suggestions, report)
+    result = GenerationResult(content.decode("utf-8-sig"), report.getvalue(), suggestions,
+                              preview.metadata.get("nicegui_generation_binding", ""))
+    return result, preview
 
 
 def stamps(sources):
@@ -29,6 +43,7 @@ class SuggestionJob:
     findings_file: SourceFile | None = None
     session_result: PolicyResult | None = None
     session_stamps: tuple | None = None
+    findings_stamp: tuple | None = None
 
     @property
     def sources(self):
@@ -66,9 +81,12 @@ def run_generation(job):
         metadata = dict(annotators=list(job.session_result.settings.annotators),
                         id_feature=job.session_result.settings.id_feature, id_prefix=job.session_result.settings.id_prefix)
     else:
+        if job.findings_stamp is not None and job.findings_file.stamp() != job.findings_stamp:
+            raise ValueError("Restored findings changed. Load them again in tab 1.")
         if job.findings_file.stamp()[2] > MAX_SUGGESTIONS_BYTES:
             raise ValueError("CriticalFindings JSON exceeds the 50 MiB processing limit.")
-        findings, metadata = read_critical_findings_json_with_metadata(job.findings_file.path)
+        with job.findings_file.path.open(encoding="utf-8-sig") as stream:
+            findings, metadata = read_critical_findings_json_with_metadata(stream)
     result = generate_suggestions(job.lists.path, findings, metadata, job.policy, job.settings, binding=binding,
                                   project=job.project.path if job.project else None,
                                   cache=job.cache.path if job.cache else None, custom=job.custom.path if job.custom else None)

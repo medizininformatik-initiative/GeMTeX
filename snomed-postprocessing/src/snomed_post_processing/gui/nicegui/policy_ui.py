@@ -1,12 +1,43 @@
 """Explicit, page-local policy checks; does not change suggestions or review state."""
-from snomed_post_processing.pipelines.policy_check import PolicySettings, check_policy, project_annotators
+from io import StringIO
+
+from snomed_post_processing.findings_io import read_critical_findings_json_with_metadata
+from snomed_post_processing.pipelines.policy_check import PolicyResult, PolicySettings, check_policy, project_annotators
 from snomed_post_processing.terminology import policy_label
-from snomed_post_processing.uima_processing.scope import normalize_annotators
+from snomed_post_processing.uima_processing.scope import annotator_in_scope, normalize_annotators
 from .file_sources import FileSource
 
 
-def _stamps(project, lists):
-    return project.stamp(), lists.stamp()
+MAX_FINDINGS_BYTES = 50 * 1024 * 1024
+
+
+def _stamps(*sources):
+    return tuple(source.stamp() for source in sources)
+
+
+def _saved_findings(source):
+    before = source.stamp()
+    if before[2] > MAX_FINDINGS_BYTES:
+        raise ValueError("CriticalFindings JSON exceeds 50 MiB.")
+    content = source.path.read_bytes()
+    if len(content) > MAX_FINDINGS_BYTES:
+        raise ValueError("CriticalFindings JSON exceeds 50 MiB.")
+    text = content.decode("utf-8-sig")
+    findings, metadata = read_critical_findings_json_with_metadata(StringIO(text))
+    scope = metadata.get("annotators", [])
+    if not isinstance(scope, list) or any(not isinstance(name, str) for name in scope):
+        raise ValueError("Invalid saved annotator scope.")
+    for name in ("id_feature", "id_prefix"):
+        if name in metadata and not isinstance(metadata[name], str):
+            raise ValueError("Invalid saved ID settings.")
+    settings = PolicySettings(annotators=normalize_annotators(scope),
+                              id_feature=metadata.get("id_feature", "id"),
+                              id_prefix=metadata.get("id_prefix", "http://snomed.info/id/"))
+    findings = tuple(f for f in findings if annotator_in_scope(f.annotator, settings.annotators))
+    count = len({(f.document, f.annotator) for f in findings if not f.ignored})
+    if source.stamp() != before:
+        raise ValueError("Findings changed while loading.")
+    return PolicyResult(settings, findings, count, {"critical-findings.json": text}), before
 
 
 def _checked_policy(project, lists, settings):
@@ -39,6 +70,9 @@ class PolicyCheckControls:
         self.result = self.completed_sources = self.completed_stamps = None
         self.result_revision = None
         self.project_path = None
+        self.imported_source = None
+        self.result_stale = False
+        self.restore_revision = 0
         self.listeners = []
         self.result_listeners = []
         ui.label("Check inclusion/exclusion-list policy. No annotations are changed.").classes("text-sm")
@@ -62,13 +96,17 @@ class PolicyCheckControls:
                 self.feature = ui.input("SNOMED ID feature", value="id", on_change=self.changed)
                 self.prefix = ui.input("SNOMED ID prefix (empty for plain SCTIDs)",
                                        value="http://snomed.info/id/", on_change=self.changed).classes("w-full")
+        with ui.expansion("Restore CriticalFindings JSON").classes("w-full"):
+            self.saved_findings = FileSource(ui, "CriticalFindings JSON", (".json",), self.data_dir, self.restore_changed)
+            self.restore_button = ui.button("Load saved findings", on_click=self.load_saved)
+            ui.label("Restores findings without ZIP/HDF5 or analysis. Full policy reports are not contained in this artifact. Limit: 50 MiB.").classes("text-sm")
         with ui.row().classes("items-center"):
             self.run_button = ui.button("Run policy check", on_click=self.run_check)
             self.spinner = ui.spinner()
         self.status = ui.label().classes("text-sm")
         with ui.column().classes("w-full min-w-0") as self.results:
             self.summary = ui.label().classes("text-sm")
-            ui.label("Last successful check. Filters affect display only, not downloads.").classes("text-sm")
+            self.result_source = ui.label("Last successful check. Filters affect display only, not downloads.").classes("text-sm")
             self.empty = ui.label("No findings.")
             self.grid = ui.aggrid({
                 "columnDefs": [
@@ -87,6 +125,7 @@ class PolicyCheckControls:
             }).classes("w-full h-96 overflow-auto overscroll-contain")
             ui.button("Clear filters", on_click=self.clear_filters).props("flat dense")
             self.downloads = []
+            self.report_buttons = {}
             with ui.row().classes("w-full items-center"):
                 for label, filename in (("CriticalFindings JSON", "critical-findings.json"),
                                         ("Markdown", "policy-report.md"),
@@ -94,17 +133,57 @@ class PolicyCheckControls:
                                         ("Report JSON", "policy-report.json")):
                     button = ui.button(label, on_click=lambda _, filename=filename: self.download(filename))
                     self.downloads.append(button)
+                    self.report_buttons[filename] = button
                     if "masked" in filename:
                         button.tooltip("Masks document/annotator names, not clinical text. Not full anonymization.")
         ui.context.client.on_delete(self.close)
         self.ready = True
         self.refresh()
 
+    @property
+    def result_current(self):
+        return self.result is not None and not self.result_stale and (self.imported_source is not None or self.result_revision == self.revision)
+
+    def restore_changed(self):
+        if self.ready and not self.closed:
+            self.restore_revision += 1
+            self.refresh()
+
+    async def load_saved(self):
+        from nicegui import run
+        source = self.saved_findings.snapshot()
+        if self.closed or self.busy or source is None:
+            return
+        token = self.restore_revision
+        self.busy = True
+        self.status.set_text("Loading saved findings…")
+        self.refresh()
+        try:
+            result, stamp = await run.io_bound(_saved_findings, source)
+            if self.closed or token != self.restore_revision:
+                return
+            self.result, self.result_revision = result, self.revision
+            self.imported_source, self.result_stale = source, False
+            self.completed_sources, self.completed_stamps = (source,), (stamp,)
+            self.render_result()
+            self.result_source.set_text(f"Restored: {source.path.name}. Findings and original JSON only; full policy reports unavailable. Filters affect display only.")
+            self.status.set_text("Findings restored in tab 1 and available for generation in tab 2. No analysis or review changes.")
+            for listener in self.result_listeners:
+                listener()
+        except Exception:
+            if not self.closed and token == self.restore_revision:
+                self.status.set_text("Could not restore CriticalFindings JSON (limit 50 MiB). Previous result retained.")
+        finally:
+            self.busy = False
+            if not self.closed:
+                self.refresh()
+
     def changed(self, _=None):
         if not self.ready or self.closed:
             return
         self.revision += 1
-        self.status.set_text("Inputs changed. Run policy check to obtain current results.")
+        self.status.set_text("Shared inputs changed. Restored findings remain available; generation validates their scope/ID settings."
+                             if self.imported_source is not None else "Inputs changed. Run policy check to obtain current results.")
         self.refresh()
         for listener in self.listeners:
             listener()
@@ -124,6 +203,7 @@ class PolicyCheckControls:
             return
         self.project.refresh_directory()
         self.lists.refresh_directory()
+        self.saved_findings.refresh_directory()
         self.changed()
 
     def refresh(self):
@@ -131,10 +211,10 @@ class PolicyCheckControls:
         self.run_button.set_enabled(selected and not self.busy)
         self.load_names.set_enabled(self.project.snapshot() is not None and not self.busy)
         self.spinner.set_visibility(self.busy)
-        current = self.result is not None and self.result_revision == self.revision
-        self.results.set_visibility(current)
-        for button in self.downloads:
-            button.set_enabled(current and not self.busy)
+        self.restore_button.set_enabled(not self.busy and self.saved_findings.snapshot() is not None)
+        self.results.set_visibility(self.result_current)
+        for filename, button in self.report_buttons.items():
+            button.set_enabled(self.result_current and not self.busy and filename in self.result.reports)
 
     def settings(self):
         lines = lambda text: tuple(line.strip() for line in (text or "").splitlines() if line.strip())
@@ -183,19 +263,10 @@ class PolicyCheckControls:
                 self.status.set_text("Inputs changed during checking. Older results discarded; run again.")
                 return
             self.result, self.result_revision = result, revision
+            self.imported_source, self.result_stale = None, False
             self.completed_sources, self.completed_stamps = (project, lists), stamps
-            self.grid.options["rowData"] = finding_rows(result.findings)
-            self.grid.update()
-            self.empty.set_visibility(not result.findings)
-            self.grid.set_visibility(bool(result.findings))
-            critical = sum(not f.ignored for f in result.findings)
-            inclusion = sum(f.list_type == "whitelist" for f in result.findings)
-            self.summary.set_text(
-                f"{critical} critical · {len(result.findings) - critical} ignored · "
-                f"{inclusion} inclusion-list · {len(result.findings) - inclusion} exclusion-list · "
-                f"{len({f.document for f in result.findings})} documents · "
-                f"{len({f.annotator for f in result.findings})} annotators · "
-                f"{result.critical_documents} critical document/annotator pairs")
+            self.render_result()
+            self.result_source.set_text("Last successful policy check. Filters affect display only, not downloads.")
             self.status.set_text("Policy check finished. No annotations changed.")
             for listener in self.result_listeners:
                 listener()
@@ -207,13 +278,28 @@ class PolicyCheckControls:
             if not self.closed:
                 self.refresh()
 
+    def render_result(self):
+        result = self.result
+        self.grid.options["rowData"] = finding_rows(result.findings)
+        self.grid.update()
+        self.empty.set_visibility(not result.findings)
+        self.grid.set_visibility(bool(result.findings))
+        critical = sum(not f.ignored for f in result.findings)
+        inclusion = sum(f.list_type == "whitelist" for f in result.findings)
+        self.summary.set_text(
+            f"{critical} critical · {len(result.findings) - critical} ignored · "
+            f"{inclusion} inclusion-list · {len(result.findings) - inclusion} exclusion-list · "
+            f"{len({f.document for f in result.findings})} documents · "
+            f"{len({f.annotator for f in result.findings})} annotators · "
+            f"{result.critical_documents} critical document/annotator pairs")
+
     async def clear_filters(self):
         await self.grid.run_grid_method("setFilterModel", None)
 
     async def download(self, filename):
         from nicegui import run
         result, revision = self.result, self.revision
-        if self.closed or self.busy or result is None or self.result_revision != revision:
+        if self.closed or self.busy or not self.result_current or filename not in result.reports:
             return
         try:
             stamps = await run.io_bound(_stamps, *self.completed_sources)
@@ -221,8 +307,9 @@ class PolicyCheckControls:
                 raise ValueError("Inputs changed.")
         except Exception:
             if not self.closed and revision == self.revision:
+                self.result_stale = True
                 self.changed()
-                self.status.set_text("Input files changed or are unavailable. Run policy check again before downloading.")
+                self.status.set_text("Source files changed or are unavailable. Restore findings or run policy check again before downloading.")
             return
         if not self.closed and revision == self.revision and result is self.result and not self.busy:
             self.ui.download.content(result.reports[filename], filename)
@@ -232,4 +319,6 @@ class PolicyCheckControls:
         self.revision += 1
         self.project.close()
         self.lists.close()
-        self.result = self.completed_sources = None
+        self.saved_findings.close()
+        self.restore_revision += 1
+        self.result = self.completed_sources = self.imported_source = None
