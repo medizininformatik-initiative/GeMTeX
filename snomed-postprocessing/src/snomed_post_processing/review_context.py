@@ -40,7 +40,10 @@ class ReviewContext:
     @classmethod
     def from_metadata(cls, metadata: dict[str, Any], *, document_texts: dict[str, str] | None = None) -> ReviewContext:
         lookup = {}
-        for item in metadata.get("finding_contexts", ()) or ():
+        items = metadata.get("finding_contexts", ())
+        if not isinstance(items, (list, tuple)):
+            items = ()
+        for item in items:
             try:
                 offset = tuple(int(value) for value in item.get("offset", ()))
                 if len(offset) != 2:

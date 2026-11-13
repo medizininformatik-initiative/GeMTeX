@@ -231,6 +231,63 @@ class SuggestionsPreviewTest(unittest.TestCase):
 
 
 class SuggestionsUploadPageTest(unittest.IsolatedAsyncioTestCase):
+    async def test_saved_context_reuses_annotation_line_without_staging_or_changing_covered_text(self):
+        ui, grids, labels = fake_ui()
+        data = payload()
+        finding = data["suggestions"][0]["finding"]
+        snippet = "… before [ 0042 ± <script>toy</script> ] after …"
+        data["metadata"]["finding_contexts"] = [dict(
+            document=finding["document"], annotator=finding["annotator"], code=finding["code"],
+            offset=finding["offset"], context=snippet,
+        )]
+        handler = ui.upload.call_args.kwargs["on_upload"]
+        with patch("nicegui.run.io_bound", new=AsyncMock(side_effect=lambda function, *args: function(*args))):
+            await handler(upload_event(encoded(data)))
+        row = grids[0].options["rowData"][0]
+        grids[0].on.call_args.args[1](SimpleNamespace(args={"data": row}))
+        annotation = labels[next(index for index, label in enumerate(labels) if label.text == "Annotation") + 1]
+        self.assertEqual(annotation.text, snippet)
+        self.assertEqual(row["text"], finding["covered_text"])
+        self.assertEqual(row["review"], "Unreviewed")
+        ui.html.assert_not_called()
+        ui.markdown.assert_not_called()
+        with patch("nicegui.run.io_bound", new=AsyncMock(side_effect=lambda function, *args: function(*args))):
+            await handler(upload_event(b"not JSON"))
+        self.assertEqual(annotation.text, snippet)  # Failed loads retain the current context.
+        data["metadata"]["finding_contexts"] = 42
+        with patch("nicegui.run.io_bound", new=AsyncMock(side_effect=lambda function, *args: function(*args))):
+            await handler(upload_event(encoded(data)))
+        self.assertEqual(annotation.text, "")
+        grids[0].on.call_args.args[1](SimpleNamespace(args={"data": grids[0].options["rowData"][0]}))
+        self.assertEqual(annotation.text, finding["covered_text"])
+
+    async def test_context_uses_original_scoped_index_and_clears_on_document_navigation(self):
+        import copy
+        ui, grids, labels = fake_ui()
+        data = payload()
+        alice = data["suggestions"][0]
+        bob = copy.deepcopy(alice); bob["finding"]["annotator"] = "Bob"
+        other = copy.deepcopy(alice); other["finding"]["document"] = "other.txt"
+        data["suggestions"] = [bob, alice, other]
+        data["metadata"]["annotators"] = ["alice"]
+        data["metadata"]["finding_contexts"] = [
+            dict(document=item["finding"]["document"], annotator=item["finding"]["annotator"],
+                 code=item["finding"]["code"], offset=item["finding"]["offset"], context=text)
+            for item, text in ((bob, "Excluded Bob context"), (alice, "Alice surrounding context"))
+        ]
+        with patch("nicegui.run.io_bound", new=AsyncMock(side_effect=lambda function, *args: function(*args))):
+            await ui.upload.call_args.kwargs["on_upload"](upload_event(encoded(data)))
+        row = grids[0].options["rowData"][0]
+        self.assertEqual(row["suggestion_index"], 1)
+        grids[0].on.call_args.args[1](SimpleNamespace(args={"data": row}))
+        annotation = labels[next(index for index, label in enumerate(labels) if label.text == "Annotation") + 1]
+        self.assertEqual(annotation.text, "Alice surrounding context")
+        self.assertFalse(any(label.text == "Excluded Bob context" for label in labels))
+        switch_document(ui, 1)
+        self.assertEqual(annotation.text, "")
+        grids[0].on.call_args.args[1](SimpleNamespace(args={"data": grids[0].options["rowData"][0]}))
+        self.assertEqual(annotation.text, other["finding"]["covered_text"])
+
     async def test_detail_cleanup_hides_internal_counts_and_places_proposal_with_rationale(self):
         ui, grids, labels = fake_ui()
         self.assertNotIn("suggestion_index", [column["field"] for column in grids[0].options["columnDefs"]])

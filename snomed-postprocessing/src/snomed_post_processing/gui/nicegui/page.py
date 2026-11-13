@@ -1,4 +1,6 @@
 """NiceGUI suggestions inspection and explicit manual review; no CAS write-back."""
+from snomed_post_processing.review_context import ReviewContext
+
 from .demo import create_demo_state
 from .review_ui import ReviewControls
 from .suggestions import MAX_SUGGESTIONS_BYTES, SuggestionsPreviewError, load_suggestions_preview
@@ -25,6 +27,7 @@ def _candidate_rows(finding):
 def build_page(ui) -> None:
     """Build once per visitor; imports replace state only after successful parsing."""
     state = create_demo_state()
+    review_context = ReviewContext()
     load_revision = 0
     active_document = None
     document_slides = {}
@@ -83,8 +86,8 @@ def build_page(ui) -> None:
                             {"field": "text", "headerName": "Covered text", "flex": 2, "minWidth": 350},
                             {"field": "status", "headerName": "Status", "minWidth": 220},
                             {"field": "policy_issue", "headerName": "Policy check"},
-                            {"field": "review", "headerName": "Manual review"},
-                            {"field": "ignored", "headerName": "Ignored", "maxWidth": 80},
+                            {"field": "review", "headerName": "Manual review", "minWidth": 250},
+                            {"field": "ignored", "headerName": "Ignored", "maxWidth": 100},
                         ],
                         "defaultColDef": {"sortable": True, "filter": "agTextColumnFilter", "floatingFilter": True, "resizable": True, "editable": False},
                         "rowData": [],
@@ -147,7 +150,8 @@ def build_page(ui) -> None:
             documents.on_value_change(lambda event: change_document(event.value))
 
             def show_source():
-                nonlocal active_document
+                nonlocal active_document, review_context
+                review_context = ReviewContext.from_metadata(state.metadata)
                 banner.set_text(
                     ("Synthetic preview only — load suggestions JSON to enable review. " if state.is_demo else "Suggestions and manual review. ")
                     + "No project/CAS is changed. Review is page-local until downloaded as JSON."
@@ -193,7 +197,12 @@ def build_page(ui) -> None:
                 if finding.row_id == previous_id:
                     return finding
                 # identity.set_text(f"{finding.document} · {finding.annotator} · SCTID {finding.code}")
-                covered_text.set_text(finding.text)
+                text = finding.text
+                if not state.is_demo:
+                    backend_finding = state.source_suggestions[finding.suggestion_index].finding
+                    if not review_context.missing_documents((backend_finding,)):
+                        text = review_context.label(backend_finding)
+                covered_text.set_text(text)
                 finding_details.set_text(
                     f"Source FSN: {finding.source_fsn}\n"
                     f"Span: {finding.offset} · Layer: {finding.layer or 'not recorded'}"
