@@ -40,7 +40,7 @@ class SuggestionControls:
         self.created_caches = []
         self.rule_job = self.rule_stamps = None
         self.records = rule_records(DEFAULT_CONCEPT_RULES)
-        ui.label("Uses the project, HDF5, annotator scope and annotation settings in tab 1. Inputs never start processing.").classes("text-sm")
+        ui.label("Uses the shared Inputs sidebar for HDF5, annotator scope and annotation settings. Saved findings require HDF5 but no project ZIP; ZIP is optional for context and required for policy checks/rules. Inputs never start processing.").classes("text-sm")
         with ui.expansion("Concept rules").classes("w-full"):
             ui.label("Match original IDs across all selected layers and annotators, including annotations without findings. ID-only changes; no chaining.").classes("text-sm")
             self.rule_editor = ui.aggrid({
@@ -109,6 +109,7 @@ class SuggestionControls:
         with ui.row():
             self.generate_button = ui.button("Generate sanitization suggestions", on_click=self.generate)
             self.spinner = ui.spinner()
+        self.requirements = ui.label().classes("text-sm whitespace-pre-wrap").props("role=status aria-live=polite")
         self.status = ui.label().classes("text-sm whitespace-pre-wrap")
         with ui.column().classes("w-full") as self.results:
             self.summary = ui.label()
@@ -177,16 +178,42 @@ class SuggestionControls:
             self.members.set_options([], value=[])
         self.changed()
 
+    def generation_blockers(self):
+        blockers = []
+        if self.busy:
+            blockers.append("Wait for the current generation, rule or cache task to finish.")
+        if self.policy.lists.snapshot() is None:
+            blockers.append("Select or finish uploading the SNOMED HDF5 in the shared Inputs sidebar.")
+        if self.findings_mode.value == "Current session":
+            if self.policy.project.snapshot() is None:
+                blockers.append("Select a project ZIP in Inputs for a policy check, or use Saved JSON findings without a ZIP.")
+            if self.policy.result is None or self.policy.result_revision != self.policy.revision:
+                blockers.append("Run Check policy with the current inputs, or select Saved JSON findings.")
+        elif self.findings.snapshot() is None:
+            blockers.append("Select or finish uploading saved CriticalFindings JSON.")
+        if self.policy.project.uploading:
+            blockers.append("Wait for the project ZIP upload to finish before using it for context.")
+        if self.bm25.value and self.snogit.value:
+            if self.cache.uploading or (self.cache.snapshot() is None and self.created_cache is None):
+                blockers.append("Select/create a processed SNOGIT cache, finish its upload, or turn off SNOGIT under Advanced suggestion settings.")
+        if self.target.value == "release" and "custom" in self.exclusion.value and self.custom.snapshot() is None:
+            blockers.append("Select or finish uploading custom exclusion-list rules under Replacement requirements.")
+        try:
+            self.settings()
+        except (ValueError, TypeError, OverflowError):
+            blockers.append("Correct advanced suggestion settings (thresholds and candidate/ancestor limits).")
+        return blockers
+
     def refresh(self):
         custom = self.target.value == "release" and "custom" in self.exclusion.value
         self.exclusion.set_visibility(self.target.value == "release")
         self.custom.container.set_visibility(custom)
         self.findings.container.set_visibility(self.findings_mode.value == "Saved JSON")
         available = self.policy.lists.snapshot() is not None
-        findings_ready = (self.policy.result is not None and self.policy.result_revision == self.policy.revision
-                          if self.findings_mode.value == "Current session" else self.findings.snapshot() is not None)
-        cache_ready = not (self.bm25.value and self.snogit.value) or self.cache.snapshot() is not None or self.created_cache is not None
-        self.generate_button.set_enabled(not self.busy and available and findings_ready and cache_ready)
+        blockers = self.generation_blockers()
+        self.generate_button.set_enabled(not blockers)
+        self.requirements.set_text("Cannot generate yet:\n" + "\n".join(f"• {reason}" for reason in blockers)
+                                   if blockers else "Inputs selected. Click Generate to start; file validity and findings scope are checked during generation.")
         self.apply_button.set_enabled(not self.busy and available and self.policy.project.snapshot() is not None)
         self.inspect_button.set_enabled(not self.busy and self.snogit_source.snapshot() is not None)
         self.cache_button.set_enabled(not self.busy and available and self.member_stamp is not None and bool(self.members.value))
@@ -216,7 +243,7 @@ class SuggestionControls:
             raise ValueError("Select at least one annotation layer.")
         lists = self.policy.lists.snapshot()
         if lists is None:
-            raise ValueError("Select the SNOMED HDF5 in tab 1.")
+            raise ValueError("Select the SNOMED HDF5 in the shared Inputs sidebar.")
         custom = self.custom.snapshot() if settings.target_view == "release" and "custom" in settings.release_blacklist_mode else None
         if settings.target_view == "release" and "custom" in settings.release_blacklist_mode and custom is None:
             raise ValueError("Select custom exclusion-list rules.")
@@ -233,6 +260,9 @@ class SuggestionControls:
     async def generate(self):
         from nicegui import run
         if self.busy or self.closed:
+            return
+        if self.generation_blockers():
+            self.refresh()
             return
         try:
             job = self.job()

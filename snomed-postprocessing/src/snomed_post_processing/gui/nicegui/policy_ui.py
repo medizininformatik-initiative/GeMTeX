@@ -42,11 +42,11 @@ class PolicyCheckControls:
         self.listeners = []
         self.result_listeners = []
         ui.label("Check inclusion/exclusion-list policy. No annotations are changed.").classes("text-sm")
-        with ui.expansion("Project and policy inputs", value=True).classes("w-full"):
+        with ui.expansion("Project and policy inputs", value=True).classes("w-full") as self.inputs:
             with ui.row().classes("w-full items-center"):
                 self.data_dir = ui.input("Server data directory", value="data", on_change=self.directory_changed)
                 ui.button(icon="refresh", on_click=self.directory_changed).props("flat round dense").tooltip("Refresh server file lists")
-            with ui.element("div").classes("grid grid-cols-1 lg:grid-cols-2 gap-4 w-full"):
+            with ui.column().classes("gap-4 w-full min-w-0"):
                 self.project = FileSource(ui, "INCEpTION project ZIP", (".zip",), self.data_dir, self.project_changed)
                 self.lists = FileSource(ui, "SNOMED HDF5", (".hdf5", ".h5"), self.data_dir, self.changed)
             with ui.row().classes("w-full items-center"):

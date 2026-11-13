@@ -233,6 +233,67 @@ class GenerationControlsTest(unittest.IsolatedAsyncioTestCase):
         await self.panel.open_review()
         self.assertEqual(len(self.review.state.findings), before)
 
+    async def test_saved_findings_explain_missing_hdf5_and_generate_without_project(self):
+        self.policy.project.path.set_value("")
+        self.policy.lists.path.set_value("")
+        self.panel.findings_mode.set_value("Saved JSON")
+        content = (FIXTURE / "critical-findings.json").read_bytes()
+        async def save(path):
+            path.write_bytes(content)
+        await self.panel.findings.load(SimpleNamespace(file=SimpleNamespace(
+            name="critical-findings.json", size=lambda: len(content), save=save)))
+        self.assertFalse(self.panel.generate_button.enabled)
+        self.assertIn("SNOMED HDF5", self.panel.requirements.text)
+        self.assertEqual(len(self.panel.generation_blockers()), 1)
+        await self.panel.generate()
+        self.cpu.assert_not_awaited()
+        self.policy.lists.path.set_value(str(FIXTURE / "policy.hdf5"))
+        self.assertTrue(self.panel.generate_button.enabled)
+        self.assertIn("file validity", self.panel.requirements.text)
+        await self.panel.generate()
+        self.assertIsNotNone(self.panel.completed, self.panel.status.text)
+        self.assertEqual(len(self.panel.completed[1].findings), 10)
+        self.assertIsNone(self.panel.completed[2].project)
+
+    async def test_generation_requirements_follow_cache_custom_settings_and_busy_state(self):
+        self.panel.findings_mode.set_value("Saved JSON")
+        self.assertIn("CriticalFindings JSON", self.panel.requirements.text)
+        self.panel.findings.mode.set_value("Server path")
+        self.panel.findings.path.set_value(str(FIXTURE / "critical-findings.json"))
+        self.panel.bm25.set_value(True)
+        self.assertFalse(self.panel.generate_button.enabled)
+        self.assertIn("processed SNOGIT cache", self.panel.requirements.text)
+        self.panel.snogit.set_value(False)
+        self.assertTrue(self.panel.generate_button.enabled)
+        self.panel.target.set_value("release")
+        self.panel.exclusion.set_value("custom")
+        self.assertFalse(self.panel.generate_button.enabled)
+        self.assertIn("custom exclusion-list rules", self.panel.requirements.text)
+        self.panel.exclusion.set_value("none")
+        self.panel.candidates.set_value(None)
+        self.assertFalse(self.panel.generate_button.enabled)
+        self.assertIn("Correct advanced suggestion settings", self.panel.requirements.text)
+        self.panel.candidates.set_value(5)
+        self.policy.project.uploading = True
+        self.panel.refresh()
+        self.assertIn("project ZIP upload", self.panel.requirements.text)
+        self.policy.project.uploading = False
+        self.panel.busy = True
+        self.panel.refresh()
+        self.assertFalse(self.panel.generate_button.enabled)
+        self.assertIn("Wait for the current", self.panel.requirements.text)
+        self.panel.busy = False
+        self.panel.refresh()
+        self.assertTrue(self.panel.generate_button.enabled)
+        self.cpu.assert_not_awaited()
+        self.io.assert_not_awaited()
+
+    async def test_current_session_requirements_explain_policy_check_and_zip(self):
+        self.policy.project.path.set_value("")
+        self.assertIn("project ZIP", self.panel.requirements.text)
+        self.assertIn("Run Check policy", self.panel.requirements.text)
+        self.assertFalse(self.panel.generate_button.enabled)
+
     async def test_loading_annotators_normalizes_typed_scope_without_broadening(self):
         self.policy.annotators.set_options({" ALICE ": "Alice", "absent": "absent"}, value=[" ALICE ", "absent"])
         await self.policy.load_annotators()

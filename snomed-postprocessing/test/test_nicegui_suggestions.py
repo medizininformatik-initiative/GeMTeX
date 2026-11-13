@@ -78,7 +78,7 @@ def fake_ui(state=None):
         element.props_data = {}
         element.props.__setitem__.side_effect = element.props_data.__setitem__
         element.set_enabled.side_effect = lambda value: setattr(element, "enabled", value)
-        if "icon" in kwargs:
+        if kwargs.get("icon") == "check_circle_outline":
             element.callback = kwargs["on_click"]
             ui.document_buttons.append(element)
         return element

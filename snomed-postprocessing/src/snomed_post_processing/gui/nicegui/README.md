@@ -34,7 +34,11 @@ Its options remain unchanged, e.g. `--server.port 8502`.
 
 ## Check policy
 
-In **1. Check policy**, open **Project and policy inputs**. Both the project ZIP
+Open **Inputs** in the header to show/hide the shared sidebar from any tab
+(open by default on wide screens, collapsed on narrow screens). Its **Project and
+policy inputs** hold one persistent set of ZIP/HDF5, server-directory, annotator
+and annotation settings; tab changes do not recreate uploads or run processing.
+Both the project ZIP
 and SNOMED HDF5 support **Upload**, **Data directory** and **Server path**, matching
 Streamlit's file-source modes. Directory selection lists matching files directly
 inside the configured server directory, without recursion. Uploads are limited to
@@ -56,10 +60,16 @@ INCEpTION API fetching/deployment remain separate future work.
 
 ## Rules and suggestion generation
 
-**2. Suggest** shares tab 1's project/HDF5/annotation settings and annotator scope.
+**2. Suggest** uses the shared Inputs sidebar's project/HDF5/annotation settings and annotator scope.
 Use current successful policy findings, or select saved CriticalFindings JSON via
 Upload / Data directory / Server path (50 MiB processing limit). Narrower source
 scope and mismatching saved ID settings are rejected rather than silently reused.
+Saved findings require HDF5, but not a project ZIP (optional for context; required
+for policy checks and rules). A live explanation beside **Generate** lists missing
+HDF5/findings/current policy results/SNOGIT cache/custom exclusions, pending uploads,
+invalid settings or a busy task. The button uses that same prerequisite list.
+Selections are not a claim of file validity: source compatibility/scope is checked
+when generation explicitly runs.
 
 The settings mirror Streamlit: Policy rules / Active release, all four release
 exclusion modes, historical associations (including an explicitly empty selection),

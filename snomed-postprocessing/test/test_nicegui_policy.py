@@ -121,9 +121,27 @@ class PolicyControlsTest(unittest.IsolatedAsyncioTestCase):
         tabs.set_value("check")
         self.assertFalse(review_source.visible)
         policy = controls[0]
+        worker_calls = self.worker_mock.await_count
+        drawer = next(element for element in elements.values() if element.tag == "q-drawer")
+        self.assertIs(policy.inputs.parent_slot.parent, drawer)
+        self.assertEqual(drawer.default_slot.children.count(policy.inputs), 1)
+        for tab in ("suggest", "review", "check"):
+            tabs.set_value(tab)
+            self.assertIs(policy.inputs.parent_slot.parent, drawer)
+            self.assertTrue(policy.inputs.visible)
+        self.assertEqual(self.worker_mock.await_count, worker_calls)
+        drawer.hide()
+        self.assertFalse(drawer.value)
+        drawer.toggle()
+        self.assertTrue(drawer.value)
         for source, name in ((policy.project, "project.zip"), (policy.lists, "policy.hdf5")):
             source.mode.set_value("Server path")
             source.path.set_value(str(FIXTURE / name))
+        for tab in ("suggest", "review", "check"):
+            tabs.set_value(tab)
+            self.assertEqual(policy.project.snapshot().path, FIXTURE / "project.zip")
+            self.assertEqual(policy.lists.snapshot().path, FIXTURE / "policy.hdf5")
+        self.assertEqual(self.worker_mock.await_count, worker_calls)
         await policy.run_check()
         self.assertIsNotNone(policy.result)
         self.assertEqual(review_grid.options["rowData"], rows)
