@@ -84,5 +84,5 @@ def load_suggestions_preview(content: bytes, filename: str = "suggestions.json")
             retrieval_limits=tuple(getattr(suggestion, "retrieval_limits", ())),
             proposed_code="" if suggestion.replacement_code is None else str(suggestion.replacement_code),
         ))
-    return PreviewState(findings=tuple(rows), source_name=filename, is_demo=False,
+    return PreviewState(findings=tuple(rows), source_name=filename,
                         source_suggestions=tuple(suggestions), metadata=metadata, source_annotators=scope)

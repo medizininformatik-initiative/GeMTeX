@@ -41,11 +41,10 @@ class FindingPreview:
 class PreviewState:
     """Create one per page; navigation never stages or approves a decision."""
 
-    findings: Tuple[FindingPreview, ...]
+    findings: Tuple[FindingPreview, ...] = ()
     selected_finding_id: Optional[str] = None
     selected_candidate_id: Optional[str] = None
-    source_name: str = "Synthetic demo"
-    is_demo: bool = True
+    source_name: Optional[str] = None
     source_suggestions: Tuple[object, ...] = ()
     metadata: dict[str, object] = field(default_factory=dict)
     source_annotators: Tuple[str, ...] = ()

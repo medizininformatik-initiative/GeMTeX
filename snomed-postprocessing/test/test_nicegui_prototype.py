@@ -4,25 +4,38 @@ import subprocess
 import sys
 import unittest
 from contextlib import redirect_stderr
+from copy import deepcopy
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from snomed_post_processing.gui.nicegui import app
-from snomed_post_processing.gui.nicegui.demo import create_demo_state
+from snomed_post_processing.gui.nicegui.suggestions import load_suggestions_preview
+from test.test_nicegui_suggestions import payload, encoded
+
+
+def preview_state():
+    data = payload()
+    data["suggestions"] = [deepcopy(data["suggestions"][0]) for _ in range(3)]
+    for index, suggestion in enumerate(data["suggestions"]):
+        suggestion["finding"]["document"] = f"document-{index}.txt"
+    data["suggestions"][2]["candidates"] = []
+    data["suggestions"][2]["context_candidates"] = []
+    return load_suggestions_preview(encoded(data))
 
 
 class PreviewStateTest(unittest.TestCase):
     def setUp(self):
-        self.state = create_demo_state()
+        self.state = preview_state()
+        self.candidate_id = self.state.findings[0].candidates[0].row_id
 
     def test_no_finding_or_candidate_preselected(self):
         self.assertIsNone(self.state.selected_finding)
         self.assertIsNone(self.state.selected_candidate_id)
 
     def test_page_states_are_independent(self):
-        other = create_demo_state()
+        other = preview_state()
         self.state.select_finding(self.state.findings[0].row_id)
-        self.state.preview_candidate("demo:0:selectable:0")
+        self.state.preview_candidate(self.candidate_id)
         self.assertIsNone(other.selected_finding_id)
         self.assertIsNone(other.selected_candidate_id)
 
@@ -34,16 +47,16 @@ class PreviewStateTest(unittest.TestCase):
 
     def test_changing_finding_clears_candidate_preview(self):
         self.state.select_finding(self.state.findings[0].row_id)
-        self.state.preview_candidate("demo:0:selectable:0")
+        self.state.preview_candidate(self.candidate_id)
         self.state.select_finding(self.state.findings[1].row_id)
         self.assertIsNone(self.state.selected_candidate_id)
 
     def test_repeated_navigation_preserves_candidate_preview(self):
         row_id = self.state.findings[0].row_id
         self.state.select_finding(row_id)
-        self.state.preview_candidate("demo:0:selectable:0")
+        self.state.preview_candidate(self.candidate_id)
         self.state.select_finding(row_id)
-        self.assertEqual(self.state.selected_candidate_id, "demo:0:selectable:0")
+        self.assertEqual(self.state.selected_candidate_id, self.candidate_id)
 
     def test_unknown_identity_does_not_change_selection(self):
         row_id = self.state.findings[0].row_id
@@ -54,21 +67,21 @@ class PreviewStateTest(unittest.TestCase):
 
     def test_candidate_must_belong_to_current_finding(self):
         with self.assertRaises(ValueError):
-            self.state.preview_candidate("demo:0:selectable:0")
+            self.state.preview_candidate(self.candidate_id)
         self.state.select_finding(self.state.findings[1].row_id)
         with self.assertRaises(ValueError):
-            self.state.preview_candidate("demo:0:selectable:0")
+            self.state.preview_candidate(self.candidate_id)
         self.assertIsNone(self.state.selected_candidate_id)
 
     def test_diagnostic_context_can_be_inspected_but_remains_nonselectable(self):
         self.state.select_finding(self.state.findings[1].row_id)
-        candidate = self.state.preview_candidate("demo:1:context:0")
+        candidate = self.state.preview_candidate(self.state.findings[1].candidates[-1].row_id)
         self.assertFalse(candidate.selectable)
 
     def test_string_codes_numeric_scores_and_competition_ranks_survive(self):
         candidates = self.state.findings[1].candidates[:3]
         self.assertEqual([item.rank for item in candidates], [1, 1, 3])
-        self.assertEqual([item.score for item in candidates], [9.0, 9.0, 4.0])
+        self.assertEqual([item.score for item in candidates], [9.0000000001, 9.0, 4.0])
         self.assertTrue(all(isinstance(item.code, str) for item in candidates))
 
 
@@ -102,7 +115,7 @@ class NiceGuiBootstrapTest(unittest.TestCase):
 
     def test_page_navigation_updates_detail_grid_not_finding_grid(self):
         from test.test_nicegui_suggestions import fake_ui, switch_document
-        ui, grids, labels = fake_ui()
+        ui, grids, labels = fake_ui(preview_state())
         findings, candidates = grids
         switch_document(ui, 1)
         original_rows = findings.options["rowData"]
@@ -111,7 +124,8 @@ class NiceGuiBootstrapTest(unittest.TestCase):
         select(SimpleNamespace(args={"data": original_rows[0]}))
         candidate_rows = candidates.options["rowData"]
         self.assertEqual([row["rank"] for row in candidate_rows[:3]], [1, 1, 3])
-        preview(SimpleNamespace(args={"data": {"row_id": "demo:1:context:0"}}))
+        context_id = candidate_rows[-1]["row_id"]
+        preview(SimpleNamespace(args={"data": {"row_id": context_id}}))
         self.assertTrue(any(label.text.startswith("Diagnostic context only") for label in labels))
         select(SimpleNamespace(args={"data": original_rows[0]}))
         self.assertIs(candidates.options["rowData"], candidate_rows)
@@ -119,7 +133,7 @@ class NiceGuiBootstrapTest(unittest.TestCase):
         switch_document(ui, 2)
         select(SimpleNamespace(args={"data": findings.options["rowData"][0]}))
         self.assertEqual(candidates.options["rowData"], [])
-        preview(SimpleNamespace(args={"data": {"row_id": "demo:1:context:0"}}))
+        preview(SimpleNamespace(args={"data": {"row_id": context_id}}))
         ui.notify.assert_called_once()
 
     def test_tables_are_stacked_full_width_and_candidate_text_cannot_collapse(self):

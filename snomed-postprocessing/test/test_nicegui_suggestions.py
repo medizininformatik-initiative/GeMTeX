@@ -7,6 +7,7 @@ import pathlib
 import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
+from contextlib import nullcontext
 
 from snomed_post_processing.gui.nicegui.page import build_page, _finding_rows, _candidate_rows
 from snomed_post_processing.gui.nicegui.suggestions import (
@@ -39,7 +40,7 @@ def encoded(data):
     return json.dumps(data, ensure_ascii=False).encode("utf-8")
 
 
-def fake_ui():
+def fake_ui(state=None):
     ui = MagicMock()
     grids, labels = [], []
 
@@ -90,7 +91,8 @@ def fake_ui():
     ui.menu_item.side_effect = menu_item
     ui.aggrid.side_effect = grid
     ui.label.side_effect = label
-    build_page(ui)
+    with patch("snomed_post_processing.gui.nicegui.page.PreviewState", return_value=state) if state is not None else nullcontext():
+        build_page(ui, MagicMock())
     return ui, grids, labels
 
 
@@ -120,7 +122,6 @@ class SuggestionsPreviewTest(unittest.TestCase):
         self.assertEqual(state.source_suggestions, tuple(expected))
         self.assertEqual(state.metadata, metadata)
         self.assertEqual(state.source_name, "uploaded.json")
-        self.assertFalse(state.is_demo)
         row = state.findings[0]
         self.assertEqual(row.text, expected[0].finding.covered_text)
         self.assertEqual(row.offset, (2, 17))
@@ -316,16 +317,17 @@ class SuggestionsUploadPageTest(unittest.IsolatedAsyncioTestCase):
         proposal = labels[heading + 1]
         self.assertEqual(proposal.text, "Saved proposed SCTID: 1234567890123456789012345 (not automatically accepted)")
         self.assertEqual(labels[heading + 2].text, "Original saved rationale")
-        reset = next(call.kwargs["on_click"] for call in ui.button.call_args_list if call.args and call.args[0] == "Use synthetic demo")
-        reset()
+        with patch("nicegui.run.io_bound", new=AsyncMock(side_effect=lambda function, *args: function(*args))):
+            await ui.upload.call_args.kwargs["on_upload"](upload_event(encoded(payload())))
         self.assertEqual(proposal.text, "")
 
     async def test_upload_replaces_data_and_stale_clicks_are_rejected(self):
         ui, grids, labels = fake_ui()
         findings, candidates = grids
-        old_row = findings.options["rowData"][0]
         handler = ui.upload.call_args.kwargs["on_upload"]
         with patch("nicegui.run.io_bound", new=AsyncMock(side_effect=lambda function, *args: function(*args))):
+            await handler(upload_event(encoded(payload()), "previous.json"))
+            old_row = findings.options["rowData"][0]
             await handler(upload_event(encoded(payload()), "real-suggestions.json"))
         self.assertTrue(any(label.text == "Source: real-suggestions.json" for label in labels))
         row = findings.options["rowData"][0]
@@ -397,7 +399,7 @@ class SuggestionsUploadPageTest(unittest.IsolatedAsyncioTestCase):
         with patch("nicegui.run.io_bound", new=AsyncMock(side_effect=lambda function, *args: function(*args))):
             await first.upload.call_args.kwargs["on_upload"](upload_event(encoded(payload()), "first.json"))
         self.assertIs(second_grids[0].options["rowData"], second_rows)
-        self.assertTrue(any(label.text == "Source: Synthetic demo" for label in second_labels))
+        self.assertTrue(any(label.text == "Source: No suggestions loaded" for label in second_labels))
 
     async def test_newer_upload_wins_if_previous_reader_finishes_late(self):
         ui, grids, labels = fake_ui()
@@ -418,25 +420,12 @@ class SuggestionsUploadPageTest(unittest.IsolatedAsyncioTestCase):
             await previous
         self.assertTrue(any(label.text == "Source: newer.json" for label in labels))
 
-    async def test_explicit_demo_reset_supersedes_pending_upload(self):
+    async def test_page_starts_empty_until_suggestions_are_uploaded(self):
         ui, grids, labels = fake_ui()
-        handler = ui.upload.call_args.kwargs["on_upload"]
-        started, finish = asyncio.Event(), asyncio.Event()
-
-        async def reader(function, content, name):
-            started.set()
-            await finish.wait()
-            return load_suggestions_preview(content, name)
-
-        with patch("nicegui.run.io_bound", side_effect=reader):
-            pending = asyncio.create_task(handler(upload_event(encoded(payload()))))
-            await asyncio.wait_for(started.wait(), timeout=2)
-            reset = next(call.kwargs["on_click"] for call in ui.button.call_args_list if call.args and call.args[0] == "Use synthetic demo")
-            reset()
-            finish.set()
-            await pending
-        self.assertTrue(any(label.text == "Source: Synthetic demo" for label in labels))
-        self.assertEqual(len(grids[0].options["rowData"]), 1)  # First document's slide only.
+        self.assertEqual(grids[0].options["rowData"], [])
+        self.assertEqual(grids[1].options["rowData"], [])
+        self.assertEqual(ui.document_buttons, [])
+        self.assertTrue(any(label.text == "Source: No suggestions loaded" for label in labels))
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 """NiceGUI suggestions inspection and explicit manual review; no CAS write-back."""
 from snomed_post_processing.review_context import ReviewContext
 
-from .demo import create_demo_state
+from .state import PreviewState
 from .review_ui import ReviewControls
 from .suggestions import MAX_SUGGESTIONS_BYTES, SuggestionsPreviewError, load_suggestions_preview
 
@@ -26,7 +26,7 @@ def _candidate_rows(finding):
 
 def build_page(ui, events) -> None:
     """Build once per visitor; imports replace state only after successful parsing."""
-    state = create_demo_state()
+    state = PreviewState()
     review_context = ReviewContext()
     load_revision = 0
     active_document = None
@@ -56,7 +56,7 @@ def build_page(ui, events) -> None:
             toggle.props["icon"] = "check_circle" if effective else "check_circle_outline"
             toggle.props["color"] = "amber-8" if pending else "green-7" if reviewed else "grey-6"
             toggle.props["aria-label"] = action
-            toggle.set_enabled(not state.is_demo)
+            toggle.set_enabled(state.source_name is not None)
             tip.set_text(action + (" (pending; Save choices)" if pending else ""))
             heading.classes(add="text-green-700 font-semibold" if reviewed else "",
                             remove="" if reviewed else "text-green-700 font-semibold")
@@ -175,14 +175,14 @@ def build_page(ui, events) -> None:
                 nonlocal active_document, review_context
                 review_context = ReviewContext.from_metadata(state.metadata)
                 banner.set_text(
-                    ("Synthetic preview only — load suggestions JSON to enable review. " if state.is_demo else "Suggestions and manual review. ")
+                    "Suggestions and manual review. "
                     + "No project/CAS is changed. Review is page-local until downloaded as JSON."
                 )
-                source.set_text(f"Source: {state.source_name}")
+                source.set_text(f"Source: {state.source_name or 'No suggestions loaded'}")
                 saved_mode = state.metadata.get("target_view")
                 mode = {"policy": "Policy rules", "release": "Active release"}.get(saved_mode, "not recorded") if isinstance(saved_mode, str) else "not recorded"
                 scope.set_text(f"Saved annotator scope: {', '.join(state.source_annotators) or 'all annotators'} · Saved replacement mode: {mode}")
-                total = len(state.findings) if state.is_demo else len(state.source_suggestions)
+                total = len(state.source_suggestions)
                 counts.set_text(f"{total} saved suggestions · {len(state.findings)} in artifact scope before grid filters · explicit review only · Save/export include all documents")
                 # Reuse one workspace; clearing old slides must not delete its widgets.
                 workspace.move(review_panel)
@@ -225,10 +225,9 @@ def build_page(ui, events) -> None:
                     return finding
                 # identity.set_text(f"{finding.document} · {finding.annotator} · SCTID {finding.code}")
                 text = finding.text
-                if not state.is_demo:
-                    backend_finding = state.source_suggestions[finding.suggestion_index].finding
-                    if not review_context.missing_documents((backend_finding,)):
-                        text = review_context.label(backend_finding)
+                backend_finding = state.source_suggestions[finding.suggestion_index].finding
+                if not review_context.missing_documents((backend_finding,)):
+                    text = review_context.label(backend_finding)
                 covered_text.set_text(text)
                 finding_details.set_text(
                     f"Source FSN: {finding.source_fsn}\n"
@@ -285,26 +284,17 @@ def build_page(ui, events) -> None:
                         uploader.reset()
                     return
                 if revision != load_revision:
-                    return  # A newer upload or explicit demo reset superseded this load.
+                    return  # A newer upload superseded this load.
                 state = loaded
                 show_source()
                 upload_status.set_text("Suggestions loaded. Previous review choices and flags reset; no decisions staged.")
                 uploader.reset()
-
-            # def use_demo():
-            #     nonlocal state, load_revision
-            #     load_revision += 1
-            #     state = create_demo_state()
-            #     show_source()
-            #     upload_status.set_text("Synthetic demo restored; uploaded data is no longer the active preview.")
-            #     uploader.reset()
 
             with upload_controls:
                 uploader = ui.upload(label="Load suggestions JSON", on_upload=load_upload,
                                      auto_upload=True, multiple=False, max_file_size=MAX_SUGGESTIONS_BYTES,
                                      on_rejected=lambda: upload_status.set_text("Upload rejected. Choose one JSON file up to 50 MiB; current preview unchanged.")) \
                     .props("accept=.json").classes("max-w-full")
-                # ui.button("Use synthetic demo", on_click=use_demo).tooltip("Replace this page's preview with artificial data; no files are changed.")
             # Native DOM right-clicks provide coordinates and immutable rendered row IDs;
             # AG Grid's serialized cellContextMenu event omits pointer coordinates.
             context_handler = """event => {

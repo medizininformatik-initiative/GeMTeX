@@ -35,8 +35,7 @@ Its options remain unchanged, e.g. `--server.port 8502`.
 
 In **3. Review & apply**, use **Load suggestions JSON** (one file, up to **50 MiB**).
 Use the suggestions JSON produced by the existing CLI/Streamlit workflow, not
-CriticalFindings or reviewed-decisions JSON. **Use synthetic demo** resets only
-this page's preview.
+CriticalFindings or reviewed-decisions JSON. The page starts empty until suggestions are loaded.
 
 The adapter uses `read_sanitization_suggestions_json_with_metadata` unchanged.
 It preserves backend objects/metadata server-side and inherits the saved
@@ -52,7 +51,7 @@ are retained. Diagnostic context is unranked and cannot become selectable.
 A saved proposal is displayed as provenance, never automatically selected.
 
 Successful imports clear navigation; stale row/candidate clicks are rejected.
-Parsing runs in a NiceGUI worker; newer uploads/demo reset supersede older
+Parsing runs in a NiceGUI worker; newer uploads supersede older
 pending loads. Invalid, oversized or unreadable files leave the active preview
 unchanged, with a safe error that does not echo file contents. No metadata paths
 are followed and no HDF5/retrieval/policy pipeline is run.
@@ -64,7 +63,7 @@ only data you intend to show in this browser session.
 
 ## Stage, save and restore review
 
-Load suggestions first; staging/import/export are disabled for the synthetic demo.
+Load suggestions first; staging/import/export are disabled until then.
 
 1. Click a finding and inspect candidates/evidence. Navigation never approves a target.
 2. The **Findings** right-click menu offers **Accept Suggestion**, **Delete**,
@@ -112,7 +111,7 @@ manual conflicts are rejected rather than silently dropping protected manual wor
 Unchanged automatic provenance survives unrelated manual saves; explicit human
 confirmation removes automatic ownership for the affected choices/documents.
 
-New suggestions or **Use synthetic demo** reset all review state. Latest upload/reset
+New suggestions reset all review state. Latest upload
 wins; a pending decision import cannot overwrite subsequent manual edits. Filtering
 is display-only and never limits decision export. No CAS files are changed.
 
@@ -153,8 +152,6 @@ and does not install the optional extra automatically.
 - `suggestions.py`: read-only backend-reader adapter and safe import errors.
 - `review.py`: page-local staging/save commands and backend-compatible JSON adapter.
 - `review_ui.py`: event adapters, explicit review controls and guarded async import.
-- `demo.py`: three artificial findings, toy string SCTIDs, tied ranks `1,1,3`,
-  diagnostic-only context and a no-candidate example.
 - `requirements.txt`: standalone reference pin; prefer the project extra above.
 
 Clicks only navigate/preview: no target is preselected or approved. Selecting a

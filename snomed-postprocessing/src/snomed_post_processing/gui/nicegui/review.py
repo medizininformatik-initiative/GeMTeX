@@ -61,7 +61,7 @@ class ReviewSession:
         return bool(self.drafts or self.draft_reviewed)
 
     def _require_source(self):
-        if self.source.is_demo:
+        if self.source.source_name is None:
             raise ReviewError("Load suggestions JSON before staging, importing or exporting decisions.")
 
     def _row(self, row_id):

@@ -33,7 +33,7 @@ class ReviewControls:
     def refresh(self, *, update_grid=True):
         state = self.get_state()
         row = state.selected_finding
-        enabled = not state.is_demo
+        enabled = state.source_name is not None
         self.menu.close()
         self.menu_target = None
         self.save.set_enabled(enabled and self.session.dirty)
@@ -70,7 +70,7 @@ class ReviewControls:
         # Quasar treats its anchor as "inside" for outside-click dismissal.
         self.menu.props["target"] = f"#{event.sender.html_id}"
         candidate = next((c for c in row.candidates if c.row_id == state.selected_candidate_id), None)
-        enabled = not state.is_demo and not self.session.protected(row)
+        enabled = state.source_name is not None and not self.session.protected(row)
         actions = (("Apply", "candidate", enabled and bool(candidate and candidate.selectable)),) if candidates else (
             ("Accept Suggestion", "accept", enabled and self.session.proposed_candidate(row.row_id) is not None),
             ("Delete", "delete", enabled),

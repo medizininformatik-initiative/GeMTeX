@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from snomed_post_processing.gui.nicegui.demo import create_demo_state
+from snomed_post_processing.gui.nicegui.state import PreviewState
 from snomed_post_processing.gui.nicegui.review import ReviewError, ReviewSession, load_review
 from snomed_post_processing.gui.nicegui.suggestions import load_suggestions_preview
 from snomed_post_processing.sanitization.decisions_json import read_sanitization_decisions_json
@@ -27,7 +27,7 @@ def artifact(decisions, metadata=None):
 
 
 class ReviewSessionTest(unittest.TestCase):
-    def test_navigation_does_not_stage_or_save_and_demo_cannot_export(self):
+    def test_navigation_does_not_stage_or_save_and_empty_page_cannot_export(self):
         source = state()
         source.select_finding(source.findings[0].row_id)
         source.preview_candidate(source.findings[0].candidates[0].row_id)
@@ -37,7 +37,7 @@ class ReviewSessionTest(unittest.TestCase):
         self.assertFalse(decisions[0]["apply"])
         self.assertFalse(decisions[0]["reviewed_by_human"])
         with self.assertRaises(ReviewError):
-            ReviewSession(create_demo_state()).export_text()
+            ReviewSession(PreviewState()).export_text()
 
     def test_candidate_is_only_saved_by_explicit_save_and_roundtrips(self):
         source = state(); row = source.findings[0]; review = ReviewSession(source)
@@ -422,12 +422,7 @@ class ReviewUiTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(grids[0].options["rowData"][0]["review"], "Unreviewed")
         self.assertEqual(grids[0].options["rowData"][1]["review"], "Pending deletion")
 
-    async def test_demo_protected_import_and_old_snapshot_menus_cannot_stage(self):
-        ui, grids, labels = fake_ui()
-        demo = open_context(ui, grids[0], grids[0].options["rowData"][0])
-        self.assertTrue(all(not item.enabled for item in demo.values()))
-        demo["Delete"].callback(None)
-        self.assertNotIn("Pending", grids[0].options["rowData"][0]["review"])
+    async def test_protected_import_and_old_snapshot_menus_cannot_stage(self):
         ui, grids, labels, source_handler, import_handler, _ = await self.setup_page()
         row = grids[0].options["rowData"][0]
         actions = open_context(ui, grids[0], row)
@@ -508,9 +503,8 @@ class ReviewUiTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("older upload", ui.notify.call_args.args[0])
         self.assertFalse(grids[0].options["rowData"][0]["document_reviewed"])
         ui, grids, _ = fake_ui()
-        self.assertTrue(all(not button.enabled for button in ui.document_buttons))
-        ui.document_buttons[0].callback(None)
-        self.assertFalse(grids[0].options["rowData"][0]["document_reviewed"])
+        self.assertEqual(ui.document_buttons, [])
+        self.assertEqual(grids[0].options["rowData"], [])
 
     async def test_bad_import_and_new_source_reset(self):
         ui, grids, labels, source_handler, review_handler, buttons = await self.setup_page()
@@ -567,25 +561,21 @@ class ReviewUiTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(grids[0].options["rowData"][0]["review"], "Saved Keep")
         self.assertEqual(second[1][0].options["rowData"][0]["review"], "Unreviewed")
 
-    async def test_new_source_and_demo_reset_supersede_pending_decision_import(self):
-        for reset_demo in (False, True):
-            ui, grids, labels, source_handler, handler, buttons = await self.setup_page()
-            content = ReviewSession(state()).export_text().encode()
-            started, finish = asyncio.Event(), asyncio.Event()
-            async def delayed(function, data, name_or_state):
-                if function is load_review:
-                    started.set(); await finish.wait()
-                return function(data, name_or_state)
-            with patch("nicegui.run.io_bound", side_effect=delayed):
-                pending = asyncio.create_task(handler(upload_event(content)))
-                await asyncio.wait_for(started.wait(), 2)
-                if reset_demo:
-                    buttons["Use synthetic demo"]()
-                else:
-                    await source_handler(upload_event(encoded(payload()), "new.json"))
-                finish.set(); await pending
-            self.assertFalse(any("restored; prior" in label.text for label in labels))
-            self.assertTrue(any(label.text == ("Source: Synthetic demo" if reset_demo else "Source: new.json") for label in labels))
+    async def test_new_source_supersedes_pending_decision_import(self):
+        ui, grids, labels, source_handler, handler, buttons = await self.setup_page()
+        content = ReviewSession(state()).export_text().encode()
+        started, finish = asyncio.Event(), asyncio.Event()
+        async def delayed(function, data, name_or_state):
+            if function is load_review:
+                started.set(); await finish.wait()
+            return function(data, name_or_state)
+        with patch("nicegui.run.io_bound", side_effect=delayed):
+            pending = asyncio.create_task(handler(upload_event(content)))
+            await asyncio.wait_for(started.wait(), 2)
+            await source_handler(upload_event(encoded(payload()), "new.json"))
+            finish.set(); await pending
+        self.assertFalse(any("restored; prior" in label.text for label in labels))
+        self.assertTrue(any(label.text == "Source: new.json" for label in labels))
 
     async def test_pending_import_never_overwrites_new_manual_change(self):
         ui, grids, labels, _, review_handler, buttons = await self.setup_page()
