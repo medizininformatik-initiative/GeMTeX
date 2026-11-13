@@ -57,6 +57,8 @@ class ReviewControls:
             return
         target = (state, self.session, row.row_id, state.selected_candidate_id)
         self.menu_target = target
+        # Quasar treats its anchor as "inside" for outside-click dismissal.
+        self.menu.props["target"] = f"#{event.sender.html_id}"
         candidate = next((c for c in row.candidates if c.row_id == state.selected_candidate_id), None)
         enabled = not state.is_demo and not self.session.protected(row)
         actions = (("Apply", "candidate", enabled and bool(candidate and candidate.selectable)),) if candidates else (

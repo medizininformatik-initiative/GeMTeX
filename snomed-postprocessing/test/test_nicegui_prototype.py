@@ -101,40 +101,23 @@ class NiceGuiBootstrapTest(unittest.TestCase):
                 app._load_ui()
 
     def test_page_navigation_updates_detail_grid_not_finding_grid(self):
-        from snomed_post_processing.gui.nicegui.page import build_page
-        ui = MagicMock()
-        grids, labels = [], []
-
-        def grid(options):
-            element = MagicMock()
-            element.options = options
-            element.classes.return_value = element
-            grids.append(element)
-            return element
-
-        def label(text=""):
-            element = MagicMock()
-            element.classes.return_value = element
-            labels.append((text, element))
-            return element
-
-        ui.aggrid.side_effect = grid
-        ui.label.side_effect = label
-        build_page(ui)
+        from test.test_nicegui_suggestions import fake_ui, switch_document
+        ui, grids, labels = fake_ui()
         findings, candidates = grids
+        switch_document(ui, 1)
         original_rows = findings.options["rowData"]
         select = findings.on.call_args[0][1]
         preview = candidates.on.call_args[0][1]
-        select(SimpleNamespace(args={"data": original_rows[1]}))
+        select(SimpleNamespace(args={"data": original_rows[0]}))
         candidate_rows = candidates.options["rowData"]
         self.assertEqual([row["rank"] for row in candidate_rows[:3]], [1, 1, 3])
         preview(SimpleNamespace(args={"data": {"row_id": "demo:1:context:0"}}))
-        preview_label = next(element for text, element in labels if text.startswith("Candidate clicks"))
-        self.assertIn("Diagnostic context only", preview_label.set_text.call_args[0][0])
-        select(SimpleNamespace(args={"data": original_rows[1]}))
+        self.assertTrue(any(label.text.startswith("Diagnostic context only") for label in labels))
+        select(SimpleNamespace(args={"data": original_rows[0]}))
         self.assertIs(candidates.options["rowData"], candidate_rows)
         self.assertIs(findings.options["rowData"], original_rows)
-        select(SimpleNamespace(args={"data": original_rows[2]}))
+        switch_document(ui, 2)
+        select(SimpleNamespace(args={"data": findings.options["rowData"][0]}))
         self.assertEqual(candidates.options["rowData"], [])
         preview(SimpleNamespace(args={"data": {"row_id": "demo:1:context:0"}}))
         ui.notify.assert_called_once()
@@ -153,6 +136,14 @@ class NiceGuiBootstrapTest(unittest.TestCase):
         self.assertEqual(candidates["fsn"]["minWidth"], 240)
         self.assertEqual(candidates["rank"]["width"], 80)
         self.assertGreater(candidates["fsn"]["flex"], 0)
+
+    def test_tables_contain_scroll_chaining_without_disabling_internal_scrolling(self):
+        from test.test_nicegui_suggestions import fake_ui
+        _, grids, _ = fake_ui()
+        for grid in grids:
+            classes = grid.classes.call_args.args[0].split()
+            self.assertIn("overflow-auto", classes)
+            self.assertIn("overscroll-contain", classes)
 
     def test_score_formatting_is_display_only_with_full_precision_row_values(self):
         from test.test_nicegui_suggestions import fake_ui, payload, encoded

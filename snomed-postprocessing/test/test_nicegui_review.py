@@ -12,7 +12,7 @@ from snomed_post_processing.gui.nicegui.demo import create_demo_state
 from snomed_post_processing.gui.nicegui.review import ReviewError, ReviewSession, load_review
 from snomed_post_processing.gui.nicegui.suggestions import load_suggestions_preview
 from snomed_post_processing.sanitization.decisions_json import read_sanitization_decisions_json
-from test.test_nicegui_suggestions import payload, encoded, fake_ui, upload_event, open_context
+from test.test_nicegui_suggestions import payload, encoded, fake_ui, upload_event, open_context, switch_document
 
 FIXTURE = Path(__file__).parent / "projects/synthetic-annotator-scope"
 
@@ -355,6 +355,59 @@ class ReviewUiTest(unittest.IsolatedAsyncioTestCase):
         buttons["Save choices"]()
         self.assertEqual(grids[0].options["rowData"][0]["review"], "Saved Keep")
 
+    async def test_carousel_groups_documents_preserves_review_and_exports_all_original_indices(self):
+        ui, grids, labels, source_handler, _, buttons = await self.setup_page()
+        data = payload()
+        data["suggestions"][0]["replacement_code"] = "990000202"
+        other = copy.deepcopy(data["suggestions"][0]); other["finding"]["document"] = "other.txt"
+        same = copy.deepcopy(data["suggestions"][0]); same["finding"]["annotator"] = "Bob"
+        data["suggestions"].extend([other, same])
+        with patch("nicegui.run.io_bound", new=AsyncMock(side_effect=lambda function, *args: function(*args))):
+            await source_handler(upload_event(encoded(data)))
+        self.assertEqual(len(grids), 2)  # One reused workspace, not a grid pair per document.
+        self.assertNotIn("document", [column["field"] for column in grids[0].options["columnDefs"]])
+        self.assertEqual([row["suggestion_index"] for row in grids[0].options["rowData"]], [0, 2])
+        open_context(ui, grids[0], grids[0].options["rowData"][0])["Keep Original"].callback(None)
+        switch_document(ui, 1)
+        self.assertEqual([row["suggestion_index"] for row in grids[0].options["rowData"]], [1])
+        self.assertEqual(grids[1].options["rowData"], [])
+        other_row = grids[0].options["rowData"][0]
+        open_context(ui, grids[0], other_row)["Accept Suggestion"].callback(None)
+        switch_document(ui, 0)
+        self.assertEqual(grids[0].options["rowData"][0]["review"], "Pending Keep")
+        self.assertEqual(open_context(ui, grids[0], other_row), {})  # Late events from hidden slides are rejected.
+        buttons["Save choices"]()
+        self.assertEqual(grids[0].options["rowData"][0]["review"], "Saved Keep")
+        await buttons["Download reviewed decisions JSON"]()
+        decisions = json.loads(ui.download.content.call_args.args[0])["decisions"]
+        self.assertEqual([item["suggestion_index"] for item in decisions], [0, 1, 2])
+        self.assertEqual(decisions[1]["replacement_code"], "990000202")
+        switch_document(ui, 1)
+        self.assertEqual(grids[0].options["rowData"][0]["review"], "Saved replacement: 990000202")
+
+    async def test_carousel_ignores_old_source_navigation_and_handles_empty_artifacts(self):
+        ui, grids, _, source_handler, _, _ = await self.setup_page()
+        carousel = ui.carousel.return_value
+        old_token = carousel.value
+        data = payload(); data["suggestions"] = []
+        with patch("nicegui.run.io_bound", new=AsyncMock(side_effect=lambda function, *args: function(*args))):
+            await source_handler(upload_event(encoded(data)))
+            self.assertEqual(grids[0].options["rowData"], [])
+            carousel.set_visibility.assert_called_with(False)
+            await source_handler(upload_event(encoded(payload())))
+        before = grids[0].options["rowData"]
+        carousel.on_value_change.call_args.args[0](SimpleNamespace(value=old_token))
+        self.assertIs(grids[0].options["rowData"], before)
+        carousel.set_visibility.assert_called_with(True)
+
+    async def test_context_menu_anchors_to_clicked_table_not_surrounding_page(self):
+        ui, grids, _, _, _, _ = await self.setup_page()
+        menu = ui.context_menu.return_value.props.return_value
+        open_context(ui, grids[0], grids[0].options["rowData"][0])
+        menu.props.__setitem__.assert_called_with("target", f"#{grids[0].html_id}")
+        open_context(ui, grids[1], grids[1].options["rowData"][0])
+        menu.props.__setitem__.assert_called_with("target", f"#{grids[1].html_id}")
+
     async def test_context_menu_does_not_follow_navigation_to_another_finding(self):
         ui, grids, labels, source_handler, _, _ = await self.setup_page()
         content = (FIXTURE / "suggestions.json").read_bytes()
@@ -408,20 +461,21 @@ class ReviewUiTest(unittest.IsolatedAsyncioTestCase):
         definitions = grids[0].options["columnDefs"]
         self.assertEqual(definitions[-1]["field"], "ignored")
         self.assertNotIn("document_reviewed", [column["field"] for column in definitions])
-        document = next(column for column in definitions if column["field"] == "document")
-        self.assertIn("document_reviewed === true", document[":cellStyle"])
-        self.assertIn("'inherit'", document[":cellStyle"])  # Reset styling when review is unmarked.
+        self.assertNotIn("document", [column["field"] for column in definitions])
+        heading = next(label for label in reversed(labels) if label.text == "toy.txt")
         grids[0].on.call_args.args[1](SimpleNamespace(args={"data": grids[0].options["rowData"][0]}))
         buttons["Mark document reviewed"]()
         self.assertFalse(grids[0].options["rowData"][0]["document_reviewed"])
         buttons["Save choices"]()
         self.assertTrue(grids[0].options["rowData"][0]["document_reviewed"])
+        self.assertIn("text-green-700", heading.classes.call_args.kwargs["add"])
         buttons["Unmark document reviewed"]()
         self.assertTrue(grids[0].options["rowData"][0]["document_reviewed"])
         buttons["Discard pending changes"]()
         self.assertTrue(grids[0].options["rowData"][0]["document_reviewed"])
         buttons["Unmark document reviewed"](); buttons["Save choices"]()
         self.assertFalse(grids[0].options["rowData"][0]["document_reviewed"])
+        self.assertIn("text-green-700", heading.classes.call_args.kwargs["remove"])
         buttons["Mark document reviewed"](); buttons["Save choices"]()
         with patch("nicegui.run.io_bound", new=AsyncMock(side_effect=lambda function, *args: function(*args))):
             await source_handler(upload_event(encoded(payload()), "new.json"))

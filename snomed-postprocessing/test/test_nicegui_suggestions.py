@@ -46,6 +46,7 @@ def fake_ui():
     def grid(options):
         element = MagicMock()
         element.options = options
+        element.html_id = f"c_test_grid_{len(grids)}"
         element.classes.return_value = element
         grids.append(element)
         return element
@@ -67,6 +68,10 @@ def fake_ui():
         ui.context_items.append(element)
         return element
 
+    carousel = MagicMock()
+    carousel.props.return_value = carousel.classes.return_value = carousel
+    carousel.set_value.side_effect = lambda value: setattr(carousel, "value", value)
+    ui.carousel.return_value = carousel
     ui.menu_item.side_effect = menu_item
     ui.aggrid.side_effect = grid
     ui.label.side_effect = label
@@ -74,10 +79,17 @@ def fake_ui():
     return ui, grids, labels
 
 
+def switch_document(ui, index):
+    carousel = ui.carousel.return_value
+    token = f"{carousel.value.rsplit(':', 1)[0]}:{index}"
+    carousel.set_value(token)
+    carousel.on_value_change.call_args.args[0](SimpleNamespace(value=token))
+
+
 def open_context(ui, grid, row):
     handler = next(call.args[1] for call in grid.on.call_args_list if call.args[0] == "contextmenu")
     previous = len(ui.context_items)
-    handler(SimpleNamespace(args={"data": row, "clientX": 50, "clientY": 100}))
+    handler(SimpleNamespace(sender=grid, args={"data": row, "clientX": 50, "clientY": 100}))
     return {item.text: item for item in ui.context_items[previous:]}
 
 
@@ -352,7 +364,7 @@ class SuggestionsUploadPageTest(unittest.IsolatedAsyncioTestCase):
             finish.set()
             await pending
         self.assertTrue(any(label.text == "Source: Synthetic demo" for label in labels))
-        self.assertEqual(len(grids[0].options["rowData"]), 3)
+        self.assertEqual(len(grids[0].options["rowData"]), 1)  # First document's slide only.
 
 
 if __name__ == "__main__":

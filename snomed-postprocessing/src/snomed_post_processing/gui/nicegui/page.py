@@ -26,6 +26,16 @@ def build_page(ui) -> None:
     """Build once per visitor; imports replace state only after successful parsing."""
     state = create_demo_state()
     load_revision = 0
+    active_document = None
+    document_slides = {}
+
+    def refresh_documents(session):
+        finding_grid.options["rowData"] = [row for row in _finding_rows(state, session)
+                                          if row["document"] == active_document]
+        for document, _, heading in document_slides.values():
+            reviewed = document in session.reviewed_documents
+            heading.classes(add="text-green-700 font-semibold" if reviewed else "",
+                            remove="" if reviewed else "text-green-700 font-semibold")
 
     def begin_load():
         nonlocal load_revision
@@ -54,19 +64,19 @@ def build_page(ui) -> None:
         with ui.tab_panel(suggest):
             ui.label("Rules and suggestion generation are not connected in this prototype.")
             ui.button("Generate suggestions").disable()
-        with ui.tab_panel(review):
+        with ui.tab_panel(review) as review_panel:
             upload_controls = ui.row().classes("w-full items-start")
             upload_status = ui.label().classes("text-sm")
             counts = ui.label().classes("text-sm")
-            with ui.column().classes("w-full min-w-0 gap-4"):
+            documents = ui.carousel(arrows=True, navigation=True).props(
+                "height=auto navigation-position=top control-color=primary keep-alive"
+            ).classes("w-full")
+            empty = ui.label("No findings in the current artifact scope.")
+            with ui.column().classes("w-full min-w-0 gap-4") as workspace:
                 with ui.column().classes("w-full min-w-0"):
                     ui.label("Findings — click a row to inspect").classes("text-lg")
                     finding_grid = ui.aggrid({
                         "columnDefs": [
-                            {"field": "document", "headerName": "Document",
-                             ":cellStyle": "params => ({color: params.data?.document_reviewed === true ? '#15803d' : 'inherit', fontWeight: params.data?.document_reviewed === true ? '600' : 'inherit'})",
-                             ":tooltipValueGetter": "params => params.data?.document_reviewed === true ? 'Review saved for this document.' : 'Document review is not marked as saved.'",
-                             "headerTooltip": "Green means the document-reviewed flag is saved, not that every finding has a replacement. Pending flags take effect after Save choices."},
                             {"field": "annotator", "headerName": "Annotator"},
                             {"field": "code", "headerName": "Source SCTID"},
                             {"field": "text", "headerName": "Covered text", "flex": 2, "minWidth": 400},
@@ -79,7 +89,7 @@ def build_page(ui) -> None:
                         "rowData": [],
                         ":getRowId": "params => params.data.row_id",
                         "rowSelection": {"mode": "singleRow", "checkboxes": False, "enableClickSelection": True},
-                    }).classes("w-full h-80")
+                    }).classes("w-full h-80 overflow-auto overscroll-contain")
                 with ui.column().classes("w-full min-w-0"):
                     ui.label("Selected finding").classes("text-lg")
                     identity = ui.label("Select a finding. Nothing is preselected.")
@@ -107,14 +117,35 @@ def build_page(ui) -> None:
                         "rowData": [],
                         ":getRowId": "params => params.data.row_id",
                         "rowSelection": {"mode": "singleRow", "checkboxes": False, "enableClickSelection": True},
-                    }).classes("w-full h-64")
+                    }).classes("w-full h-64 overflow-auto overscroll-contain")
                     preview = ui.label("Candidate clicks only preview; they do not approve anything.")
                     evidence = ui.label().classes("text-sm whitespace-pre-wrap")
-                    controls = ReviewControls(ui, lambda: state, lambda: load_revision, begin_load,
-                                              lambda session: finding_grid.options.__setitem__("rowData", _finding_rows(state, session)))
+                    controls = ReviewControls(ui, lambda: state, lambda: load_revision, begin_load, refresh_documents)
             ui.label("Review JSON only. Generation, rules/conditions, ZIP write-back and deployment remain disconnected.")
 
+            def clear_inspection():
+                state.selected_finding_id = None
+                state.selected_candidate_id = None
+                candidate_grid.options["rowData"] = []
+                identity.set_text("Select a finding. Nothing is preselected.")
+                for label in (covered_text, finding_details, proposed, rationale, limits, evidence):
+                    label.set_text("")
+                preview.set_text("No candidate selected. Inspecting a candidate stages no decision.")
+
+            def change_document(value):
+                nonlocal active_document
+                entry = document_slides.get(value)
+                if entry is None or entry[0] == active_document:
+                    return
+                active_document = entry[0]
+                workspace.move(entry[1])
+                clear_inspection()
+                controls.refresh()
+
+            documents.on_value_change(lambda event: change_document(event.value))
+
             def show_source():
+                nonlocal active_document
                 banner.set_text(
                     ("Synthetic preview only — load suggestions JSON to enable review. " if state.is_demo else "Suggestions and manual review. ")
                     + "No project/CAS is changed. Review is page-local until downloaded as JSON."
@@ -124,19 +155,36 @@ def build_page(ui) -> None:
                 mode = {"policy": "Policy rules", "release": "Active release"}.get(saved_mode, "not recorded") if isinstance(saved_mode, str) else "not recorded"
                 scope.set_text(f"Saved annotator scope: {', '.join(state.source_annotators) or 'all annotators'} · Saved replacement mode: {mode}")
                 total = len(state.findings) if state.is_demo else len(state.source_suggestions)
-                counts.set_text(f"{total} saved suggestions · {len(state.findings)} in artifact scope before grid filters · explicit review only")
-                finding_grid.options["rowData"] = _finding_rows(state)
-                candidate_grid.options["rowData"] = []
-                identity.set_text("Select a finding. Nothing is preselected.")
-                for label in (covered_text, finding_details, proposed, rationale, limits, evidence):
-                    label.set_text("")
-                preview.set_text("No candidate selected. Inspecting a candidate stages no decision.")
+                counts.set_text(f"{total} saved suggestions · {len(state.findings)} in artifact scope before grid filters · explicit review only · Save/export include all documents")
+                # Reuse one workspace; clearing old slides must not delete its widgets.
+                workspace.move(review_panel)
+                documents.clear()
+                document_slides.clear()
+                active_document = None
+                clear_inspection()
                 controls.reset()
+                names = list(dict.fromkeys(row.document for row in state.findings))
+                with documents:
+                    for index, document in enumerate(names):
+                        token = f"{load_revision}:{index}"
+                        with ui.carousel_slide(name=token).classes("w-full min-w-0 px-12 pt-12") as slide:
+                            heading = ui.label(document).classes("text-xl")
+                            heading.tooltip("Green means document review is saved; it does not imply every finding has a replacement.")
+                        document_slides[token] = (document, slide, heading)
+                documents.set_visibility(bool(names))
+                empty.set_visibility(not names)
+                if names:
+                    token = next(iter(document_slides))
+                    documents.set_value(token)
+                    change_document(token)
 
             def select_finding(event):
                 previous_id = state.selected_finding_id
                 try:
-                    finding = state.select_finding(event.args["data"]["row_id"])
+                    row_id = event.args["data"]["row_id"]
+                    if not any(row.row_id == row_id and row.document == active_document for row in state.findings):
+                        raise ValueError("Finding is not in the visible document.")
+                    finding = state.select_finding(row_id)
                 except (KeyError, TypeError, ValueError):
                     ui.notify("Select a valid finding from this preview.", type="warning")
                     return
