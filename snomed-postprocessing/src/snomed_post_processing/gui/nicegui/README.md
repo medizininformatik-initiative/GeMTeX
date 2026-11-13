@@ -2,7 +2,7 @@
 
 Preview **synthetic data or uploaded suggestions JSON**, then deliberately stage
 and save manual choices and download/restore reviewed-decisions JSON.
-Processing, CAS write-back and deployment are not connected.
+Suggestion generation, CAS write-back and deployment are not connected.
 Both frontends now use the same Python 3.11 project environment, `.venv-py311`.
 The shared `gui/app.py` defaults to Streamlit; select NiceGUI explicitly.
 
@@ -30,6 +30,28 @@ Do not launch this file using `streamlit run`.
 
 For Streamlit, omit `--frontend` or use `--frontend streamlit`.
 Its options remain unchanged, e.g. `--server.port 8502`.
+
+## Check policy
+
+In **1. Check policy**, open **Project and policy inputs**. Both the project ZIP
+and SNOMED HDF5 support **Upload**, **Data directory** and **Server path**, matching
+Streamlit's file-source modes. Directory selection lists matching files directly
+inside the configured server directory, without recursion. Uploads are limited to
+200 MiB each and streamed to page-owned temporary files; use server files for
+larger inputs. Input files are never overwritten and reports are kept in memory.
+
+**Load annotators** reads ZIP member names; empty selection means all annotators.
+The collapsed annotation settings retain Streamlit's layer, overlap, ID feature
+and prefix defaults. Only **Run policy check** performs analysis, in a worker.
+Results survive tab navigation; grid filters never rerun analysis or limit exports.
+Download CriticalFindings JSON, Markdown, masked Markdown or report JSON. Masked
+Markdown still contains clinical text. Input/scope changes hide outdated results
+and block downloads; late worker results are discarded. Failed checks retain the
+last successful result. File identity/size/mtime checks detect changed source files
+during analysis and before download. No application persistence is added.
+
+Policy checking does not alter loaded suggestions or their saved review scope.
+Generation and INCEpTION API fetching/deployment remain separate future work.
 
 ## Load saved suggestions
 
@@ -159,10 +181,10 @@ different finding updates details/candidates, not the main grid. Text renders as
 text, not HTML; filters are display-only. Reloading discards per-page preview
 state. There is no persistent/global review state or cookie secret.
 
-**Not connected:** project ZIP/HDF5 loading, shared processing-scope controls,
-policy checks, rule editing/application, generation, conditions, new deletion/manual-
-edit/ID-removal choices, ZIP sanitization or INCEpTION. Those actions remain disabled.
-Only explicitly uploaded suggestions/review JSON is read; startup uses artificial data.
+**Not connected:** rule editing/application, suggestion generation, conditions,
+ID-removal choices, ZIP sanitization or INCEpTION API fetching/deployment.
+Startup is empty. Only explicitly selected policy inputs and uploaded
+suggestions/review JSON are read.
 
 ## Verification
 

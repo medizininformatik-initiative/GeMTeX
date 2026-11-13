@@ -3,6 +3,7 @@ from snomed_post_processing.review_context import ReviewContext
 
 from .state import PreviewState
 from .review_ui import ReviewControls
+from .policy_ui import PolicyCheckControls
 from .suggestions import MAX_SUGGESTIONS_BYTES, SuggestionsPreviewError, load_suggestions_preview
 
 
@@ -71,21 +72,24 @@ def build_page(ui, events) -> None:
     banner = ui.label().classes("text-amber-900 bg-amber-100 p-3 rounded w-full")
     source = ui.label().classes("text-sm")
     scope = ui.label().classes("text-sm")
-    with ui.expansion("Project and processing scope (not connected)").classes("w-full"):
-        ui.label("Project ZIP, HDF5 and shared processing controls are not connected.")
+    with ui.expansion("Saved suggestions scope").classes("w-full") as saved_scope:
         ui.label("Uploaded suggestions inherit their saved annotator scope; it cannot be broadened here.")
         ui.label("Saved generation settings are displayed as provenance, not revalidated against a project or HDF5.")
         ui.label("Grid filters affect display only, not the source artifact or its annotator scope.")
 
+    def change_tab(event):
+        keyboard_active(event.value, keyboard)
+        for element in (banner, source, scope, saved_scope):
+            element.set_visibility(event.value == "review")
+
     with ui.tabs().classes("w-full") as tabs:
-        tabs.on_value_change(lambda event: keyboard_active(event.value, keyboard))
+        tabs.on_value_change(change_tab)
         check = ui.tab("check", label="1. Check policy")
         suggest = ui.tab("suggest", label="2. Suggest")
         review = ui.tab("review", label="3. Review & apply")
-    with ui.tab_panels(tabs, value=review).props("keep-alive").classes("w-full"):
+    with ui.tab_panels(tabs, value=check).props("keep-alive").classes("w-full"):
         with ui.tab_panel(check):
-            ui.label("Policy checking is not connected in this prototype.")
-            ui.button("Check policy").disable()
+            PolicyCheckControls(ui)
         with ui.tab_panel(suggest):
             ui.label("Rules and suggestion generation are not connected in this prototype.")
             ui.button("Generate suggestions").disable()
@@ -132,7 +136,7 @@ def build_page(ui, events) -> None:
                     candidate_grid = ui.aggrid({
                         "columnDefs": [
                             {"field": "rank", "headerName": "Rank", "width": 80, "filter": "agNumberColumnFilter"},
-                            {"field": "code", "headerName": "SCTID", "width": 180},
+                            {"field": "code", "headerName": "SCTID", "width": 120},
                             {"field": "fsn", "headerName": "FSN", "flex": 2, "minWidth": 240},
                             {"field": "score", "headerName": "Score", "width": 120, "filter": "agNumberColumnFilter",
                              ":valueFormatter": "params => params.value == null ? '' : params.value.toFixed(2)",
