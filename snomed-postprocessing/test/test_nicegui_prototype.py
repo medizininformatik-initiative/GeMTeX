@@ -167,7 +167,7 @@ class NiceGuiBootstrapTest(unittest.TestCase):
 
     def test_score_formatting_is_display_only_with_full_precision_row_values(self):
         from test.test_nicegui_suggestions import fake_ui, payload, encoded
-        from snomed_post_processing.gui.nicegui.page import _candidate_rows
+        from snomed_post_processing.gui.nicegui.review_panel import _candidate_rows
         from snomed_post_processing.gui.nicegui.suggestions import load_suggestions_preview
         _, grids, _ = fake_ui()
         score = next(column for column in grids[1].options["columnDefs"] if column["field"] == "score")

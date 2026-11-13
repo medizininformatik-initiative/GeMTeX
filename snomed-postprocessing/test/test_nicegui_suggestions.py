@@ -9,7 +9,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from contextlib import nullcontext
 
-from snomed_post_processing.gui.nicegui.page import build_page, _finding_rows, _candidate_rows
+from snomed_post_processing.gui.nicegui.page import build_page
+from snomed_post_processing.gui.nicegui.review_panel import _finding_rows, _candidate_rows
 from snomed_post_processing.gui.nicegui.suggestions import (
     MAX_SUGGESTIONS_BYTES, SuggestionsPreviewError, load_suggestions_preview,
 )
@@ -92,7 +93,7 @@ def fake_ui(state=None):
     ui.aggrid.side_effect = grid
     ui.label.side_effect = label
     with patch("snomed_post_processing.gui.nicegui.page.PolicyCheckControls"), \
-            patch("snomed_post_processing.gui.nicegui.page.PreviewState", return_value=state) if state is not None else nullcontext():
+            patch("snomed_post_processing.gui.nicegui.review_panel.PreviewState", return_value=state) if state is not None else nullcontext():
         build_page(ui, MagicMock())
     return ui, grids, labels
 
