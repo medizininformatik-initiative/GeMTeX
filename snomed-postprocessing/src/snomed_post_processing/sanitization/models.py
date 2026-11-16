@@ -33,6 +33,12 @@ def format_association_type_descriptions() -> str:
     )
 
 
+EXCLUSION_LIST_NO_REPLACEMENT_REASON = (
+    "No selectable replacement suggestion was generated for this exclusion-list finding. "
+    "Manual review is required."
+)
+
+
 class SanitizationStatus(str, enum.Enum):
     HISTORICAL_ASSOCIATION_REPLACEMENT = "historical_association_replacement"
     SEMANTIC_BM25_REPLACEMENT = "semantic_bm25_replacement"
@@ -42,7 +48,7 @@ class SanitizationStatus(str, enum.Enum):
     AMBIGUOUS_ANCESTOR = "ambiguous_ancestor"
     NO_POLICY_ACCEPTABLE_CANDIDATE = "no_policy_acceptable_candidate"
     NO_HISTORICAL_ASSOCIATION = "no_historical_association"
-    BLACKLISTED_NO_AUTO_SANITIZATION = "blacklisted_no_auto_sanitization"
+    EXCLUSION_LIST_NO_REPLACEMENT = "exclusion_list_no_replacement"
     NO_REPLACEMENT = "no_replacement"
 
 

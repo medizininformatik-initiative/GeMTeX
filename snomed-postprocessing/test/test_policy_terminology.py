@@ -43,8 +43,8 @@ class PolicyTerminologyTest(unittest.TestCase):
             "Reason: not on inclusion list",
         )
         self.assertEqual(
-            _status_label(SanitizationStatus.BLACKLISTED_NO_AUTO_SANITIZATION),
-            "Excluded/no automatic sanitization",
+            _status_label(SanitizationStatus.EXCLUSION_LIST_NO_REPLACEMENT),
+            "Exclusion-list finding — no replacement suggestion",
         )
 
     def test_policy_report_headings_anchors_and_ignored_reasons(self):
@@ -74,16 +74,20 @@ class PolicyTerminologyTest(unittest.TestCase):
         self.assertIn("on the exclusion list", output.getvalue())
         self.assertNotRegex(output.getvalue().lower(), "whitelist|blacklist")
 
-    def test_suggestion_markdown_renames_status_but_not_json(self):
+    def test_suggestion_status_is_renamed_in_markdown_and_json(self):
         suggestion = SanitizationSuggestion(
-            finding=FINDING, status=SanitizationStatus.BLACKLISTED_NO_AUTO_SANITIZATION,
+            finding=FINDING, status=SanitizationStatus.EXCLUSION_LIST_NO_REPLACEMENT,
         )
         output = io.StringIO()
         write_sanitization_markdown_report([suggestion], output)
-        self.assertIn("excluded_no_auto_sanitization", output.getvalue())
+        self.assertIn("Exclusion-list finding — no replacement suggestion", output.getvalue())
         self.assertNotIn("blacklisted_no_auto_sanitization", output.getvalue())
         payload = sanitization_suggestion_to_dict(suggestion)
-        self.assertEqual(payload["status"], "blacklisted_no_auto_sanitization")
+        self.assertEqual(payload["status"], "exclusion_list_no_replacement")
+        from snomed_post_processing.sanitization.json_io import sanitization_suggestion_from_dict
+        self.assertEqual(sanitization_suggestion_from_dict(payload), suggestion)
+        with self.assertRaises(ValueError):
+            sanitization_suggestion_from_dict({**payload, "status": "blacklisted_no_auto_sanitization"})
         self.assertEqual(payload["finding"]["list_type"], "blacklist")
         self.assertEqual(payload["finding"]["reason"], "blacklisted")
         self.assertEqual(critical_finding_to_dict(FINDING)["list_type"], "blacklist")

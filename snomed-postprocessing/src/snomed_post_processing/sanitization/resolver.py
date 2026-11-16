@@ -25,6 +25,7 @@ from ..hdf5_handling.policy import (
 from ..uima_processing import CriticalFinding
 from .models import (
     DEFAULT_ALLOWED_ASSOCIATION_TYPES,
+    EXCLUSION_LIST_NO_REPLACEMENT_REASON,
     SanitizationCandidate,
     SanitizationStatus,
     SanitizationSuggestion,
@@ -129,8 +130,8 @@ class SanitizationResolver:
         if finding.list_type == "blacklist":
             return SanitizationSuggestion(
                 finding=finding,
-                status=SanitizationStatus.BLACKLISTED_NO_AUTO_SANITIZATION,
-                reason="automatic sanitization for blacklist findings is disabled",
+                status=SanitizationStatus.EXCLUSION_LIST_NO_REPLACEMENT,
+                reason=EXCLUSION_LIST_NO_REPLACEMENT_REASON,
             )
         if finding.list_type != "whitelist":
             return SanitizationSuggestion(

@@ -1794,7 +1794,7 @@ def _status_label(status: Any) -> str:
         SanitizationStatus.AMBIGUOUS_ANCESTOR.value: "Ambiguous ancestor",
         SanitizationStatus.NO_POLICY_ACCEPTABLE_CANDIDATE.value: "No acceptable candidate",
         SanitizationStatus.NO_HISTORICAL_ASSOCIATION.value: "No historical association",
-        SanitizationStatus.BLACKLISTED_NO_AUTO_SANITIZATION.value: "Excluded/no automatic sanitization",
+        SanitizationStatus.EXCLUSION_LIST_NO_REPLACEMENT.value: "Exclusion-list finding — no replacement suggestion",
     }
     value = _status_value(status)
     return labels.get(value, value.replace("_", " ").title())

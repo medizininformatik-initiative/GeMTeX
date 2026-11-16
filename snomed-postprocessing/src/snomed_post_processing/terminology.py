@@ -14,4 +14,4 @@ def finding_reason_label(reason: str) -> str:
 
 def suggestion_status_label(status: str) -> str:
     # Other status identifiers retain their established report display.
-    return {"blacklisted_no_auto_sanitization": "excluded_no_auto_sanitization"}.get(status, status)
+    return {"exclusion_list_no_replacement": "Exclusion-list finding — no replacement suggestion"}.get(status, status)

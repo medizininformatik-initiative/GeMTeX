@@ -1,3 +1,4 @@
+import dataclasses
 import io
 import pathlib
 import tempfile
@@ -279,7 +280,8 @@ class TestSemanticBm25Sanitization(unittest.TestCase):
 
             suggestion = resolver.suggest(_finding(list_type="blacklist"))
 
-        self.assertEqual(suggestion.status, SanitizationStatus.BLACKLISTED_NO_AUTO_SANITIZATION)
+        self.assertEqual(suggestion.status, SanitizationStatus.EXCLUSION_LIST_NO_REPLACEMENT)
+        self.assertIn("BM25 suggestions for exclusion-list findings are disabled", suggestion.reason)
         self.assertIsNone(suggestion.replacement_code)
 
     def test_blacklist_findings_can_get_opt_in_bm25_suggestions(self):
@@ -315,8 +317,8 @@ class TestSemanticBm25Sanitization(unittest.TestCase):
             _write_compact_hdf5(hdf5_path, blacklist_indices=(3,))
             blacklist_unresolved = SanitizationSuggestion(
                 finding=_finding(list_type="blacklist"),
-                status=SanitizationStatus.BLACKLISTED_NO_AUTO_SANITIZATION,
-                reason="blacklist suggestions disabled",
+                status=SanitizationStatus.EXCLUSION_LIST_NO_REPLACEMENT,
+                reason="No selectable replacement suggestion was generated for this exclusion-list finding. Manual review is required.",
             )
 
             suggestions = apply_semantic_bm25_fallback(
@@ -334,6 +336,43 @@ class TestSemanticBm25Sanitization(unittest.TestCase):
         self.assertEqual(suggestions[0].replacement_code, "100")
         self.assertIn("semantic_bm25_replacement", report)
         self.assertIn("BM25", report)
+
+    def test_unsuccessful_exclusion_bm25_explains_failure_without_claiming_disabled(self):
+        from snomed_post_processing.sanitization.models import EXCLUSION_LIST_NO_REPLACEMENT_REASON
+        with tempfile.TemporaryDirectory() as tmpdir:
+            hdf5_path = pathlib.Path(tmpdir) / "concepts.hdf5"
+            _write_compact_hdf5(hdf5_path, blacklist_indices=(3,))
+            for text, minimum, expected_reason in (
+                ("alpha therapy", 999.0, "score thresholds"),
+                ("unmatchabletoken", 0.1, "no policy-acceptable BM25 candidate"),
+            ):
+                with self.subTest(text=text):
+                    finding = _finding(list_type="blacklist", covered_text=text)
+                    # Prevent the source FSN from supplying matches in the no-hit case.
+                    if text == "unmatchabletoken":
+                        finding = dataclasses.replace(finding, code="999999", fsn=None)
+                    direct = suggest_semantic_bm25(
+                        finding, hdf5_path, allow_blacklist_findings=True,
+                        min_score=minimum, min_lexical_score=0.2,
+                    )
+                    self.assertEqual(direct.status, SanitizationStatus.EXCLUSION_LIST_NO_REPLACEMENT)
+                    self.assertIn(expected_reason, direct.reason)
+                    original = SanitizationSuggestion(
+                        finding=finding, status=SanitizationStatus.EXCLUSION_LIST_NO_REPLACEMENT,
+                        reason=EXCLUSION_LIST_NO_REPLACEMENT_REASON,
+                    )
+                    result = apply_semantic_bm25_fallback(
+                        [original], hdf5_path, allow_blacklist_findings=True,
+                        min_score=minimum, min_lexical_score=0.2,
+                    )[0]
+                    self.assertEqual(result.status, SanitizationStatus.EXCLUSION_LIST_NO_REPLACEMENT)
+                    self.assertIsNone(result.replacement_code)
+                    self.assertEqual(result.candidates, ())
+                    self.assertIn("Manual review is required", result.reason)
+                    self.assertIn(expected_reason, result.reason)
+                    self.assertNotIn("disabled", result.reason)
+                    self.assertEqual(original.reason, EXCLUSION_LIST_NO_REPLACEMENT_REASON)
+                    self.assertEqual(sanitization_suggestion_from_dict(sanitization_suggestion_to_dict(result)), result)
 
     def test_apply_fallback_feeds_existing_sanitization_report(self):
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -17,7 +17,7 @@ import h5py
 from ..uima_processing import CriticalFinding
 from ..hdf5_handling.policy import read_candidate_validity_sets, read_concepts, read_policy_indices, require_bm25_ready
 from .bm25_index import BM25Index
-from .models import SanitizationStatus
+from .models import EXCLUSION_LIST_NO_REPLACEMENT_REASON, SanitizationStatus
 from .semantic_models import SemanticBm25Candidate, SemanticBm25Suggestion
 from .semantic_text import _fsn_text, _query_text, _semantic_tag, _tokenize
 from .snogit_sidecar import SnogitSidecarBm25Searcher, validate_snogit_sidecar_compatibility
@@ -110,11 +110,13 @@ class SemanticBm25Resolver:
                 status=SanitizationStatus.NO_REPLACEMENT,
                 reason="ignored findings are informational and are not sanitized",
             )
+        unresolved_status = (SanitizationStatus.EXCLUSION_LIST_NO_REPLACEMENT
+                             if finding.list_type == "blacklist" else SanitizationStatus.NO_REPLACEMENT)
         if finding.list_type == "blacklist" and not self.allow_blacklist_findings:
             return SemanticBm25Suggestion(
                 finding=finding,
-                status=SanitizationStatus.BLACKLISTED_NO_AUTO_SANITIZATION,
-                reason="BM25 fallback for blacklist findings is disabled by default",
+                status=unresolved_status,
+                reason=EXCLUSION_LIST_NO_REPLACEMENT_REASON + " BM25 suggestions for exclusion-list findings are disabled.",
             )
         if finding.list_type not in {"whitelist", "blacklist"}:
             return SemanticBm25Suggestion(
@@ -133,7 +135,7 @@ class SemanticBm25Resolver:
         if not query_tokens and not snogit_query_tokens:
             return SemanticBm25Suggestion(
                 finding=finding,
-                status=SanitizationStatus.NO_REPLACEMENT,
+                status=unresolved_status,
                 reason="finding has no searchable text",
             )
 
@@ -143,7 +145,7 @@ class SemanticBm25Resolver:
         if not candidates:
             return SemanticBm25Suggestion(
                 finding=finding,
-                status=SanitizationStatus.NO_REPLACEMENT,
+                status=unresolved_status,
                 reason=f"no {self.target_view}-acceptable BM25 candidate found",
                 retrieval_limits=retrieval_limits,
             )
@@ -152,7 +154,7 @@ class SemanticBm25Resolver:
         if best.score < self.min_score or best.lexical_score < self.min_lexical_score:
             return SemanticBm25Suggestion(
                 finding=finding,
-                status=SanitizationStatus.NO_REPLACEMENT,
+                status=unresolved_status,
                 reason=(
                     "best BM25 candidate did not satisfy score thresholds "
                     f"(score={best.score:.3f}, lexical={best.lexical_score:.3f})"
@@ -394,7 +396,8 @@ def apply_semantic_bm25_fallback(
     replacement. If ``allow_blacklist_findings`` is true, BM25 is also consulted
     for actionable blacklist findings; candidates must still be active,
     acceptable in the selected target view. If BM25 does not pass thresholds, the
-    original suggestion is kept so its original failure reason remains visible.
+    original suggestion is kept. For exclusion-list findings, its reason is
+    updated to explain the unsuccessful BM25 attempt.
     """
     resolver = SemanticBm25Resolver(
         hdf5_path,
@@ -471,6 +474,12 @@ def apply_semantic_bm25_fallback(
                     progress=(index / total if total else 1.0),
                 )
                 continue
+            if finding.list_type == "blacklist":
+                suggestion = dataclasses.replace(
+                    suggestion,
+                    status=SanitizationStatus.EXCLUSION_LIST_NO_REPLACEMENT,
+                    reason=f"{EXCLUSION_LIST_NO_REPLACEMENT_REASON} BM25 attempt: {bm25_suggestion.reason}",
+                )
         enhanced.append(suggestion)
         report_progress(
             phase="processed",

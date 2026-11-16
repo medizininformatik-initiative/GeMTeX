@@ -33,6 +33,12 @@ All replacement sources share the same target-view gates from `/src/snomed_post_
 
 Release mode (**Active release** in the sidebar) deliberately has no inclusion-list requirement. Embedded exclusion-list enforcement stays optional; custom exclusions apply only when selected. The SNOMED root concept `138875005` is rejected as a generic replacement candidate.
 
+# Exclusion-list findings without replacements
+
+`exclusion_list_no_replacement` replaces the misleading `blacklisted_no_auto_sanitization` identifier in generated JSON, reports and UI labels. The base reason is: “No selectable replacement suggestion was generated for this exclusion-list finding. Manual review is required.” It describes the outcome, not whether BM25 was attempted. The structured resolver does not propose exclusion-list replacements. Explicitly enabled BM25 can replace this outcome with a successful/ambiguous suggestion; unsuccessful attempts retain the no-replacement status and append the actual BM25 failure reason (e.g. no acceptable candidate or insufficient score). Direct BM25 calls use the same no-replacement identifier for unresolved exclusion-list findings; disabled BM25 is stated only when it is actually disabled. Inclusion-list and ignored-finding outcomes are unchanged.
+
+This is an intentional identifier change, not a reader alias/migration: old suggestions JSON containing `blacklisted_no_auto_sanitization` must be regenerated. Regeneration changes the source snapshot/fingerprint, so old reviewed-decisions artifacts may not match. Original clinical findings, policy identifiers, candidate gates and manual-review requirements are not rewritten.
+
 # Selectable versus diagnostic candidates
 
 Both structured and BM25 suggestions separate `candidates` (selectable) from `context_candidates` (diagnostic only). `candidate_count` counts selectable candidates. Rejected historical targets, ancestors rejected by distance limits, and BM25 hits below thresholds are context, not replacement choices. Overview/report displays explicitly label diagnostics as not selectable.
@@ -162,7 +168,7 @@ BM25/SNOGIT candidates cannot bypass target-view gates and also reject unchanged
 | `nearest_*_ancestor` / `ancestor_*` | Replacement found through active or historical ancestor fallback. |
 | `semantic_bm25_*` | Replacement found through lexical BM25 fallback. |
 | `ambiguous_*` | Human choice required. |
-| `blacklisted_no_auto_sanitization` | Blacklist finding not auto-sanitized. |
+| `exclusion_list_no_replacement` | Exclusion-list finding with no selectable replacement suggestion; manual review required. |
 | `no_policy_acceptable_candidate` | Candidates existed but failed selected gates or distance limits. |
 | `no_replacement` / no replacement found | No safe candidate source produced a replacement. |
 

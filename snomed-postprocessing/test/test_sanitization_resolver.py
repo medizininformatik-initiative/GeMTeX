@@ -228,7 +228,9 @@ class TestSanitizationResolver(unittest.TestCase):
 
             suggestion = resolver.suggest(finding)
 
-        self.assertEqual(suggestion.status, SanitizationStatus.BLACKLISTED_NO_AUTO_SANITIZATION)
+        self.assertEqual(suggestion.status, SanitizationStatus.EXCLUSION_LIST_NO_REPLACEMENT)
+        self.assertIn("Manual review is required", suggestion.reason)
+        self.assertNotIn("disabled", suggestion.reason)
         self.assertIsNone(suggestion.replacement_code)
 
     def test_missing_historical_association_is_reported(self):

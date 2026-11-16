@@ -5,10 +5,42 @@ expanding the main setup and workflow instructions.
 
 ## Contents
 
+- [Exclusion-list findings without replacements](#exclusion-list-findings-without-replacements)
+- [Diagnostic candidates](#diagnostic-candidates)
 - [SNOGIT retrieval limits](#snogit-retrieval-limits)
   - [What the three limits mean](#what-the-three-limits-mean)
   - [Term rows, hits and final candidates](#term-rows-hits-and-final-candidates)
   - [What to do when a limit is reported](#what-to-do-when-a-limit-is-reported)
+
+## Exclusion-list findings without replacements
+
+The status **`exclusion_list_no_replacement`** means no selectable replacement
+suggestion was generated for an exclusion-list finding; **manual review is required**.
+It does not mean BM25 was necessarily disabled or never attempted.
+
+- The initial structured resolver leaves exclusion-list findings unresolved.
+- When BM25 suggestions for exclusion-list findings are enabled, a qualifying
+  match changes the status to a BM25 suggestion or ambiguity. Other exclusion-list
+  findings can therefore have suggestions in the same run.
+- If BM25 finds no acceptable match or fails score thresholds, the no-replacement
+  status remains and the reason explains the unsuccessful BM25 attempt.
+
+This identifier replaces `blacklisted_no_auto_sanitization`. Older suggestions
+files containing that identifier must be regenerated; no automatic conversion is
+performed. Regeneration creates a new suggestions snapshot, so previously exported
+reviewed decisions may no longer match it. Keep existing paired artifacts backed up.
+
+## Diagnostic candidates
+
+**Diagnostic candidates** are matches retained for explanation, **not selectable
+replacements**. Examples include historical targets that fail the selected target
+requirements, ancestors outside the configured distance limits, and BM25 matches
+below score or lexical-overlap thresholds.
+
+They help explain why no replacement was suggested or why other candidates were
+retained. They do not count toward the selectable candidate count. After changing
+relevant settings, regenerate suggestions; existing diagnostics are not
+automatically promoted to selectable candidates.
 
 ## SNOGIT retrieval limits
 

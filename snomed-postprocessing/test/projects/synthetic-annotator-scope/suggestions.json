@@ -317,11 +317,11 @@
         "ignored": false,
         "ignore_overlaps": []
       },
-      "status": "blacklisted_no_auto_sanitization",
+      "status": "exclusion_list_no_replacement",
       "replacement_code": null,
       "replacement_fsn": null,
       "association_type": null,
-      "reason": "automatic sanitization for blacklist findings is disabled",
+      "reason": "No selectable replacement suggestion was generated for this exclusion-list finding. Manual review is required.",
       "candidate_count": 0,
       "candidates": [],
       "context_candidates": []
@@ -344,11 +344,11 @@
         "ignored": false,
         "ignore_overlaps": []
       },
-      "status": "blacklisted_no_auto_sanitization",
+      "status": "exclusion_list_no_replacement",
       "replacement_code": null,
       "replacement_fsn": null,
       "association_type": null,
-      "reason": "automatic sanitization for blacklist findings is disabled",
+      "reason": "No selectable replacement suggestion was generated for this exclusion-list finding. Manual review is required.",
       "candidate_count": 0,
       "candidates": [],
       "context_candidates": []
