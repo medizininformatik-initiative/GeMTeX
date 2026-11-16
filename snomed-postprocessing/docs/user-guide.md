@@ -5,6 +5,7 @@ expanding the main setup and workflow instructions.
 
 ## Contents
 
+- [Masked suggestion overview download](#masked-suggestion-overview-download)
 - [Review summary counts](#review-summary-counts)
 - [Exclusion-list findings without replacements](#exclusion-list-findings-without-replacements)
 - [Diagnostic candidates](#diagnostic-candidates)
@@ -12,6 +13,22 @@ expanding the main setup and workflow instructions.
   - [What the three limits mean](#what-the-three-limits-mean)
   - [Term rows, hits and final candidates](#term-rows-hits-and-final-candidates)
   - [What to do when a limit is reported](#what-to-do-when-a-limit-is-reported)
+
+## Masked suggestion overview download
+
+In Streamlit's **Suggest policy sanitization → Suggestion overview**, use
+**Download masked overview CSV** to export all overview rows with only the
+**Document** and **Annotator** columns pseudonymized. Repeated names get consistent
+numbered aliases within that table (`document-1`, `annotator-1`, etc.). The aliases
+are assigned by first appearance and are not shared with the masked policy report.
+
+All other columns remain unchanged, including offsets, codes, candidate summaries,
+reasons and clinical text. **This is not full anonymization:** names may still
+appear in free text. The UTF-8 CSV includes a BOM for spreadsheet compatibility;
+import SCTID columns as text to avoid spreadsheet number conversion. It does not
+modify the displayed table, saved suggestions or review decisions, and is not an
+artifact for restoring review. Sorting the table in the browser does not change
+the source row order used for export.
 
 ## Review summary counts
 

@@ -47,6 +47,10 @@ BM25 retention uses a soft maximum and includes all ties at the score cutoff, su
 
 JSON serialization preserves this separation. BM25 fallback preserves diagnostic historical/ancestor context when it supplies a replacement. Regenerate suggestions after changing target settings; review and export use the generated candidates rather than adding another HDF5 validation layer. There is no legacy-file normalization or status-based selection allowlist.
 
+# Streamlit masked overview CSV
+
+`_render_suggestion_overview` offers **Download masked overview CSV**. `_masked_overview_csv` copies the exact overview DataFrame and replaces only Document/Annotator using separate first-appearance numbered mappings (`document-N`, `annotator-N`). The CSV includes all source overview rows/columns, UTF-8 BOM and no extra index. It preserves all other cell values, including offsets, leading-zero codes, Unicode, multiline clinical text and displayed candidate summaries. It is a table export, not a complete candidate JSON artifact or reviewed-decisions restore source. Mappings are export-local, not shared with the random-word aliases in policy Markdown. Source objects, table, suggestions metadata and review state remain unchanged; `on_click="ignore"` avoids triggering processing/reruns on download. Help and the [user guide](../../../docs/user-guide.md#masked-suggestion-overview-download) warn that names in clinical/free text remain and this is not full anonymization. Synthetic CSV round-trip, identity consistency, unchanged-source and Streamlit AppTest coverage are included.
+
 # Release-view blacklist modes
 
 | CLI flags / GUI choices | Effective release-view rule |

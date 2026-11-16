@@ -775,6 +775,23 @@ def _render_suggestion_overview(suggestions: list[Any]) -> None:
             ),
         },
     )
+    st.download_button(
+        "Download masked overview CSV",
+        data=_masked_overview_csv(overview_df),
+        file_name="sanitization-suggestion-overview.masked.csv",
+        mime="text/csv",
+        key="sanitization_suggestion_overview_masked_csv",
+        on_click="ignore",
+        help="Downloads all overview rows with numbered document/annotator aliases. All other fields, including clinical text, remain unchanged. This is not full anonymization or a review-import artifact.",
+    )
+
+
+def _masked_overview_csv(overview_df: pd.DataFrame) -> bytes:
+    masked = overview_df.copy()
+    for column, prefix in (("Document", "document"), ("Annotator", "annotator")):
+        aliases = {name: f"{prefix}-{index}" for index, name in enumerate(masked[column].unique(), start=1)}
+        masked[column] = masked[column].map(aliases)
+    return masked.to_csv(index=False).encode("utf-8-sig")
 
 
 def _suggestion_overview_row(index: int, suggestion: Any) -> dict[str, Any]:

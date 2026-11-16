@@ -1,10 +1,13 @@
+import io
 import pathlib
 import tempfile
 import unittest
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import h5py
 import numpy as np
+import pandas as pd
 from streamlit.testing.v1 import AppTest
 
 from test.test_semantic_bm25_sanitization import _finding, _write_compact_hdf5
@@ -15,6 +18,8 @@ from snomed_post_processing.gui.streamlit.sanitization_check_tab import (
     _resolve_custom_blacklist_indices,
     _uses_custom_blacklist,
     _suggestion_overview_row,
+    _masked_overview_csv,
+    _render_suggestion_overview,
 )
 
 
@@ -60,11 +65,50 @@ class GuiSanitizationCheckHelpersTest(unittest.TestCase):
             with self.subTest(list_type=raw):
                 finding = SimpleNamespace(
                     document="doc.txt", annotator="reviewer", code="123",
-                    covered_text="example", list_type=raw,
+                    covered_text="example", list_type=raw, offset=(0, 7),
                 )
                 row = _suggestion_overview_row(1, SimpleNamespace(finding=finding))
                 self.assertEqual(row["Issue"], label)
                 self.assertEqual(finding.list_type, raw)
+
+    def test_masked_overview_csv_changes_only_identity_columns(self):
+        findings = [
+            SimpleNamespace(document=document, annotator=annotator, code="0042",
+                            covered_text='Alice,\n"clinical ± text"', offset=(10, 20), list_type="whitelist")
+            for document, annotator in (("private-a.txt", "Alice"), ("private-a.txt", "Bob"), ("private-b.txt", "Alice"))
+        ]
+        suggestions = [SimpleNamespace(finding=finding, reason="private-a.txt remains in clinical evidence") for finding in findings]
+        original = pd.DataFrame([_suggestion_overview_row(i, item) for i, item in enumerate(suggestions, start=1)])
+        before = original.copy(deep=True)
+        content = _masked_overview_csv(original)
+        restored = pd.read_csv(io.BytesIO(content), dtype=str, keep_default_na=False)
+        self.assertTrue(content.startswith(b"\xef\xbb\xbf"))
+        self.assertEqual(list(restored.columns), list(original.columns))
+        self.assertEqual(restored["Document"].tolist(), ["document-1", "document-1", "document-2"])
+        self.assertEqual(restored["Annotator"].tolist(), ["annotator-1", "annotator-2", "annotator-1"])
+        pd.testing.assert_frame_equal(
+            restored.drop(columns=["Document", "Annotator"]),
+            original.drop(columns=["Document", "Annotator"]).astype(str),
+        )
+        pd.testing.assert_frame_equal(original, before)
+        self.assertEqual(findings[0].document, "private-a.txt")
+        self.assertEqual(findings[0].annotator, "Alice")
+        self.assertEqual(_masked_overview_csv(original), content)
+
+    def test_overview_download_uses_masked_data_without_triggering_rerun(self):
+        suggestion = SimpleNamespace(finding=_finding())
+        with patch("snomed_post_processing.gui.streamlit.sanitization_check_tab.st.data_editor") as editor, \
+                patch("snomed_post_processing.gui.streamlit.sanitization_check_tab.st.download_button") as download:
+            _render_suggestion_overview([suggestion])
+        table = editor.call_args.args[0]
+        self.assertEqual(table.iloc[0]["Document"], suggestion.finding.document)
+        self.assertEqual(download.call_args.kwargs["data"], _masked_overview_csv(table))
+        self.assertEqual(download.call_args.kwargs["on_click"], "ignore")
+        self.assertEqual(download.call_args.kwargs["mime"], "text/csv")
+        self.assertIn("not full anonymization", download.call_args.kwargs["help"])
+        with patch("snomed_post_processing.gui.streamlit.sanitization_check_tab.st.download_button") as download:
+            _render_suggestion_overview([])
+        download.assert_not_called()
 
     def test_gui_boost_reaches_scoring_and_saved_suggestion_metadata(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -104,6 +148,7 @@ with patch("streamlit.segmented_control", side_effect=lambda *args, **kwargs: kw
             next(item for item in app.button if item.label == "Generate sanitization suggestions").click().run()
             self.assertFalse(app.exception, str(app.exception))
             self.assertFalse(app.error, str(app.error))
+            self.assertIn("Download masked overview CSV", {item.label for item in app.get("download_button")})
             settings = app.session_state["sanitization_suggestions_metadata"]["settings"]
             self.assertEqual(settings["bm25_semantic_tag_boost_percent"], 37.0)
             self.assertTrue(settings["bm25_fsn_semantic_tags_excluded"])
