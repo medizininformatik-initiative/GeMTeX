@@ -12,6 +12,7 @@ from snomed_post_processing.sanitization import (
     SUPPORTED_ASSOCIATION_TYPES, SanitizationResolver, apply_semantic_bm25_fallback,
     sanitization_suggestions_json_text, write_sanitization_markdown_report,
 )
+from snomed_post_processing.sanitization.semantic_text import normalize_fsn_postfixes
 from snomed_post_processing.uima_processing.scope import annotator_in_scope, normalize_annotators, scope_covers
 
 DEFAULT_ASSOCIATIONS = tuple(name for name in SUPPORTED_ASSOCIATION_TYPES if name not in {"MOVED_FROM", "REFERS_TO"})
@@ -31,9 +32,11 @@ class SuggestionSettings:
     bm25_min_lexical_score: float = 0.0
     bm25_max_candidates: int = 5
     bm25_semantic_tag_boost_percent: float = 10.0
+    bm25_excluded_fsn_postfixes: tuple[str, ...] = ("action",)
     snogit_bm25: bool = True
 
     def validate(self):
+        normalize_fsn_postfixes(self.bm25_excluded_fsn_postfixes)
         if self.target_view not in {"policy", "release"} or self.release_blacklist_mode not in {"none", "embedded", "custom", "embedded+custom"}:
             raise ValueError("Select valid replacement requirements.")
         if set(self.allowed_association_types) - set(SUPPORTED_ASSOCIATION_TYPES):
@@ -94,6 +97,7 @@ def generate_suggestions(hdf5, findings, metadata, policy, settings, *, binding,
             suggestions, hdf5, min_score=settings.bm25_min_score,
             min_lexical_score=settings.bm25_min_lexical_score, max_candidates=settings.bm25_max_candidates,
             semantic_tag_boost_percent=settings.bm25_semantic_tag_boost_percent,
+            excluded_fsn_postfixes=settings.bm25_excluded_fsn_postfixes,
             allow_blacklist_findings=settings.blacklist_bm25_suggestions, snogit_sidecar_path=cache, **constraints)
     cache_members = []
     if settings.semantic_bm25_fallback and settings.snogit_bm25 and cache is not None:
@@ -115,7 +119,7 @@ def generate_suggestions(hdf5, findings, metadata, policy, settings, *, binding,
         hdf5_release_date=summary.concepts_release_date, hdf5_policy_date=summary.concepts_policy_date,
         hdf5_rf2_view=summary.concepts_rf2_view, finding_count=len(findings), suggestion_count=len(suggestions),
         target_view=settings.target_view, finding_contexts=contexts,
-        settings={**asdict(settings), "snogit_cache_path": str(cache) if cache else None,
+        settings={**asdict(settings), "bm25_excluded_fsn_postfixes": list(normalize_fsn_postfixes(settings.bm25_excluded_fsn_postfixes)), "snogit_cache_path": str(cache) if cache else None,
                   "snogit_members": cache_members, "custom_blacklist_path": str(custom) if custom else None,
                   "enforce_embedded_blacklist": constraints["release_exclude_blacklist"],
                   "custom_blacklist_concepts": len(constraints["runtime_blacklist_indices"]),

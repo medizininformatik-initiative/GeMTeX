@@ -67,16 +67,20 @@ class GenerationBackendTest(unittest.TestCase):
         self.assertNotIn("MOVED_FROM", DEFAULT_ASSOCIATIONS)
         self.assertNotIn("REFERS_TO", DEFAULT_ASSOCIATIONS)
         options = SuggestionSettings(snogit_bm25=False, allowed_association_types=(), ancestor_max_distance=None,
-                                     ancestor_max_relative_distance=None, bm25_semantic_tag_boost_percent=0)
+                                     ancestor_max_relative_distance=None, bm25_semantic_tag_boost_percent=0,
+                                     bm25_excluded_fsn_postfixes=(" ACTION ", "custom"))
         with patch("snomed_post_processing.pipelines.suggestion_generation.apply_semantic_bm25_fallback", side_effect=lambda suggestions, *a, **k: suggestions) as bm25:
             result = self.generate(settings=options)
         self.assertEqual(bm25.call_args.kwargs["semantic_tag_boost_percent"], 0)
+        self.assertEqual(bm25.call_args.kwargs["excluded_fsn_postfixes"], (" ACTION ", "custom"))
+        self.assertEqual(json.loads(result.json)["metadata"]["settings"]["bm25_excluded_fsn_postfixes"], ["action", "custom"])
         self.assertTrue(bm25.call_args.kwargs["allow_blacklist_findings"])
         self.assertEqual(json.loads(result.json)["metadata"]["settings"]["allowed_association_types"], [])
         with self.assertRaisesRegex(ValueError, "SNOGIT"):
             self.generate(settings=SuggestionSettings())
         for settings in (replace(options, bm25_min_score=float("nan")), replace(options, bm25_max_candidates=0),
-                         replace(options, bm25_semantic_tag_boost_percent=101), replace(options, ancestor_max_relative_distance=2)):
+                         replace(options, bm25_semantic_tag_boost_percent=101), replace(options, ancestor_max_relative_distance=2),
+                         replace(options, bm25_excluded_fsn_postfixes=("",)), replace(options, bm25_excluded_fsn_postfixes="action")):
             with self.assertRaises(ValueError):
                 settings.validate()
 
@@ -215,6 +219,25 @@ class GenerationControlsTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(self.panel.completed, self.panel.status.text)
         self.assertIs(self.cpu.await_args.args[0], run_generation)
         self.assertFalse(any(call.args[0] is run_generation for call in self.io.await_args_list))
+
+    async def test_postfix_rows_default_custom_disable_and_metadata(self):
+        self.assertEqual(len(self.panel.postfix_controls), 4)
+        self.assertEqual(self.panel.settings().bm25_excluded_fsn_postfixes, ("action",))
+        for _, checked, _ in self.panel.postfix_controls:
+            checked.set_value(False)
+        self.assertEqual(self.panel.settings().bm25_excluded_fsn_postfixes, ())
+        with self.client:
+            self.panel.add_postfix(" Custom ", enabled=True)
+        self.assertEqual(self.panel.settings().bm25_excluded_fsn_postfixes, ("custom",))
+        self.io.assert_not_awaited()
+        self.cpu.assert_not_awaited()
+        await self.checked_generation()
+        self.assertEqual(json.loads(self.panel.completed[0].json)["metadata"]["settings"]["bm25_excluded_fsn_postfixes"], ["custom"])
+        self.panel.postfix_controls[-1][2].set_value("")
+        self.assertFalse(self.panel.generate_button.enabled)
+        self.panel.remove_postfix(self.panel.postfix_controls[-1])
+        self.assertEqual(self.panel.settings().bm25_excluded_fsn_postfixes, ())
+        self.assertEqual(self.cpu.await_count, 1)
 
     async def test_input_changes_never_process_and_generation_does_not_replace_review(self):
         self.io.assert_not_awaited()

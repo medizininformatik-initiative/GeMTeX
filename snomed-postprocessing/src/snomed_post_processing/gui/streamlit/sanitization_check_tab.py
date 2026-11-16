@@ -14,6 +14,7 @@ import streamlit as st
 
 from snomed_post_processing.findings_io import read_critical_findings_json_with_metadata
 from snomed_post_processing.terminology import policy_label
+from snomed_post_processing.sanitization.semantic_text import FSN_POSTFIX_PRESETS, normalize_fsn_postfixes
 from snomed_post_processing.hdf5_handling.metadata import inspect_hdf5_metadata
 from snomed_post_processing.hdf5_handling.policy import (
     read_blacklist_rule_file,
@@ -284,6 +285,14 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                 "FSN semantic tags are excluded from word matching and lexical overlap. "
                 "The boost separately rewards matching tags. Regenerate suggestions after changing scoring settings."
             )
+            st.markdown("#### Excluded FSN postfixes")
+            postfix_rows = st.data_editor(
+                pd.DataFrame([{"Exclude": postfix == "action", "Postfix": postfix} for postfix in FSN_POSTFIX_PRESETS]),
+                key="bm25_fsn_postfix_editor", num_rows="dynamic", hide_index=True, width="stretch",
+                column_config={"Exclude": st.column_config.CheckboxColumn("Exclude", default=False),
+                               "Postfix": st.column_config.TextColumn("Postfix", required=True)},
+            )
+            st.caption("Only selected literal postfixes after the last whitespace-surrounded hyphen are removed from FSN matching text. Unspaced hyphens, clinical text and SNOGIT terms remain unchanged. Optional presets may carry meaning; regenerate suggestions after changes. Uncheck all rows to disable.")
             st.markdown("#### Optional SNOGIT/interface terms")
             use_snogit_bm25 = st.checkbox(
                 "Use SNOGIT/interface terms for BM25 candidates",
@@ -344,6 +353,15 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
         settings_applied = st.form_submit_button(
             "Apply suggestion settings", help="Save these settings. Generate suggestions separately to use them.",
         )
+    postfix_error = None
+    try:
+        excluded_fsn_postfixes = normalize_fsn_postfixes(
+            [row["Postfix"] for row in postfix_rows.to_dict("records") if row.get("Exclude")]
+        )
+    except ValueError as error:
+        excluded_fsn_postfixes = ()
+        postfix_error = str(error)
+        st.error(postfix_error)
     if settings_applied:
         st.success("Suggestion settings applied.")
 
@@ -491,6 +509,7 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
         bm25_min_lexical_score=float(sanitize_bm25_min_lexical_score),
         bm25_max_candidates=int(sanitize_bm25_max_candidates),
         bm25_semantic_tag_boost_percent=float(sanitize_bm25_semantic_tag_boost_percent),
+        bm25_excluded_fsn_postfixes=excluded_fsn_postfixes,
     )
 
     custom_blacklist_ready = (
@@ -506,7 +525,7 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
         "Generate sanitization suggestions",
         help="Generate replacement proposals using the current settings. Review and select actions separately; no CAS files change.",
         type="primary",
-        disabled=not inputs.hdf5_file or not (use_session_findings or uploaded_findings_file) or not snogit_ready or not custom_blacklist_ready,
+        disabled=not inputs.hdf5_file or not (use_session_findings or uploaded_findings_file) or not snogit_ready or not custom_blacklist_ready or postfix_error is not None,
     ):
         try:
             with st.status(
@@ -629,6 +648,7 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                         min_lexical_score=sanitize_bm25_min_lexical_score,
                         max_candidates=int(sanitize_bm25_max_candidates),
                         semantic_tag_boost_percent=float(sanitize_bm25_semantic_tag_boost_percent),
+                        excluded_fsn_postfixes=excluded_fsn_postfixes,
                         allow_blacklist_findings=sanitize_blacklist_suggestions,
                         snogit_sidecar_path=snogit_sidecar_path,
                         target_view=inputs.target_view,
@@ -667,6 +687,7 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                 "bm25_min_lexical_score": float(sanitize_bm25_min_lexical_score),
                 "bm25_max_candidates": int(sanitize_bm25_max_candidates),
                 "bm25_semantic_tag_boost_percent": float(sanitize_bm25_semantic_tag_boost_percent),
+                "bm25_excluded_fsn_postfixes": list(excluded_fsn_postfixes),
                 "bm25_fsn_semantic_tags_excluded": True,
                 "snogit_bm25": bool(use_snogit_bm25),
                 "snogit_members": list(selected_snogit_members),
@@ -846,6 +867,7 @@ def _render_active_settings_notice(
     bm25_min_lexical_score: float,
     bm25_max_candidates: int,
     bm25_semantic_tag_boost_percent: float = 10.0,
+    bm25_excluded_fsn_postfixes: tuple[str, ...] = (),
 ) -> None:
     ancestor_bits = []
     if historical_ancestor_fallback:
@@ -856,7 +878,8 @@ def _render_active_settings_notice(
     ancestor_text = "on" + (f" ({', '.join(ancestor_bits)})" if ancestor_bits else "") if historical_ancestor_fallback else "off"
     bm25_text = (
         f"on (score ≥{bm25_min_score:.2f}, lexical ≥{bm25_min_lexical_score:.2f}, "
-        f"{bm25_max_candidates} candidates + cutoff ties, tag boost {bm25_semantic_tag_boost_percent:g}%)"
+        f"{bm25_max_candidates} candidates + cutoff ties, tag boost {bm25_semantic_tag_boost_percent:g}%, "
+        f"excluded FSN postfixes: {', '.join(bm25_excluded_fsn_postfixes) or 'none'})"
         if semantic_bm25_fallback
         else "off"
     )

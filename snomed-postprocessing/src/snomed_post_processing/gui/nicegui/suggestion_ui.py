@@ -6,6 +6,7 @@ import uuid
 
 from snomed_post_processing.pipelines.suggestion_generation import DEFAULT_ASSOCIATIONS, SuggestionSettings
 from snomed_post_processing.sanitization import ASSOCIATION_TYPE_DESCRIPTIONS, SUPPORTED_ASSOCIATION_TYPES
+from snomed_post_processing.sanitization.semantic_text import FSN_POSTFIX_PRESETS, normalize_fsn_postfixes
 from snomed_post_processing.sanitization.concept_rules import (
     ConceptRule, DEFAULT_CONCEPT_RULES, preserve_rule_edits, read_rules_json, rules_json_text, validate_rules,
 )
@@ -101,6 +102,13 @@ class SuggestionControls:
                 self.candidates = ui.number("Maximum retained candidates", value=5, min=1, max=50, step=1, on_change=self.changed)
                 self.boost = ui.number("Matching semantic-tag boost (%)", value=10, min=0, max=100, on_change=self.changed)
             ui.label("FSN tags are excluded from lexical matching; 0% disables the separate tag boost. Cutoff ties and incomplete-retrieval flags are retained. BM25 scores are not clinical confidence.").classes("text-sm")
+            ui.label("Excluded FSN postfixes").classes("font-medium")
+            self.postfix_controls = []
+            self.postfix_rows = ui.column().classes("w-full")
+            for postfix in FSN_POSTFIX_PRESETS:
+                self.add_postfix(postfix, enabled=postfix == "action")
+            ui.button("Add postfix", on_click=lambda: self.add_postfix()).props("flat dense")
+            ui.label("Only selected literal postfixes after the last whitespace-surrounded hyphen are removed from FSN matching text. Clinical text, unspaced hyphens and SNOGIT remain unchanged. Optional presets may carry meaning; regenerate suggestions after changes. Uncheck all to disable.").classes("text-sm")
             self.snogit = ui.checkbox("Use SNOGIT/interface terms for BM25 candidates", value=True, on_change=self.changed)
             self.cache = FileSource(ui, "Processed SNOGIT cache HDF5", (".hdf5", ".h5"), inputs.data_dir, self.changed)
             self.snogit_source = FileSource(ui, "SNOGIT ZIP or .dat source", (".zip", ".dat"), inputs.data_dir, self.snogit_changed)
@@ -223,6 +231,23 @@ class SuggestionControls:
         self.uploader.set_enabled(not self.busy)
         self.results.set_visibility(self.artifact_current and not self.busy)
 
+    def add_postfix(self, postfix="", *, enabled=False):
+        with self.postfix_rows:
+            with self.ui.row().classes("w-full items-center") as row:
+                checked = self.ui.checkbox("Exclude", value=enabled, on_change=self.changed)
+                value = self.ui.input("Postfix", value=postfix, on_change=self.changed).classes("grow")
+                self.ui.button(icon="close", on_click=lambda: self.remove_postfix(item)).props("flat round dense").tooltip("Remove postfix row")
+        item = (row, checked, value)
+        self.postfix_controls.append(item)
+        self.changed()
+
+    def remove_postfix(self, item):
+        if item not in self.postfix_controls:
+            return
+        self.postfix_controls.remove(item)
+        item[0].delete()
+        self.changed()
+
     def settings(self, *, rules=False):
         base = dict(target_view=self.target.value, release_blacklist_mode=self.exclusion.value)
         if rules:
@@ -235,7 +260,9 @@ class SuggestionControls:
             ancestor_max_relative_distance=float(self.ratio.value) if self.relative.value else None,
             semantic_bm25_fallback=self.bm25.value, blacklist_bm25_suggestions=self.blacklist_bm25.value,
             bm25_min_score=float(self.score.value), bm25_min_lexical_score=float(self.lexical.value),
-            bm25_max_candidates=int(self.candidates.value), bm25_semantic_tag_boost_percent=float(self.boost.value), snogit_bm25=self.snogit.value)
+            bm25_max_candidates=int(self.candidates.value), bm25_semantic_tag_boost_percent=float(self.boost.value),
+            bm25_excluded_fsn_postfixes=normalize_fsn_postfixes([value.value for _, checked, value in self.postfix_controls if checked.value]),
+            snogit_bm25=self.snogit.value)
         settings.validate()
         return settings
 

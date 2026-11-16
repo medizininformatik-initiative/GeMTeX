@@ -9,6 +9,7 @@ expanding the main setup and workflow instructions.
 - [Review summary counts](#review-summary-counts)
 - [Exclusion-list findings without replacements](#exclusion-list-findings-without-replacements)
 - [Diagnostic candidates](#diagnostic-candidates)
+- [FSN postfix exclusions](#fsn-postfix-exclusions)
 - [SNOGIT retrieval limits](#snogit-retrieval-limits)
   - [What the three limits mean](#what-the-three-limits-mean)
   - [Term rows, hits and final candidates](#term-rows-hits-and-final-candidates)
@@ -75,6 +76,54 @@ They help explain why no replacement was suggested or why other candidates were
 retained. They do not count toward the selectable candidate count. After changing
 relevant settings, regenerate suggestions; existing diagnostics are not
 automatically promoted to selectable candidates.
+
+## FSN postfix exclusions
+
+In **Advanced suggestion settings → Excluded FSN postfixes**, each row has an
+**Exclude** checkbox and a **Postfix** value. Only `action` is selected by default;
+the other presets are available but unchecked. Uncheck every row to disable
+postfix exclusion. In Streamlit, add/delete custom rows in the table and submit
+**Apply suggestion settings**; in NiceGUI, use **Add postfix** or a row's remove
+button. Editing settings never starts generation or changes existing review choices.
+
+These are recurring **classification-like suffixes**, not guaranteed meaningless
+text. They are candidates for reducing repetitive lexical evidence, not a general
+recommendation to discard concept distinctions.
+
+| Postfix | Exclude by default | Active concepts in local scan | Verified example FSN | SCTID |
+|---|---|---:|---|---|
+| `action` | Yes | 324 | Evaluation - action (qualifier value) | `129265001` |
+| `unit of product usage` | No | 58 | Applicator - unit of product usage (qualifier value) | `1641000175108` |
+| `dosing instruction fragment` | No | 35 | At - dosing instruction fragment (qualifier value) | `420246001` |
+| `dosing instruction imperative` | No | 25 | Apply - dosing instruction imperative (qualifier value) | `417924000` |
+
+Counts are from the read-only scan of
+`data/gemtex_snomedct_codes_release20260401_policy20240401.hdf5`, not a global
+SNOMED count or a count of policy-eligible replacements. All active matches for
+these four postfixes had the semantic tag `qualifier value` in this snapshot.
+
+Postfixes such as `non-surgical`, `open`, `closed`, and `normal` are **not**
+presets: removing them can erase clinically meaningful distinctions. Even the
+optional presets above can carry useful context; different concepts may become
+lexically indistinguishable after stripping. BM25 similarity is not clinical
+replacement confidence.
+
+Matching removes the trailing semantic tag first, then inspects the last ASCII
+hyphen surrounded by whitespace on **both sides**. Only a complete,
+case-insensitive match to a selected literal postfix is removed, and only if a
+nonempty first part remains. For example, selected `action` turns
+`Evaluation - action (qualifier value)` into `Evaluation` for matching, while
+`Evaluation-action (qualifier value)` remains `Evaluation-action`.
+Ordinary internal hyphens remain intact; tokenization itself does not change.
+
+The same cleanup applies to FSN index text and the source-FSN part of queries,
+not annotation text or SNOGIT terms. Full FSNs, SCTIDs, semantic tags and the
+separate tag boost remain unchanged. Selected postfixes are recorded in suggestion
+metadata as `settings.bm25_excluded_fsn_postfixes`, with duplicates removed and
+case/outer whitespace normalized. Changed settings require explicitly regenerating
+suggestions, not rebuilding the processed SNOGIT cache. Standalone resolver/API and
+CLI defaults retain postfixes; programmatic callers can opt in through
+`excluded_fsn_postfixes`. The GUI default is `action` only.
 
 ## SNOGIT retrieval limits
 

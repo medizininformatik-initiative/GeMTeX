@@ -19,7 +19,7 @@ from ..hdf5_handling.policy import read_candidate_validity_sets, read_concepts, 
 from .bm25_index import BM25Index
 from .models import EXCLUSION_LIST_NO_REPLACEMENT_REASON, SanitizationStatus
 from .semantic_models import SemanticBm25Candidate, SemanticBm25Suggestion
-from .semantic_text import _fsn_text, _query_text, _semantic_tag, _tokenize
+from .semantic_text import _fsn_text, _query_text, _semantic_tag, _tokenize, normalize_fsn_postfixes
 from .snogit_sidecar import SnogitSidecarBm25Searcher, validate_snogit_sidecar_compatibility
 
 MAX_TIED_CANDIDATES = 2000
@@ -58,6 +58,7 @@ class SemanticBm25Resolver:
         b: float = 0.75,
         use_semantic_tag_boost: bool = True,
         semantic_tag_boost_percent: float = 10.0,
+        excluded_fsn_postfixes: Sequence[str] = (),
         allow_blacklist_findings: bool = False,
         snogit_sidecar_path: Optional[Union[str, pathlib.Path]] = None,
         use_snogit: bool = False,
@@ -83,6 +84,7 @@ class SemanticBm25Resolver:
         self._snogit_searcher: Optional[SnogitSidecarBm25Searcher] = None
         self._snogit_query_cache = {}
         self._snogit_retrieval_limits = ()
+        self.excluded_fsn_postfixes = normalize_fsn_postfixes(excluded_fsn_postfixes)
         self.semantic_tag_boost_percent = float(semantic_tag_boost_percent)
         if not math.isfinite(self.semantic_tag_boost_percent) or not 0 <= self.semantic_tag_boost_percent <= 100:
             raise ValueError("Semantic-tag boost must be a finite percentage between 0 and 100.")
@@ -129,7 +131,7 @@ class SemanticBm25Resolver:
         if not finding.fsn and source_fsn:
             finding = dataclasses.replace(finding, fsn=source_fsn)
 
-        query = _query_text(finding, source_fsn)
+        query = _query_text(finding, source_fsn, self.excluded_fsn_postfixes)
         query_tokens = _tokenize(query)
         snogit_query_tokens = _tokenize(finding.covered_text)
         if not query_tokens and not snogit_query_tokens:
@@ -235,7 +237,7 @@ class SemanticBm25Resolver:
         for idx in range(len(self.codes)):
             if self.candidate_validity_sets.check_index(idx).acceptable and self.fsn[idx]:
                 self.document_indices.append(idx)
-                self.documents.append(_tokenize(_fsn_text(self.fsn[idx])))
+                self.documents.append(_tokenize(_fsn_text(self.fsn[idx], self.excluded_fsn_postfixes)))
                 self.document_sources.append("snomed_fsn")
                 self.document_terms.append(self.fsn[idx])
                 self.document_source_members.append(None)

@@ -152,10 +152,26 @@ with patch("streamlit.segmented_control", side_effect=lambda *args, **kwargs: kw
             settings = app.session_state["sanitization_suggestions_metadata"]["settings"]
             self.assertEqual(settings["bm25_semantic_tag_boost_percent"], 37.0)
             self.assertTrue(settings["bm25_fsn_semantic_tags_excluded"])
+            self.assertEqual(settings["bm25_excluded_fsn_postfixes"], ["action"])
             expected = suggest_semantic_bm25(_finding(), path, semantic_tag_boost_percent=37.0, min_score=0, min_lexical_score=0)
             actual = app.session_state["sanitization_suggestions"][0]
             self.assertAlmostEqual(actual.score, expected.score)
             self.assertEqual(actual.replacement_code, expected.replacement_code)
+            from snomed_post_processing.gui.streamlit import sanitization_check_tab as tab
+            render_editor = tab.st.data_editor
+            # AppTest has no cell-edit API for data_editor; supply its returned rows.
+            for selected, excluded in (([], []), (["unit of product usage", " Custom "], ["custom", "unit of product usage"])):
+                rows = pd.DataFrame([{"Exclude": True, "Postfix": value} for value in selected], columns=["Exclude", "Postfix"])
+                def edited_table(frame, **kwargs):
+                    return rows if kwargs.get("key") == "bm25_fsn_postfix_editor" else render_editor(frame, **kwargs)
+                previous = app.session_state["sanitization_suggestions_metadata"]["settings"]["bm25_excluded_fsn_postfixes"]
+                with patch.object(tab.st, "data_editor", side_effect=edited_table):
+                    next(item for item in app.button if item.label == "Apply suggestion settings").click().run()
+                    self.assertFalse(app.exception, str(app.exception))
+                    self.assertEqual(app.session_state["sanitization_suggestions_metadata"]["settings"]["bm25_excluded_fsn_postfixes"], previous)
+                    next(item for item in app.button if item.label == "Generate sanitization suggestions").click().run()
+                    self.assertFalse(app.exception, str(app.exception))
+                    self.assertEqual(app.session_state["sanitization_suggestions_metadata"]["settings"]["bm25_excluded_fsn_postfixes"], excluded)
 
     def test_release_blacklist_mode_helpers(self):
         self.assertFalse(_enforce_embedded_blacklist("none"))

@@ -89,7 +89,14 @@ when generation explicitly runs.
 The settings mirror Streamlit: Policy rules / Active release, all four release
 exclusion modes, historical associations (including an explicitly empty selection),
 ancestor limits, semantic BM25, exclusion-finding BM25, lexical/score thresholds,
-retention limit and 0–100% tag boost. GUI defaults are unchanged. SNOGIT defaults on
+retention limit and 0–100% tag boost. **Excluded FSN postfixes** has selectable rows
+with `action` enabled by default and three unchecked classification-like presets;
+add/remove custom rows or uncheck all to disable. Only selected complete postfixes
+after the last whitespace-surrounded ASCII hyphen are removed from FSN index/query
+text. Annotation text, SNOGIT, original FSNs and tag boosting remain unchanged.
+The selection is saved in metadata; regenerate explicitly after changes. See the
+[user guide](../../../../docs/user-guide.md#fsn-postfix-exclusions) for examples and
+meaning-loss cautions. Other GUI defaults are unchanged. SNOGIT defaults on
 and requires a compatible processed cache, or an explicit opt-out. Cache/source
 selectors default to Data directory; all three file modes work. Inspect members,
 then explicitly create a cache; neither action starts generation. Raw `.dat`
