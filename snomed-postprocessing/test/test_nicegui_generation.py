@@ -176,14 +176,16 @@ class GenerationControlsTest(unittest.IsolatedAsyncioTestCase):
         from nicegui import ui, Client
         from nicegui.page import page
         from snomed_post_processing.gui.nicegui.policy_ui import PolicyCheckControls
+        from snomed_post_processing.gui.nicegui.shared_inputs import SharedInputControls
         from snomed_post_processing.gui.nicegui.review_panel import ReviewPanelControls
         self.ui, self.client = ui, Client(page("/generation-test"))
         with self.client:
-            self.policy = PolicyCheckControls(ui)
+            self.inputs = SharedInputControls(ui)
+            self.policy = PolicyCheckControls(ui, self.inputs)
             banner, source, scope = ui.label(), ui.label(), ui.label()
             with ui.column() as parent:
                 self.review = ReviewPanelControls(ui, parent, banner=banner, source=source, scope=scope)
-            self.panel = SuggestionControls(ui, self.policy, lambda: self.review)
+            self.panel = SuggestionControls(ui, self.inputs, self.policy, lambda: self.review)
             self.panel.connect_review()
         self.worker = patch("nicegui.run.io_bound", new=AsyncMock(side_effect=inline))
         self.io = self.worker.start()
@@ -191,7 +193,7 @@ class GenerationControlsTest(unittest.IsolatedAsyncioTestCase):
         self.cpu = self.cpu_worker.start()
         self.editor = patch.object(self.panel.rule_editor, "get_client_data", new=AsyncMock(side_effect=lambda: copy.deepcopy(self.panel.records)))
         self.editor.start()
-        for source, name in ((self.policy.project, "project.zip"), (self.policy.lists, "policy.hdf5")):
+        for source, name in ((self.inputs.project, "project.zip"), (self.inputs.lists, "policy.hdf5")):
             source.mode.set_value("Server path")
             source.path.set_value(str(FIXTURE / name))
         self.panel.bm25.set_value(False)
@@ -242,15 +244,15 @@ class GenerationControlsTest(unittest.IsolatedAsyncioTestCase):
         session = self.review.controls.session
         session.mark_document(old_source.findings[0].row_id, True)
         session.save()
-        self.policy.project.path.set_value("")
-        self.policy.lists.path.set_value("")
+        self.inputs.project.path.set_value("")
+        self.inputs.lists.path.set_value("")
         await self.panel.load_suggestions(upload_event(content, "restored.json"))
         self.assertTrue(self.panel.results.visible, self.panel.status.text)
         self.assertEqual(len(self.panel.overview.options["rowData"]), 10)
         self.assertIs(self.review.state, old_source)
         self.assertIs(self.review.controls.session, session)
         self.assertTrue(session.reviewed_documents)
-        self.policy.prefix.set_value("")
+        self.inputs.prefix.set_value("")
         self.assertTrue(self.panel.results.visible)
         with patch.object(self.ui.download, "content") as download:
             await self.panel.download("json")
@@ -295,8 +297,8 @@ class GenerationControlsTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(self.review.state.source_name)
 
     async def test_saved_findings_explain_missing_hdf5_and_generate_without_project(self):
-        self.policy.project.path.set_value("")
-        self.policy.lists.path.set_value("")
+        self.inputs.project.path.set_value("")
+        self.inputs.lists.path.set_value("")
         content = (FIXTURE / "critical-findings.json").read_bytes()
         async def save(path):
             path.write_bytes(content)
@@ -308,7 +310,7 @@ class GenerationControlsTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(self.panel.generation_blockers()), 1)
         await self.panel.generate()
         self.cpu.assert_not_awaited()
-        self.policy.lists.path.set_value(str(FIXTURE / "policy.hdf5"))
+        self.inputs.lists.path.set_value(str(FIXTURE / "policy.hdf5"))
         self.assertTrue(self.panel.generate_button.enabled)
         self.assertIn("file validity", self.panel.requirements.text)
         await self.panel.generate()
@@ -336,10 +338,10 @@ class GenerationControlsTest(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.panel.generate_button.enabled)
         self.assertIn("Correct advanced suggestion settings", self.panel.requirements.text)
         self.panel.candidates.set_value(5)
-        self.policy.project.uploading = True
+        self.inputs.project.uploading = True
         self.panel.refresh()
         self.assertIn("project ZIP upload", self.panel.requirements.text)
-        self.policy.project.uploading = False
+        self.inputs.project.uploading = False
         self.panel.busy = True
         self.panel.refresh()
         self.assertFalse(self.panel.generate_button.enabled)
@@ -351,16 +353,16 @@ class GenerationControlsTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.io.await_count, read_calls)
 
     async def test_current_session_requirements_explain_policy_check_and_zip(self):
-        self.policy.project.path.set_value("")
+        self.inputs.project.path.set_value("")
         self.assertIn("project ZIP", self.panel.requirements.text)
         self.assertIn("Run Check policy", self.panel.requirements.text)
         self.assertFalse(self.panel.generate_button.enabled)
 
     async def test_loading_annotators_normalizes_typed_scope_without_broadening(self):
-        self.policy.annotators.set_options({" ALICE ": "Alice", "absent": "absent"}, value=[" ALICE ", "absent"])
-        await self.policy.load_annotators()
-        self.assertEqual(self.policy.settings().annotators, ("absent", "alice"))
-        self.assertEqual(set(self.policy.annotators.value), {"absent", "alice"})
+        self.inputs.annotators.set_options({" ALICE ": "Alice", "absent": "absent"}, value=[" ALICE ", "absent"])
+        await self.inputs.load_annotators()
+        self.assertEqual(self.inputs.settings().annotators, ("absent", "alice"))
+        self.assertEqual(set(self.inputs.annotators.value), {"absent", "alice"})
 
     async def test_saved_findings_source_supports_server_files_without_policy_check(self):
         self.policy.saved_findings.mode.set_value("Server path")
@@ -403,7 +405,7 @@ class GenerationControlsTest(unittest.IsolatedAsyncioTestCase):
         with patch("nicegui.run.cpu_bound", side_effect=delayed):
             task = asyncio.create_task(self.panel.generate())
             await entered.wait()
-            self.policy.prefix.set_value("")
+            self.inputs.prefix.set_value("")
             release.set()
             await task
         self.assertIs(self.panel.completed, previous)
@@ -514,7 +516,7 @@ class GenerationControlsTest(unittest.IsolatedAsyncioTestCase):
             await self.panel.apply_rules()
         session = self.review.controls.session
         session.save()
-        self.policy.annotators.set_options({"alice": "Alice"}, value=["alice"])
+        self.inputs.annotators.set_options({"alice": "Alice"}, value=["alice"])
         self.assertTrue(session.invalid_rules)
         with self.assertRaises(ReviewError):
             session.export_text()

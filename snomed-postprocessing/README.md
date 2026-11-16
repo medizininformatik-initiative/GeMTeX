@@ -436,3 +436,8 @@ The GUI has three tabs:
 - The policy check can take a while on large projects or large policy files.
 - A default HDF5 path is attempted when `--lists-path` is omitted, but providing the policy file explicitly is recommended.
 - Use masked markdown reports when sharing results outside a protected environment.
+
+## Addendum: user guide
+
+See the [user guide](docs/user-guide.md) for detailed explanations of results and
+warnings, starting with [SNOGIT retrieval limits](docs/user-guide.md#snogit-retrieval-limits).

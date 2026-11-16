@@ -112,6 +112,24 @@ bm25_max_candidates
 
 Repeated normalized query texts are cached during one resolver run.
 
+## Meaning of SNOGIT retrieval limits
+
+User-facing reference: [user guide — SNOGIT retrieval limits](../../../docs/user-guide.md#snogit-retrieval-limits), linked from the main README addendum.
+
+| Recorded warning | Stage and budget | Behaviour when exceeded |
+|---|---|---|
+| `SNOGIT postings limit` | Per query token, before scoring; `max_postings_per_token=250_000`. | Skip the entire token if its postings list contains more than 250,000 term rows. Do not truncate its postings list. |
+| `SNOGIT candidate-row limit` | Union of accepted term-row IDs across tokens, before scoring; `max_candidate_rows=100_000`. | Skip the entire token if adding its rows would exceed 100,000 distinct rows. Process tokens from rarest to most common. |
+| `SNOGIT hit limit` | Returned scored term rows; generation sets `max_hits=max(max_candidates * 20, 50)`. The standalone search default is 50. | Return the highest-scoring hits and boundary ties, subject to the tie safety cap; flag when scored hits remain omitted. |
+
+A skipped token adds neither rows nor BM25 score contributions, even for rows already accepted through another token. Postings/candidate-row guards can therefore change ranking as well as coverage. Hit limiting happens after scoring. The first two budgets are internal search parameters, not GUI controls; changing the requested final candidate count changes the hit budget only.
+
+Term rows/hits are not distinct SCTIDs or project annotations. Several SNOGIT term entries can map to one concept. Returned hits still undergo target/score gates and evidence merging by SCTID; the final candidate maximum is a separate tie-aware cutoff. For example, requesting five final candidates requests 100 SNOGIT term hits, not 100 distinct targets, and does not guarantee five eligible final candidates.
+
+Boundary-hit tie expansion is bounded by `max(max_hits, 2_000)`. Cutting that group additionally records `SNOGIT tied-hit limit (N)` with the actual cap; it can coexist with the ordinary hit-limit warning. Comparisons use full-precision scores, not rounded display values.
+
+A warning indicates incomplete evidence, not necessarily an incorrect displayed candidate. Automatic BM25 acceptance is blocked by any recorded retrieval limit; manual review remains possible. Saved artifacts cannot recover omitted hits, and regeneration with unchanged inputs/budgets may repeat the warning. Increasing the final candidate count cannot repair postings/candidate-row omissions; increasing internal budgets costs memory/runtime and does not establish clinical confidence. SNOGIT guards affect its evidence channel, not the separate SNOMED FSN search.
+
 # Cutoff ties and retrieval coverage
 
 The requested candidate maximum is a **soft cutoff**: keep the entire score-tie group at its boundary, after policy/release filtering and target-code deduplication. Ties use full-precision `math.isclose` semantics (`rel_tol=1e-9`, `abs_tol=1e-9`), not rounded displayed scores. A first-place tie remains ambiguous even when the requested maximum is one; there is no preferred replacement code.

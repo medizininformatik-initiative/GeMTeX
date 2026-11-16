@@ -99,7 +99,8 @@ def fake_ui(state=None):
         panel = ReviewPanelControls(*args, **kwargs)
         reviews.append(panel)
         return panel
-    with patch("snomed_post_processing.gui.nicegui.page.PolicyCheckControls"), \
+    with patch("snomed_post_processing.gui.nicegui.page.SharedInputControls"), \
+            patch("snomed_post_processing.gui.nicegui.page.PolicyCheckControls"), \
             patch("snomed_post_processing.gui.nicegui.page.SuggestionControls"), \
             patch("snomed_post_processing.gui.nicegui.page.ReviewPanelControls", side_effect=review_panel), \
             patch("snomed_post_processing.gui.nicegui.review_panel.PreviewState", return_value=state) if state is not None else nullcontext():

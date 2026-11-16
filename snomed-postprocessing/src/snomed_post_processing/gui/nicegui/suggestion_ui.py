@@ -32,8 +32,8 @@ def rules_from_records(rows):
 
 
 class SuggestionControls:
-    def __init__(self, ui, policy, get_review):
-        self.ui, self.policy, self.get_review = ui, policy, get_review
+    def __init__(self, ui, inputs, policy, get_review):
+        self.ui, self.inputs, self.policy, self.get_review = ui, inputs, policy, get_review
         self.revision = self.rule_revision = self.rule_load_revision = 0
         self.ready = self.closed = self.busy = False
         self.completed = self.created_cache = self.member_stamp = None
@@ -79,7 +79,7 @@ class SuggestionControls:
             self.exclusion = ui.select({"none": "No exclusion list", "embedded": "Embedded exclusion list",
                                         "custom": "Custom exclusion list", "embedded+custom": "Embedded and custom exclusion lists"},
                                        value="none", label="Active-release exclusions", on_change=self.requirements_changed)
-            self.custom = FileSource(ui, "Custom exclusion-list rules", (".txt", ".tsv", ".csv"), policy.data_dir,
+            self.custom = FileSource(ui, "Custom exclusion-list rules", (".txt", ".tsv", ".csv"), inputs.data_dir,
                                      lambda: self.changed(rule_inputs=True))
             ui.label("Policy rules requires active inclusion-list concepts outside exclusions. Active release requires active concepts with optional exclusions. Neither changes Check policy; explicit rules may override list restrictions.").classes("text-sm")
         with ui.row().classes("w-full"):
@@ -102,8 +102,8 @@ class SuggestionControls:
                 self.boost = ui.number("Matching semantic-tag boost (%)", value=10, min=0, max=100, on_change=self.changed)
             ui.label("FSN tags are excluded from lexical matching; 0% disables the separate tag boost. Cutoff ties and incomplete-retrieval flags are retained. BM25 scores are not clinical confidence.").classes("text-sm")
             self.snogit = ui.checkbox("Use SNOGIT/interface terms for BM25 candidates", value=True, on_change=self.changed)
-            self.cache = FileSource(ui, "Processed SNOGIT cache HDF5", (".hdf5", ".h5"), policy.data_dir, self.changed)
-            self.snogit_source = FileSource(ui, "SNOGIT ZIP or .dat source", (".zip", ".dat"), policy.data_dir, self.snogit_changed)
+            self.cache = FileSource(ui, "Processed SNOGIT cache HDF5", (".hdf5", ".h5"), inputs.data_dir, self.changed)
+            self.snogit_source = FileSource(ui, "SNOGIT ZIP or .dat source", (".zip", ".dat"), inputs.data_dir, self.snogit_changed)
             with ui.row():
                 self.inspect_button = ui.button("Inspect SNOGIT members", on_click=self.inspect_snogit)
                 self.members = ui.select([], multiple=True, value=[], label="SNOGIT members (newest general file by default)", on_change=self.changed).classes("grow")
@@ -131,7 +131,7 @@ class SuggestionControls:
             ui.label("Loading replaces generic choices and flags; same-input rule choices are retained. Download existing reviewed decisions first if needed. No target is approved automatically.").classes("text-sm")
         self.cache.mode.set_value("Data directory")
         self.snogit_source.mode.set_value("Data directory")
-        policy.listeners.append(self.shared_changed)
+        inputs.listeners.append(self.shared_changed)
         policy.result_listeners.append(self.policy_result_changed)
         ui.context.client.on_delete(self.close)
         self.ready = True
@@ -139,7 +139,7 @@ class SuggestionControls:
 
     @property
     def version(self):
-        return self.revision, self.policy.revision
+        return self.revision, self.inputs.revision
 
     def connect_review(self):
         self.get_review().controls.before_export = self.validate_rules_current
@@ -184,11 +184,11 @@ class SuggestionControls:
         blockers = []
         if self.busy:
             blockers.append("Wait for the current generation, rule or cache task to finish.")
-        if self.policy.lists.snapshot() is None:
+        if self.inputs.lists.snapshot() is None:
             blockers.append("Select or finish uploading the SNOMED HDF5 in the shared Inputs sidebar.")
         if not self.policy.result_current:
             blockers.append("Run Check policy (project ZIP required), or restore CriticalFindings JSON in tab 1.")
-        if self.policy.project.uploading:
+        if self.inputs.project.uploading:
             blockers.append("Wait for the project ZIP upload to finish before using it for context.")
         if self.bm25.value and self.snogit.value:
             if self.cache.uploading or (self.cache.snapshot() is None and self.created_cache is None):
@@ -210,12 +210,12 @@ class SuggestionControls:
             self.findings_source.set_text(f"Findings from tab 1: {origin} · {len(self.policy.result.findings)} findings.")
         else:
             self.findings_source.set_text("No current findings. Run or restore them in tab 1.")
-        available = self.policy.lists.snapshot() is not None
+        available = self.inputs.lists.snapshot() is not None
         blockers = self.generation_blockers()
         self.generate_button.set_enabled(not blockers)
         self.requirements.set_text("Cannot generate yet:\n" + "\n".join(f"• {reason}" for reason in blockers)
                                    if blockers else "Inputs selected. Click Generate to start; file validity and findings scope are checked during generation.")
-        self.apply_button.set_enabled(not self.busy and available and self.policy.project.snapshot() is not None)
+        self.apply_button.set_enabled(not self.busy and available and self.inputs.project.snapshot() is not None)
         self.inspect_button.set_enabled(not self.busy and self.snogit_source.snapshot() is not None)
         self.cache_button.set_enabled(not self.busy and available and self.member_stamp is not None and bool(self.members.value))
         self.cache_download.set_enabled(not self.busy and self.created_cache is not None)
@@ -241,9 +241,9 @@ class SuggestionControls:
 
     def job(self, *, rules=False):
         settings = self.settings(rules=rules)
-        if rules and not (self.policy.layers.value or "").strip():
+        if rules and not (self.inputs.layers.value or "").strip():
             raise ValueError("Select at least one annotation layer.")
-        lists = self.policy.lists.snapshot()
+        lists = self.inputs.lists.snapshot()
         if lists is None:
             raise ValueError("Select the SNOMED HDF5 in the shared Inputs sidebar.")
         custom = self.custom.snapshot() if settings.target_view == "release" and "custom" in settings.release_blacklist_mode else None
@@ -254,7 +254,7 @@ class SuggestionControls:
         if not rules and not self.policy.result_current:
             raise ValueError("Run Check policy or restore CriticalFindings JSON in tab 1.")
         cache = None if rules or not (settings.semantic_bm25_fallback and settings.snogit_bm25) else self.cache.snapshot() or self.created_cache
-        return SuggestionJob(self.policy.project.snapshot(), lists, self.policy.settings(), settings, custom, cache,
+        return SuggestionJob(self.inputs.project.snapshot(), lists, self.inputs.settings(), settings, custom, cache,
                              findings_file, result, self.policy.completed_stamps,
                              self.policy.completed_stamps[0] if findings_file is not None else None)
 
@@ -522,7 +522,7 @@ class SuggestionControls:
 
     async def build_cache(self):
         from nicegui import run
-        source, lists = self.snogit_source.snapshot(), self.policy.lists.snapshot()
+        source, lists = self.snogit_source.snapshot(), self.inputs.lists.snapshot()
         if self.closed or self.busy or source is None or lists is None or not self.members.value:
             return
         version, members = self.version, tuple(self.members.value)
@@ -559,7 +559,7 @@ class SuggestionControls:
             source.close()
         self.completed = self.created_cache = self.rule_job = None
         self.created_caches.clear()
-        if self.shared_changed in self.policy.listeners:
-            self.policy.listeners.remove(self.shared_changed)
+        if self.shared_changed in self.inputs.listeners:
+            self.inputs.listeners.remove(self.shared_changed)
         if self.policy_result_changed in self.policy.result_listeners:
             self.policy.result_listeners.remove(self.policy_result_changed)

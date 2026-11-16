@@ -754,6 +754,7 @@ def _render_suggestion_overview(suggestions: list[Any]) -> None:
             "Annotator": st.column_config.TextColumn("Annotator", width="small"),
             "Source code": st.column_config.TextColumn("Source code", width="small"),
             "Covered text": st.column_config.TextColumn("Covered text", width="medium"),
+            "Offset": st.column_config.TextColumn("Offset", width="small"),
             "Issue": st.column_config.TextColumn(
                 "Issue", width="small", help="Which policy check produced the source finding.",
             ),
@@ -782,9 +783,9 @@ def _suggestion_overview_row(index: int, suggestion: Any) -> dict[str, Any]:
         "#": index,
         "Document": finding.document,
         "Annotator": finding.annotator,
-        "Retrieval limits": ", ".join(getattr(suggestion, "retrieval_limits", ())),
         "Source code": finding.code or "",
         "Covered text": finding.covered_text,
+        "Offset": ", ".join(map(str, finding.offset)),
         "Issue": policy_label(getattr(finding, "list_type", "")),
         "Status": _status_text(getattr(suggestion, "status", "")),
         "Replacement code": getattr(suggestion, "replacement_code", None) or "",
@@ -792,6 +793,7 @@ def _suggestion_overview_row(index: int, suggestion: Any) -> dict[str, Any]:
         "Reason": getattr(suggestion, "reason", "") or "",
         "Top candidates": _candidate_summary(getattr(suggestion, "candidates", ())),
         "Diagnostic candidates (not selectable)": _candidate_summary(getattr(suggestion, "context_candidates", ())),
+        "Retrieval limits": ", ".join(getattr(suggestion, "retrieval_limits", ())),
     }
 
 

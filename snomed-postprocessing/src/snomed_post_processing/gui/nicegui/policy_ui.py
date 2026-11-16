@@ -2,7 +2,7 @@
 from io import StringIO
 
 from snomed_post_processing.findings_io import read_critical_findings_json_with_metadata
-from snomed_post_processing.pipelines.policy_check import PolicyResult, PolicySettings, check_policy, project_annotators
+from snomed_post_processing.pipelines.policy_check import PolicyResult, PolicySettings, check_policy
 from snomed_post_processing.terminology import policy_label
 from snomed_post_processing.uima_processing.scope import annotator_in_scope, normalize_annotators
 from .file_sources import FileSource
@@ -48,14 +48,6 @@ def _checked_policy(project, lists, settings):
     return result, before
 
 
-def _annotators(project):
-    before = project.stamp()
-    result = project_annotators(project.path)
-    if before != project.stamp():
-        raise ValueError("Project changed during inspection.")
-    return result
-
-
 def finding_rows(findings):
     return [dict(row_id=index, document=f.document, annotator=f.annotator, sctid=f.code or "",
                  fsn=f.fsn or "", covered_text=f.covered_text, begin=f.offset[0], end=f.offset[1],
@@ -63,41 +55,19 @@ def finding_rows(findings):
 
 
 class PolicyCheckControls:
-    def __init__(self, ui):
-        self.ui = ui
+    def __init__(self, ui, inputs):
+        self.ui, self.inputs = ui, inputs
         self.revision = 0
         self.busy = self.closed = self.ready = False
         self.result = self.completed_sources = self.completed_stamps = None
         self.result_revision = None
-        self.project_path = None
         self.imported_source = None
         self.result_stale = False
         self.restore_revision = 0
-        self.listeners = []
         self.result_listeners = []
         ui.label("Check inclusion/exclusion-list policy. No annotations are changed.").classes("text-sm")
-        with ui.expansion("Project and policy inputs", value=True).classes("w-full") as self.inputs:
-            with ui.row().classes("w-full items-center"):
-                self.data_dir = ui.input("Server data directory", value="data", on_change=self.directory_changed)
-                ui.button(icon="refresh", on_click=self.directory_changed).props("flat round dense").tooltip("Refresh server file lists")
-            with ui.column().classes("gap-4 w-full min-w-0"):
-                self.project = FileSource(ui, "INCEpTION project ZIP", (".zip",), self.data_dir, self.project_changed)
-                self.lists = FileSource(ui, "SNOMED HDF5", (".hdf5", ".h5"), self.data_dir, self.changed)
-            with ui.row().classes("w-full items-center"):
-                self.annotators = ui.select({}, label="Annotators (empty = all)", multiple=True,
-                                            new_value_mode="add-unique", value=[], on_change=self.changed).classes("grow")
-                self.load_names = ui.button("Load annotators", on_click=self.load_annotators)
-            with ui.expansion("Annotation settings").classes("w-full"):
-                self.layers = ui.textarea("Target annotation types (one per line)",
-                                          value="gemtex.Concept\nwebanno.custom.Concept", on_change=self.changed).classes("w-full")
-                self.ignore = ui.textarea("Ignore overlap types (one per line)", value="", on_change=self.changed).classes("w-full")
-                self.overlap = ui.select(["overlap", "covered-by", "contains", "exact"],
-                                         label="Ignore overlap mode", value="overlap", on_change=self.changed)
-                self.feature = ui.input("SNOMED ID feature", value="id", on_change=self.changed)
-                self.prefix = ui.input("SNOMED ID prefix (empty for plain SCTIDs)",
-                                       value="http://snomed.info/id/", on_change=self.changed).classes("w-full")
         with ui.expansion("Restore CriticalFindings JSON").classes("w-full"):
-            self.saved_findings = FileSource(ui, "CriticalFindings JSON", (".json",), self.data_dir, self.restore_changed)
+            self.saved_findings = FileSource(ui, "CriticalFindings JSON", (".json",), inputs.data_dir, self.restore_changed)
             self.restore_button = ui.button("Load saved findings", on_click=self.load_saved)
             ui.label("Restores findings without ZIP/HDF5 or analysis. Full policy reports are not contained in this artifact. Limit: 50 MiB.").classes("text-sm")
         with ui.row().classes("items-center"):
@@ -136,6 +106,7 @@ class PolicyCheckControls:
                     self.report_buttons[filename] = button
                     if "masked" in filename:
                         button.tooltip("Masks document/annotator names, not clinical text. Not full anonymization.")
+        inputs.listeners.append(self.changed)
         ui.context.client.on_delete(self.close)
         self.ready = True
         self.refresh()
@@ -182,76 +153,26 @@ class PolicyCheckControls:
         if not self.ready or self.closed:
             return
         self.revision += 1
+        self.saved_findings.refresh_directory()
         self.status.set_text("Shared inputs changed. Restored findings remain available; generation validates their scope/ID settings."
                              if self.imported_source is not None else "Inputs changed. Run policy check to obtain current results.")
         self.refresh()
-        for listener in self.listeners:
-            listener()
-
-    def project_changed(self):
-        if self.ready and not self.closed:
-            if not self.project.uploading:
-                source = self.project.snapshot()
-                path = source.path if source is not None else None
-                if path != self.project_path:
-                    self.project_path = path
-                    self.annotators.set_options({}, value=[])
-            self.changed()
-
-    def directory_changed(self, _=None):
-        if not self.ready:
-            return
-        self.project.refresh_directory()
-        self.lists.refresh_directory()
-        self.saved_findings.refresh_directory()
-        self.changed()
 
     def refresh(self):
-        selected = self.project.snapshot() is not None and self.lists.snapshot() is not None
+        selected = self.inputs.project.snapshot() is not None and self.inputs.lists.snapshot() is not None
         self.run_button.set_enabled(selected and not self.busy)
-        self.load_names.set_enabled(self.project.snapshot() is not None and not self.busy)
         self.spinner.set_visibility(self.busy)
         self.restore_button.set_enabled(not self.busy and self.saved_findings.snapshot() is not None)
         self.results.set_visibility(self.result_current)
         for filename, button in self.report_buttons.items():
             button.set_enabled(self.result_current and not self.busy and filename in self.result.reports)
 
-    def settings(self):
-        lines = lambda text: tuple(line.strip() for line in (text or "").splitlines() if line.strip())
-        return PolicySettings(normalize_annotators(self.annotators.value or ()),
-                              lines(self.layers.value) or ("gemtex.Concept",), lines(self.ignore.value),
-                              self.overlap.value, self.prefix.value or "", (self.feature.value or "").strip())
-
-    async def load_annotators(self):
-        from nicegui import run
-        project = self.project.snapshot()
-        if project is None or self.busy or self.closed:
-            return
-        revision = self.revision
-        self.busy = True
-        self.status.set_text("Reading annotator names…")
-        self.refresh()
-        try:
-            names = await run.io_bound(_annotators, project)
-            if not self.closed and revision == self.revision:
-                selected = list(normalize_annotators(self.annotators.value or ()))
-                options = {**{name: name for name in selected}, **names}
-                self.annotators.set_options(options, value=selected)
-                self.status.set_text("Annotators loaded. Empty selection includes all annotators.")
-        except Exception:
-            if not self.closed and revision == self.revision:
-                self.status.set_text("Could not read annotators. Use a project ZIP containing JSON CAS or XMI, not Java serialized CAS.")
-        finally:
-            self.busy = False
-            if not self.closed:
-                self.refresh()
-
     async def run_check(self):
         from nicegui import run
-        project, lists = self.project.snapshot(), self.lists.snapshot()
+        project, lists = self.inputs.project.snapshot(), self.inputs.lists.snapshot()
         if self.closed or self.busy or project is None or lists is None:
             return
-        revision, settings = self.revision, self.settings()
+        revision, settings = self.revision, self.inputs.settings()
         self.busy = True
         self.status.set_text("Checking policy…")
         self.refresh()
@@ -309,6 +230,8 @@ class PolicyCheckControls:
             if not self.closed and revision == self.revision:
                 self.result_stale = True
                 self.changed()
+                for listener in self.result_listeners:
+                    listener()
                 self.status.set_text("Source files changed or are unavailable. Restore findings or run policy check again before downloading.")
             return
         if not self.closed and revision == self.revision and result is self.result and not self.busy:
@@ -317,8 +240,8 @@ class PolicyCheckControls:
     def close(self):
         self.closed = True
         self.revision += 1
-        self.project.close()
-        self.lists.close()
+        if self.changed in self.inputs.listeners:
+            self.inputs.listeners.remove(self.changed)
         self.saved_findings.close()
         self.restore_revision += 1
         self.result = self.completed_sources = self.imported_source = None

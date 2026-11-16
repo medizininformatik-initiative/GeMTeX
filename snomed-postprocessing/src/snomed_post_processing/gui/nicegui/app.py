@@ -12,11 +12,11 @@ NICEGUI_VERSION = "4.0.0"
 def _load_ui():
     """Load the optional frontend lazily from the shared Python environment."""
     if sys.version_info < (3, 11):
-        raise RuntimeError("The NiceGUI prototype needs Python 3.11+; use the project's .venv-py311 environment.")
+        raise RuntimeError("The NiceGUI prototype needs Python 3.11+")
     try:
         version = importlib.metadata.version("nicegui")
     except importlib.metadata.PackageNotFoundError as exc:
-        raise RuntimeError("Enable the nicegui extra in the project environment: uv sync --locked --extra nicegui (set UV_PROJECT_ENVIRONMENT=.venv-py311).") from exc
+        raise RuntimeError("Enable the nicegui extra in the project environment: uv sync --locked --extra nicegui") from exc
     if version != NICEGUI_VERSION:
         raise RuntimeError(f"This prototype targets nicegui=={NICEGUI_VERSION}; found {version}.")
     from nicegui import app, ui, events
@@ -26,7 +26,7 @@ def _load_ui():
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="Synthetic, read-only NiceGUI frontend prototype.")
+    parser = argparse.ArgumentParser(description="NiceGUI frontend version for the SNOMED Postprocessing project.")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8080)
     parser.add_argument("--show", action="store_true", help="Open a browser on startup.")
@@ -45,7 +45,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     # One server, no reload worker, no implicit browser launch.
     ui.run(host=arguments.host, port=arguments.port, show=arguments.show,
-           reload=False, title="SNOMED Postprocessing — NiceGUI prototype")
+           reload=False, title="SNOMED Postprocessing — NiceGUI version")
     return 0
 
 

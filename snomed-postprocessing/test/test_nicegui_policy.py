@@ -17,6 +17,7 @@ import zipfile
 from snomed_post_processing.findings_io.json_io import read_critical_findings_json
 from snomed_post_processing.gui.nicegui.file_sources import MAX_UPLOAD_BYTES, list_server_files
 from snomed_post_processing.gui.nicegui.policy_ui import PolicyCheckControls
+from snomed_post_processing.gui.nicegui.shared_inputs import SharedInputControls
 from snomed_post_processing.pipelines.policy_check import PolicySettings, check_policy, project_annotators
 
 FIXTURE = Path(__file__).parent / "projects" / "synthetic-annotator-scope"
@@ -81,7 +82,8 @@ class PolicyControlsTest(unittest.IsolatedAsyncioTestCase):
         self.client = Client(page("/policy-test"))
         with self.client:
             with ui.column() as self.container:
-                self.panel = PolicyCheckControls(ui)
+                self.inputs = SharedInputControls(ui)
+                self.panel = PolicyCheckControls(ui, self.inputs)
         self.worker = patch("nicegui.run.io_bound", new=AsyncMock(side_effect=inline))
         self.worker_mock = self.worker.start()
 
@@ -92,10 +94,10 @@ class PolicyControlsTest(unittest.IsolatedAsyncioTestCase):
 
     def server_inputs(self, directory=FIXTURE):
         p = self.panel
-        p.project.mode.set_value("Server path")
-        p.project.path.set_value(str(directory / "project.zip"))
-        p.lists.mode.set_value("Server path")
-        p.lists.path.set_value(str(directory / "policy.hdf5"))
+        p.inputs.project.mode.set_value("Server path")
+        p.inputs.project.path.set_value(str(directory / "project.zip"))
+        p.inputs.lists.mode.set_value("Server path")
+        p.inputs.lists.path.set_value(str(directory / "policy.hdf5"))
 
     async def test_restore_findings_without_inputs_exports_only_original_json(self):
         p = self.panel
@@ -104,12 +106,12 @@ class PolicyControlsTest(unittest.IsolatedAsyncioTestCase):
         await p.load_saved()
         self.assertTrue(p.result_current, p.status.text)
         self.assertEqual(len(p.grid.options["rowData"]), 10)
-        self.assertIsNone(p.project.snapshot())
-        self.assertIsNone(p.lists.snapshot())
+        self.assertIsNone(p.inputs.project.snapshot())
+        self.assertIsNone(p.inputs.lists.snapshot())
         self.assertTrue(p.report_buttons["critical-findings.json"].enabled)
         self.assertTrue(all(not p.report_buttons[name].enabled for name in ("policy-report.md", "policy-report.masked.md", "policy-report.json")))
         rows = copy.deepcopy(p.grid.options["rowData"])
-        p.prefix.set_value("")
+        p.inputs.prefix.set_value("")
         self.assertTrue(p.results.visible)
         self.assertEqual(p.grid.options["rowData"], rows)
         with patch.object(self.ui.download, "content") as download:
@@ -159,8 +161,8 @@ class PolicyControlsTest(unittest.IsolatedAsyncioTestCase):
             control = SuggestionControls(*args)
             suggestions.append(control)
             return control
-        def create(ui):
-            control = PolicyCheckControls(ui)
+        def create(ui, inputs):
+            control = PolicyCheckControls(ui, inputs)
             controls.append(control)
             return control
         with self.client, patch("snomed_post_processing.gui.nicegui.page.PolicyCheckControls", side_effect=create), \
@@ -184,24 +186,25 @@ class PolicyControlsTest(unittest.IsolatedAsyncioTestCase):
         policy = controls[0]
         worker_calls = self.worker_mock.await_count
         drawer = next(element for element in elements.values() if element.tag == "q-drawer")
-        self.assertIs(policy.inputs.parent_slot.parent, drawer)
-        self.assertEqual(drawer.default_slot.children.count(policy.inputs), 1)
+        self.assertIs(policy.inputs.container.parent_slot.parent, drawer)
+        self.assertIs(suggestions[0].inputs, policy.inputs)
+        self.assertEqual(drawer.default_slot.children.count(policy.inputs.container), 1)
         for tab in ("suggest", "review", "check"):
             tabs.set_value(tab)
-            self.assertIs(policy.inputs.parent_slot.parent, drawer)
-            self.assertTrue(policy.inputs.visible)
+            self.assertIs(policy.inputs.container.parent_slot.parent, drawer)
+            self.assertTrue(policy.inputs.container.visible)
         self.assertEqual(self.worker_mock.await_count, worker_calls)
         drawer.hide()
         self.assertFalse(drawer.value)
         drawer.toggle()
         self.assertTrue(drawer.value)
-        for source, name in ((policy.project, "project.zip"), (policy.lists, "policy.hdf5")):
+        for source, name in ((policy.inputs.project, "project.zip"), (policy.inputs.lists, "policy.hdf5")):
             source.mode.set_value("Server path")
             source.path.set_value(str(FIXTURE / name))
         for tab in ("suggest", "review", "check"):
             tabs.set_value(tab)
-            self.assertEqual(policy.project.snapshot().path, FIXTURE / "project.zip")
-            self.assertEqual(policy.lists.snapshot().path, FIXTURE / "policy.hdf5")
+            self.assertEqual(policy.inputs.project.snapshot().path, FIXTURE / "project.zip")
+            self.assertEqual(policy.inputs.lists.snapshot().path, FIXTURE / "policy.hdf5")
         self.assertEqual(self.worker_mock.await_count, worker_calls)
         await policy.run_check()
         self.assertIsNotNone(policy.result)
@@ -212,24 +215,24 @@ class PolicyControlsTest(unittest.IsolatedAsyncioTestCase):
     async def test_selection_and_directory_refresh_never_run_policy(self):
         p = self.panel
         self.assertFalse(p.run_button.enabled)
-        p.data_dir.set_value(str(FIXTURE))
-        for source, name in ((p.project, "project.zip"), (p.lists, "policy.hdf5")):
+        p.inputs.data_dir.set_value(str(FIXTURE))
+        for source, name in ((p.inputs.project, "project.zip"), (p.inputs.lists, "policy.hdf5")):
             source.mode.set_value("Data directory")
             self.assertIn(str(FIXTURE / name), source.choice.options)
             source.choice.set_value(str(FIXTURE / name))
             self.assertEqual(source.snapshot().path, FIXTURE / name)
         self.assertTrue(p.run_button.enabled)
         self.worker_mock.assert_not_awaited()
-        await p.load_annotators()
-        self.assertEqual(set(p.annotators.options), {"alice", "bob"})
-        p.annotators.set_value(["alice"])
+        await p.inputs.load_annotators()
+        self.assertEqual(set(p.inputs.annotators.options), {"alice", "bob"})
+        p.inputs.annotators.set_value(["alice"])
         self.assertIsNone(p.result)
-        self.assertEqual(p.settings().annotators, ("alice",))
-        p.project.path.set_value(str(FIXTURE / "project.zip"))
-        p.project.mode.set_value("Server path")
-        self.assertEqual(p.annotators.value, ["alice"])
-        p.project.path.set_value(str(FIXTURE / "different-project.zip"))
-        self.assertEqual(p.annotators.value, [])
+        self.assertEqual(p.inputs.settings().annotators, ("alice",))
+        p.inputs.project.path.set_value(str(FIXTURE / "project.zip"))
+        p.inputs.project.mode.set_value("Server path")
+        self.assertEqual(p.inputs.annotators.value, ["alice"])
+        p.inputs.project.path.set_value(str(FIXTURE / "different-project.zip"))
+        self.assertEqual(p.inputs.annotators.value, [])
 
     async def test_explicit_check_exports_all_findings_and_filters_do_not_rerun(self):
         p = self.panel
@@ -261,7 +264,7 @@ class PolicyControlsTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(p.results.visible)
         self.assertNotIn("DO_NOT_ECHO", p.status.text)
         count = self.worker_mock.await_count
-        p.prefix.set_value("")
+        p.inputs.prefix.set_value("")
         self.assertFalse(p.results.visible)
         self.assertTrue(all(not button.enabled for button in p.downloads))
         self.assertEqual(self.worker_mock.await_count, count)
@@ -280,7 +283,7 @@ class PolicyControlsTest(unittest.IsolatedAsyncioTestCase):
         with patch("nicegui.run.io_bound", side_effect=delayed):
             task = asyncio.create_task(p.run_check())
             await started.wait()
-            p.layers.set_value("changed.Layer")
+            p.inputs.layers.set_value("changed.Layer")
             finish.set()
             await task
         self.assertIsNone(p.result)
@@ -303,7 +306,7 @@ class PolicyControlsTest(unittest.IsolatedAsyncioTestCase):
             self.assertIn("changed", p.status.text)
 
     async def test_uploads_stream_to_owned_files_and_worker_references_keep_them_alive(self):
-        for source, name in ((self.panel.project, "project.zip"), (self.panel.lists, "policy.hdf5")):
+        for source, name in ((self.inputs.project, "project.zip"), (self.inputs.lists, "policy.hdf5")):
             content = (FIXTURE / name).read_bytes()
             async def save(path):
                 path.write_bytes(content)
@@ -313,11 +316,11 @@ class PolicyControlsTest(unittest.IsolatedAsyncioTestCase):
             snapshot = source.snapshot()
             self.assertEqual(snapshot.path.read_bytes(), content)
             event.file.read.assert_not_awaited()
-            if source is self.panel.project:
-                self.panel.annotators.set_options({"alice": "Alice"}, value=["alice"])
+            if source is self.inputs.project:
+                self.inputs.annotators.set_options({"alice": "Alice"}, value=["alice"])
                 rejected = SimpleNamespace(file=SimpleNamespace(name=name, size=lambda: MAX_UPLOAD_BYTES + 1, save=AsyncMock()))
                 await source.load(rejected)
-                self.assertEqual(self.panel.annotators.value, ["alice"])
+                self.assertEqual(self.inputs.annotators.value, ["alice"])
                 self.assertEqual(source.snapshot(), snapshot)
             owned_path = snapshot.path
             source.close()
@@ -327,7 +330,7 @@ class PolicyControlsTest(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(owned_path.exists())
 
     async def test_oversize_and_late_uploads_do_not_replace_selection(self):
-        source = self.panel.project
+        source = self.inputs.project
         event = SimpleNamespace(file=SimpleNamespace(name="project.zip", size=lambda: MAX_UPLOAD_BYTES + 1, save=AsyncMock()))
         await source.load(event)
         event.file.save.assert_not_awaited()

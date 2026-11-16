@@ -1,5 +1,6 @@
 """NiceGUI page shell and workflow tab composition; no CAS write-back."""
 from .policy_ui import PolicyCheckControls
+from .shared_inputs import SharedInputControls
 from .review_panel import ReviewPanelControls
 from .suggestion_ui import SuggestionControls
 
@@ -8,11 +9,10 @@ def build_page(ui, events) -> None:
     """Build independent workflow panels once per visitor."""
     review_controls = None
     with ui.left_drawer(bordered=True).props("width=360") as sidebar:
-        ui.label("Shared inputs").classes("text-lg font-medium")
-        ui.label("Used by Check policy and Suggest. Changing inputs never starts processing.").classes("text-sm")
+        shared_inputs = SharedInputControls(ui)
     with ui.header():
         ui.button("Inputs", icon="menu", on_click=sidebar.toggle).props("flat color=white").tooltip("Show or hide shared inputs")
-        ui.label("SNOMED Postprocessing — NiceGUI prototype").classes("text-xl")
+        ui.label("SNOMED Postprocessing").classes("text-xl")
     banner = ui.label().classes("text-amber-900 bg-amber-100 p-3 rounded w-full")
     source = ui.label().classes("text-sm")
     scope = ui.label().classes("text-sm")
@@ -35,10 +35,9 @@ def build_page(ui, events) -> None:
         review = ui.tab("review", label="3. Review & apply")
     with ui.tab_panels(tabs, value=check).props("keep-alive").classes("w-full"):
         with ui.tab_panel(check):
-            policy_controls = PolicyCheckControls(ui)
-            policy_controls.inputs.move(sidebar)
+            policy_controls = PolicyCheckControls(ui, shared_inputs)
         with ui.tab_panel(suggest):
-            suggestion_controls = SuggestionControls(ui, policy_controls, lambda: review_controls)
+            suggestion_controls = SuggestionControls(ui, shared_inputs, policy_controls, lambda: review_controls)
         with ui.tab_panel(review) as review_panel:
             review_controls = ReviewPanelControls(ui, review_panel, banner=banner, source=source, scope=scope)
     suggestion_controls.connect_review()
