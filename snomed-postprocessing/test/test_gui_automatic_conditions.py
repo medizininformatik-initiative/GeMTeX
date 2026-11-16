@@ -198,6 +198,54 @@ class GuiAutomaticConditionsTest(unittest.TestCase):
         self.assertFalse(self.decisions()[5]["apply"])
         self.assertTrue(any(item.label == "BM25 score-gap assessment" for item in self.app.expander))
 
+    def test_exclusion_bm25_opt_in_is_unchecked_below_bm25_and_shares_undo(self):
+        self.add_bm25(bm25_suggestion(index=4, list_type="blacklist"))
+        opt_in = self.app.checkbox(key="sanitization_condition_bm25_exclusions")
+        self.assertFalse(opt_in.value)
+        self.assertIn("already-generated", opt_in.help)
+        labels = [item.label for item in self.app.checkbox]
+        self.assertEqual(labels.index(opt_in.label), labels.index("Enable BM25 automatic selection (heuristic)") + 1)
+        self.enable_bm25()
+        self.apply()
+        self.assertFalse(self.decisions()[4]["apply"])
+        assessment = next(frame.value for frame in self.app.dataframe if "Qualifies if enabled" in frame.value.columns)
+        self.assertFalse(assessment.iloc[0]["Qualifies if enabled"])
+        self.assertIn("opt-in", assessment.iloc[0]["Reason"])
+        self.app.checkbox(key="sanitization_condition_bm25_exclusions").check()
+        self.apply()
+        selected = self.decisions()[4]
+        self.assertTrue(selected["apply"])
+        self.assertEqual(selected["automatic_condition"]["source_list_type"], "blacklist")
+        self.assertFalse(self.decisions()[1]["apply"])  # Exclusion-list historical proposal stays manual.
+        self.assertTrue(self.app.session_state[_document_reviewed_key("bm25.txt")])
+        self.app.run()
+        self.healthy()
+        self.assertTrue(self.app.checkbox(key="sanitization_condition_bm25_exclusions").value)
+        assessment = next(frame.value for frame in self.app.dataframe if "Qualifies if enabled" in frame.value.columns)
+        self.assertTrue(assessment.iloc[0]["Qualifies if enabled"])
+        self.button("Undo Automatic Conditions").click().run()
+        self.healthy()
+        self.assertFalse(self.decisions()[4]["apply"])
+        self.assertFalse(self.app.session_state[_document_reviewed_key("bm25.txt")])
+        self.assertTrue(self.decisions()[0]["apply"])
+
+    def test_exclusion_opt_in_requires_bm25_and_both_can_be_enabled_in_one_form_batch(self):
+        self.add_bm25(bm25_suggestion(index=4, list_type="blacklist"))
+        next(item for item in self.app.checkbox if item.label == "Enable BM25 automatic selection (heuristic)").uncheck()
+        self.app.checkbox(key="sanitization_condition_bm25_exclusions").check()
+        self.apply()
+        self.assertFalse(self.decisions()[4]["apply"])
+        self.app.checkbox(key="sanitization_condition_bm25_exclusions").uncheck()
+        self.apply()
+        self.enable_bm25()
+        self.app.checkbox(key="sanitization_condition_bm25_exclusions").check()
+        self.apply()
+        self.assertTrue(self.decisions()[4]["apply"])
+        # Turning the opt-in off does not silently clear an earlier selection.
+        self.app.checkbox(key="sanitization_condition_bm25_exclusions").uncheck()
+        self.apply()
+        self.assertTrue(self.decisions()[4]["apply"])
+
     def test_saved_bm25_checkbox_edits_survive_undo(self):
         self.add_bm25(bm25_suggestion(index=4))
         self.enable_bm25()

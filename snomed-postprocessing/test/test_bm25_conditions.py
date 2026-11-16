@@ -106,6 +106,82 @@ class Bm25ConditionsTest(unittest.TestCase):
         self.assertFalse(bm25_assessments([item, exclusion])[0]["eligible"])
         self.assertFalse(bm25_assessments([item, item])[0]["eligible"])
 
+    def test_exclusion_opt_in_requires_bm25_and_preserves_provenance_and_undo(self):
+        item = bm25_suggestion(list_type="blacklist")
+        original = [decision(item, 0)]
+        self.assertFalse(self.assess(item)["eligible"])
+        self.assertIn("opt-in", self.assess(item)["reason"])
+        self.assertTrue(self.assess(item, include_exclusion_findings=True)["eligible"])
+        disabled = apply_conditions([item], original, ["SAME_AS"], choices([item]),
+                                    bm25_include_exclusion_findings=True)
+        self.assertEqual(disabled.changed, 0)
+        self.assertEqual(self.apply([item]).changed, 0)
+        result = self.apply([item], original, bm25_include_exclusion_findings=True)
+        self.assertEqual(result.changed, 1)
+        self.assertEqual(result.reviewed_documents, {"bm25.txt"})
+        evidence = result.decisions[0]["automatic_condition"]
+        self.assertEqual(evidence["kind"], "bm25_gap")
+        self.assertEqual(evidence["source_list_type"], "blacklist")
+        restored, _ = read_sanitization_decisions_json(io.StringIO(sanitization_decisions_json_text(result.decisions)))
+        self.assertEqual(restored, result.decisions)
+        repeated = self.apply([item], result.decisions, bm25_include_exclusion_findings=True)
+        self.assertEqual(repeated.changed, 0)
+        self.assertIsNone(repeated.undo)
+        # Disabling the opt-in does not silently clear earlier selections.
+        self.assertEqual(self.apply([item], result.decisions).decisions, result.decisions)
+        undone = undo_automatic_conditions(restored, result.reviewed_documents, result.undo)
+        self.assertEqual(undone.decisions, original)
+        self.assertEqual(undone.reviewed_documents, set())
+
+    def test_exclusion_opt_in_keeps_ignored_duplicate_and_unknown_sources_manual(self):
+        item = bm25_suggestion(list_type="blacklist")
+        inclusion = dataclasses.replace(item, finding=dataclasses.replace(item.finding, list_type="whitelist"))
+        ignored = dataclasses.replace(item, finding=dataclasses.replace(item.finding, ignored=True))
+        unknown = dataclasses.replace(item, finding=dataclasses.replace(item.finding, list_type="other"))
+        for items in ([item, item], [item, inclusion], [ignored], [unknown]):
+            with self.subTest(items=items):
+                assessments = bm25_assessments(items, include_exclusion_findings=True)
+                self.assertFalse(any(entry["eligible"] for entry in assessments.values()))
+                self.assertEqual(self.apply(items, bm25_include_exclusion_findings=True).changed, 0)
+
+    def test_exclusion_opt_in_does_not_bypass_bm25_candidate_gates(self):
+        item = bm25_suggestion(list_type="blacklist")
+        blocked = [
+            bm25_suggestion([12, 7], list_type="blacklist"),
+            bm25_suggestion([12, 12, 6], list_type="blacklist"),
+            bm25_suggestion([10, 9.9, 9.89], list_type="blacklist"),
+            bm25_suggestion([12, 7, float("nan")], list_type="blacklist"),
+            dataclasses.replace(item, retrieval_limits=("SNOGIT hit limit",)),
+            dataclasses.replace(item, status=SanitizationStatus.NO_REPLACEMENT,
+                                candidates=(), context_candidates=item.candidates),
+            dataclasses.replace(item, candidates=(item.candidates[0],
+                dataclasses.replace(item.candidates[1], source="snogit", source_member="other"), item.candidates[2])),
+        ]
+        for proposal in blocked:
+            with self.subTest(proposal=proposal):
+                self.assertFalse(self.assess(proposal, include_exclusion_findings=True)["eligible"])
+                self.assertEqual(self.apply([proposal], bm25_include_exclusion_findings=True).changed, 0)
+
+    def test_exclusion_opt_in_leaves_historical_sources_and_unresolved_documents_manual(self):
+        items = [suggestion(document="bm25.txt", list_type="blacklist"),
+                 bm25_suggestion(index=1, list_type="blacklist")]
+        result = self.apply(items, bm25_include_exclusion_findings=True)
+        self.assertEqual([entry["apply"] for entry in result.decisions], [False, True])
+        self.assertEqual(result.reviewed_documents, set())
+
+    def test_exclusion_opt_in_preserves_manual_rule_and_review_protections(self):
+        item = bm25_suggestion(list_type="blacklist")
+        original = decision(item, 0)
+        variants = [dict(original, reviewed_by_human=True), dict(original, apply=True, action="replace"),
+                    dict(original, manual_edit=True, action="manual_edit"),
+                    dict(original, delete_annotation=True, action="delete"),
+                    dict(original, concept_rule={"rule_id": "explicit"})]
+        for prior in variants:
+            with self.subTest(prior=prior):
+                self.assertEqual(self.apply([item], [prior], bm25_include_exclusion_findings=True).decisions, [prior])
+        for protection in ({"reviewed_documents": {"bm25.txt"}}, {"protected_indices": {0}}):
+            self.assertEqual(self.apply([item], bm25_include_exclusion_findings=True, **protection).changed, 0)
+
     def test_configurable_thresholds_and_boundary_values(self):
         item = bm25_suggestion([10, 8, 7])  # D=2/3 and M=.2 exactly
         self.assertTrue(self.assess(item)["eligible"])

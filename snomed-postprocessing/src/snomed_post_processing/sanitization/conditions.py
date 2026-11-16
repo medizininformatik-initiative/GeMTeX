@@ -28,12 +28,14 @@ def finding_key(finding):
     return (finding.document, finding.annotator, finding.layer, tuple(finding.offset), finding.code or "")
 
 
-def eligible_source_indices(suggestions):
+def eligible_source_indices(suggestions, *, include_exclusion_findings=False):
     excluded = {finding_key(item.finding) for item in suggestions if item.finding.list_type == "blacklist"}
     occurrences = Counter(finding_key(item.finding) for item in suggestions)
+    allowed_lists = {"whitelist", "blacklist"} if include_exclusion_findings else {"whitelist"}
     return {index for index, item in enumerate(suggestions)
-            if item.finding.list_type == "whitelist" and not item.finding.ignored
-            and finding_key(item.finding) not in excluded and occurrences[finding_key(item.finding)] == 1}
+            if item.finding.list_type in allowed_lists and not item.finding.ignored
+            and (include_exclusion_findings or finding_key(item.finding) not in excluded)
+            and occurrences[finding_key(item.finding)] == 1}
 
 
 def historical_targets(suggestions: Sequence[Any], association_types: Sequence[str]):
@@ -57,12 +59,13 @@ def historical_targets(suggestions: Sequence[Any], association_types: Sequence[s
     return targets
 
 
-def bm25_assessments(suggestions, min_dominance=2 / 3, min_relative_lead=0.20):
+def bm25_assessments(suggestions, min_dominance=2 / 3, min_relative_lead=0.20, *,
+                     include_exclusion_findings=False):
     """Assess every saved BM25 candidate, without mixing score channels or inventing targets."""
     for threshold in (min_dominance, min_relative_lead):
         if isinstance(threshold, bool) or not isinstance(threshold, Real) or not math.isfinite(threshold) or not 0 <= threshold <= 1:
             raise ValueError("BM25 gap thresholds must be finite numbers between 0 and 1.")
-    eligible = eligible_source_indices(suggestions)
+    eligible = eligible_source_indices(suggestions, include_exclusion_findings=include_exclusion_findings)
     assessments = {}
     for index, suggestion in enumerate(suggestions):
         if not isinstance(suggestion, SemanticBm25Suggestion):
@@ -73,7 +76,11 @@ def bm25_assessments(suggestions, min_dominance=2 / 3, min_relative_lead=0.20):
                       "min_dominance": float(min_dominance), "min_relative_lead": float(min_relative_lead)}
         assessments[index] = assessment
         if index not in eligible:
-            assessment["reason"] = "Source finding is excluded, ignored, duplicated, or not from the inclusion-list check."
+            assessment["reason"] = (
+                "Exclusion-list source findings require the BM25 exclusion-list opt-in."
+                if suggestion.finding.list_type == "blacklist" and not include_exclusion_findings
+                else "Source finding is ignored, duplicated, or not from an enabled list check."
+            )
             continue
         if suggestion.status not in (SanitizationStatus.SEMANTIC_BM25_REPLACEMENT, SanitizationStatus.AMBIGUOUS_REPLACEMENT):
             assessment["reason"] = "No selectable BM25 proposal passed generation thresholds."
@@ -123,12 +130,15 @@ def bm25_assessments(suggestions, min_dominance=2 / 3, min_relative_lead=0.20):
 
 def apply_conditions(suggestions, decisions, association_types, choices_by_index,
                      reviewed_documents=(), protected_indices=(), *, bm25_enabled=False,
-                     bm25_min_dominance=2 / 3, bm25_min_relative_lead=0.20):
+                     bm25_min_dominance=2 / 3, bm25_min_relative_lead=0.20,
+                     bm25_include_exclusion_findings=False):
     updated = copy.deepcopy(decisions)
     reviewed = set(reviewed_documents)
     targets = historical_targets(suggestions, association_types)
     if bm25_enabled:
-        for index, assessment in bm25_assessments(suggestions, bm25_min_dominance, bm25_min_relative_lead).items():
+        for index, assessment in bm25_assessments(
+                suggestions, bm25_min_dominance, bm25_min_relative_lead,
+                include_exclusion_findings=bm25_include_exclusion_findings).items():
             if assessment["eligible"]:
                 targets.setdefault(index, {key: value for key, value in assessment.items() if key != "eligible"})
     protected = set(protected_indices)
@@ -164,7 +174,9 @@ def apply_conditions(suggestions, decisions, association_types, choices_by_index
     for document, items in grouped.items():
         if document in reviewed or not any(item.get("suggestion_index") in after for item in items):
             continue
-        if any(decision_key(item) in excluded_keys for item in items):
+        if any(decision_key(item) in excluded_keys and not (
+                bm25_enabled and bm25_include_exclusion_findings
+                and (item.get("automatic_condition") or {}).get("kind") == "bm25_gap") for item in items):
             continue
         if all(not item.get("manual_edit") and (
             (item.get("apply") and item.get("valid_choice") and

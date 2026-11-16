@@ -921,7 +921,8 @@ def _sync_condition_result(result, documents) -> None:
 def _render_automatic_conditions(suggestions, rows, rule_decisions) -> None:
     st.markdown("#### Automatic conditions")
     st.caption(
-        "Only inclusion-list source findings qualify. Exclusion-list findings remain manual. "
+        "Historical conditions apply only to inclusion-list source findings. "
+        "BM25 can also assess exclusion-list findings with the separate opt-in below. "
         "Historical relationships and BM25 gaps are not guarantees of clinical equivalence. No CAS files change here."
     )
     with st.form("sanitization_conditions_form"):
@@ -934,6 +935,13 @@ def _render_automatic_conditions(suggestions, rows, rule_decisions) -> None:
         bm25_enabled = st.checkbox(
             "Enable BM25 automatic selection (heuristic)", value=True, key="sanitization_condition_bm25",
             help="Select a leading BM25 target when both gap thresholds pass. Requires at least three distinct, comparable targets.",
+        )
+        bm25_include_exclusions = st.checkbox(
+            "Include exclusion-list findings in BM25 automatic selection", value=False,
+            key="sanitization_condition_bm25_exclusions",
+            help="Only takes effect when BM25 automatic selection is enabled. Uses already-generated selectable BM25 "
+                 "candidates with the same thresholds and safeguards; does not generate suggestions or enable "
+                 "historical automation for exclusion-list findings. Scores do not establish clinical equivalence.",
         )
         threshold_columns = st.columns(2)
         with threshold_columns[0]:
@@ -955,14 +963,19 @@ def _render_automatic_conditions(suggestions, rows, rule_decisions) -> None:
         )
         apply = st.form_submit_button(
             "Apply Conditions",
-            help="Stage matching inclusion-list selections, preserving manual choices. Earlier selections are not cleared; CAS files are unchanged.",
+            help="Stage matching selections from the enabled source checks, preserving manual choices. "
+                 "Earlier selections are not cleared; CAS files are unchanged.",
         )
     visible_indices = sorted(int(row["#"]) - 1 for row in rows)
     assessments = {visible_indices[index]: item for index, item in bm25_assessments(
-        [suggestions[index] for index in visible_indices], min_dominance, min_relative_lead).items()}
+        [suggestions[index] for index in visible_indices], min_dominance, min_relative_lead,
+        include_exclusion_findings=bm25_include_exclusions).items()}
     if assessments:
         with st.expander("BM25 score-gap assessment", expanded=False):
-            st.caption("Qualifies indicates the score/source condition only, before manual-choice protection. BM25 selection is opt-in.")
+            st.caption(
+                "Qualifies indicates the score/source condition only, before manual-choice protection. "
+                "Selection requires BM25 to be enabled; exclusion-list findings also require the separate opt-in."
+            )
             st.dataframe(pd.DataFrame([{
                 "#": index + 1, "Document": suggestions[index].finding.document,
                 "Source SCTID": suggestions[index].finding.code,
@@ -988,6 +1001,7 @@ def _render_automatic_conditions(suggestions, rows, rule_decisions) -> None:
         result = apply_conditions(
             suggestions, current, associations, choices, reviewed, protected,
             bm25_enabled=bm25_enabled, bm25_min_dominance=min_dominance, bm25_min_relative_lead=min_relative_lead,
+            bm25_include_exclusion_findings=bm25_include_exclusions,
         )
         if result.undo is not None:
             st.session_state["sanitization_conditions_undo"] = result.undo
