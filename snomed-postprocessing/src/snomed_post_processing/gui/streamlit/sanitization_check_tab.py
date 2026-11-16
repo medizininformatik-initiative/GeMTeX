@@ -13,6 +13,7 @@ import pandas as pd
 import streamlit as st
 
 from snomed_post_processing.findings_io import read_critical_findings_json_with_metadata
+from snomed_post_processing.sanitization.json_io import read_sanitization_suggestions_json_with_metadata
 from snomed_post_processing.terminology import policy_label
 from snomed_post_processing.sanitization.semantic_text import FSN_POSTFIX_PRESETS, normalize_fsn_postfixes
 from snomed_post_processing.hdf5_handling.metadata import inspect_hdf5_metadata
@@ -47,6 +48,23 @@ DEFAULT_GUI_ASSOCIATION_TYPES = tuple(
     association_type for association_type in SUPPORTED_ASSOCIATION_TYPES
     if association_type not in {"MOVED_FROM", "REFERS_TO"}
 )
+
+
+def _read_source_bytes(source) -> bytes:
+    if isinstance(source, pathlib.Path):
+        return source.read_bytes()
+    return source.getvalue() if hasattr(source, "getvalue") else source.read()
+
+
+def _selected_source_key(source) -> str:
+    if isinstance(source, pathlib.Path):
+        stat = source.stat()
+        return f"{source.resolve()}:{stat.st_size}:{stat.st_mtime_ns}"
+    return f"{getattr(source, 'name', 'upload')}:{len(_read_source_bytes(source))}"
+
+
+def _selected_source_name(source) -> str:
+    return source.name if hasattr(source, "name") else pathlib.Path(source).name
 
 
 def _format_association_type_option(association_type: str) -> str:
@@ -138,6 +156,37 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
         "the check step. Policy suggestions target the same materialized HDF5 "
         "policy/view date used for checking; release suggestions target active release concepts."
     )
+
+    st.subheader("Restore sanitization suggestions JSON")
+    st.caption("Load suggestions generated in an earlier session. They become available in the Review & apply tab without rerunning analysis.")
+    suggestions_selection = render_file_source_selector(
+        "Sanitization suggestions JSON",
+        key="sanitization_check_suggestions_json",
+        data_dir=inputs.data_dir,
+        suffixes=(".json",),
+        upload_types=("json",),
+        default_source="Upload",
+        help="Load a saved sanitization suggestions artifact; reviewed decisions remain separate.",
+    )
+    if suggestions_selection.value is not None:
+        suggestions_key = _selected_source_key(suggestions_selection.value)
+        if st.session_state.get("loaded_sanitization_check_suggestions_key") != suggestions_key:
+            try:
+                suggestions, metadata = read_sanitization_suggestions_json_with_metadata(
+                    suggestions_selection.value
+                )
+                reset_generic_review_for_new_suggestions(suggestions)
+                st.session_state["sanitization_suggestions"] = suggestions
+                st.session_state["sanitization_suggestions_metadata"] = metadata
+                st.session_state["sanitization_suggestions_report_path"] = None
+                st.session_state["sanitization_suggestions_json_path"] = _selected_source_name(suggestions_selection.value)
+                st.session_state["loaded_sanitization_check_suggestions_key"] = suggestions_key
+                st.session_state["sanitization_last_load_message"] = (
+                    f"Loaded suggestions from {_selected_source_name(suggestions_selection.value)}."
+                )
+                st.success(st.session_state["sanitization_last_load_message"])
+            except Exception as exc:
+                st.error(f"Could not load sanitization suggestions JSON: {exc}")
     session_findings_available = st.session_state.get("critical_findings") is not None
     if session_findings_available and not scope_covers(st.session_state.get("critical_findings_annotators", ()), inputs.annotators):
         st.warning("Current findings were checked for a narrower annotator scope. Rerun the policy check or load matching findings JSON.")

@@ -4,14 +4,17 @@ from __future__ import annotations
 
 from collections import defaultdict
 import pathlib
+from io import StringIO
 
 import streamlit as st
 
+from snomed_post_processing.findings_io import read_critical_findings_json_with_metadata
 from snomed_post_processing.terminology import policy_label
 from snomed_post_processing.uima_processing import CriticalFinding, get_annotator_names
 
 from .downloads import download_json_report, download_md_report
 from .files import save_uploaded_file
+from .file_sources import render_file_source_selector
 from .report_generation import generate_report
 from .sidebar import GuiInputs
 from .annotator_scope import sync_annotator_scope
@@ -35,6 +38,50 @@ def render_policy_tab(inputs: GuiInputs) -> None:
         )
     annotator_selection = list(normalize_annotators(getattr(inputs, "annotators", ())))
     zip_temp_path = None
+
+    st.subheader("Restore CriticalFindings JSON")
+    st.caption("Load findings produced by an earlier policy check. The findings are retained in this session and can be used by the sanitization-suggestion tab.")
+    findings_selection = render_file_source_selector(
+        "CriticalFindings JSON",
+        key="policy_critical_findings_json",
+        data_dir=inputs.data_dir,
+        suffixes=(".json",),
+        upload_types=("json",),
+        default_source="Upload",
+        help="Load a saved CriticalFindings JSON artifact without rerunning policy analysis.",
+    )
+    if findings_selection.value is not None:
+        findings_key = _selected_source_key(findings_selection.value)
+        if st.session_state.get("loaded_critical_findings_key") != findings_key:
+            try:
+                content = _read_source_bytes(findings_selection.value)
+                findings, metadata = read_critical_findings_json_with_metadata(
+                    StringIO(content.decode("utf-8-sig"))
+                )
+                saved_scope = normalize_annotators(metadata.get("annotators", ()))
+                st.session_state["critical_findings"] = tuple(findings)
+                st.session_state["critical_findings_annotators"] = saved_scope
+                st.session_state["critical_findings_metadata"] = metadata
+                st.session_state["critical_findings_json_text"] = content.decode("utf-8-sig")
+                st.session_state["critical_findings_json_name"] = _selected_source_name(findings_selection.value)
+                st.session_state["loaded_critical_findings_key"] = findings_key
+                st.session_state["policy_check_result"] = {
+                    "critical_findings": tuple(findings),
+                    "annotators": list(saved_scope),
+                    "critical_documents_found": len({(item.document, item.annotator) for item in findings if not item.ignored}),
+                    "report_folder": "",
+                    "markdown_text": "",
+                    "markdown_name": "",
+                    "masked_markdown_text": "",
+                    "masked_markdown_name": "",
+                    "json_text": "",
+                    "json_name": "",
+                    "findings_json_text": content.decode("utf-8-sig"),
+                    "findings_json_name": _selected_source_name(findings_selection.value),
+                }
+                st.success(f"Loaded CriticalFindings JSON from {_selected_source_name(findings_selection.value)}.")
+            except Exception as exc:
+                st.error(f"Could not load CriticalFindings JSON: {exc}")
 
     if zip_file := st.session_state.get("zip_file"):
         zip_temp_path = save_uploaded_file(zip_file, ".zip")
@@ -153,6 +200,23 @@ def render_policy_tab(inputs: GuiInputs) -> None:
     render_policy_check_result(inputs.annotators)
 
 
+def _read_source_bytes(source) -> bytes:
+    if isinstance(source, pathlib.Path):
+        return source.read_bytes()
+    return source.getvalue() if hasattr(source, "getvalue") else source.read()
+
+
+def _selected_source_key(source) -> str:
+    if isinstance(source, pathlib.Path):
+        stat = source.stat()
+        return f"{source.resolve()}:{stat.st_size}:{stat.st_mtime_ns}"
+    return f"{getattr(source, 'name', 'upload')}:{len(_read_source_bytes(source))}"
+
+
+def _selected_source_name(source) -> str:
+    return source.name if hasattr(source, "name") else pathlib.Path(source).name
+
+
 def render_policy_check_result(annotators=()) -> None:
     """Render the last successful check on every rerun, including filter changes."""
     result = st.session_state.get("policy_check_result")
@@ -174,21 +238,22 @@ def render_policy_check_result(annotators=()) -> None:
 
     render_findings_table(result["critical_findings"])
 
-    st.subheader("Reports")
-    st.write(f"Report saved to folder: `{result['report_folder']}`")
-    report_col1, report_col2, report_col3 = st.columns(3)
-    with report_col1:
-        download_md_report(result["markdown_text"], pathlib.Path(result["markdown_name"]), "markdown")
-    with report_col2:
-        download_md_report(
-            result["masked_markdown_text"], pathlib.Path(result["masked_markdown_name"]), "masked markdown",
-            help="Masks document and annotator names, not clinical text. This is not full anonymization.",
-        )
-    with report_col3:
-        download_json_report(
-            result["json_text"], pathlib.Path(result["json_name"]), "report",
-            help="Structured policy-check report. Use CriticalFindings JSON instead as input for suggestion generation.",
-        )
+    if result.get("markdown_text"):
+        st.subheader("Reports")
+        st.write(f"Report saved to folder: `{result['report_folder']}`")
+        report_col1, report_col2, report_col3 = st.columns(3)
+        with report_col1:
+            download_md_report(result["markdown_text"], pathlib.Path(result["markdown_name"]), "markdown")
+        with report_col2:
+            download_md_report(
+                result["masked_markdown_text"], pathlib.Path(result["masked_markdown_name"]), "masked markdown",
+                help="Masks document and annotator names, not clinical text. This is not full anonymization.",
+            )
+        with report_col3:
+            download_json_report(
+                result["json_text"], pathlib.Path(result["json_name"]), "report",
+                help="Structured policy-check report. Use CriticalFindings JSON instead as input for suggestion generation.",
+            )
 
 
 def render_findings_table(findings: list[CriticalFinding]) -> None:
