@@ -67,6 +67,8 @@ class SuggestionJob:
                    for source in (self.project, self.lists, self.custom)]
         policy = asdict(self.policy)
         identity = {name: policy[name] for name in ("annotators", "annotation_types", "id_feature", "id_prefix")}
+        if self.policy.store_scope is not None:
+            identity["store_scope"] = self.policy.store_scope
         payload = [primary, identity, self.settings.target_view, self.settings.release_blacklist_mode]
         return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
@@ -79,7 +81,8 @@ def run_generation(job):
             raise ValueError("Run a current policy check, or select saved CriticalFindings JSON.")
         findings = job.session_result.findings
         metadata = dict(annotators=list(job.session_result.settings.annotators),
-                        id_feature=job.session_result.settings.id_feature, id_prefix=job.session_result.settings.id_prefix)
+                        id_feature=job.session_result.settings.id_feature, id_prefix=job.session_result.settings.id_prefix,
+                        store_scope=job.session_result.settings.store_scope)
     else:
         if job.findings_stamp is not None and job.findings_file.stamp() != job.findings_stamp:
             raise ValueError("Restored findings changed. Load them again in tab 1.")
@@ -99,13 +102,14 @@ def run_generation(job):
 
 def run_rules(job, rules):
     if job.project is None:
-        raise ValueError("Select a project ZIP for rule scanning.")
+        raise ValueError("Select a project ZIP or annotation store for rule scanning.")
     before = stamps(job.sources)
     binding = job.binding()
     constraints = replacement_constraints(job.lists.path, job.settings, job.custom.path if job.custom else None)
     decisions = preview_concept_rules(job.project.path, job.lists.path, rules,
                                      annotation_types=job.policy.annotation_types, annotators=job.policy.annotators,
-                                     id_feature=job.policy.id_feature, id_prefix=job.policy.id_prefix, **constraints)
+                                     id_feature=job.policy.id_feature, id_prefix=job.policy.id_prefix,
+                                     **({"store_scope": job.policy.store_scope} if job.policy.store_scope is not None else {}), **constraints)
     if before != stamps(job.sources) or binding != job.binding():
         raise ValueError("Source files changed during rule scanning.")
     return decisions, binding, before
@@ -126,7 +130,8 @@ def validate_preserved_rules(job, decisions):
     targets = validate_rule_targets(job.lists.path, rules.values(), **constraints)
     expected = preview_concept_rules(job.project.path, job.lists.path, rules.values(),
                                     annotation_types=job.policy.annotation_types, annotators=job.policy.annotators,
-                                    id_feature=job.policy.id_feature, id_prefix=job.policy.id_prefix, **constraints)
+                                    id_feature=job.policy.id_feature, id_prefix=job.policy.id_prefix,
+                                    **({"store_scope": job.policy.store_scope} if job.policy.store_scope is not None else {}), **constraints)
     by_key = {decision_key(item): item for item in expected}
     for item in edited:
         original = by_key.get(decision_key(item))

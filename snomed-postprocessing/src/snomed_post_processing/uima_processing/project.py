@@ -22,8 +22,11 @@ from .models import TemporaryContainer, TemporaryCorpus
 
 
 def get_annotator_names(
-    project_path: pathlib.Path, allowed_extensions: Optional[list[str]] = None
+    project_path: pathlib.Path, allowed_extensions: Optional[list[str]] = None, *, store_scope=None
 ) -> tuple[set[str], bool]:
+    from ..annotation_source import is_annotation_store, store_annotators
+    if is_annotation_store(project_path):
+        return store_annotators(project_path, store_scope), False
     annotator_names = set()
     only_ser = True
     found_any = False
@@ -80,7 +83,13 @@ def process_inception_zip(
     allowed_extensions: Optional[list[str]] = None,
     ignore_overlap_types: Optional[list[str]] = None,
     ignore_overlap_mode: str = "overlap",
+    store_scope: str | None = None,
 ) -> TemporaryCorpus:
+    from ..annotation_source import is_annotation_store, read_annotation_store
+    if is_annotation_store(file_path):
+        return read_annotation_store(file_path, store_scope=store_scope, annotator_filter=annotator_filter,
+                                     annotation_types=annotation_types, ignore_overlap_types=ignore_overlap_types,
+                                     ignore_overlap_mode=ignore_overlap_mode).corpus
     if not annotation_types:
         annotation_types = ["gemtex.Concept"]
     if ignore_overlap_types is None:

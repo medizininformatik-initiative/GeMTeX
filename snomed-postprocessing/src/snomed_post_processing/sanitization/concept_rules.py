@@ -113,7 +113,7 @@ def preview_concept_rules(
     annotation_types: Iterable[str], documents: Iterable[str] = (), annotators: Iterable[str] = (),
     id_prefix: str = "http://snomed.info/id/", id_feature: str = "id",
     target_view: str = "policy", release_exclude_blacklist: bool = False,
-    runtime_blacklist_indices: Iterable[int] = (),
+    runtime_blacklist_indices: Iterable[int] = (), store_scope: str | None = None,
 ) -> list[dict[str, Any]]:
     """Scan original annotations once; never chain rules or modify the source CAS.
 
@@ -133,6 +133,36 @@ def preview_concept_rules(
     )
 
     decisions, seen = [], set()
+    from ..annotation_source import is_annotation_store, read_annotation_store
+    if is_annotation_store(project_path):
+        corpus = read_annotation_store(project_path, store_scope=store_scope, annotator_filter=annotators,
+                                       annotation_types=layers).corpus
+        for annotator, container in corpus.annotators.items():
+            for document, annotations in container.documents.items():
+                if documents and document not in documents:
+                    continue
+                for index in range(annotations.length):
+                    code = annotations.snomed_codes[index].decode()
+                    rule = enabled.get(code)
+                    if rule is None:
+                        continue
+                    target_fsn, overridden = targets.get(rule.rule_id, (None, False))
+                    decision = {
+                        "action": rule.action, "apply": True, "valid_choice": True,
+                        "document": document, "annotator": annotator, "layer": str(annotations.layers[index]),
+                        "offset": [int(value) for value in annotations.offsets[index]],
+                        "covered_text": str(annotations.text[index]), "source_code": code,
+                        "replacement_code": rule.target_code or None, "replacement_fsn": target_fsn,
+                        "suggestion_status": "Explicit concept rule", "resolved": True,
+                        "concept_rule": dataclasses.asdict(rule), "policy_overridden": overridden,
+                        "review_note": f"Explicit concept rule: {rule.rule_id}; preserve literal and all other features.",
+                    }
+                    key = decision_key(decision)
+                    if key in seen:
+                        raise ValueError("Ambiguous annotation identity for a concept rule in the annotation store.")
+                    seen.add(key)
+                    decisions.append(decision)
+        return decisions
     with zipfile.ZipFile(project_path) as archive:
         project = _read_project(archive, project_path.name)
         files = list(_yield_matching_files(project, archive, project_path.name, [".json", ".xmi"]))

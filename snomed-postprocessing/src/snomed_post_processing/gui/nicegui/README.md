@@ -58,6 +58,18 @@ during analysis and before download. No application persistence is added.
 Policy checking does not alter loaded suggestions or their saved review scope.
 INCEpTION API fetching/deployment remain separate future work.
 
+## SQLite project replacement
+
+In Shared inputs choose **Annotation source → Annotation store (SQLite)**, select a
+schema-v2 snapshot and click **Inspect SQLite scopes**. Select the export/view scope,
+then check policy, generate suggestions or scan rules as usual, without a ZIP/API.
+Combined scopes reject ambiguous document/annotator identities and conflicting text.
+The same source supplies review context; stored SCTIDs and exact layer names are used,
+while the selected HDF5 remains authoritative for policy and terminology. The database
+is read-only; no migration, CAS reconstruction or write-back is added. Use a closed,
+checkpointed snapshot, not a live WAL database. See the
+[user guide](../../../../docs/user-guide.md#sqlite-instead-of-an-inception-project).
+
 ## Restore computed states
 
 - **1. Check policy → Restore CriticalFindings JSON:** select Upload / Data directory /

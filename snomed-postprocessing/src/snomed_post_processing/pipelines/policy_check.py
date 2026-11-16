@@ -19,6 +19,7 @@ class PolicySettings:
     ignore_overlap_mode: str = "overlap"
     id_prefix: str = "http://snomed.info/id/"
     id_feature: str = "id"
+    store_scope: str | None = None
 
 
 @dataclass(frozen=True)
@@ -29,8 +30,8 @@ class PolicyResult:
     reports: dict[str, str]
 
 
-def project_annotators(project: Path) -> dict[str, str]:
-    names, only_ser = get_annotator_names(project)
+def project_annotators(project: Path, *, store_scope=None) -> dict[str, str]:
+    names, only_ser = get_annotator_names(project, **({"store_scope": store_scope} if store_scope is not None else {}))
     if only_ser:
         raise ValueError("Java serialized CAS is unsupported; export JSON CAS or XMI instead.")
     if not names:
@@ -43,13 +44,14 @@ def check_policy(project: Path, lists: Path, settings: PolicySettings) -> Policy
     settings = replace(settings, annotators=normalize_annotators(settings.annotators))
     if not settings.id_feature.strip():
         raise ValueError("An annotation ID feature is required.")
-    project_annotators(project)
+    project_annotators(project, store_scope=settings.store_scope)
     corpus = process_inception_zip(
         project, annotator_filter=list(settings.annotators) or None,
         annotation_types=list(settings.annotation_types) or ["gemtex.Concept"],
         ignore_overlap_types=list(settings.ignore_overlap_types),
         ignore_overlap_mode=settings.ignore_overlap_mode,
         id_prefix=settings.id_prefix, id_feature=settings.id_feature,
+        **({"store_scope": settings.store_scope} if settings.store_scope is not None else {}),
     )
     if corpus is None:
         raise ValueError("Project processing failed.")
@@ -61,7 +63,8 @@ def check_policy(project: Path, lists: Path, settings: PolicySettings) -> Policy
                     lists_path=str(lists), annotation_types=list(settings.annotation_types) or ["gemtex.Concept"],
                     ignore_overlap_types=list(settings.ignore_overlap_types),
                     ignore_overlap_mode=settings.ignore_overlap_mode,
-                    id_prefix=settings.id_prefix, id_feature=settings.id_feature)
+                    id_prefix=settings.id_prefix, id_feature=settings.id_feature,
+                    annotation_source_file=project.name, store_scope=settings.store_scope)
     return PolicyResult(settings, tuple(findings), count, {
         "critical-findings.json": critical_findings_json_text(findings, metadata=metadata),
         "policy-report.md": markdown.getvalue(),

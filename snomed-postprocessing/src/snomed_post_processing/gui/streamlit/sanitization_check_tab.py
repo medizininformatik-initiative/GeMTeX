@@ -95,8 +95,8 @@ def _uses_custom_blacklist(release_blacklist_mode: str) -> bool:
     return release_blacklist_mode in {"custom", "embedded+custom"}
 
 
-def _suggestion_context_metadata(suggestions: list[Any], *, annotators=()) -> list[dict[str, Any]]:
-    document_texts = _project_document_text_lookup(st.session_state.get("zip_file"), annotators=annotators)
+def _suggestion_context_metadata(suggestions: list[Any], *, annotators=(), store_scope=None) -> list[dict[str, Any]]:
+    document_texts = _project_document_text_lookup(st.session_state.get("zip_file"), annotators=annotators, store_scope=store_scope)
     if not document_texts:
         return []
     review_context = ReviewContext(document_texts=document_texts)
@@ -606,11 +606,19 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                     )
                 if use_session_findings:
                     findings = st.session_state["critical_findings"]
+                    findings_metadata = {"store_scope": st.session_state.get("critical_findings_store_scope")}
+                    if findings_metadata["store_scope"] is not None:
+                        source = st.session_state.get("zip_file")
+                        stamp = (str(source.resolve()), source.stat().st_size, source.stat().st_mtime_ns) if isinstance(source, pathlib.Path) else None
+                        if stamp != st.session_state.get("critical_findings_store_source"):
+                            raise ValueError("Annotation store changed. Run policy check again.")
                 else:
                     findings_path = save_uploaded_file(uploaded_findings_file, ".json")
                     findings, findings_metadata = read_critical_findings_json_with_metadata(findings_path)
                     if not scope_covers(findings_metadata.get("annotators", ()), inputs.annotators):
                         raise ValueError("Findings JSON was produced for a narrower annotator scope. Recheck with the requested scope.")
+                if st.session_state.get("zip_file") is not None and findings_metadata.get("store_scope") != inputs.store_scope:
+                    raise ValueError("Findings annotation-store scope differs from the selected input. Run policy check again.")
                 findings = [finding for finding in findings if annotator_in_scope(finding.annotator, inputs.annotators)]
 
                 st.write("Creating resolver and loading SNOMED lookup data...")
@@ -751,7 +759,9 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                 "hdf5_rf2_view": hdf5_summary.concepts_rf2_view,
                 "finding_count": len(findings),
                 "suggestion_count": len(suggestions),
-                "finding_contexts": _suggestion_context_metadata(suggestions, annotators=inputs.annotators),
+                "finding_contexts": _suggestion_context_metadata(suggestions, annotators=inputs.annotators, store_scope=inputs.store_scope),
+                "store_scope": inputs.store_scope if st.session_state.get("zip_file") is not None else findings_metadata.get("store_scope"),
+                "annotation_source_file": str(st.session_state.get("zip_file") or ""),
                 "settings": sanitization_settings,
             }
             with output_sanitization_md.open("w", encoding="utf-8") as sanitization_fi:

@@ -5,6 +5,7 @@ expanding the main setup and workflow instructions.
 
 ## Contents
 
+- [SQLite instead of an INCEpTION project](#sqlite-instead-of-an-inception-project)
 - [Masked suggestion overview download](#masked-suggestion-overview-download)
 - [Review summary counts](#review-summary-counts)
 - [Exclusion-list findings without replacements](#exclusion-list-findings-without-replacements)
@@ -14,6 +15,36 @@ expanding the main setup and workflow instructions.
   - [What the three limits mean](#what-the-three-limits-mean)
   - [Term rows, hits and final candidates](#term-rows-hits-and-final-candidates)
   - [What to do when a limit is reported](#what-to-do-when-a-limit-is-reported)
+
+## SQLite instead of an INCEpTION project
+
+Both frontends accept **Annotation source → Annotation store (SQLite)** instead of
+an INCEpTION project ZIP/API source. The selected HDF5 remains the terminology and
+policy source; SQLite supplies the annotations, documents, annotators and text.
+
+1. Select a closed, checkpointed **schema v2** database using Upload, Data directory
+   or Server path. For a large database outside `data`, use Server path.
+2. Click **Inspect SQLite scopes**, then select **SQLite export / view**. A sole
+   view kind is selected automatically. Combined exports/views are allowed only
+   when each document/annotator identity is unambiguous; otherwise select a single
+   export/view. Conflicting text for one document name is also rejected.
+3. Select annotators and exact stored layer names, then **Run policy check**.
+   Continue with suggestions, concept rules and review as usual; no ZIP/API is needed.
+
+Annotation occurrences are preserved even when their payloads are deduplicated in
+SQLite. Stored `sctid` values are used directly: ID-feature/prefix settings apply
+only to project input. Stored FSNs/activity flags do not override the selected HDF5.
+SQLite has no CAS type system, so layer selection matches exact names rather than
+expanding inherited types. A requested ignore-overlap layer absent from the selected
+data causes an explicit error. If document text is missing, full context is unavailable;
+covered text and saved snippets remain usable.
+
+The database is opened read-only, with no migration, updates or WAL/SHM creation.
+Live databases with pending WAL content are rejected. Findings and suggestions retain
+`store_scope` and source-file provenance in metadata; existing artifact formats remain
+unchanged. Changing inputs does not run analysis or replace loaded review decisions.
+**Project sanitization/deployment is unavailable for SQLite-backed review**; download
+reviewed decisions instead. No CAS reconstruction or SQLite write-back is performed.
 
 ## Masked suggestion overview download
 

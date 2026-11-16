@@ -86,11 +86,11 @@ def render_policy_tab(inputs: GuiInputs) -> None:
     if zip_file := st.session_state.get("zip_file"):
         zip_temp_path = save_uploaded_file(zip_file, ".zip")
         zip_name = zip_file.name if hasattr(zip_file, "name") else str(zip_file)
-        st.success(f"ZIP ready: {zip_name}")
+        st.success(f"Annotation source ready: {zip_name}")
 
-        if inputs.load_annotators:
+        if inputs.load_annotators and (inputs.source_kind != "Annotation store (SQLite)" or inputs.store_scope is not None):
             try:
-                annotators, only_ser = get_annotator_names(zip_temp_path)
+                annotators, only_ser = get_annotator_names(zip_temp_path, **({"store_scope": inputs.store_scope} if inputs.store_scope is not None else {}))
                 annotators = sorted(annotators)
                 if only_ser:
                     st.error(
@@ -120,13 +120,13 @@ def render_policy_tab(inputs: GuiInputs) -> None:
         "Run policy check",
         help="Check selected layers and annotators against inclusion/exclusion policy. No annotations are changed.",
         type="primary",
-        disabled=not (st.session_state.get("zip_file") and inputs.hdf5_file),
+        disabled=not (st.session_state.get("zip_file") and inputs.hdf5_file) or (inputs.source_kind == "Annotation store (SQLite)" and inputs.store_scope is None),
     ):
         try:
             if zip_temp_path is None:
                 raise RuntimeError("ZIP file was not prepared correctly.")
             with st.status("Running policy check...", expanded=True) as status:
-                st.write("Preparing project ZIP and SNOMED HDF5 inputs...")
+                st.write("Preparing annotation source and SNOMED HDF5 inputs...")
                 if inputs.hdf5_temp_path is None:
                     inputs.hdf5_temp_path = save_uploaded_file(inputs.hdf5_file, ".hdf5")
 
@@ -164,6 +164,7 @@ def render_policy_tab(inputs: GuiInputs) -> None:
                     ignore_overlap_mode=inputs.ignore_overlap_mode,
                     id_prefix=inputs.id_prefix,
                     id_feature=inputs.id_feature,
+                    **({"store_scope": inputs.store_scope} if inputs.store_scope is not None else {}),
                 )
                 progress_bar.empty()
                 status.update(label="Policy check finished.", state="complete", expanded=False)
@@ -175,6 +176,11 @@ def render_policy_tab(inputs: GuiInputs) -> None:
 
             st.session_state["critical_findings"] = critical_findings
             st.session_state["critical_findings_annotators"] = inputs.annotators
+            st.session_state["critical_findings_store_scope"] = inputs.store_scope
+            st.session_state["critical_findings_store_source"] = (
+                (str(zip_temp_path.resolve()), zip_temp_path.stat().st_size, zip_temp_path.stat().st_mtime_ns)
+                if inputs.store_scope is not None else None
+            )
             st.session_state["critical_findings_json_text"] = findings_json_text
             st.session_state["critical_findings_json_name"] = output_path_findings_json.name
 

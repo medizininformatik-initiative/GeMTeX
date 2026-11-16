@@ -220,6 +220,32 @@ class GenerationControlsTest(unittest.IsolatedAsyncioTestCase):
         self.assertIs(self.cpu.await_args.args[0], run_generation)
         self.assertFalse(any(call.args[0] is run_generation for call in self.io.await_args_list))
 
+    async def test_sqlite_replaces_project_through_check_generation_rules_and_review(self):
+        from test.test_annotation_source import make_store
+        with TemporaryDirectory() as directory:
+            store = make_store(Path(directory) / "annotations.sqlite")
+            self.inputs.source_kind.set_value("Annotation store (SQLite)")
+            self.inputs.project.mode.set_value("Server path")
+            self.inputs.project.path.set_value(str(store))
+            self.io.assert_not_awaited()
+            self.cpu.assert_not_awaited()
+            self.assertFalse(self.policy.run_button.enabled)
+            await self.inputs.load_store_scopes()
+            self.assertEqual(self.inputs.settings().store_scope, "*:annotation")
+            self.cpu.assert_not_awaited()
+            await self.checked_generation()
+            metadata = json.loads(self.panel.completed[0].json)["metadata"]
+            self.assertEqual(metadata["store_scope"], "*:annotation")
+            self.assertEqual(metadata["id_feature"], "sctid")
+            with self.client:
+                await self.panel.open_review()
+                await self.panel.apply_rules()
+            self.assertEqual(len(self.review.state.findings), 10)
+            self.assertEqual(len(self.review.controls.session.effective_rules), 4)
+            self.inputs.source_kind.set_value("INCEpTION project")
+            self.assertIsNone(self.inputs.settings().store_scope)
+            self.assertFalse(self.panel.generate_button.enabled)
+
     async def test_postfix_rows_default_custom_disable_and_metadata(self):
         self.assertEqual(len(self.panel.postfix_controls), 4)
         self.assertEqual(self.panel.settings().bm25_excluded_fsn_postfixes, ("action",))

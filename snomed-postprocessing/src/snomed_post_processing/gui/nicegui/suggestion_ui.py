@@ -42,7 +42,7 @@ class SuggestionControls:
         self.created_caches = []
         self.rule_job = self.rule_stamps = None
         self.records = rule_records(DEFAULT_CONCEPT_RULES)
-        ui.label("Uses the shared Inputs sidebar for HDF5, annotator scope and annotation settings. Saved findings require HDF5 but no project ZIP; ZIP is optional for context and required for policy checks/rules. Inputs never start processing.").classes("text-sm")
+        ui.label("Uses the shared Inputs sidebar for HDF5, annotator scope and annotation settings. Saved findings require HDF5 but no project input; a ZIP or read-only SQLite store supplies annotations for policy checks/rules and optional context. Inputs never start processing.").classes("text-sm")
         with ui.expansion("Concept rules").classes("w-full"):
             ui.label("Match original IDs across all selected layers and annotators, including annotations without findings. ID-only changes; no chaining.").classes("text-sm")
             self.rule_editor = ui.aggrid({
@@ -195,9 +195,12 @@ class SuggestionControls:
         if self.inputs.lists.snapshot() is None:
             blockers.append("Select or finish uploading the SNOMED HDF5 in the shared Inputs sidebar.")
         if not self.policy.result_current:
-            blockers.append("Run Check policy (project ZIP required), or restore CriticalFindings JSON in tab 1.")
+            blockers.append("Run Check policy (project ZIP or SQLite required), or restore CriticalFindings JSON in tab 1.")
         if self.inputs.project.uploading:
-            blockers.append("Wait for the project ZIP upload to finish before using it for context.")
+            blockers.append("Wait for the annotation store upload to finish before using it for context." if self.inputs.is_store
+                            else "Wait for the project ZIP upload to finish before using it for context.")
+        if self.inputs.is_store and self.inputs.project.snapshot() is not None and self.inputs.scope.value is None:
+            blockers.append("Inspect SQLite scopes and select an export / view first.")
         if self.bm25.value and self.snogit.value:
             if self.cache.uploading or (self.cache.snapshot() is None and self.created_cache is None):
                 blockers.append("Select/create a processed SNOGIT cache, finish its upload, or turn off SNOGIT under Advanced suggestion settings.")
@@ -484,7 +487,8 @@ class SuggestionControls:
             if review.state.source_name is None or (not review.state.source_suggestions
                     and review.state.metadata.get("nicegui_generation_binding") != binding):
                 metadata = dict(annotators=list(job.policy.annotators), id_prefix=job.policy.id_prefix,
-                                id_feature=job.policy.id_feature, nicegui_generation_binding=binding, target_view=job.settings.target_view)
+                                id_feature=job.policy.id_feature, nicegui_generation_binding=binding, target_view=job.settings.target_view,
+                                store_scope=job.policy.store_scope, annotation_source_file=job.project.path.name)
                 review.publish_generated(load_suggestions_preview(sanitization_suggestions_json_text([], metadata=metadata).encode(), "rule-only-review.json"))
             elif review.state.metadata.get("nicegui_generation_binding") != binding:
                 raise ReviewError("Load generated suggestions for the current project/scope before applying rules. Existing review unchanged.")

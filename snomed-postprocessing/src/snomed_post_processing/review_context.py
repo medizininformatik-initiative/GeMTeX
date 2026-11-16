@@ -1,7 +1,8 @@
 """Framework-neutral document extraction and display context for annotation review.
 
-Accepts explicitly supplied ZIP bytes/paths/maps/metadata only. No caching, session state,
-metadata-path access, database access or network operations are performed here.
+Accepts explicitly supplied ZIP bytes, ZIP/SQLite paths, maps or metadata. No caching,
+session state, implicit metadata-path access or network operations are performed here.
+Only explicitly selected SQLite paths are opened, through the read-only source adapter.
 """
 from __future__ import annotations
 
@@ -65,8 +66,12 @@ class ReviewContext:
         return cls.from_metadata(metadata or {}, document_texts=texts)
 
     @classmethod
-    def from_project_path(cls, path: pathlib.Path, *, annotators=()) -> ReviewContext:
-        """Read an explicitly selected local ZIP without loading its bytes into memory."""
+    def from_project_path(cls, path: pathlib.Path, *, annotators=(), store_scope=None) -> ReviewContext:
+        """Read an explicitly selected ZIP or read-only annotation-store snapshot."""
+        from .annotation_source import is_annotation_store, read_annotation_store
+        if is_annotation_store(path):
+            return cls(document_texts=read_annotation_store(path, store_scope=store_scope,
+                                                           annotator_filter=annotators).document_texts)
         return cls(document_texts=_extract_project_document_texts(path, path.name, annotators=annotators))
 
     def document_text(self, document: str) -> str:

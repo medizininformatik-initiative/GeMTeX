@@ -83,6 +83,8 @@ def generate_suggestions(hdf5, findings, metadata, policy, settings, *, binding,
     for name in ("id_feature", "id_prefix"):
         if name in metadata and metadata[name] != getattr(policy, name):
             raise ValueError("Findings ID settings differ from the shared inputs. Recheck or select matching inputs.")
+    if project is not None and metadata.get("store_scope") is not None and metadata["store_scope"] != policy.store_scope:
+        raise ValueError("Findings annotation-store scope differs from the selected input. Recheck matching inputs.")
     findings = [finding for finding in findings if annotator_in_scope(finding.annotator, scope)]
     if settings.semantic_bm25_fallback and settings.snogit_bm25 and cache is None:
         raise ValueError("Select or create a processed SNOGIT cache, or explicitly turn SNOGIT off.")
@@ -105,7 +107,7 @@ def generate_suggestions(hdf5, findings, metadata, policy, settings, *, binding,
             if "metadata/source_members" in handle:
                 cache_members = handle["metadata/source_members"].asstr()[:].tolist()
     summary = inspect_hdf5_metadata(hdf5)
-    context = ReviewContext.from_project_path(project, annotators=scope) if project is not None else ReviewContext.from_metadata(metadata)
+    context = ReviewContext.from_project_path(project, annotators=scope, **({"store_scope": policy.store_scope} if policy.store_scope is not None else {})) if project is not None else ReviewContext.from_metadata(metadata)
     contexts = []
     for suggestion in suggestions:
         finding = suggestion.finding
@@ -114,6 +116,8 @@ def generate_suggestions(hdf5, findings, metadata, policy, settings, *, binding,
                                  offset=list(finding.offset), context=context.label(finding)))
     output_metadata = dict(
         source="nicegui-suggestion-generation", annotators=list(scope), id_prefix=policy.id_prefix,
+        annotation_source_file=project.name if project is not None else metadata.get("annotation_source_file"),
+        store_scope=policy.store_scope if project is not None else metadata.get("store_scope"),
         id_feature=policy.id_feature, annotation_types=list(policy.annotation_types),
         nicegui_generation_binding=binding, hdf5_file_name=hdf5.name,
         hdf5_release_date=summary.concepts_release_date, hdf5_policy_date=summary.concepts_policy_date,

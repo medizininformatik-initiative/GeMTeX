@@ -12,6 +12,8 @@ import streamlit as st
 from snomed_post_processing.inception import get_project_zip
 
 from .file_sources import render_file_source_selector
+from .files import save_uploaded_file
+from snomed_post_processing.annotation_source import store_scopes, default_store_scope
 
 
 @dataclasses.dataclass
@@ -29,6 +31,8 @@ class GuiInputs:
     runtime_blacklist_file: Any = None
     hdf5_temp_path: pathlib.Path | None = None
     annotators: tuple[str, ...] = ()
+    store_scope: str | None = None
+    source_kind: str = "INCEpTION project"
 
 
 def render_sidebar() -> GuiInputs:
@@ -36,13 +40,16 @@ def render_sidebar() -> GuiInputs:
     # settings on the next rerun, before instantiating the bound widgets.
     for key, value in st.session_state.pop("sanitization_pending_id_settings", {}).items():
         st.session_state[key] = value
+    store_scope = None
     with st.sidebar:
         st.header("Inputs")
+        source_kind = st.selectbox("Annotation source", ["INCEpTION project", "Annotation store (SQLite)"])
+        is_store = source_kind == "Annotation store (SQLite)"
         load_annotators = st.checkbox(
-            "Load annotators from ZIP", value=True,
+            "Load annotators from source", value=True,
             help="Read annotator names for the shared selection in tab 1. That scope applies to checking, rules, suggestions, review and export/upload.",
         )
-        use_api = st.toggle(
+        use_api = not is_store and st.toggle(
             "Use INCEpTION API", value=False,
             help="Load the source project from INCEpTION instead of selecting a project ZIP.",
         )
@@ -60,7 +67,43 @@ def render_sidebar() -> GuiInputs:
         else:
             st.warning(f"Server data directory not found: `{data_dir}`")
 
-        if use_api:
+        if is_store:
+            store_selection = render_file_source_selector(
+                "Annotation store SQLite", key="annotation_store_sqlite", data_dir=data_dir,
+                suffixes=(".sqlite", ".sqlite3", ".db"), upload_types=("sqlite", "sqlite3", "db"), default_source="Upload",
+                help="Read-only schema v2 snapshot, replacing the project. No ZIP/API is required. Use a closed, checkpointed database.")
+            source = store_selection.value
+            stamp = None
+            if source is not None:
+                if isinstance(source, pathlib.Path):
+                    stamp = (str(source.resolve()), source.stat().st_size, source.stat().st_mtime_ns)
+                    prepared = source
+                else:
+                    stamp = (source.name, source.size, getattr(source, "file_id", id(source)))
+                    if st.session_state.get("annotation_store_upload_key") != stamp:
+                        st.session_state["annotation_store_upload_path"] = save_uploaded_file(source, ".sqlite")
+                        st.session_state["annotation_store_upload_key"] = stamp
+                    prepared = st.session_state["annotation_store_upload_path"]
+            else:
+                prepared = None
+            st.session_state["zip_file"] = prepared
+            if st.session_state.get("annotation_store_scope_source") != stamp:
+                st.session_state["annotation_store_scope_source"] = stamp
+                st.session_state["annotation_store_scopes"] = {}
+                st.session_state.pop("annotation_store_scope", None)
+            if st.button("Inspect SQLite scopes", disabled=prepared is None):
+                try:
+                    options = store_scopes(prepared)
+                    st.session_state["annotation_store_scopes"] = options
+                    current = st.session_state.get("annotation_store_scope")
+                    st.session_state["annotation_store_scope"] = current if current in options else default_store_scope(options)
+                except (ValueError, OSError) as error:
+                    st.error(str(error))
+            options = st.session_state.get("annotation_store_scopes", {})
+            store_scope = st.selectbox("SQLite export / view", options, index=None,
+                                       format_func=lambda key: options[key], key="annotation_store_scope")
+            st.caption("Choose an export/view scope. Combined scopes require unambiguous document/annotator identities. The database is never modified.")
+        elif use_api:
             _render_inception_api_controls()
         else:
             project_selection = render_file_source_selector(
@@ -95,6 +138,8 @@ def render_sidebar() -> GuiInputs:
             )
 
         with st.expander("Annotation layers", expanded=False):
+            if is_store:
+                st.caption("SQLite uses stored SCTIDs and exact layer names. ID feature/prefix settings below apply only to INCEpTION projects.")
             annotation_types_text = st.text_area(
                 "Target annotation types to check",
                 value="gemtex.Concept\nwebanno.custom.Concept",
@@ -141,8 +186,9 @@ def render_sidebar() -> GuiInputs:
         annotation_types_text=annotation_types_text,
         ignore_overlap_types_text=ignore_overlap_types_text,
         ignore_overlap_mode=ignore_overlap_mode,
-        id_prefix=id_prefix,
-        id_feature=id_feature,
+        id_prefix="" if is_store else id_prefix,
+        id_feature="sctid" if is_store else id_feature,
+        store_scope=store_scope, source_kind=source_kind,
         data_dir=data_dir,
         target_view=target_view,
         release_blacklist_mode=release_blacklist_mode,

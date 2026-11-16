@@ -2,11 +2,12 @@
 from snomed_post_processing.pipelines.policy_check import PolicySettings, project_annotators
 from snomed_post_processing.uima_processing.scope import normalize_annotators
 from .file_sources import FileSource
+from snomed_post_processing.annotation_source import store_scopes, default_store_scope, AnnotationStoreError
 
 
-def _annotators(project):
+def _annotators(project, scope=None):
     before = project.stamp()
-    result = project_annotators(project.path)
+    result = project_annotators(project.path, **({"store_scope": scope} if scope is not None else {}))
     if before != project.stamp():
         raise ValueError("Project changed during inspection.")
     return result
@@ -25,7 +26,14 @@ class SharedInputControls:
                 self.data_dir = ui.input("Server data directory", value="data", on_change=self.directory_changed)
                 ui.button(icon="refresh", on_click=self.directory_changed).props("flat round dense").tooltip("Refresh server file lists")
             with ui.column().classes("gap-4 w-full min-w-0"):
-                self.project = FileSource(ui, "INCEpTION project ZIP", (".zip",), self.data_dir, self.project_changed)
+                self.source_kind = ui.select(["INCEpTION project", "Annotation store (SQLite)"], label="Annotation source",
+                                             value="INCEpTION project", on_change=self.source_changed)
+                self.zip_project = FileSource(ui, "INCEpTION project ZIP", (".zip",), self.data_dir, self.project_changed)
+                self.store = FileSource(ui, "Annotation store SQLite", (".sqlite", ".sqlite3", ".db"), self.data_dir, self.project_changed)
+                with ui.column().classes("w-full") as self.store_selection:
+                    ui.label("Read-only schema v2 snapshot. Select an export/view scope; combined scopes require unambiguous document/annotator identities.").classes("text-sm")
+                    self.scope = ui.select({}, label="SQLite export / view", value=None, on_change=self.changed).classes("w-full")
+                    self.inspect_store = ui.button("Inspect SQLite scopes", on_click=self.load_store_scopes)
                 self.lists = FileSource(ui, "SNOMED HDF5", (".hdf5", ".h5"), self.data_dir, self.changed)
             with ui.row().classes("w-full items-center"):
                 self.annotators = ui.select({}, label="Annotators (empty = all)", multiple=True,
@@ -49,7 +57,47 @@ class SharedInputControls:
         lines = lambda text: tuple(line.strip() for line in (text or "").splitlines() if line.strip())
         return PolicySettings(normalize_annotators(self.annotators.value or ()),
                               lines(self.layers.value) or ("gemtex.Concept",), lines(self.ignore.value),
-                              self.overlap.value, self.prefix.value or "", (self.feature.value or "").strip())
+                              self.overlap.value, "" if self.is_store else self.prefix.value or "",
+                              "sctid" if self.is_store else (self.feature.value or "").strip(),
+                              self.scope.value if self.is_store else None)
+
+    @property
+    def is_store(self):
+        return self.source_kind.value == "Annotation store (SQLite)"
+
+    @property
+    def project(self):
+        return self.store if self.is_store else self.zip_project
+
+    def source_changed(self, _=None):
+        if self.ready and not self.closed:
+            self.project_path = None
+            self.annotators.set_options({}, value=[])
+            self.scope.set_options({}, value=None)
+            self.project_changed()
+
+    async def load_store_scopes(self):
+        from nicegui import run
+        source = self.store.snapshot()
+        if source is None or self.busy or self.closed:
+            return
+        revision = self.revision
+        self.busy = True
+        self.refresh()
+        try:
+            before = source.stamp()
+            options = await run.io_bound(store_scopes, source.path)
+            if not self.closed and revision == self.revision and source.stamp() == before:
+                self.scope.set_options(options, value=self.scope.value if self.scope.value in options else default_store_scope(options))
+                self.changed()
+                self.status.set_text("SQLite scopes loaded. Select a scope, then run the desired action explicitly.")
+        except Exception:
+            if not self.closed and revision == self.revision:
+                self.status.set_text("Could not inspect SQLite. Use a closed, checkpointed schema v2 annotation-store snapshot.")
+        finally:
+            self.busy = False
+            if not self.closed:
+                self.refresh()
 
     def changed(self, _=None):
         if not self.ready or self.closed:
@@ -68,17 +116,26 @@ class SharedInputControls:
                 if path != self.project_path:
                     self.project_path = path
                     self.annotators.set_options({}, value=[])
+                    self.scope.set_options({}, value=None)
             self.changed()
 
     def directory_changed(self, _=None):
         if not self.ready or self.closed:
             return
-        self.project.refresh_directory()
+        self.zip_project.refresh_directory()
+        self.store.refresh_directory()
         self.lists.refresh_directory()
         self.changed()
 
     def refresh(self):
-        self.load_names.set_enabled(self.project.snapshot() is not None and not self.busy)
+        self.zip_project.container.set_visibility(not self.is_store)
+        self.store.container.set_visibility(self.is_store)
+        self.store_selection.set_visibility(self.is_store)
+        self.feature.set_visibility(not self.is_store)
+        self.prefix.set_visibility(not self.is_store)
+        self.inspect_store.set_enabled(self.store.snapshot() is not None and not self.busy)
+        self.load_names.set_enabled(self.project.snapshot() is not None and not self.busy
+                                    and (not self.is_store or self.scope.value is not None))
 
     async def load_annotators(self):
         from nicegui import run
@@ -90,15 +147,18 @@ class SharedInputControls:
         self.status.set_text("Reading annotator names…")
         self.refresh()
         try:
-            names = await run.io_bound(_annotators, project)
+            names = await run.io_bound(_annotators, project, **({"scope": self.scope.value} if self.is_store else {}))
             if not self.closed and revision == self.revision:
                 selected = list(normalize_annotators(self.annotators.value or ()))
                 options = {**{name: name for name in selected}, **names}
                 self.annotators.set_options(options, value=selected)
                 self.status.set_text("Annotators loaded. Empty selection includes all annotators.")
+        except AnnotationStoreError as error:
+            if not self.closed and revision == self.revision:
+                self.status.set_text(str(error))
         except Exception:
             if not self.closed and revision == self.revision:
-                self.status.set_text("Could not read annotators. Use a project ZIP containing JSON CAS or XMI, not Java serialized CAS.")
+                self.status.set_text("Could not read annotators. Check the selected ZIP or SQLite scope.")
         finally:
             self.busy = False
             if not self.closed:
@@ -107,6 +167,7 @@ class SharedInputControls:
     def close(self):
         self.closed = True
         self.revision += 1
-        self.project.close()
+        self.zip_project.close()
+        self.store.close()
         self.lists.close()
         self.listeners.clear()

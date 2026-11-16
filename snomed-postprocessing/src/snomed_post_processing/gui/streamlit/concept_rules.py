@@ -41,7 +41,8 @@ def _file_signature(source):
 
 def source_signature(inputs: GuiInputs):
     return (
-        _file_signature(st.session_state.get("zip_file")), _file_signature(inputs.hdf5_file),
+        ((_file_signature(st.session_state.get("zip_file")), inputs.store_scope) if inputs.store_scope is not None
+         else _file_signature(st.session_state.get("zip_file"))), _file_signature(inputs.hdf5_file),
         inputs.id_feature, inputs.id_prefix, inputs.annotation_types_text,
         inputs.target_view, inputs.release_blacklist_mode, _file_signature(inputs.runtime_blacklist_file),
         rules_json_text(st.session_state.get("concept_rules", DEFAULT_CONCEPT_RULES)),
@@ -148,7 +149,8 @@ def _render_concept_rules_form(inputs: GuiInputs) -> None:
         )
         st.caption("Apply stages review decisions; only export/upload changes CAS files. Manual decisions are protected.")
         apply = st.form_submit_button(
-            "Apply rules to review", disabled=not (st.session_state.get("zip_file") and inputs.hdf5_file),
+            "Apply rules to review", disabled=not (st.session_state.get("zip_file") and inputs.hdf5_file)
+            or (inputs.source_kind == "Annotation store (SQLite)" and inputs.store_scope is None),
             help="Validate rules, scan original annotations and select matching review decisions. Preserve saved Apply choices.",
         )
     if apply:
@@ -158,6 +160,8 @@ def _render_concept_rules_form(inputs: GuiInputs) -> None:
                 raise ValueError("Select at least one annotation layer.")
             st.session_state["concept_rules"] = rules
             st.session_state["concept_rule_scope"] = {"layers": layers, "documents": "", "annotators": "\n".join(inputs.annotators)}
+            if inputs.store_scope is not None:
+                st.session_state["concept_rule_scope"]["store_scope"] = inputs.store_scope
             # Import lazily to avoid coupling the rule engine to suggestion generation.
             from .sanitization_check_tab import _enforce_embedded_blacklist, _uses_custom_blacklist, _resolve_custom_blacklist_indices
             with st.spinner("Scanning original annotations for concept rules..."):
@@ -171,6 +175,7 @@ def _render_concept_rules_form(inputs: GuiInputs) -> None:
                 decisions = preview_concept_rules(
                     project, hdf5, rules, annotation_types=_lines(layers), annotators=inputs.annotators,
                     id_prefix=inputs.id_prefix, id_feature=inputs.id_feature,
+                    **({"store_scope": inputs.store_scope} if inputs.store_scope is not None else {}),
                     target_view=inputs.target_view,
                     release_exclude_blacklist=_enforce_embedded_blacklist(inputs.release_blacklist_mode),
                     runtime_blacklist_indices=runtime,

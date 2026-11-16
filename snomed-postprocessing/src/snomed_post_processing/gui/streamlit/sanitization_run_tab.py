@@ -105,7 +105,7 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
     if report_path:
         st.caption(f"Suggestion report: `{report_path}`")
 
-    document_texts = _project_document_text_lookup(st.session_state.get("zip_file"), annotators=inputs.annotators)
+    document_texts = _project_document_text_lookup(st.session_state.get("zip_file"), annotators=inputs.annotators, store_scope=inputs.store_scope)
     context = ReviewContext.from_metadata(
         st.session_state.get("sanitization_suggestions_metadata") or {}, document_texts=document_texts,
     )
@@ -339,12 +339,22 @@ def _render_sanitization_run_controls(
         return
     st.subheader("Run")
     project_source = st.session_state.get("zip_file")
-    run_disabled = project_source is None or selected_count == 0 or has_invalid_selected_rows
-    _render_run_readiness(
-        project_loaded=project_source is not None,
-        selected_count=selected_count,
-        has_invalid_selected_rows=has_invalid_selected_rows,
+    from snomed_post_processing.annotation_source import is_annotation_store
+    store_source = (
+        (isinstance(project_source, pathlib.Path) and project_source.is_file() and is_annotation_store(project_source))
+        or st.session_state.get("sanitization_suggestions_metadata", {}).get("store_scope") is not None
+        or (bool(st.session_state.get("concept_rule_decisions"))
+            and st.session_state.get("concept_rule_scope", {}).get("store_scope") is not None)
     )
+    run_disabled = store_source or project_source is None or selected_count == 0 or has_invalid_selected_rows
+    if store_source:
+        st.info("SQLite-backed review is read-only. Download reviewed decisions; project sanitization and deployment are unavailable for this input.")
+    else:
+        _render_run_readiness(
+            project_loaded=project_source is not None,
+            selected_count=selected_count,
+            has_invalid_selected_rows=has_invalid_selected_rows,
+        )
 
     control_col1, control_col2 = st.columns([1, 1])
     with control_col1:
@@ -367,6 +377,8 @@ def _render_sanitization_run_controls(
                 help="Save review choices and progress to restore later with matching suggestions. This does not export a project.",
             )
             st.caption("Save this JSON to restore the current review state later.")
+    if store_source:
+        return
     _render_inception_apply_upload_controls(
         project_source=project_source,
         reviewed_decisions=reviewed_decisions,
@@ -589,10 +601,11 @@ def _uploaded_file_key(uploaded_file: Any) -> tuple[str, int | None]:
     return (getattr(uploaded_file, "name", ""), getattr(uploaded_file, "size", None))
 
 
-def _selected_file_key(selected_file: Any) -> tuple[str, int | None]:
+def _selected_file_key(selected_file: Any) -> tuple:
     if isinstance(selected_file, pathlib.Path):
         try:
-            return (str(selected_file.resolve()), selected_file.stat().st_size)
+            info = selected_file.stat()
+            return (str(selected_file.resolve()), info.st_size, info.st_mtime_ns)
         except OSError:
             return (str(selected_file), None)
     return _uploaded_file_key(selected_file)
@@ -604,28 +617,27 @@ def _selected_file_name(selected_file: Any) -> str:
     return getattr(selected_file, "name", "")
 
 
-def _project_document_text_lookup(project_source: Any, *, annotators=()) -> dict[str, str]:
+def _project_document_text_lookup(project_source: Any, *, annotators=(), store_scope=None) -> dict[str, str]:
     if project_source is None:
-        logger.debug("Context extraction skipped: no project ZIP selected.")
+        logger.debug("Context extraction skipped: no annotation source selected.")
         return {}
-    upload_key = (_selected_file_key(project_source), normalize_annotators(annotators))
+    upload_key = (_selected_file_key(project_source), normalize_annotators(annotators), store_scope)
     cache_key = "sanitization_project_text_lookup_key"
     if st.session_state.get(cache_key) == upload_key:
         return st.session_state.get("sanitization_project_text_lookup", {})
     try:
         if isinstance(project_source, pathlib.Path):
-            data = project_source.read_bytes()
-            source_name = project_source.name
+            lookup = ReviewContext.from_project_path(project_source, annotators=annotators,
+                                                    **({"store_scope": store_scope} if store_scope is not None else {})).document_texts
         else:
-            data = project_source.getvalue()
-            source_name = getattr(project_source, "name", None)
-        lookup = ReviewContext.from_project_zip(data, source_name, annotators=annotators).document_texts
+            lookup = ReviewContext.from_project_zip(project_source.getvalue(), getattr(project_source, "name", None),
+                                                    annotators=annotators).document_texts
     except Exception:
-        logger.exception("Could not extract review context from the selected project ZIP.")
+        logger.exception("Could not extract review context from the selected annotation source.")
         lookup = {}
     if not lookup:
         logger.warning(
-            "Review context lookup is empty for the selected project ZIP. "
+            "Review context lookup is empty for the selected annotation source. "
             "Extraction failures are logged above; reselect/reload the project to retry."
         )
     st.session_state[cache_key] = upload_key
@@ -648,7 +660,7 @@ def _log_missing_context_documents(
         logger.warning(
             "Review context unavailable for %d document(s): %r. "
             "No matching project text or saved context snippet was found. "
-            "Check the selected ZIP and exact document names (lookup aliases=%d).",
+            "Check the selected annotation source and exact document names (lookup aliases=%d).",
             len(missing), missing, len(context.document_texts),
         )
 
