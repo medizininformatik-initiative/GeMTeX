@@ -41,6 +41,10 @@ The GUI's tab-1 annotator selection governs all checks, suggestions, rules, revi
 
 Local ZIP write-back receives the annotator filter and leaves excluded CAS contents unchanged. Deployment filters both decisions and CAS extraction, so excluded annotators are not uploaded merely because their unchanged CAS is present in the source ZIP. Standalone deployment/artifact creation honors saved decision scope unless explicitly overridden by the caller. With no scope restriction, default behavior remains all annotators.
 
+# Streamlit review summary counts
+
+`_render_review_summary` partitions scoped generic rows after concept-rule reservations using `_valid_choices` and `_needs_choice`: selectable rows without a per-row choice form, selectable rows with that form (including saved choices), and rows with no selectable candidates. These three counts sum to Suggestions. No replacement is based on candidate availability, not the current selection sentinel, so unselected BM25 ties are not double-counted. These are not approval/pending-review metrics; Documents is a separate document count. Metric tooltips and the [user guide](../../../docs/user-guide.md#review-summary-counts) explain the boundary. A regression test covers single, selected/unselected ambiguous, zero-candidate and empty inputs.
+
 # Explicit concept rules
 
 The reusable engine is `sanitization/concept_rules.py`. The GUI form is above fallback settings in **Suggest policy sanitization**:

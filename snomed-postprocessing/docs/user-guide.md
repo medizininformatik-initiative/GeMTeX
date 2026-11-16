@@ -5,12 +5,29 @@ expanding the main setup and workflow instructions.
 
 ## Contents
 
+- [Review summary counts](#review-summary-counts)
 - [Exclusion-list findings without replacements](#exclusion-list-findings-without-replacements)
 - [Diagnostic candidates](#diagnostic-candidates)
 - [SNOGIT retrieval limits](#snogit-retrieval-limits)
   - [What the three limits mean](#what-the-three-limits-mean)
   - [Term rows, hits and final candidates](#term-rows-hits-and-final-candidates)
   - [What to do when a limit is reported](#what-to-do-when-a-limit-is-reported)
+
+## Review summary counts
+
+In Streamlit's **Review & apply**, the three candidate categories partition
+**Suggestions**:
+
+- **Single/no-choice:** a selectable replacement without a per-row choice form.
+- **Need choice:** selectable candidates routed to the per-row choice form,
+  including rows where a choice has already been saved.
+- **No replacement:** no selectable replacement candidate is available.
+
+An unselected tied result counts only under **Need choice**, not **No replacement**.
+These are candidate categories, not approval or pending-review counts. The total
+covers in-scope generic suggestions after concept-rule reservations; explicit rule
+decisions are shown separately. **Documents** counts documents, not suggestions,
+and is not part of the sum.
 
 ## Exclusion-list findings without replacements
 

@@ -1,7 +1,10 @@
 from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 from snomed_post_processing.gui.streamlit.sanitization_run_tab import (
+    NO_REPLACEMENT_LABEL,
     _needs_row_specific_choice,
+    _render_review_summary,
     _replacement_options_and_hints,
     _review_rows_to_decisions,
     _row_manual_choice_resolved,
@@ -10,6 +13,30 @@ from snomed_post_processing.gui.streamlit.sanitization_run_tab import (
 )
 from snomed_post_processing.sanitization.models import SanitizationStatus
 from snomed_post_processing.review_context import ReviewContext
+
+
+def test_review_summary_categories_partition_rows_regardless_of_selection():
+    rows = [
+        {"Document": "a.txt", "_valid_choices": ("one",), "_needs_choice": False,
+         "Suggested replacement": "one"},
+        {"Document": "a.txt", "_valid_choices": ("one", "two"), "_needs_choice": True,
+         "Suggested replacement": NO_REPLACEMENT_LABEL},
+        {"Document": "b.txt", "_valid_choices": ("one", "two"), "_needs_choice": True,
+         "Suggested replacement": "two"},
+        {"Document": "b.txt", "_valid_choices": (), "_needs_choice": False,
+         "Suggested replacement": NO_REPLACEMENT_LABEL},
+    ]
+    for source in (rows, []):
+        columns = [MagicMock() for _ in range(5)]
+        with patch("snomed_post_processing.gui.streamlit.sanitization_run_tab.st.columns", return_value=columns):
+            _render_review_summary(source)
+        counts = {column.metric.call_args.args[0]: column.metric.call_args.args[1] for column in columns}
+        assert counts["Suggestions"] == len(source)
+        assert counts["Documents"] == (2 if source else 0)
+        assert counts["Single/no-choice"] == (1 if source else 0)
+        assert counts["Need choice"] == (2 if source else 0)
+        assert counts["No replacement"] == (1 if source else 0)
+        assert sum(counts[name] for name in ("Single/no-choice", "Need choice", "No replacement")) == len(source)
 
 
 def test_finding_context_uses_metadata_when_project_text_is_unavailable():

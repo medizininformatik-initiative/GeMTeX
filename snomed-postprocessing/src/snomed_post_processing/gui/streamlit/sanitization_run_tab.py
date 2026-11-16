@@ -1352,19 +1352,16 @@ def _render_review_summary(rows: list[dict[str, Any]]) -> None:
     single_choice_replacements = sum(
         1
         for row in rows
-        if row.get("Suggested replacement") != NO_REPLACEMENT_LABEL
-        and not row.get("_needs_choice")
+        if row.get("_valid_choices") and not row.get("_needs_choice")
     )
-    needs_choice = sum(1 for row in rows if row.get("_needs_choice"))
-    no_replacement = sum(
-        1 for row in rows if row.get("Suggested replacement") == NO_REPLACEMENT_LABEL
-    )
+    needs_choice = sum(1 for row in rows if row.get("_valid_choices") and row.get("_needs_choice"))
+    no_replacement = sum(1 for row in rows if not row.get("_valid_choices"))
     metric_cols = st.columns(5)
-    metric_cols[0].metric("Suggestions", len(rows))
+    metric_cols[0].metric("Suggestions", len(rows), help="In-scope generic suggestions, excluding annotations reserved by concept rules. The three candidate categories add up to this total.")
     metric_cols[1].metric("Documents", len(grouped_rows))
-    metric_cols[2].metric("Single/no-choice", single_choice_replacements)
-    metric_cols[3].metric("Need choice", needs_choice)
-    metric_cols[4].metric("No replacement", no_replacement)
+    metric_cols[2].metric("Single/no-choice", single_choice_replacements, help="Selectable replacement available without a per-row choice form. This is not an approval count.")
+    metric_cols[3].metric("Need choice", needs_choice, help="Selectable candidates requiring the per-row choice form, including rows with saved choices. This is not a pending-review count.")
+    metric_cols[4].metric("No replacement", no_replacement, help="No selectable replacement candidate available. An unselected row with candidates belongs to Need choice, not this category.")
 
 
 def _decisions_metadata(rows: list[dict[str, Any]]) -> dict[str, Any]:
