@@ -4,24 +4,24 @@ Preview **synthetic data or uploaded suggestions JSON**, then deliberately stage
 and save manual choices and download/restore reviewed-decisions JSON.
 Policy checking, explicit concept rules and suggestion generation are connected.
 CAS write-back and deployment are not connected.
-Both frontends now use the same Python 3.11 project environment, `.venv-py311`.
+Both frontends use the standard Python 3.11 project environment, `.venv`.
 The shared `gui/app.py` defaults to Streamlit; select NiceGUI explicitly.
 
 ## Run NiceGUI
 
-From the repository root, with the already installed extra:
+From the repository root:
 
 ```bash
-.venv-py311/Scripts/python -m snomed_post_processing.gui.app --frontend nicegui --show
+uv run --extra nicegui src/snomed_post_processing/gui/app.py --frontend nicegui --show
 ```
 
-Or run the Python file directly:
+The module form is also supported:
 
 ```bash
-.venv-py311/Scripts/python src/snomed_post_processing/gui/app.py --frontend nicegui --show
+uv run --extra nicegui python -m snomed_post_processing.gui.app --frontend nicegui --show
 ```
 
-In your IDE, select `.venv-py311/Scripts/python.exe`, use `gui/app.py` as the
+In your IDE, select `.venv/Scripts/python.exe`, use `gui/app.py` as the
 script, and set its parameters to `--frontend nicegui --show`.
 
 Default URL: `http://127.0.0.1:8080`. Omit `--show` to avoid opening a browser;
@@ -235,26 +235,16 @@ is display-only and never limits decision export. No CAS files are changed.
 
 `nicegui==4.0.0` is pinned in the project's **optional `nicegui` extra** and
 resolved in `uv.lock`, not a separate backend-less runtime. No `PYTHONPATH`
-setting or `--no-project` command is needed. The original Python 3.9 `.venv`
-remains untouched; do not select it for either frontend.
-
-PowerShell:
-
-```powershell
-$env:UV_PROJECT_ENVIRONMENT = ".venv-py311"
-uv sync --locked --extra nicegui
-uv run --locked --extra nicegui python -m snomed_post_processing.gui.app --frontend nicegui --show
-```
-
-Bash:
+setting or `--no-project` command is needed. Use the standard project `.venv`
+for both frontends; no `UV_PROJECT_ENVIRONMENT` override is required.
 
 ```bash
-UV_PROJECT_ENVIRONMENT=.venv-py311 uv sync --locked --extra nicegui
-UV_PROJECT_ENVIRONMENT=.venv-py311 uv run --locked --extra nicegui python -m snomed_post_processing.gui.app --frontend nicegui --show
+uv sync --locked --extra nicegui
+uv run --locked --extra nicegui src/snomed_post_processing/gui/app.py --frontend nicegui --show
 ```
 
 Keep `--extra nicegui` on uv run/sync commands for this environment; otherwise
-uv can remove the optional packages. Direct `.venv-py311/Scripts/python` launches
+uv can remove the optional packages. Direct `.venv/Scripts/python` launches
 do not sync packages. Other systems use the environment's `bin/python` path.
 Setup commands may download dependencies. Docker still defaults to Streamlit
 and does not install the optional extra automatically.

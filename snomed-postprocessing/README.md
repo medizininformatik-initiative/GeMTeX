@@ -83,17 +83,15 @@ BM25 and SNOGIT are suggestion-only evidence. Candidates must still pass the sel
 
 ## Python runtime
 
-The project targets **Python 3.11.x** (`requires-python = "~=3.11.0"`). `.python-version`, `uv.lock` and the Docker base image are aligned to 3.11. Core dependency versions are retained; the optional NiceGUI extra updates only certifi, idna and Pygments among existing packages.
-
-The shared **`.venv-py311` (Python 3.11.13)** has both Streamlit and NiceGUI installed via the project's `nicegui` extra. The lock contains 100 packages across platforms (99 installed on Windows). The full regression run reports **280 passed, 3 failed** (2 warnings); all three failures are existing GUI BM25/TLS-default mismatches, reproduced in the preserved Python 3.9 environment. Core imports, all 11 CLI help commands and the installed dependency check pass. No new Python-3.11-specific failure was identified; the suite is not fully green.
-
-The original Python 3.9 `.venv` remains unchanged. Point your IDE at `.venv-py311/Scripts/python.exe`, or launch the GUI on Windows with:
+The project requires **Python 3.11.x** and uses the standard **`.venv`** environment for the CLI and both GUI frontends. No separate frontend environment is needed.
 
 ```bash
-.venv-py311/Scripts/python -m snomed_post_processing.gui.app
+uv sync --locked
 ```
 
-For uv commands, set `UV_PROJECT_ENVIRONMENT=.venv-py311` and include `--extra nicegui` on run/sync commands to retain the optional frontend. Avoid plain `uv sync`/`uv run` against the old `.venv`, since uv may replace it. Both file and module NiceGUI launches returned HTTP 200 in loopback startup/page-construction checks. Browser JavaScript/visual interactions, Docker builds and live deployment remain unverified.
+To also install the optional NiceGUI frontend, use `uv sync --locked --extra nicegui`. Keep `--extra nicegui` on subsequent uv run/sync commands when using that frontend so its packages are retained.
+
+On Windows, select `.venv/Scripts/python.exe` in your IDE; on other systems use `.venv/bin/python`.
 
 ## CLI usage
 
@@ -381,55 +379,39 @@ uv run deploy-inception-sanitized-project \
 
 ## GUI usage
 
-**The annotator selection in tab 1 applies throughout the pipeline**, including concept rules, suggestions, review and export/upload—not just the policy check. Empty means all annotators. Excluded annotators' CAS stays unchanged in a local sanitized ZIP and is omitted from upload artifacts. Saved artifact metadata carries the scope. Changing it discards excluded pending choices and resets review progress; narrower-scope artifacts require rechecking/regeneration before broadening. Save reviewed decisions before replacing suggestions, which resets generic index-based choices to prevent applying them to different annotations.
+### Start the GUI
 
-The stable launcher is `gui/app.py`. Both frontends share `.venv-py311`; Streamlit remains the default, while NiceGUI supports suggestions inspection and explicit manual review JSON staging/import/export—not production processing, CAS write-back or deployment. See its [setup and limitations](src/snomed_post_processing/gui/nicegui/README.md).
-
-Start NiceGUI locally (Windows):
+From the repository root, start the default **Streamlit** GUI:
 
 ```bash
-.venv-py311/Scripts/python src/snomed_post_processing/gui/app.py --frontend nicegui --show
+uv run src/snomed_post_processing/gui/app.py
 ```
 
-NiceGUI now connects **1. Check policy** and **2. Suggest**: shared ZIP/HDF5/scope inputs, explicit concept rules, resolver/ancestor/BM25 settings, SNOGIT cache inspection/creation, and JSON/Markdown reports. Generate or restore suggestions in tab 2, then explicitly **Load in review (replaces review)**; neither generation nor artifact restoration alone resets review or approves targets. Rule application stages tab-3 decisions for **Save choices**, with manual-conflict and stale-source protection. CAS ZIP write-back and deployment remain unconnected.
-
-NiceGUI restores artifacts at their workflow stage: **1. Check policy → Restore CriticalFindings JSON** restores the findings table and JSON export (not unavailable full policy reports); **2. Suggest → Restore suggestions JSON** restores the suggestions overview (up to 50 MiB). Use **Load in review (replaces review)** explicitly to inspect/stage those suggestions in tab 3. Reviewed-decisions loading remains in **3. Review & apply**. Its saved annotator scope is inherited; original indices, ties, diagnostic targets and evidence are retained. Upload errors leave the last preview intact. Loading only reads saved results; it does not generate suggestions, approve choices, validate HDF5 or change CAS files. With loaded suggestions, use the finding/candidate right-click actions, then **Save choices**. Reviewed flags and reviewed-decisions JSON download/restore are connected; pending edits must be saved/discarded before download. Imports replace review atomically after scope/index/identity checks; protected imported rules/deletions/manual edits remain read-only. The explicit review handoff resets generic review; restoring tab-2 suggestions alone does not. Page reload loses unsaved-to-file state. See the frontend README for scope, provenance and validation limits.
-
-Omit `--frontend nicegui` to start Streamlit, or select `--frontend streamlit` explicitly. Backend options are forwarded unchanged: `--port 8081` for NiceGUI, `--server.port 8502` for Streamlit. The module form `python -m snomed_post_processing.gui.app` is also supported. In an IDE, select `.venv-py311/Scripts/python.exe` and set script parameters to `--frontend nicegui --show`.
-
-For uv, set `UV_PROJECT_ENVIRONMENT=.venv-py311`, install with `uv sync --locked --extra nicegui`, and launch with `uv run --locked --extra nicegui python -m snomed_post_processing.gui.app --frontend nicegui --show`. Keep the extra selected to prevent uv removing its packages. NiceGUI defaults to `http://127.0.0.1:8080`; the launcher starts only the selected frontend, in the same Python environment.
-
-With Docker, the GUI can be started as:
+Or use Docker, then open `http://localhost:8501`:
 
 ```bash
-docker run --rm -p HOST_PORT:8501 \
+docker run --rm -p 8501:8501 \
   ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:2.0.2 \
   start-gui
 ```
 
-Convenience scripts are included for the common Docker commands:
+The Docker convenience script is `bash start-gui.sh 8501`.
+
+For the experimental **NiceGUI** frontend:
 
 ```bash
-bash log-inception-docs.sh inception-export.zip
-bash start-gui.sh 8501
+uv run --extra nicegui src/snomed_post_processing/gui/app.py --frontend nicegui --show
 ```
 
-If you want to run them as `./log-inception-docs.sh` or `./start-gui.sh`, mark them executable first with `chmod +x`. The logging script assumes files are in `./data` and relies on the container-visible `/app/data` paths.
+See its [setup and limitations](src/snomed_post_processing/gui/nicegui/README.md); CAS write-back and deployment are not yet connected there.
 
-The GUI has three tabs:
+### Workflow (Streamlit)
 
-1. **Check policy**
-   Upload an INCEpTION ZIP or fetch one through the INCEpTION API, upload the HDF5 policy file, optionally select annotators and annotation layers, then run the policy check. Reports and JSON artifacts can be downloaded.
+1. **Check policy:** Select the annotation source and HDF5 policy file, choose annotators/layers, and run the check. Download reports and findings JSON.
+2. **Sanitization suggestions:** Use current-session or saved findings, configure rules and optional fallback methods, and generate suggestions. You can also load suggestions JSON from an earlier run; the overview appears in this tab.
+3. **Review & apply:** Review replacements, save/load reviewed decisions, then explicitly export a sanitized ZIP or run the INCEpTION deployment pipeline. Reviewing choices alone does not modify the input project.
 
-2. **Sanitization suggestions**  
-   Use the `CriticalFindings` JSON from the current session or upload one. Select policy or active-release target view, configure optional embedded/custom exclusion-list handling for release view, choose fallback methods, optionally select/create a processed SNOGIT cache, then download suggestion reports.
-
-3. **Review & apply / Sanitization run**  
-   Review suggestions, save/load reviewed decisions, and either:
-   - run the legacy local sanitization ZIP export, or
-   - run the INCEpTION deployment pipeline.
-
-   The INCEpTION deployment section mirrors `apply-decisions-to-inception`: it builds a schema shell ZIP, builds repaired flattened upload artifacts, and then performs a dry-run or, only if explicitly selected, uploads to INCEpTION. Download buttons are provided for the shell ZIP, repaired upload artifacts ZIP, and pipeline report.
+**Annotator selection applies to every step.** Empty means all annotators. Excluded annotators remain unchanged in local ZIP exports and are omitted from uploads. Changing scope can discard pending choices and reset review progress. Save reviewed decisions before loading different suggestions, which resets generic review choices.
 
 ## Notes
 
