@@ -306,6 +306,9 @@ class GenerationControlsTest(unittest.IsolatedAsyncioTestCase):
         with patch.object(self.ui.download, "content") as download:
             await self.panel.download("json")
             self.assertEqual(download.call_args.args[0], content.decode("utf-8"))
+            await self.panel.download_masked_overview()
+            self.assertEqual(download.call_args.args[1], "sanitization-suggestion-overview.masked.csv")
+            self.assertIs(self.review.controls.session, session)
         with self.client:
             await self.panel.open_review()
         self.assertEqual(self.review.state.source_name, "restored.json")
@@ -667,12 +670,40 @@ class GenerationControlsTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(self.review.controls.session.draft_rules)
         self.assertTrue(self.review.controls.session.drafts)
 
+    async def test_masked_csv_download_uses_snapshot_and_rejects_changes_during_preparation(self):
+        import csv
+        import io
+        from snomed_post_processing.gui.nicegui.suggestion_ui import masked_preview_csv
+        await self.checked_generation()
+        rows = copy.deepcopy(self.panel.overview.options["rowData"])
+        session = self.review.controls.session
+        with patch.object(self.ui.download, "content") as download:
+            await self.panel.download_masked_overview()
+        content, filename = download.call_args.args
+        self.assertEqual(filename, "sanitization-suggestion-overview.masked.csv")
+        self.assertEqual(download.call_args.kwargs["media_type"], "text/csv")
+        exported = list(csv.DictReader(io.StringIO(content.decode("utf-8-sig"))))
+        self.assertEqual(len(exported), len(rows))
+        self.assertEqual([row["Covered text"] for row in exported], [row["text"] for row in rows])
+        self.assertTrue(all(row["Document"].startswith("document-") for row in exported))
+        self.assertEqual(self.panel.overview.options["rowData"], rows)
+        self.assertIs(self.review.controls.session, session)
+        async def change_during_csv(function, *args, **kwargs):
+            result = inline(function, *args, **kwargs)
+            if function is masked_preview_csv:
+                self.inputs.prefix.set_value("")
+            return result
+        with patch("nicegui.run.io_bound", side_effect=change_during_csv), patch.object(self.ui.download, "content") as download:
+            await self.panel.download_masked_overview()
+        download.assert_not_called()
+
     async def test_external_source_change_blocks_generation_download(self):
         await self.checked_generation()
         from snomed_post_processing.gui.nicegui.suggestion_ui import stamps
         with patch("snomed_post_processing.gui.nicegui.suggestion_ui.stamps", return_value=()):
             with patch.object(self.ui.download, "content") as download:
                 await self.panel.download("json")
+                await self.panel.download_masked_overview()
         download.assert_not_called()
         self.assertFalse(self.panel.results.visible)
 

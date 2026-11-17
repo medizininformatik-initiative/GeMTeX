@@ -4,6 +4,9 @@ from dataclasses import asdict
 import io
 import uuid
 
+import pandas as pd
+from snomed_post_processing.sanitization_context import masked_overview_csv
+
 from snomed_post_processing.pipelines.suggestion_generation import DEFAULT_ASSOCIATIONS, SuggestionSettings
 from snomed_post_processing.sanitization import ASSOCIATION_TYPE_DESCRIPTIONS, SUPPORTED_ASSOCIATION_TYPES
 from snomed_post_processing.sanitization.semantic_text import FSN_POSTFIX_PRESETS, normalize_fsn_postfixes
@@ -16,6 +19,15 @@ from .suggestion_jobs import (
     SuggestionJob, create_cache, inspect_members, restore_suggestions, run_generation, run_rules, stamps, validate_preserved_rules,
 )
 from .suggestions import MAX_SUGGESTIONS_BYTES, SuggestionsPreviewError, load_suggestions_preview
+
+
+def masked_preview_csv(preview):
+    columns = {"document": "Document", "annotator": "Annotator", "code": "Source code",
+               "status": "Status", "proposed_code": "Replacement code", "candidate_count": "Candidate count",
+               "text": "Covered text"}
+    frame = pd.DataFrame([{name: getattr(row, name) for name in columns} for row in preview.findings],
+                         columns=list(columns)).rename(columns=columns)
+    return masked_overview_csv(frame)
 
 
 def rule_records(rules):
@@ -136,6 +148,8 @@ class SuggestionControls:
                 self.open_button = ui.button("Load in review (replaces review)", on_click=self.open_review)
                 ui.button("Download suggestions JSON", on_click=lambda: self.download("json"))
                 ui.button("Download suggestions Markdown", on_click=lambda: self.download("markdown"))
+                ui.button("Download masked overview CSV", on_click=self.download_masked_overview).tooltip(
+                    "All overview rows; only Document/Annotator are pseudonymized. Clinical text is unchanged. Not full anonymization or a review-import artifact.")
             ui.label("Loading replaces generic choices and flags; same-input rule choices are retained. Download existing reviewed decisions first if needed. No target is approved automatically.").classes("text-sm")
         self.cache.mode.set_value("Data directory")
         self.snogit_source.mode.set_value("Data directory")
@@ -381,6 +395,18 @@ class SuggestionControls:
             self.ui.download.content(getattr(completed[0], kind), "sanitization-suggestions." + ("json" if kind == "json" else "md"))
         except (ReviewError, OSError):
             self.status.set_text("Generation inputs changed or are unavailable. Generate again before downloading.")
+
+    async def download_masked_overview(self):
+        from nicegui import run
+        try:
+            completed = await self.current_result()
+            content = await run.io_bound(masked_preview_csv, completed[1])
+            if await self.current_result() is not completed:
+                raise ReviewError("Suggestions changed during CSV preparation.")
+            self.ui.download.content(content, "sanitization-suggestion-overview.masked.csv", media_type="text/csv")
+        except (ReviewError, OSError):
+            if not self.closed:
+                self.status.set_text("Suggestions or generation inputs changed or are unavailable. Retry with current suggestions before downloading.")
 
     def review_token(self):
         review = self.get_review()

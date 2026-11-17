@@ -12,13 +12,13 @@ from streamlit.testing.v1 import AppTest
 
 from test.test_semantic_bm25_sanitization import _finding, _write_compact_hdf5
 from snomed_post_processing.sanitization.semantic_bm25 import suggest_semantic_bm25
+from snomed_post_processing.sanitization_context import masked_overview_csv as _masked_overview_csv
 
 from snomed_post_processing.gui.streamlit.sanitization_check_tab import (
     _enforce_embedded_blacklist,
     _resolve_custom_blacklist_indices,
     _uses_custom_blacklist,
     _suggestion_overview_row,
-    _masked_overview_csv,
     _render_suggestion_overview,
 )
 

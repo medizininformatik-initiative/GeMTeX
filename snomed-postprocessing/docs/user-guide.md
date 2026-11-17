@@ -48,14 +48,17 @@ reviewed decisions instead. No CAS reconstruction or SQLite write-back is perfor
 
 ## Masked suggestion overview download
 
-In Streamlit's **Suggest policy sanitization → Suggestion overview**, use
-**Download masked overview CSV** to export all overview rows with only the
+In Streamlit's **Suggest policy sanitization → Suggestion overview**, or NiceGUI's
+**2. Suggest** results, use **Download masked overview CSV** to export all overview rows with only the
 **Document** and **Annotator** columns pseudonymized. Repeated names get consistent
 numbered aliases within that table (`document-1`, `annotator-1`, etc.). The aliases
 are assigned by first appearance and are not shared with the masked policy report.
 
-All other columns remain unchanged, including offsets, codes, candidate summaries,
-reasons and clinical text. **This is not full anonymization:** names may still
+All other columns remain unchanged. NiceGUI exports document, annotator, source code,
+status, replacement code, candidate count and covered text; Streamlit's richer overview
+also includes offsets, candidate summaries and reasons. NiceGUI exports the loaded
+artifact's scoped rows, for both generated and restored suggestions, regardless of
+grid sorting/filtering. Stale generated results cannot be downloaded. **This is not full anonymization:** names may still
 appear in free text. The UTF-8 CSV includes a BOM for spreadsheet compatibility;
 import SCTID columns as text to avoid spreadsheet number conversion. It does not
 modify the displayed table, saved suggestions or review decisions, and is not an
