@@ -12,6 +12,7 @@ import h5py
 import pandas as pd
 import streamlit as st
 
+from snomed_post_processing.sanitization_context import masked_overview_csv
 from snomed_post_processing.findings_io import read_critical_findings_json_with_metadata
 from snomed_post_processing.sanitization.json_io import read_sanitization_suggestions_json_with_metadata
 from snomed_post_processing.terminology import policy_label
@@ -158,7 +159,7 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
     )
 
     st.subheader("Restore sanitization suggestions JSON")
-    st.caption("Load suggestions generated in an earlier session. They become available in the Review & apply tab without rerunning analysis.")
+    st.caption("Load suggestions generated in an earlier session to see their overview here and review them in Review & apply, without rerunning analysis.")
     suggestions_selection = render_file_source_selector(
         "Sanitization suggestions JSON",
         key="sanitization_check_suggestions_json",
@@ -796,9 +797,6 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                 help="Save generated candidates and settings to load in Review & apply. This is not a saved review state.",
             )
 
-            st.subheader("Suggestion overview")
-            _render_suggestion_overview(suggestions)
-
             st.subheader("Reports")
             download_md_report(
                 sanitization_report_text,
@@ -810,9 +808,20 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
         except Exception as exc:
             st.error(f"Sanitization suggestion generation failed: {exc}")
 
+    suggestions = st.session_state.get("sanitization_suggestions")
+    if suggestions is not None:
+        st.subheader("Suggestion overview")
+        metadata = st.session_state.get("sanitization_suggestions_metadata") or {}
+        if scope_covers(metadata.get("annotators", ()), inputs.annotators):
+            _render_suggestion_overview(suggestions, annotators=inputs.annotators)
+        else:
+            st.warning("Suggestions were generated for a narrower annotator scope. Regenerate suggestions or load matching suggestions JSON.")
 
-def _render_suggestion_overview(suggestions: list[Any]) -> None:
-    rows = [_suggestion_overview_row(index, suggestion) for index, suggestion in enumerate(suggestions, start=1)]
+
+def _render_suggestion_overview(suggestions: list[Any], *, annotators=()) -> None:
+    rows = [_suggestion_overview_row(index, suggestion)
+            for index, suggestion in enumerate(suggestions, start=1)
+            if annotator_in_scope(suggestion.finding.annotator, annotators)]
     if not rows:
         st.info("No sanitization suggestions to preview.")
         return
@@ -857,21 +866,13 @@ def _render_suggestion_overview(suggestions: list[Any]) -> None:
     )
     st.download_button(
         "Download masked overview CSV",
-        data=_masked_overview_csv(overview_df),
+        data=masked_overview_csv(overview_df),
         file_name="sanitization-suggestion-overview.masked.csv",
         mime="text/csv",
         key="sanitization_suggestion_overview_masked_csv",
         on_click="ignore",
         help="Downloads all overview rows with numbered document/annotator aliases. All other fields, including clinical text, remain unchanged. This is not full anonymization or a review-import artifact.",
     )
-
-
-def _masked_overview_csv(overview_df: pd.DataFrame) -> bytes:
-    masked = overview_df.copy()
-    for column, prefix in (("Document", "document"), ("Annotator", "annotator")):
-        aliases = {name: f"{prefix}-{index}" for index, name in enumerate(masked[column].unique(), start=1)}
-        masked[column] = masked[column].map(aliases)
-    return masked.to_csv(index=False).encode("utf-8-sig")
 
 
 def _suggestion_overview_row(index: int, suggestion: Any) -> dict[str, Any]:

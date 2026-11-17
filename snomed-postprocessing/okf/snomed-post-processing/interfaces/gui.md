@@ -187,6 +187,10 @@ The collapsed rules editor supports add/remove/edit and schema-v1 JSON load/down
 
 The sidebar annotation-layer settings include the configurable SNOMED ID feature name and prefix. The feature defaults to `id`; the prefix defaults to `http://snomed.info/id/`. Use an empty prefix for layers that store plain SCTIDs. The same feature/prefix settings are used when matching reviewed decisions and writing replacement IDs. See [Annotation layer requirements](/snomed-post-processing/data/annotation-layer-requirements.md).
 
+# Streamlit saved-suggestions overview
+
+Tab 2's **Restore sanitization suggestions JSON** shows the existing read-only **Suggestion overview**, including the masked CSV download, without requiring HDF5/project inputs or rerunning generation. The overview reads the current session suggestions on every rerun, so imported and newly generated suggestions share one table and it remains visible after other controls change or the file selector is cleared. Failed imports retain the last successfully loaded overview. The shared annotator scope filters rows without renumbering their original suggestion indices; artifacts generated for a narrower scope show a warning instead of implying broader coverage. An empty artifact has an explicit empty-preview message. Review choices and CAS files are not changed by displaying the overview. CSV masking replaces document/annotator names only; clinical content is retained and this is not full anonymization.
+
 # BM25 matching settings
 
 **Advanced suggestion settings → Matching semantic-tag boost (%)** controls the separate score bonus for matching source/candidate FSN tags (default 10%, range 0–100; 0 disables it). A tooltip explains the multiplier and unchanged lexical overlap, and the active-settings notice shows the selected percentage. Known FSNs are indexed/queried without the trailing semantic tag; full display labels, clinical parentheses and SNOGIT terms are preserved. Suggestion JSON settings record the boost and FSN-tag exclusion. Regenerate suggestions after changing scoring settings; automatic-acceptance thresholds remain unvalidated heuristics.
