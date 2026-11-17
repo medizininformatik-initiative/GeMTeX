@@ -139,7 +139,7 @@ Docker CLI example with local files mounted into `/app/data`:
 docker run \
   --volume ./data:/app/data \
   --rm \
-  ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:2.0.2 \
+  ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:2.1.0 \
   log-critical-documents \
   --lists-path /app/data/gemtex_snomedct_codes.hdf5 \
   /app/data/inception-export.zip
@@ -417,7 +417,7 @@ Or use Docker, then open `http://localhost:8501`:
 
 ```bash
 docker run --rm -p 8501:8501 \
-  ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:2.0.2 \
+  ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:2.1.0 \
   start-gui
 ```
 
