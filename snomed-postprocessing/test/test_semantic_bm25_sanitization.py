@@ -1,3 +1,4 @@
+import dataclasses
 import io
 import pathlib
 import tempfile
@@ -17,12 +18,15 @@ from snomed_post_processing.sanitization import (
     validate_snogit_sidecar_compatibility,
     write_sanitization_markdown_report,
 )
+from snomed_post_processing.sanitization.json_io import sanitization_suggestion_from_dict, sanitization_suggestion_to_dict
+from snomed_post_processing.sanitization.models import SanitizationCandidate
 from snomed_post_processing.sanitization.semantic_bm25 import (
     BM25Index,
     SemanticBm25Resolver,
     _query_text,
     suggest_semantic_bm25,
 )
+from snomed_post_processing.sanitization.semantic_text import _fsn_text, _tokenize
 from snomed_post_processing.uima_processing import CriticalFinding
 
 
@@ -49,6 +53,7 @@ def _write_compact_hdf5(
     whitelist_indices=(1, 2, 3),
     blacklist_indices=(),
     active=(False, True, True, True),
+    fsns=None,
 ):
     with h5py.File(path, "w") as h5_file:
         concepts = h5_file.create_group("concepts")
@@ -63,7 +68,7 @@ def _write_compact_hdf5(
         concepts.create_dataset(
             "fsn",
             data=np.asarray(
-                [
+                fsns or [
                     "Inactive alpha therapy legacy concept (procedure)",
                     "Alpha therapy procedure (procedure)",
                     "Beta diagnostic procedure (procedure)",
@@ -104,8 +109,62 @@ class TestSemanticBm25Sanitization(unittest.TestCase):
             "Old alpha concept (procedure)",
         )
 
-        self.assertEqual(query, "alpha therapy Old alpha concept (procedure)")
+        self.assertEqual(query, "alpha therapy Old alpha concept")
         self.assertNotIn("123456789", query)
+
+    def test_fsn_suffix_removal_preserves_clinical_parentheses_and_original_text(self):
+        fsn = "Pain (left side) (finding)"
+        self.assertEqual(_fsn_text(fsn), "Pain (left side)")
+        self.assertEqual(_fsn_text("Pain without a tag"), "Pain without a tag")
+        self.assertEqual(_fsn_text(None), "")
+        query = _query_text(_finding(covered_text="Pain (left side)"), fsn)
+        self.assertEqual(query, "Pain (left side) Pain (left side)")
+        self.assertEqual(_tokenize("Procedure (left side)"), ["procedure", "left", "side"])
+        self.assertEqual(fsn, "Pain (left side) (finding)")
+
+    def test_shared_semantic_tag_alone_does_not_retrieve_candidates(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = pathlib.Path(tmpdir) / "concepts.hdf5"
+            _write_compact_hdf5(path, fsns=["Unrelated (finding)", "Alpha (finding)", "Beta (finding)", "Gamma (finding)"])
+            with SemanticBm25Resolver(path, min_score=0, min_lexical_score=0) as resolver:
+                self.assertNotIn("finding", resolver.bm25_index.inverted)
+                result = resolver.suggest(_finding(covered_text="delta"))
+                self.assertEqual(result.status, SanitizationStatus.NO_REPLACEMENT)
+                self.assertFalse(result.candidates)
+
+    def test_lexical_overlap_does_not_count_fsn_semantic_tags(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = pathlib.Path(tmpdir) / "concepts.hdf5"
+            _write_compact_hdf5(path, fsns=["Alpha delta (finding)", "Alpha (finding)", "Beta (finding)", "Gamma (finding)"])
+            result = suggest_semantic_bm25(_finding(covered_text=""), path, min_score=0, min_lexical_score=0.6)
+            self.assertEqual(result.status, SanitizationStatus.NO_REPLACEMENT)
+            self.assertFalse(result.candidates)
+            self.assertEqual(result.context_candidates[0].lexical_score, 0.5)
+
+    def test_configurable_tag_boost_preserves_fsn_metadata_and_overlap(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = pathlib.Path(tmpdir) / "concepts.hdf5"
+            for target_tag in ("finding", "procedure"):
+                _write_compact_hdf5(path, fsns=["Alpha (finding)", f"Alpha ({target_tag})", "Beta (finding)", "Gamma (finding)"])
+                def hit(**kwargs):
+                    return suggest_semantic_bm25(_finding(covered_text=""), path, min_score=0, min_lexical_score=0, **kwargs).candidates[0]
+                plain = hit(semantic_tag_boost_percent=0)
+                default = hit()
+                boosted = hit(semantic_tag_boost_percent=50)
+                disabled = hit(use_semantic_tag_boost=False, semantic_tag_boost_percent=50)
+                self.assertAlmostEqual(default.score, plain.score * (1.1 if target_tag == "finding" else 1))
+                self.assertAlmostEqual(boosted.score, plain.score * (1.5 if target_tag == "finding" else 1))
+                self.assertEqual(disabled.score, plain.score)
+                self.assertEqual(boosted.lexical_score, plain.lexical_score)
+                self.assertEqual(boosted.lexical_score, 1)
+                self.assertEqual(boosted.fsn, f"Alpha ({target_tag})")
+                self.assertEqual(boosted.matched_term, boosted.fsn)
+                self.assertEqual(boosted.semantic_tag, target_tag)
+
+    def test_semantic_tag_boost_rejects_invalid_percentages(self):
+        for invalid in (-1, 101, float("nan"), float("inf")):
+            with self.subTest(invalid=invalid), self.assertRaisesRegex(ValueError, "finite percentage"):
+                SemanticBm25Resolver("unused.hdf5", semantic_tag_boost_percent=invalid)
 
     def test_fsn_lookup_uses_code_index_map(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -173,7 +232,7 @@ class TestSemanticBm25Sanitization(unittest.TestCase):
                 _finding(),
                 hdf5_path,
                 min_score=0.1,
-                min_lexical_score=0.5,
+                min_lexical_score=0.4,
                 target_view="release",
                 release_exclude_blacklist=True,
             )
@@ -181,7 +240,7 @@ class TestSemanticBm25Sanitization(unittest.TestCase):
                 _finding(),
                 hdf5_path,
                 min_score=0.1,
-                min_lexical_score=0.5,
+                min_lexical_score=0.4,
                 target_view="release",
             )
 
@@ -204,8 +263,14 @@ class TestSemanticBm25Sanitization(unittest.TestCase):
 
         self.assertEqual(suggestion.status, SanitizationStatus.NO_REPLACEMENT)
         self.assertIsNone(suggestion.replacement_code)
-        self.assertGreater(suggestion.candidate_count, 0)
+        self.assertEqual(suggestion.candidate_count, 0)
+        self.assertEqual(suggestion.candidates, ())
+        self.assertGreater(len(suggestion.context_candidates), 0)
         self.assertIn("threshold", suggestion.reason)
+        restored = sanitization_suggestion_from_dict(sanitization_suggestion_to_dict(suggestion))
+        self.assertEqual(restored, suggestion)
+        from snomed_post_processing.gui.streamlit.sanitization_run_tab import _replacement_options_and_hints
+        self.assertEqual(_replacement_options_and_hints(restored), ([], {}))
 
     def test_blacklist_findings_remain_disabled_by_default(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -215,7 +280,8 @@ class TestSemanticBm25Sanitization(unittest.TestCase):
 
             suggestion = resolver.suggest(_finding(list_type="blacklist"))
 
-        self.assertEqual(suggestion.status, SanitizationStatus.BLACKLISTED_NO_AUTO_SANITIZATION)
+        self.assertEqual(suggestion.status, SanitizationStatus.EXCLUSION_LIST_NO_REPLACEMENT)
+        self.assertIn("BM25 suggestions for exclusion-list findings are disabled", suggestion.reason)
         self.assertIsNone(suggestion.replacement_code)
 
     def test_blacklist_findings_can_get_opt_in_bm25_suggestions(self):
@@ -251,8 +317,8 @@ class TestSemanticBm25Sanitization(unittest.TestCase):
             _write_compact_hdf5(hdf5_path, blacklist_indices=(3,))
             blacklist_unresolved = SanitizationSuggestion(
                 finding=_finding(list_type="blacklist"),
-                status=SanitizationStatus.BLACKLISTED_NO_AUTO_SANITIZATION,
-                reason="blacklist suggestions disabled",
+                status=SanitizationStatus.EXCLUSION_LIST_NO_REPLACEMENT,
+                reason="No selectable replacement suggestion was generated for this exclusion-list finding. Manual review is required.",
             )
 
             suggestions = apply_semantic_bm25_fallback(
@@ -271,6 +337,43 @@ class TestSemanticBm25Sanitization(unittest.TestCase):
         self.assertIn("semantic_bm25_replacement", report)
         self.assertIn("BM25", report)
 
+    def test_unsuccessful_exclusion_bm25_explains_failure_without_claiming_disabled(self):
+        from snomed_post_processing.sanitization.models import EXCLUSION_LIST_NO_REPLACEMENT_REASON
+        with tempfile.TemporaryDirectory() as tmpdir:
+            hdf5_path = pathlib.Path(tmpdir) / "concepts.hdf5"
+            _write_compact_hdf5(hdf5_path, blacklist_indices=(3,))
+            for text, minimum, expected_reason in (
+                ("alpha therapy", 999.0, "score thresholds"),
+                ("unmatchabletoken", 0.1, "no policy-acceptable BM25 candidate"),
+            ):
+                with self.subTest(text=text):
+                    finding = _finding(list_type="blacklist", covered_text=text)
+                    # Prevent the source FSN from supplying matches in the no-hit case.
+                    if text == "unmatchabletoken":
+                        finding = dataclasses.replace(finding, code="999999", fsn=None)
+                    direct = suggest_semantic_bm25(
+                        finding, hdf5_path, allow_blacklist_findings=True,
+                        min_score=minimum, min_lexical_score=0.2,
+                    )
+                    self.assertEqual(direct.status, SanitizationStatus.EXCLUSION_LIST_NO_REPLACEMENT)
+                    self.assertIn(expected_reason, direct.reason)
+                    original = SanitizationSuggestion(
+                        finding=finding, status=SanitizationStatus.EXCLUSION_LIST_NO_REPLACEMENT,
+                        reason=EXCLUSION_LIST_NO_REPLACEMENT_REASON,
+                    )
+                    result = apply_semantic_bm25_fallback(
+                        [original], hdf5_path, allow_blacklist_findings=True,
+                        min_score=minimum, min_lexical_score=0.2,
+                    )[0]
+                    self.assertEqual(result.status, SanitizationStatus.EXCLUSION_LIST_NO_REPLACEMENT)
+                    self.assertIsNone(result.replacement_code)
+                    self.assertEqual(result.candidates, ())
+                    self.assertIn("Manual review is required", result.reason)
+                    self.assertIn(expected_reason, result.reason)
+                    self.assertNotIn("disabled", result.reason)
+                    self.assertEqual(original.reason, EXCLUSION_LIST_NO_REPLACEMENT_REASON)
+                    self.assertEqual(sanitization_suggestion_from_dict(sanitization_suggestion_to_dict(result)), result)
+
     def test_apply_fallback_feeds_existing_sanitization_report(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             hdf5_path = pathlib.Path(tmpdir) / "concepts.hdf5"
@@ -279,6 +382,9 @@ class TestSemanticBm25Sanitization(unittest.TestCase):
                 finding=_finding(),
                 status=SanitizationStatus.NO_HISTORICAL_ASSOCIATION,
                 reason="no historical association",
+                context_candidates=(SanitizationCandidate(
+                    "300", "Alpha therapy forbidden concept (procedure)", "REPLACED_BY", True, True, True,
+                ),),
             )
 
             suggestions = apply_semantic_bm25_fallback(
@@ -296,6 +402,14 @@ class TestSemanticBm25Sanitization(unittest.TestCase):
         self.assertIn("semantic_bm25_replacement", report)
         self.assertIn("BM25", report)
         self.assertIn("Alpha therapy procedure", report)
+        self.assertEqual(suggestions[0].context_candidates, historical_unresolved.context_candidates)
+        self.assertEqual(
+            sanitization_suggestion_from_dict(sanitization_suggestion_to_dict(suggestions[0])), suggestions[0],
+        )
+        from snomed_post_processing.gui.streamlit.sanitization_run_tab import _replacement_options_and_hints
+        options, _ = _replacement_options_and_hints(suggestions[0])
+        self.assertTrue(options)
+        self.assertFalse(any("300" in option for option in options))
 
     def test_snogit_sidecar_defaults_to_newest_general_member(self):
         with tempfile.TemporaryDirectory() as tmpdir:

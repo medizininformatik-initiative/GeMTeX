@@ -31,7 +31,27 @@ All replacement sources share the same target-view gates from `/src/snomed_post_
 | policy | active AND whitelisted AND not blacklisted |
 | release | active in selected release, plus optional embedded/custom blacklist exclusions |
 
-Release mode deliberately has no whitelist requirement. The SNOMED root concept `138875005` is rejected as a replacement candidate.
+Release mode (**Active release** in the sidebar) deliberately has no inclusion-list requirement. Embedded exclusion-list enforcement stays optional; custom exclusions apply only when selected. The SNOMED root concept `138875005` is rejected as a generic replacement candidate.
+
+# Exclusion-list findings without replacements
+
+`exclusion_list_no_replacement` replaces the misleading `blacklisted_no_auto_sanitization` identifier in generated JSON, reports and UI labels. The base reason is: “No selectable replacement suggestion was generated for this exclusion-list finding. Manual review is required.” It describes the outcome, not whether BM25 was attempted. The structured resolver does not propose exclusion-list replacements. Explicitly enabled BM25 can replace this outcome with a successful/ambiguous suggestion; unsuccessful attempts retain the no-replacement status and append the actual BM25 failure reason (e.g. no acceptable candidate or insufficient score). Direct BM25 calls use the same no-replacement identifier for unresolved exclusion-list findings; disabled BM25 is stated only when it is actually disabled. Inclusion-list and ignored-finding outcomes are unchanged.
+
+This is an intentional identifier change, not a reader alias/migration: old suggestions JSON containing `blacklisted_no_auto_sanitization` must be regenerated. Regeneration changes the source snapshot/fingerprint, so old reviewed-decisions artifacts may not match. Original clinical findings, policy identifiers, candidate gates and manual-review requirements are not rewritten.
+
+# Selectable versus diagnostic candidates
+
+Both structured and BM25 suggestions separate `candidates` (selectable) from `context_candidates` (diagnostic only). `candidate_count` counts selectable candidates. Rejected historical targets, ancestors rejected by distance limits, and BM25 hits below thresholds are context, not replacement choices. Overview/report displays explicitly label diagnostics as not selectable.
+
+BM25 retention uses a soft maximum and includes all ties at the score cutoff, subject to explicit safety caps. A first-place tie is ambiguous even with maximum 1; no replacement is preferred. `retrieval_limits` records reached guards and is preserved in JSON/reporting; partial retrieval cannot qualify for automatic BM25 acceptance. Review offers a searchable browser for large tied sets. See [BM25 tie and coverage details](/snomed-post-processing/workflows/snogit-bm25.md).
+
+JSON serialization preserves this separation. BM25 fallback preserves diagnostic historical/ancestor context when it supplies a replacement. Regenerate suggestions after changing target settings; review and export use the generated candidates rather than adding another HDF5 validation layer. There is no legacy-file normalization or status-based selection allowlist.
+
+# Masked overview CSV
+
+Streamlit's `_render_suggestion_overview` offers **Download masked overview CSV**. Shared `sanitization_context.masked_overview_csv` copies the exact overview DataFrame and replaces only Document/Annotator using separate first-appearance numbered mappings (`document-N`, `annotator-N`). The CSV includes all source overview rows/columns, UTF-8 BOM and no extra index. It preserves all other cell values, including offsets, leading-zero codes, Unicode, multiline clinical text and displayed candidate summaries. It is a table export, not a complete candidate JSON artifact or reviewed-decisions restore source. Mappings are export-local, not shared with the random-word aliases in policy Markdown. Source objects, table, suggestions metadata and review state remain unchanged; `on_click="ignore"` avoids triggering processing/reruns on download. Help and the [user guide](../../../docs/user-guide.md#masked-suggestion-overview-download) warn that names in clinical/free text remain and this is not full anonymization. Synthetic CSV round-trip, identity consistency, unchanged-source and Streamlit AppTest coverage are included.
+
+NiceGUI tab 2 offers the same **Download masked overview CSV** button for generated or restored suggestions. `suggestion_ui.masked_preview_csv` projects the loaded preview's scoped overview rows into Document, Annotator, Source code, Status, Replacement code, Candidate count and Covered text, then uses the shared masking helper. It does not export internal row IDs or depend on browser sorting/filtering. CSV preparation runs off the event loop; `current_result` checks source stamps and snapshot identity before and after preparation to block stale or superseded downloads. Clinical text, loaded overview and review state remain unchanged. Synthetic CSV round trips and installed-SDK controller checks cover generated/restored exports and stale-source/concurrent-input rejection; browser download behavior is not verified.
 
 # Release-view blacklist modes
 
@@ -51,6 +71,10 @@ non-numeric line   -> exclude concepts by FSN semantic tag
 
 Runtime SCTID descendant blacklist rules require compact ancestor arrays in the HDF5.
 
+# Shared annotator scope
+
+Before generation, the GUI filters both session and uploaded findings using the shared annotator selection in tab 1 (empty = all). The same scope is passed to concept-rule scanning and used again for imported decisions, review and write-back. Artifact metadata records `annotators`; narrower-source findings/suggestions cannot silently cover a broadened scope. Filtering review preserves original suggestion indices, and regeneration invalidates old generic choices rather than reassigning them to different annotations. See [GUI scope semantics](/snomed-post-processing/interfaces/gui.md).
+
 # Resolver order
 
 For each finding, `SanitizationResolver.suggest` proceeds as follows:
@@ -63,6 +87,35 @@ For each finding, `SanitizationResolver.suggest` proceeds as follows:
 6. If enabled, try historical/inactive `is-a` ancestor fallback.
 7. Optionally, after resolver output, apply semantic BM25 fallback.
 8. Otherwise report no replacement or no target-view-acceptable candidate.
+
+# GUI suggestion defaults
+
+In a new GUI session:
+
+- Historical ancestor fallback and semantic BM25 fallback are enabled.
+- BM25 also considers exclusion-list findings. This does not relax target-candidate validity gates.
+- **Advanced suggestion settings** opens by default so SNOGIT cache selection is visible.
+- **Use SNOGIT/interface terms for BM25 candidates** is selected by default. A compatible processed cache must be selected or created before generating suggestions with SNOGIT enabled. An explicit opt-out persists across reruns; CLI/API defaults are unchanged.
+- All supported historical association types except `MOVED_FROM` and `REFERS_TO` are selected.
+- Minimum lexical overlap ratio is `0.0`; minimum BM25 score remains `1.5`.
+- Matching semantic-tag score boost defaults to 10% and is configurable from 0–100 (0 disables it). Known FSN suffix tags are excluded from lexical matching/overlap, while full FSNs and tag metadata are retained. Regenerate suggestions after scoring changes; see [BM25 matching details](/snomed-post-processing/workflows/snogit-bm25.md).
+- Association meanings appear inline in the selection options, not in a separate explanation section.
+
+Explicit settings, including an empty association-type selection, are preserved across reruns. An empty selection disables historical-association candidates; enabled ancestor/BM25 fallbacks can still produce suggestions. These are suggestion defaults, not automatic review approval.
+
+CLI/API defaults remain conservative: association types `SAME_AS` and `REPLACED_BY`; ancestor and BM25 fallbacks are opt-in.
+
+The GUI sidebar starts with no overlap-ignore layer selected. Users may explicitly add `webanno.custom.No_Human` if desired.
+
+# NiceGUI workflow
+
+NiceGUI tab 2 uses these same GUI defaults and backend gates via `pipelines/suggestion_generation.py`, sharing tab 1 inputs/scope. It accepts current-session or saved findings, exposes both replacement views/custom exclusions and all ancestor/BM25 settings, and provides explicit SNOGIT member inspection/cache creation. Cache creation never starts generation; generated caches are session-temporary unless downloaded. Generation produces an overview plus JSON/Markdown without replacing review. A separate load-in-review action resets generic choices while retaining same-input rule choices. Concept-rule Apply stages validated original-annotation decisions for tab-3 Save, with manual conflicts and stale-source export protection. No CLI defaults, scoring algorithms, generic target revalidation, CAS write-back or deployment change. See [NiceGUI controls and safety](/snomed-post-processing/interfaces/gui.md).
+
+# Conditional review selection
+
+**Apply Conditions** in the review GUI implements historical-association selection and an opt-in BM25 gap condition, combined using OR. Both are restricted to source findings from the inclusion-list check (`finding.list_type == "whitelist"`). Exclusion-list findings (`list_type == "blacklist"`) remain manual regardless of score gaps or unique historical targets. An annotation with an exclusion-list finding must not be automatically approved through a second inclusion-list finding either. Open exclusion-list findings prevent automatic document-review completion.
+
+This is a source-finding restriction, not a new inclusion-list requirement on source or target concepts. Existing target-view gates, optional Active-release exclusions, and separately configured explicit concept rules are unchanged. BM25 suggestions for exclusion-list findings may still be generated for manual inspection. Lexical similarity is not clinical replacement evidence; comparative reliability has not been measured here. The historical condition requires exactly one distinct target among generated selectable candidates matching the selected association types; diagnostics are never promoted. Ancestor suggestions and duplicate identities remain manual. BM25 selection defaults off. When enabled, at least three distinct codes with valid comparable scores are required. Using all saved distinct ranked candidates, `D = first_gap / (first_gap + largest_later_gap)` and `M = first_gap / top_score` must pass configurable thresholds (initially `2/3` and `0.20`). Tied first place, invalid scores, mixed/unknown channels or index members, and unknown SNOGIT members remain manual. Saved manual choices and explicit rules are protected. Conditions set review decisions/provenance only; undo restores the last changed run without overwriting later manual saves. See [review/write-back](/snomed-post-processing/workflows/reviewed-decisions-and-writeback.md) and `reviewer_followup_plan.md`, section 7. The assessment table and decisions provenance expose the measured gaps, source/member and configured thresholds. Empirical calibration remains outstanding; enabling the heuristic is an explicit review-policy choice, not clinical validation.
 
 # Historical associations
 
@@ -85,7 +138,7 @@ If exactly one acceptable target code remains, status is `historical_association
 
 # Ancestor fallback
 
-Ancestor fallback is opt-in:
+In the CLI, ancestor fallback is opt-in (the GUI enables it by default):
 
 ```bash
 --activate-historical-ancestor-fallback
@@ -121,7 +174,7 @@ BM25/SNOGIT candidates cannot bypass target-view gates and also reject unchanged
 | `nearest_*_ancestor` / `ancestor_*` | Replacement found through active or historical ancestor fallback. |
 | `semantic_bm25_*` | Replacement found through lexical BM25 fallback. |
 | `ambiguous_*` | Human choice required. |
-| `blacklisted_no_auto_sanitization` | Blacklist finding not auto-sanitized. |
+| `exclusion_list_no_replacement` | Exclusion-list finding with no selectable replacement suggestion; manual review required. |
 | `no_policy_acceptable_candidate` | Candidates existed but failed selected gates or distance limits. |
 | `no_replacement` / no replacement found | No safe candidate source produced a replacement. |
 

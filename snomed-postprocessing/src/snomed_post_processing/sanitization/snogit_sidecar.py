@@ -35,6 +35,7 @@ from .semantic_text import _tokenize
 
 SCHEMA_NAME = "snomed-post-processing.snogit-sidecar"
 SCHEMA_VERSION = "2"
+MAX_TIED_SNOGIT_HITS = 2000
 _STRING_DTYPE = h5py.string_dtype(encoding="utf-8")
 _DEFAULT_CHUNK_SIZE = 100_000
 
@@ -458,8 +459,10 @@ class SnogitSidecarBm25Searcher:
     ) -> list[SnogitBm25Hit]:
         if self._sidecar is None:
             raise ValueError("SNOGIT BM25 searcher is closed.")
-        return _search_snogit_sidecar_bm25_cached(
+        limits: list[str] = []
+        hits = _search_snogit_sidecar_bm25_cached(
             query_tokens,
+            limits=limits,
             document_count=self._document_count,
             avgdl=self._avgdl,
             vocab_pos=self._vocab_pos,
@@ -476,6 +479,8 @@ class SnogitSidecarBm25Searcher:
             max_postings_per_token=max_postings_per_token,
             max_candidate_rows=max_candidate_rows,
         )
+        self.last_search_limits = tuple(sorted(set(limits)))
+        return hits
 
 
 def search_snogit_sidecar_bm25(
@@ -524,7 +529,9 @@ def _search_snogit_sidecar_bm25_cached(
     max_hits: int = 50,
     max_postings_per_token: int = 250_000,
     max_candidate_rows: int = 100_000,
+    limits: Optional[list[str]] = None,
 ) -> list[SnogitBm25Hit]:
+    limits = limits if limits is not None else []
     unique_query_tokens = tuple(dict.fromkeys(token for token in query_tokens if token))
     if not unique_query_tokens:
         return []
@@ -549,6 +556,7 @@ def _search_snogit_sidecar_bm25_cached(
     candidate_rows_seen: set[int] = set()
     for postings_length, token, vocab_idx in token_infos:
         if postings_length > max_postings_per_token:
+            limits.append("SNOGIT postings limit")
             continue
         start = int(postings_starts[vocab_idx])
         end = start + postings_length
@@ -557,6 +565,7 @@ def _search_snogit_sidecar_bm25_cached(
             continue
         rows_set = set(int(row) for row in rows)
         if len(candidate_rows_seen | rows_set) > max_candidate_rows:
+            limits.append("SNOGIT candidate-row limit")
             # Too broad for this query. Because tokens are processed from
             # rarest to most common, skip this broad token and keep scoring
             # with the more selective tokens already accepted.
@@ -583,9 +592,21 @@ def _search_snogit_sidecar_bm25_cached(
         return []
     unique_rows = unique_rows[positive]
     scores = scores[positive]
-    hit_count = min(int(max_hits), int(scores.size))
-    top_positions = np.argpartition(scores, -hit_count)[-hit_count:]
-    ordered_positions = sorted(top_positions, key=lambda pos: (-float(scores[pos]), int(unique_rows[pos])))
+    hit_count = min(max(0, int(max_hits)), int(scores.size))
+    if not hit_count:
+        limits.append("SNOGIT hit limit")
+        return []
+    # Include cutoff ties before reading terms; cap pathological groups explicitly.
+    order = np.lexsort((unique_rows, -scores))
+    cutoff = scores[order[hit_count - 1]]
+    selected = order[(np.arange(len(order)) < hit_count) | np.isclose(scores[order], cutoff, rtol=1e-9, atol=1e-9)]
+    hard_limit = max(int(max_hits), MAX_TIED_SNOGIT_HITS)
+    if len(selected) > hard_limit:
+        limits.append(f"SNOGIT tied-hit limit ({hard_limit})")
+        selected = selected[:hard_limit]
+    if len(selected) < len(scores):
+        limits.append("SNOGIT hit limit")
+    ordered_positions = selected.tolist()
     top_rows = np.asarray([unique_rows[pos] for pos in ordered_positions], dtype=np.int64)
     concept_indices = _read_dataset_rows_in_requested_order(concept_index_ds, top_rows)
     terms = tuple(

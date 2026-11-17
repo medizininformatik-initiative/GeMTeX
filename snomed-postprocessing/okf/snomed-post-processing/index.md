@@ -48,6 +48,7 @@ This bundle is the agent-readable knowledge layer for the Python app under [`/sr
 - [JSON artifacts](/snomed-post-processing/data/json-artifacts.md)
 - [JSON artifact formats](/snomed-post-processing/data/json-artifact-formats.md)
 - [INCEpTION project ZIP and CAS handling](/snomed-post-processing/data/inception-cas-and-zip.md)
+- [SQLite annotation store as project input](data/annotation-store-input.md)
 
 ## Decisions and operational notes
 

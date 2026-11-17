@@ -5,6 +5,9 @@ from __future__ import annotations
 import datetime
 import json
 import pathlib
+import tempfile
+
+from snomed_post_processing.annotation_source import is_annotation_store
 from typing import Optional
 
 from snomed_post_processing.findings_io import write_critical_findings_json
@@ -25,9 +28,11 @@ def generate_report(
     ignore_overlap_mode: str = "overlap",
     id_prefix: str = "http://snomed.info/id/",
     id_feature: str = "id",
+    store_scope: str | None = None,
 ) -> tuple[pathlib.Path, pathlib.Path, pathlib.Path, pathlib.Path, int, list[CriticalFinding]]:
     json_dump_dictionary = {}
-    output_md = project_zip.parent / (
+    output_dir = pathlib.Path(tempfile.mkdtemp(prefix="snomed-policy-report-")) if is_annotation_store(project_zip) else project_zip.parent
+    output_md = output_dir / (
         f"critical_documents_{datetime.datetime.now().strftime('%d-%m-%Y_%H-%M')}.md"
     )
     output_md_masked = output_md.with_suffix(".masked.md")
@@ -46,6 +51,7 @@ def generate_report(
         id_feature=id_feature,
         ignore_overlap_types=ignore_overlap_types,
         ignore_overlap_mode=ignore_overlap_mode,
+        **({"store_scope": store_scope} if store_scope is not None else {}),
     )
     if result is None:
         raise RuntimeError("Processing failed.")
@@ -74,6 +80,8 @@ def generate_report(
         output_findings_json,
         metadata={
             "source": "streamlit-policy-check",
+            "annotation_source_file": project_zip.name, "store_scope": store_scope,
+            "annotators": sorted(anno_filter or []),
             "lists_path": str(lists_path),
             "annotation_types": annotation_types or [],
             "ignore_overlap_types": ignore_overlap_types or [],

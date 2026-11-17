@@ -11,6 +11,7 @@ import randomname
 import yaspin
 
 from ..snomed import Information, ListDumpType
+from ..terminology import policy_label
 from ..utils.text import is_numeric
 from .models import CriticalFinding, DocumentAnnotations, TemporaryCorpus
 
@@ -149,7 +150,7 @@ def analyze_documents(
                 except Exception as e:
                     skipped_doc_count += 1
                     logging.exception(
-                        f"Skipping document due to an analysis/logging error ({filter_type.name.lower()}): annotator={annotator_name!r}, document={doc_name!r}: {e}"
+                        f"Skipping document due to an analysis/logging error ({policy_label(filter_type.name.lower())}): annotator={annotator_name!r}, document={doc_name!r}: {e}"
                     )
                     log_skipped_document(
                         annotator_name=annotator_name,
@@ -162,7 +163,7 @@ def analyze_documents(
                         error=e,
                     )
                     continue
-            concept_error_text = f"- with {concept_error_count:>3} concept(s) {'not ' if as_whitelist else ''}on '{filter_type.name.lower()}'."
+            concept_error_text = f"- with {concept_error_count:>3} concept(s) {'not ' if as_whitelist else ''}on '{policy_label(filter_type.name.lower())}'."
             skipped_text = (
                 f" {skipped_doc_count:>3} document(s) skipped due to errors."
                 if skipped_doc_count > 0
@@ -240,14 +241,14 @@ def log_skipped_document(
     annotator_names_masked: dict[str, str],
     error: Exception,
 ):
-    section = f"Skipped documents ({filter_type.name.lower()})"
+    section = f"Skipped documents ({policy_label(filter_type.name.lower())})"
     lines = [
         f"# {section}\n",
         f"[Zum Inhalt](#{Information.log_dump_pretext_caption.lower()})  \n\n",
         "These documents were skipped because an error occurred while analyzing or writing their findings. The rest of the run continued.\n\n",
         "| Annotator | Document | Check | Error |\n",
         "| --: | --: | --: | --: |\n",
-        f"| {annotator_name} | {document_name} | {filter_type.name.lower()} | {type(error).__name__}: {error} |\n",
+        f"| {annotator_name} | {document_name} | {policy_label(filter_type.name.lower())} | {type(error).__name__}: {error} |\n",
     ]
     lines_masked = [
         f"# {section}\n",
@@ -255,7 +256,7 @@ def log_skipped_document(
         "These documents were skipped because an error occurred while analyzing or writing their findings. The rest of the run continued.\n\n",
         "| Annotator | Document | Check | Error |\n",
         "| --: | --: | --: | --: |\n",
-        f"| {annotator_names_masked.get(annotator_name)} | {document_name_masked} | {filter_type.name.lower()} | {type(error).__name__}: {error} |\n",
+        f"| {annotator_names_masked.get(annotator_name)} | {document_name_masked} | {policy_label(filter_type.name.lower())} | {type(error).__name__}: {error} |\n",
     ]
     for tuple_ in [(output_file, lines), (output_file_masked, lines_masked)]:
         tuple_[0].writelines(tuple_[1])

@@ -9,7 +9,7 @@ if [[ $# -eq 0 ]] ; then
 fi
 
 if [[ $1 = "start-gui" ]] ; then
-  uv run streamlit run ./src/snomed_post_processing/gui/app.py
+  uv run python -m snomed_post_processing.gui.app
 elif [[ $1 = "log-critical-documents" ]] ; then
     log-critical-documents "${@:2}" --forbid-prompt
 else

@@ -12,6 +12,8 @@ import streamlit as st
 from snomed_post_processing.inception import get_project_zip
 
 from .file_sources import render_file_source_selector
+from .files import save_uploaded_file
+from snomed_post_processing.annotation_source import store_scopes, default_store_scope
 
 
 @dataclasses.dataclass
@@ -28,13 +30,29 @@ class GuiInputs:
     release_blacklist_mode: str = "none"
     runtime_blacklist_file: Any = None
     hdf5_temp_path: pathlib.Path | None = None
+    annotators: tuple[str, ...] = ()
+    store_scope: str | None = None
+    source_kind: str = "INCEpTION project"
 
 
 def render_sidebar() -> GuiInputs:
+    # Decisions are loaded after sidebar widgets have rendered. Apply their ID
+    # settings on the next rerun, before instantiating the bound widgets.
+    for key, value in st.session_state.pop("sanitization_pending_id_settings", {}).items():
+        st.session_state[key] = value
+    store_scope = None
     with st.sidebar:
         st.header("Inputs")
-        load_annotators = st.checkbox("Load annotators from ZIP", value=True)
-        use_api = st.toggle("Use INCEpTION API", value=False)
+        source_kind = st.selectbox("Annotation source", ["INCEpTION project", "Annotation store (SQLite)"])
+        is_store = source_kind == "Annotation store (SQLite)"
+        load_annotators = st.checkbox(
+            "Load annotators from source", value=True,
+            help="Read annotator names for the shared selection in tab 1. That scope applies to checking, rules, suggestions, review and export/upload.",
+        )
+        use_api = not is_store and st.toggle(
+            "Use INCEpTION API", value=False,
+            help="Load the source project from INCEpTION instead of selecting a project ZIP.",
+        )
         st.header("Server-side files")
         data_dir = pathlib.Path(
             st.text_input(
@@ -49,7 +67,43 @@ def render_sidebar() -> GuiInputs:
         else:
             st.warning(f"Server data directory not found: `{data_dir}`")
 
-        if use_api:
+        if is_store:
+            store_selection = render_file_source_selector(
+                "Annotation store SQLite", key="annotation_store_sqlite", data_dir=data_dir,
+                suffixes=(".sqlite", ".sqlite3", ".db"), upload_types=("sqlite", "sqlite3", "db"), default_source="Upload",
+                help="Read-only schema v2 snapshot, replacing the project. No ZIP/API is required. Use a closed, checkpointed database.")
+            source = store_selection.value
+            stamp = None
+            if source is not None:
+                if isinstance(source, pathlib.Path):
+                    stamp = (str(source.resolve()), source.stat().st_size, source.stat().st_mtime_ns)
+                    prepared = source
+                else:
+                    stamp = (source.name, source.size, getattr(source, "file_id", id(source)))
+                    if st.session_state.get("annotation_store_upload_key") != stamp:
+                        st.session_state["annotation_store_upload_path"] = save_uploaded_file(source, ".sqlite")
+                        st.session_state["annotation_store_upload_key"] = stamp
+                    prepared = st.session_state["annotation_store_upload_path"]
+            else:
+                prepared = None
+            st.session_state["zip_file"] = prepared
+            if st.session_state.get("annotation_store_scope_source") != stamp:
+                st.session_state["annotation_store_scope_source"] = stamp
+                st.session_state["annotation_store_scopes"] = {}
+                st.session_state.pop("annotation_store_scope", None)
+            if st.button("Inspect SQLite scopes", disabled=prepared is None):
+                try:
+                    options = store_scopes(prepared)
+                    st.session_state["annotation_store_scopes"] = options
+                    current = st.session_state.get("annotation_store_scope")
+                    st.session_state["annotation_store_scope"] = current if current in options else default_store_scope(options)
+                except (ValueError, OSError) as error:
+                    st.error(str(error))
+            options = st.session_state.get("annotation_store_scopes", {})
+            store_scope = st.selectbox("SQLite export / view", options, index=None,
+                                       format_func=lambda key: options[key], key="annotation_store_scope")
+            st.caption("Choose an export/view scope. Combined scopes require unambiguous document/annotator identities. The database is never modified.")
+        elif use_api:
             _render_inception_api_controls()
         else:
             project_selection = render_file_source_selector(
@@ -74,7 +128,7 @@ def render_sidebar() -> GuiInputs:
         )
         hdf5_file = hdf5_selection.value
 
-        st.header("Target")
+        st.header("Replacement requirements")
         target_view = _render_target_view_selector()
         release_blacklist_mode = "none"
         runtime_blacklist_file = None
@@ -84,25 +138,31 @@ def render_sidebar() -> GuiInputs:
             )
 
         with st.expander("Annotation layers", expanded=False):
+            if is_store:
+                st.caption("SQLite uses stored SCTIDs and exact layer names. ID feature/prefix settings below apply only to INCEpTION projects.")
             annotation_types_text = st.text_area(
                 "Target annotation types to check",
                 value="gemtex.Concept\nwebanno.custom.Concept",
-                help="One UIMA layer/type per line. Faulty SNOMED code checks run on these annotations.",
+                help="One full UIMA type name per line. Used by policy checks and concept rules.",
             )
             ignore_overlap_types_text = st.text_area(
                 "Ignore faulty target annotations overlapping these types",
-                value="webanno.custom.No_Human",
+                value="",
                 help=(
                     "One UIMA layer/type per line. Faulty target annotations overlapping these layers "
-                    "are reported separately and excluded from the critical count. Default: "
-                    "webanno.custom.No_Human."
+                    "are reported separately and excluded from the critical count. "
+                    "No ignore layer is selected by default. To ignore No_Human annotations, "
+                    "add webanno.custom.No_Human explicitly."
                 ),
             )
             ignore_overlap_mode = st.selectbox(
                 "Ignore overlap mode",
                 options=["overlap", "covered-by", "contains", "exact"],
                 index=0,
-                help="Controls how target annotations must match ignore annotations to be ignored.",
+                help=(
+                    "overlap: any shared span; covered-by: target is inside the ignore span; "
+                    "contains: target encloses the ignore span; exact: identical boundaries."
+                ),
             )
             id_feature = st.text_input(
                 "SNOMED ID feature name",
@@ -126,32 +186,32 @@ def render_sidebar() -> GuiInputs:
         annotation_types_text=annotation_types_text,
         ignore_overlap_types_text=ignore_overlap_types_text,
         ignore_overlap_mode=ignore_overlap_mode,
-        id_prefix=id_prefix,
-        id_feature=id_feature,
+        id_prefix="" if is_store else id_prefix,
+        id_feature="sctid" if is_store else id_feature,
+        store_scope=store_scope, source_kind=source_kind,
         data_dir=data_dir,
         target_view=target_view,
         release_blacklist_mode=release_blacklist_mode,
         runtime_blacklist_file=runtime_blacklist_file,
+        annotators=tuple(st.session_state.get("processing_annotators", ())),
     )
 
 
 def _render_target_view_selector() -> str:
     target_options = {
         "Policy rules": (
-            "Use the embedded whitelist/blacklist policy views. Best for the current "
-            "GeMTeX policy check and sanitization workflow."
+            "Active concepts in the inclusion list and outside the exclusion list."
         ),
         "Active release": (
-            "Use active concepts from the selected SNOMED release. Whitelist is "
-            "ignored; embedded and custom blacklists are optional."
+            "Any active concept; inclusion-list membership is not required. Exclusion lists are optional."
         ),
     }
     selected_target = st.segmented_control(
-        "Validation target",
+        "Allowed replacement concepts",
         options=list(target_options),
         default="Policy rules",
         key="target_view_selector",
-        help="Choose what makes an annotation acceptable.",
+        help="Choose which concepts may be suggested as replacements. Tab 1 always checks inclusion/exclusion policy.",
         width="stretch",
     ) or "Policy rules"
     st.caption(target_options[selected_target])
@@ -162,31 +222,31 @@ def _render_target_view_selector() -> str:
 
 def _render_release_blacklist_selector(data_dir: pathlib.Path) -> tuple[str, Any]:
     enforce_embedded = st.checkbox(
-        "Enforce embedded HDF5 blacklist",
+        "Enforce embedded HDF5 exclusion list",
         value=False,
         help=(
-            "If enabled, release-view suggestions exclude active concepts listed in the embedded HDF5 blacklist. "
-            "By default, release view ignores the embedded blacklist."
+            "If enabled, release-view suggestions exclude active concepts listed in the embedded HDF5 exclusion list. "
+            "By default, release view ignores the embedded exclusion list."
         ),
     )
     use_custom_blacklist = st.checkbox(
-        "Use custom blacklist rule file",
+        "Use custom exclusion-list rule file",
         value=False,
         help=(
-            "If enabled, release-view suggestions exclude rules from a custom blacklist file. "
+            "If enabled, release-view suggestions exclude concepts matched by a custom exclusion-list rule file. "
             "Numeric lines exclude a concept and descendants; non-numeric lines exclude by FSN semantic tag."
         ),
     )
     runtime_blacklist_file = None
     if use_custom_blacklist:
         runtime_blacklist_selection = render_file_source_selector(
-            "Custom blacklist rule file",
+            "Custom exclusion-list rule file",
             key="custom_blacklist_rule_file",
             data_dir=data_dir,
             suffixes=(".txt",),
             upload_types=("txt",),
             default_source="Upload",
-            help="Blacklist rule files are usually small, but upload, data-directory, and server-path modes are available.",
+            help="Exclusion-list rule files are usually small, but upload, data-directory, and server-path modes are available.",
         )
         runtime_blacklist_file = runtime_blacklist_selection.value
 
@@ -210,7 +270,8 @@ def _render_inception_api_controls() -> None:
 
     with st.form("inception_api_form"):
         url = st.text_input(
-            "INCEpTION API URL", value=st.session_state["api_credentials"]["url"]
+            "INCEpTION API URL", value=st.session_state["api_credentials"]["url"],
+            help="Base URL of the INCEpTION server, including any deployment path.",
         )
         username = st.text_input(
             "REMOTE Role Username",
@@ -221,7 +282,9 @@ def _render_inception_api_controls() -> None:
             type="password",
             value=st.session_state["api_credentials"]["password"],
         )
-        submitted = st.form_submit_button("Get Projects")
+        submitted = st.form_submit_button(
+            "Get Projects", help="Connect to INCEpTION and list projects available to this account.",
+        )
         if submitted:
             st.session_state["api_credentials"] = {
                 "url": url,
@@ -245,7 +308,8 @@ def _render_inception_api_controls() -> None:
 
     if st.session_state.get("projects"):
         project = st.selectbox(
-            "Select project", st.session_state["projects"], index=None
+            "Select project", st.session_state["projects"], index=None,
+            help="Selecting a project downloads its export ZIP for local processing.",
         )
         if project and (st.session_state.get("current_project") != project):
             st.session_state["current_project"] = project

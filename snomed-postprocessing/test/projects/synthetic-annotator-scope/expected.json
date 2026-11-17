@@ -1,0 +1,29 @@
+{
+  "synthetic": true,
+  "annotators": [
+    "alice",
+    "bob"
+  ],
+  "document_count": 3,
+  "annotation_count": 14,
+  "critical_finding_count": 10,
+  "inclusion_findings": 8,
+  "exclusion_findings": 2,
+  "rule_decision_count": 4,
+  "actual_policy_overrides": 2,
+  "automatic_condition_selections": 2,
+  "selected_decisions": 6,
+  "pending_manual_decisions": 6,
+  "automatically_reviewed_documents": [
+    "automatic.txt"
+  ],
+  "alice_only": {
+    "annotation_count": 7,
+    "critical_finding_count": 5,
+    "rule_decision_count": 2,
+    "automatic_condition_selections": 1,
+    "selected_decisions": 3,
+    "upload_artifact_count": 3
+  },
+  "all_upload_artifact_count": 6
+}

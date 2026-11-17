@@ -412,7 +412,7 @@ def _descendant_or_self_indices(
         return set()
     if not has_active_ancestor_arrays(h5_file):
         raise ValueError(
-            "Runtime blacklist SCTID rules require compact ancestor arrays in the HDF5. "
+            "Runtime exclusion-list SCTID rules require compact ancestor arrays in the HDF5. "
             "Rebuild the HDF5 with ancestor support or use semantic-tag rules only."
         )
     ancestors = read_active_ancestors(h5_file)

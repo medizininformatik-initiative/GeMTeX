@@ -20,12 +20,12 @@ sources:
 
 # Goal
 
-Identify SNOMED-coded annotations that violate a whitelist or blacklist policy and materialize them as structured `CriticalFinding` records plus human-readable reports.
+Identify SNOMED-coded annotations that violate an inclusion-list or exclusion-list policy and materialize them as structured `CriticalFinding` records plus human-readable reports.
 
 # Inputs
 
 - INCEpTION project ZIP, flat CAS archive, or remote INCEpTION project export.
-- HDF5 policy file containing whitelist/blacklist policy data.
+- HDF5 policy file containing inclusion/exclusion-list policy data (existing HDF5 identifiers remain unchanged).
 - Annotation layer names, defaulting to Concept-like layers such as `gemtex.Concept` and `webanno.custom.Concept` in current CLI options.
 - Optional ignore-overlap layer settings to suppress findings covered by designated annotations.
 
@@ -55,8 +55,8 @@ Each extracted annotation can carry:
 
 | Check | Critical when |
 |---|---|
-| Whitelist | code is not in whitelist policy array. |
-| Blacklist | code is in blacklist policy array. |
+| Inclusion list | code is not in inclusion-list policy array. |
+| Exclusion list | code is in exclusion-list policy array. |
 
 Ignored findings can still be recorded as informational findings with `ignored=True`, but ignored findings are not sanitized automatically.
 
@@ -77,6 +77,8 @@ fsn
 ignored
 ignore_overlaps
 ```
+
+Human-readable reports use inclusion/exclusion-list headings, matching Markdown anchors, and translated ignored-finding reason labels. Serialized values remain unchanged: `list_type` is `whitelist`/`blacklist`, and reason codes include `not_in_whitelist`/`blacklisted`. No migration or rewriting of clinical text is performed.
 
 They are serialized via `/src/snomed_post_processing/findings_io/json_io.py` and mapped with `/src/snomed_post_processing/findings_io/mapping.py`.
 

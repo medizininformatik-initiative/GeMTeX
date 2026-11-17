@@ -139,7 +139,7 @@ def _write_blacklist_metadata(
     if "0" in blacklists_group:
         if not force_overwrite:
             raise ValueError(
-                "HDF5 blacklist metadata '/metadata/blacklists/0' already exists. Use --force-overwrite to replace it."
+                "HDF5 exclusion-list metadata '/metadata/blacklists/0' already exists. Use --force-overwrite to replace it."
             )
         del blacklists_group["0"]
     group = blacklists_group.create_group("0")

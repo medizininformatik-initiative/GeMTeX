@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import datetime
+import functools
 import inspect
 import io
 import json
@@ -406,9 +407,20 @@ def _pycaprio_client(inception_url: str, username: str, password: str, *, verify
         "authentication": (username, password),
     }
     signature = inspect.signature(Pycaprio)
-    if "verify" in signature.parameters:
+    accepts_verify = "verify" in signature.parameters
+    if accepts_verify:
         kwargs["verify"] = verify_tls
-    return Pycaprio(**kwargs)
+    client = Pycaprio(**kwargs)
+    session = getattr(getattr(getattr(client, "api", None), "client", None), "session", None)
+    if session is not None:
+        session.verify = verify_tls
+        if not verify_tls:
+            # Explicit per-request False also wins over REQUESTS_CA_BUNDLE, and
+            # covers pycaprio's separate multipart upload request path.
+            session.request = functools.partial(session.request, verify=False)
+    elif not verify_tls and not accepts_verify:
+        raise RuntimeError("This Pycaprio version exposes neither a verify argument nor an HTTP session; cannot disable TLS verification.")
+    return client
 
 
 def prepare_remote_upload_cas_bytes(cas_bytes: bytes, cas_format: str, typesystem=None) -> bytes:

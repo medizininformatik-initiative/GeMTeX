@@ -10,6 +10,7 @@ import cassis
 from cassis import Cas, TypeSystem
 
 from snomed_post_processing.pipelines.inception_deployment import (
+    _pycaprio_client,
     _prepare_remote_upload_cas_bytes,
     deploy_inception_sanitized_project,
 )
@@ -223,7 +224,7 @@ class TestInceptionDeployment(unittest.TestCase):
             with mock.patch(
                 "snomed_post_processing.pipelines.inception_deployment._pycaprio_client",
                 return_value=client,
-            ):
+            ) as client_factory:
                 result = deploy_inception_sanitized_project(
                     shell_project=shell_zip,
                     upload_artifacts_dir=artifacts_dir,
@@ -232,14 +233,63 @@ class TestInceptionDeployment(unittest.TestCase):
                     password="password",
                     annotation_user="admin",
                     apply=True,
+                    verify_tls=False,
                 )
 
+            client_factory.assert_called_once_with("http://localhost:8080", "admin", "password", verify_tls=False)
             self.assertTrue(result.applied)
             kwargs = api.create_document.call_args.kwargs
             self.assertEqual(kwargs["document_format"], "jsoncas")
             self.assertNotEqual(kwargs["document_format"], "text")
             api.create_annotation.assert_called_once()
             self.assertEqual(api.create_annotation.call_args.kwargs["annotation_format"], "jsoncas")
+
+    def test_tls_setting_reaches_normal_and_multipart_requests_with_ca_environment(self):
+        import requests
+
+        response = requests.Response()
+        response.status_code = 200
+        response._content = b'{"body": []}'
+        for verify_tls in (True, False, True):
+            with self.subTest(verify_tls=verify_tls), mock.patch(
+                "requests.sessions.Session.send", return_value=response
+            ) as send, mock.patch("requests.sessions.get_environ_proxies", return_value={}), mock.patch(
+                "requests.sessions.os.environ", {"REQUESTS_CA_BUNDLE": "synthetic-test-ca.pem"},
+            ):
+                client = _pycaprio_client("https://synthetic.invalid", "synthetic-user", "synthetic-placeholder", verify_tls=verify_tls)
+                self.addCleanup(client.api.client.session.close)
+                self.assertIs(client.api.client.session.verify, verify_tls)
+                client.api.client._request("get", "/projects")
+                client.api.client._request("post", "/projects", files={"content": ("demo.zip", io.BytesIO(b"synthetic"))})
+                self.assertEqual(send.call_count, 2)
+                for call in send.call_args_list:
+                    self.assertEqual(call.kwargs["verify"], "synthetic-test-ca.pem" if verify_tls else False)
+                self.assertIn("multipart/form-data", send.call_args_list[1].args[0].headers["Content-Type"])
+        # No process-wide requests defaults are changed by an insecure client.
+        with requests.Session() as unrelated:
+            self.assertIs(unrelated.verify, True)
+
+    def test_tls_constructor_parameter_remains_supported(self):
+        calls = []
+
+        class ConstructorClient:
+            def __init__(self, inception_host, authentication, verify=True):
+                calls.append(verify)
+
+        with mock.patch("pycaprio.Pycaprio", ConstructorClient):
+            _pycaprio_client("https://synthetic.invalid", "synthetic-user", "synthetic-placeholder", verify_tls=False)
+            _pycaprio_client("https://synthetic.invalid", "synthetic-user", "synthetic-placeholder", verify_tls=True)
+        self.assertEqual(calls, [False, True])
+
+    def test_unsupported_tls_opt_out_is_not_silently_ignored(self):
+        class UnsupportedClient:
+            def __init__(self, inception_host, authentication):
+                pass
+
+        with mock.patch("pycaprio.Pycaprio", UnsupportedClient):
+            with self.assertRaisesRegex(RuntimeError, "cannot disable TLS verification"):
+                _pycaprio_client("https://synthetic.invalid", "synthetic-user", "synthetic-placeholder", verify_tls=False)
+            _pycaprio_client("https://synthetic.invalid", "synthetic-user", "synthetic-placeholder", verify_tls=True)
 
     def test_apply_requires_connection_settings(self):
         with tempfile.TemporaryDirectory() as tmp:

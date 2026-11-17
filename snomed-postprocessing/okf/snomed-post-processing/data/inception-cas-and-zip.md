@@ -88,6 +88,14 @@ Sentence ends with whitespace
 Unable to load annotations: Start position of range [...] is not part of any visible row.
 ```
 
+# Synthetic offline workflow fixture
+
+`test/projects/synthetic-annotator-scope/` contains an artificial project ZIP with Alice/JSONCAS and Bob/XMI across three documents, a tiny synthetic HDF5 policy, generated findings/suggestions, default rule JSON, staged decisions, expected counts, and a GUI walkthrough in its `README.md`. No clinical CAS or real release data is copied from the structural ZIP template.
+
+Both annotators produce ten findings total, four Number/Date rule decisions and two additional historical automatic selections. Negative controls remain manual: ambiguous historical targets, an exclusion-list finding and an unknown code. Date is included and absent from findings but still matches its rule; its target requires a policy override. Alice-only processing yields five findings, two rules, one automatic selection, three local ID changes and three upload artifacts; Bob CAS remains unchanged locally and is omitted from artifacts.
+
+`test/create_synthetic_annotator_dataset.py` rebuilds the seven generated assets into a new directory (refuses overwrite). `test/test_synthetic_annotator_dataset.py` verifies real checker/resolver/conditions, GUI interactions for both scopes, feature preservation, local write-back and offline upload preparation. This fixture is not validated as a native INCEpTION full-project restore or live upload. See the fixture README for exact settings; BM25/SNOGIT and ancestor fallback are disabled for deterministic historical automation.
+
 # Related concepts
 
 - [INCEpTION deployment](/snomed-post-processing/workflows/inception-deployment.md)

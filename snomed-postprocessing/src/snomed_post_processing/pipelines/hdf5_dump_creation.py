@@ -142,8 +142,8 @@ def _run_rf2_zip_dump(
 
     logging.info(
         f"Created RF2 HDF5 dump at '{summary.output_path}' with {summary.concept_count} concept row(s), "
-        f"{summary.association_count} historical association(s), {summary.whitelist_count} whitelist policy concept(s), "
-        f"and {summary.blacklist_count} blacklist policy concept(s)."
+        f"{summary.association_count} historical association(s), {summary.whitelist_count} inclusion-list policy concept(s), "
+        f"and {summary.blacklist_count} exclusion-list policy concept(s)."
     )
 
 
@@ -167,14 +167,14 @@ def _read_optional_filter_list(filter_list: Union[str, click.File]) -> Optional[
 def _read_required_semantic_filter_list(filter_list: Union[str, click.File]) -> list[str]:
     if len(filter_list) < 1:
         logging.error(
-            "Semantic dump mode requires at least one '--filter-list' entry or a valid filter-list file. Exiting to avoid creating a full blacklist."
+            "Semantic dump mode requires at least one '--filter-list' entry or a valid filter-list file. Exiting to avoid excluding all concepts."
         )
         sys.exit(-1)
 
     code_filter = _read_filter_list(filter_list, semantic_safety=True)
     if len(code_filter) == 0:
         logging.error(
-            "Semantic dump mode got an empty filter list. Exiting to avoid creating a full blacklist."
+            "Semantic dump mode got an empty filter list. Exiting to avoid excluding all concepts."
         )
         sys.exit(-1)
 
@@ -198,7 +198,7 @@ def _read_filter_list(
     if os.sep in str(fi):
         message = f"Filter-list path does not exist or is not a file: '{fi}'."
         if semantic_safety:
-            message += " Exiting to avoid creating a full blacklist."
+            message += " Exiting to avoid excluding all concepts."
         logging.error(message)
         sys.exit(-1)
     return [str(item).strip() for item in filter_list if str(item).strip()]
@@ -222,7 +222,7 @@ def _rf2_whitelist_roots(
         return [root_code]
     if not code_filter:
         logging.error(
-            "RF2 semantic blacklist mode requires at least one '--filter-list' entry or a valid filter-list file."
+            "RF2 semantic exclusion-list mode requires at least one '--filter-list' entry or a valid filter-list file."
         )
         sys.exit(-1)
     return None

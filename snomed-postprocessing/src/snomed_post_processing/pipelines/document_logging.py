@@ -145,6 +145,7 @@ def run_log_documents(
             critical_findings_output_path,
             metadata={
                 "command": "log-critical-documents",
+                "annotators": sorted(names_filter or []),
                 "lists_path": str(lists_path),
                 "annotation_types": list(annotation_type),
                 "ignore_overlap_types": list(ignore_overlap_type),

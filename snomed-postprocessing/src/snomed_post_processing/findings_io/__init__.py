@@ -6,6 +6,7 @@ from .json_io import (
     critical_findings_json_text,
     critical_findings_payload,
     read_critical_findings_json,
+    read_critical_findings_json_with_metadata,
     write_critical_findings_json,
 )
 from .mapping import (
@@ -26,6 +27,7 @@ __all__ = [
     "critical_findings_payload",
     "write_critical_findings_json",
     "read_critical_findings_json",
+    "read_critical_findings_json_with_metadata",
     "critical_findings_json_text",
     "_offset_tuple",
 ]

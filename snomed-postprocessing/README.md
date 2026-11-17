@@ -1,8 +1,10 @@
 # SNOMED Postprocessing
 
-SNOMED Postprocessing checks SNOMED CT annotations in INCEpTION/UIMA exports against a materialized SNOMED HDF5 file. In policy mode, annotations are checked against whitelist/blacklist policy views. The tool reports non-whitelisted or blacklisted annotations, can generate sanitization suggestions, and can apply reviewed replacement/delete decisions to a copied project ZIP.
+SNOMED Postprocessing checks SNOMED CT annotations in INCEpTION/UIMA exports against a materialized SNOMED HDF5 file. In policy mode, annotations are checked against inclusion/exclusion-list policy views. The tool reports annotations outside the inclusion list or on the exclusion list, can generate sanitization suggestions, and can apply reviewed replacement/delete decisions to a copied project ZIP.
 
-The project can be used from the command line or through a Streamlit GUI.  
+The project can be used from the command line or through a Streamlit GUI.
+
+User-facing wording uses **inclusion list** / **exclusion list**. Existing technical identifiers remain unchanged: CLI flags such as `--custom-blacklist`, HDF5 paths such as `policy_views/whitelist`, and JSON values such as `list_type="blacklist"` retain their established names. No artifact migration is required.
 
 The usage of this program requires a SNOMED CT policy file (``hdf5`` format). You can either create it yourself with a SNOMED CT release archive (``zip``)
 or with a SNOWSTORM instance - see below for instructions.  
@@ -15,7 +17,7 @@ For the GeMTeX project there is a working file here:
 
 Input:
 - an INCEpTION project export ZIP, or an INCEpTION project fetched through the API
-- a whitelist/blacklist HDF5 file
+- an inclusion/exclusion-list HDF5 file
 
 Supported CAS formats in the export are JSON CAS and XMI. Java serialized CAS (`.ser`) exports are not supported. In INCEpTION, a suitable JSON CAS backup can be created via:
 
@@ -39,7 +41,7 @@ The HDF5 policy file can be created in two modes:
 - **Snowstorm mode**: query concepts from a running Snowstorm instance.
 
 The resulting HDF5 can contain:
-- compact whitelist/blacklist policy views
+- compact inclusion/exclusion-list policy views
 - full concept metadata
 - semantic tags
 - historical associations
@@ -60,10 +62,15 @@ Output:
 
 Suggestion generation supports two target views and several fallback levels:
 
-| Target view | Candidate rule |
-|---|---|
-| policy | active AND whitelisted AND not blacklisted |
-| release | active in the selected release; optional blacklist exclusions |
+| Replacement requirement | Policy rules (`policy`) | Active release (`release`) |
+|---|---|---|
+| Concept exists and is active | Required | Required |
+| Inclusion-list membership | Required | Not required |
+| Exclusion-list enforcement | Required | Optional |
+
+Both modes use the same materialized concept state in the loaded HDF5. For RF2 Full input, `--policy-date` determines that state, not just inclusion-list membership; switching modes does not load newer concepts from the source release. If omitted, the date defaults to the RF2 release date. RF2 Snapshot input only supports its snapshot date.
+
+Policy rules restrict replacement targets to the stored inclusion list, which may contain selected subtrees. Active release also permits active concepts outside those subtrees. The policy check itself still uses the stored inclusion/exclusion lists in either mode.
 
 | Suggestion source | Purpose |
 |---|---|
@@ -72,7 +79,21 @@ Suggestion generation supports two target views and several fallback levels:
 | semantic BM25 | optional lexical fallback over SNOMED FSNs |
 | processed SNOGIT cache | optional extra BM25 evidence from SNOGIT terms |
 
-BM25 and SNOGIT are suggestion-only evidence. Candidates must still pass the selected target-view gates. The original INCEpTION ZIP is not modified.
+BM25 and SNOGIT are suggestion-only evidence. Candidates must still pass the selected target-view gates. The candidate maximum is a soft limit: ties at the cutoff are retained together, subject to explicit safety caps. Large first-place ties can be searched by SCTID/FSN in **Review & apply → Browse BM25 candidates**; select a row, click **Use selected candidate**, then save the review form. No tied candidate is preselected. Reached retrieval limits are reported because more candidates may exist; incomplete results cannot be automatically accepted. Regenerate suggestions to recover ties previously truncated by the old limit. The original INCEpTION ZIP is not modified.
+
+## Python runtime
+
+The project targets **Python 3.11.x** (`requires-python = "~=3.11.0"`). `.python-version`, `uv.lock` and the Docker base image are aligned to 3.11. Core dependency versions are retained; the optional NiceGUI extra updates only certifi, idna and Pygments among existing packages.
+
+The shared **`.venv-py311` (Python 3.11.13)** has both Streamlit and NiceGUI installed via the project's `nicegui` extra. The lock contains 100 packages across platforms (99 installed on Windows). The full regression run reports **280 passed, 3 failed** (2 warnings); all three failures are existing GUI BM25/TLS-default mismatches, reproduced in the preserved Python 3.9 environment. Core imports, all 11 CLI help commands and the installed dependency check pass. No new Python-3.11-specific failure was identified; the suite is not fully green.
+
+The original Python 3.9 `.venv` remains unchanged. Point your IDE at `.venv-py311/Scripts/python.exe`, or launch the GUI on Windows with:
+
+```bash
+.venv-py311/Scripts/python -m snomed_post_processing.gui.app
+```
+
+For uv commands, set `UV_PROJECT_ENVIRONMENT=.venv-py311` and include `--extra nicegui` on run/sync commands to retain the optional frontend. Avoid plain `uv sync`/`uv run` against the old `.venv`, since uv may replace it. Both file and module NiceGUI launches returned HTTP 200 in loopback startup/page-construction checks. Browser JavaScript/visual interactions, Docker builds and live deployment remain unverified.
 
 ## CLI usage
 
@@ -100,6 +121,8 @@ uv run log-critical-documents \
   --lists-path /path/to/gemtex_snomedct_codes.hdf5 \
   /path/to/inception-export.zip
 ```
+
+For projects with multiple annotators, the interactive CLI asks whether to include all (default: no). Otherwise, it shows a sorted numbered list; enter comma-separated numbers such as `1,3`. Empty/invalid selections are retried, and EOF/Ctrl+C aborts rather than processing everyone. Zero or one annotator needs no prompt. This uses the existing Click dependency, not PyInquirer.
 
 Non-interactive use, for example in Docker or CI:
 
@@ -179,7 +202,7 @@ uv run create-concepts-dump \
   --dump-mode version
 ```
 
-Create a blacklist policy by semantic tags or root codes:
+Create an exclusion-list policy by semantic tags or root codes:
 
 ```bash
 uv run create-concepts-dump \
@@ -190,7 +213,7 @@ uv run create-concepts-dump \
   --filter-list /path/to/blacklist_filter_tags.txt
 ```
 
-Create both blacklist and whitelist policy in one run:
+Create both exclusion-list and inclusion-list policy in one run:
 
 ```bash
 uv run create-concepts-dump \
@@ -213,7 +236,7 @@ uv run create-concepts-dump \
   --dump-mode version
 ```
 
-For semantic/blacklist dumps, provide one or more `--filter-list` values or a filter-list file.
+For semantic/exclusion-list dumps, provide one or more `--filter-list` values or a filter-list file.
 
 ### Inspect an HDF5 file
 
@@ -224,7 +247,7 @@ uv run summarize-hdf5 --markdown /path/to/gemtex_snomedct_codes.hdf5
 
 ### Generate sanitization suggestions
 
-Policy-view suggestions use the HDF5 whitelist/blacklist policy:
+Policy-view suggestions use the HDF5 inclusion/exclusion-list policy:
 
 ```bash
 uv run suggest-sanitization \
@@ -233,7 +256,7 @@ uv run suggest-sanitization \
   --output /path/to/sanitization_suggestions.md
 ```
 
-Release-view suggestions ignore the whitelist and allow any active concept by default:
+Release-view suggestions do not require inclusion-list membership and allow any active concept by default:
 
 ```bash
 uv run suggest-sanitization \
@@ -243,18 +266,22 @@ uv run suggest-sanitization \
   --target-view release
 ```
 
-Release-view blacklist exclusions are opt-in:
+Release-view exclusion-list rules are opt-in:
 
 | Options | Effective release-view rule |
 |---|---|
 | none | active concept |
-| `--enforce-embedded-blacklist` | active AND not in embedded HDF5 blacklist |
-| `--custom-blacklist PATH` | active AND not in custom blacklist |
-| both | active AND not in either blacklist |
+| `--enforce-embedded-blacklist` | active AND not in embedded HDF5 exclusion list |
+| `--custom-blacklist PATH` | active AND not in custom exclusion list |
+| both | active AND not in either exclusion list |
 
-A custom blacklist file uses the same format as RF2 blacklist ingestion: numeric SCTID lines exclude the concept and descendants; non-numeric lines exclude by FSN semantic tag.
+A custom exclusion-list file uses the same format as RF2 exclusion-list ingestion: numeric SCTID lines exclude the concept and descendants; non-numeric lines exclude by FSN semantic tag.
 
-Optional semantic BM25 fallback can be combined with either target view. It ranks SNOMED FSNs lexically and only keeps candidates that pass the selected policy/release gates:
+Optional semantic BM25 fallback can be combined with either target view. It ranks SNOMED FSNs lexically and only keeps candidates that pass the selected policy/release gates. Trailing FSN semantic tags such as `(finding)` are excluded from word matching and lexical overlap; full FSNs and clinical parentheses are preserved.
+
+Matching source/candidate tags still receive a separate **10% score boost** by default. Change it via **Advanced suggestion settings → Matching semantic-tag boost (%)** or `--bm25-semantic-tag-boost-percent P` (0–100; 0 disables the boost). Regenerate suggestions after changing scoring settings and reassess automatic-acceptance thresholds. Existing processed SNOGIT caches need no rebuild for this FSN-only change.
+
+For example:
 
 ```bash
 uv run suggest-sanitization \
@@ -354,11 +381,23 @@ uv run deploy-inception-sanitized-project \
 
 ## GUI usage
 
-Start the Streamlit app locally:
+**The annotator selection in tab 1 applies throughout the pipeline**, including concept rules, suggestions, review and export/upload—not just the policy check. Empty means all annotators. Excluded annotators' CAS stays unchanged in a local sanitized ZIP and is omitted from upload artifacts. Saved artifact metadata carries the scope. Changing it discards excluded pending choices and resets review progress; narrower-scope artifacts require rechecking/regeneration before broadening. Save reviewed decisions before replacing suggestions, which resets generic index-based choices to prevent applying them to different annotations.
+
+The stable launcher is `gui/app.py`. Both frontends share `.venv-py311`; Streamlit remains the default, while NiceGUI supports suggestions inspection and explicit manual review JSON staging/import/export—not production processing, CAS write-back or deployment. See its [setup and limitations](src/snomed_post_processing/gui/nicegui/README.md).
+
+Start NiceGUI locally (Windows):
 
 ```bash
-uv run streamlit run src/snomed_post_processing/gui/app.py
+.venv-py311/Scripts/python src/snomed_post_processing/gui/app.py --frontend nicegui --show
 ```
+
+NiceGUI now connects **1. Check policy** and **2. Suggest**: shared ZIP/HDF5/scope inputs, explicit concept rules, resolver/ancestor/BM25 settings, SNOGIT cache inspection/creation, and JSON/Markdown reports. Generate or restore suggestions in tab 2, then explicitly **Load in review (replaces review)**; neither generation nor artifact restoration alone resets review or approves targets. Rule application stages tab-3 decisions for **Save choices**, with manual-conflict and stale-source protection. CAS ZIP write-back and deployment remain unconnected.
+
+NiceGUI restores artifacts at their workflow stage: **1. Check policy → Restore CriticalFindings JSON** restores the findings table and JSON export (not unavailable full policy reports); **2. Suggest → Restore suggestions JSON** restores the suggestions overview (up to 50 MiB). Use **Load in review (replaces review)** explicitly to inspect/stage those suggestions in tab 3. Reviewed-decisions loading remains in **3. Review & apply**. Its saved annotator scope is inherited; original indices, ties, diagnostic targets and evidence are retained. Upload errors leave the last preview intact. Loading only reads saved results; it does not generate suggestions, approve choices, validate HDF5 or change CAS files. With loaded suggestions, use the finding/candidate right-click actions, then **Save choices**. Reviewed flags and reviewed-decisions JSON download/restore are connected; pending edits must be saved/discarded before download. Imports replace review atomically after scope/index/identity checks; protected imported rules/deletions/manual edits remain read-only. The explicit review handoff resets generic review; restoring tab-2 suggestions alone does not. Page reload loses unsaved-to-file state. See the frontend README for scope, provenance and validation limits.
+
+Omit `--frontend nicegui` to start Streamlit, or select `--frontend streamlit` explicitly. Backend options are forwarded unchanged: `--port 8081` for NiceGUI, `--server.port 8502` for Streamlit. The module form `python -m snomed_post_processing.gui.app` is also supported. In an IDE, select `.venv-py311/Scripts/python.exe` and set script parameters to `--frontend nicegui --show`.
+
+For uv, set `UV_PROJECT_ENVIRONMENT=.venv-py311`, install with `uv sync --locked --extra nicegui`, and launch with `uv run --locked --extra nicegui python -m snomed_post_processing.gui.app --frontend nicegui --show`. Keep the extra selected to prevent uv removing its packages. NiceGUI defaults to `http://127.0.0.1:8080`; the launcher starts only the selected frontend, in the same Python environment.
 
 With Docker, the GUI can be started as:
 
@@ -379,11 +418,11 @@ If you want to run them as `./log-inception-docs.sh` or `./start-gui.sh`, mark t
 
 The GUI has three tabs:
 
-1. **Check whitelist/blacklist**  
+1. **Check policy**
    Upload an INCEpTION ZIP or fetch one through the INCEpTION API, upload the HDF5 policy file, optionally select annotators and annotation layers, then run the policy check. Reports and JSON artifacts can be downloaded.
 
 2. **Sanitization suggestions**  
-   Use the `CriticalFindings` JSON from the current session or upload one. Select policy or active-release target view, configure optional embedded/custom blacklist handling for release view, choose fallback methods, optionally select/create a processed SNOGIT cache, then download suggestion reports.
+   Use the `CriticalFindings` JSON from the current session or upload one. Select policy or active-release target view, configure optional embedded/custom exclusion-list handling for release view, choose fallback methods, optionally select/create a processed SNOGIT cache, then download suggestion reports.
 
 3. **Review & apply / Sanitization run**  
    Review suggestions, save/load reviewed decisions, and either:
@@ -397,3 +436,8 @@ The GUI has three tabs:
 - The policy check can take a while on large projects or large policy files.
 - A default HDF5 path is attempted when `--lists-path` is omitted, but providing the policy file explicitly is recommended.
 - Use masked markdown reports when sharing results outside a protected environment.
+
+## Addendum: user guide
+
+See the [user guide](docs/user-guide.md) for detailed explanations of results and
+warnings, starting with [SNOGIT retrieval limits](docs/user-guide.md#snogit-retrieval-limits).

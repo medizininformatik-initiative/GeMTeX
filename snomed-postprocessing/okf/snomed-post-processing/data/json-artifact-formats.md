@@ -136,7 +136,7 @@ ambiguous_replacement
 ambiguous_ancestor
 no_policy_acceptable_candidate
 no_historical_association
-blacklisted_no_auto_sanitization
+exclusion_list_no_replacement
 no_replacement
 ```
 

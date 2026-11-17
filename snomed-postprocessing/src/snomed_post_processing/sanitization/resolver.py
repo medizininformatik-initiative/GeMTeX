@@ -25,6 +25,7 @@ from ..hdf5_handling.policy import (
 from ..uima_processing import CriticalFinding
 from .models import (
     DEFAULT_ALLOWED_ASSOCIATION_TYPES,
+    EXCLUSION_LIST_NO_REPLACEMENT_REASON,
     SanitizationCandidate,
     SanitizationStatus,
     SanitizationSuggestion,
@@ -129,8 +130,8 @@ class SanitizationResolver:
         if finding.list_type == "blacklist":
             return SanitizationSuggestion(
                 finding=finding,
-                status=SanitizationStatus.BLACKLISTED_NO_AUTO_SANITIZATION,
-                reason="automatic sanitization for blacklist findings is disabled",
+                status=SanitizationStatus.EXCLUSION_LIST_NO_REPLACEMENT,
+                reason=EXCLUSION_LIST_NO_REPLACEMENT_REASON,
             )
         if finding.list_type != "whitelist":
             return SanitizationSuggestion(
@@ -198,16 +199,14 @@ class SanitizationResolver:
                 finding=finding,
                 status=SanitizationStatus.NO_POLICY_ACCEPTABLE_CANDIDATE,
                 reason=f"historical associations exist, but no candidate satisfies {self.target_view}-view validity or enabled ancestor-distance limits",
-                candidate_count=len(combined_candidates),
-                candidates=combined_candidates,
+                context_candidates=combined_candidates,
             )
 
         return SanitizationSuggestion(
             finding=finding,
             status=SanitizationStatus.NO_HISTORICAL_ASSOCIATION,
             reason="no active allowed historical association found for source concept",
-            candidate_count=len(ancestor_context),
-            candidates=tuple(ancestor_context),
+            context_candidates=tuple(ancestor_context),
         )
 
     def suggest_all(self, findings: Sequence[CriticalFinding]) -> list[SanitizationSuggestion]:

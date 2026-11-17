@@ -60,7 +60,7 @@ def sanitize_cas_bytes(
 
     Decisions are optionally filtered to the supplied ``document``/``annotator``.
     Action precedence is unchanged: manual-edit marker, then deletion, then
-    replacement. Unsupported/non-action decisions are reported as skipped.
+    ID clearing/replacement. Unsupported/non-action decisions are reported as skipped.
     """
     manual_review_layer = str(manual_review_layer or "").strip() or "webanno.custom.ManualReview"
     relevant_decisions = [
@@ -119,6 +119,9 @@ def run_sanitization(
 
     manual_review_layer = str(manual_review_layer or "").strip() or "webanno.custom.ManualReview"
     sanitized_project_suffix = str(sanitized_project_suffix or "").strip() or "sanitized"
+    if annotator_filter is not None:
+        annotator_filter = {str(name).lower() for name in annotator_filter}
+        decisions = [decision for decision in decisions if str(decision.get("annotator", "")).lower() in annotator_filter]
     applicable_decisions = [decision for decision in decisions if _is_applicable_decision(decision)]
     skipped_decisions = [decision for decision in decisions if not _is_applicable_decision(decision)]
     decisions_by_key = _group_decisions_by_document_annotator(applicable_decisions)
@@ -276,6 +279,8 @@ def _is_applicable_decision(decision: dict[str, Any]) -> bool:
         return True
     if bool(decision.get("delete_annotation")) or decision.get("action") == "delete":
         return True
+    if decision.get("action") == "clear_id":
+        return bool(decision.get("apply")) and bool(decision.get("valid_choice")) and not decision.get("replacement_code")
     return bool(decision.get("apply")) and bool(decision.get("valid_choice")) and bool(decision.get("replacement_code"))
 
 
@@ -474,12 +479,25 @@ def _apply_decisions_to_cas(
     manual_review_layer: str,
 ) -> int:
     changed = 0
-    for decision_idx, decision in decisions:
-        for annotation in _matching_annotations(cas, decision, id_prefix=id_prefix, id_feature=id_feature):
+    # Match against original IDs, not IDs changed by earlier decisions (no chaining).
+    plan = [
+        (decision_idx, decision, list(_matching_annotations(cas, decision, id_prefix=id_prefix, id_feature=id_feature)))
+        for decision_idx, decision in decisions
+    ]
+    seen_annotations = set()
+    for decision_idx, decision, matches in plan:
+        if decision.get("concept_rule") and len(matches) > 1:
+            raise SanitizationRunError("Concept-rule decision matches multiple annotations; refusing ambiguous write-back.")
+        for annotation in matches:
+            if annotation.xmiID in seen_annotations:
+                raise SanitizationRunError("Multiple decisions target the same annotation; resolve the conflict before write-back.")
+            seen_annotations.add(annotation.xmiID)
             if bool(decision.get("manual_edit")) or decision.get("action") == "manual_edit":
                 _add_manual_review_marker(cas, annotation, decision, manual_review_layer=manual_review_layer)
             elif bool(decision.get("delete_annotation")) or decision.get("action") == "delete":
                 _remove_annotation(cas, annotation)
+            elif decision.get("action") == "clear_id":
+                annotation.set(id_feature, None)
             else:
                 current_id = annotation.get(id_feature)
                 annotation.set(id_feature, _replacement_id(current_id, str(decision["replacement_code"]), id_prefix=id_prefix))
@@ -563,6 +581,8 @@ def _matching_annotations(cas, decision: dict[str, Any], *, id_prefix: str, id_f
     source_code = str(decision.get("source_code", ""))
     covered_text = str(decision.get("covered_text", ""))
     for annotation in annotations:
+        if decision.get("concept_rule") and annotation.type.name != str(layer):
+            continue
         if len(offset) == 2 and (int(annotation.begin), int(annotation.end)) != (int(offset[0]), int(offset[1])):
             continue
         current_code = _normalize_snomed_id(annotation.get(id_feature), id_prefix=id_prefix)

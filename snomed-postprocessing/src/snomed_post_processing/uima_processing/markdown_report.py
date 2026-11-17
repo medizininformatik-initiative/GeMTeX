@@ -10,6 +10,7 @@ from typing import Optional
 import randomname
 
 from ..snomed import Information
+from ..terminology import finding_reason_label, policy_label
 from .models import CriticalFinding, IgnoreOverlap
 
 
@@ -75,7 +76,7 @@ def render_finding_sections(
         if not section_findings:
             return
         for fi, masked in ((output_file, False), (output_file_masked, True)):
-            fi.write(f"# {list_type.capitalize()}\n")
+            fi.write(f"# {policy_label(list_type).capitalize()}\n")
             fi.write(f"[Zum Inhalt](#{Information.log_dump_pretext_caption.lower()})  \n")
             fi.write("Zu den Annotator*innen: ")
             links = []
@@ -90,7 +91,7 @@ def render_finding_sections(
                 annotator = annotator_names_masked[finding.annotator] if masked else finding.annotator
                 document = masked_doc(finding.document) if masked else finding.document
                 if annotator != current_annotator:
-                    fi.write(f"## {annotator}\n([Zum Sektionsanfang](#{list_type}))\n")
+                    fi.write(f"## {annotator}\n([Zum Sektionsanfang](#{policy_label(list_type).replace(' ', '-')}))\n")
                     current_annotator = annotator
                     current_document = None
                 if document != current_document:
@@ -122,7 +123,7 @@ def render_finding_sections(
                 section_findings = [f for f in ignored_findings if f.list_type == list_type]
                 if not section_findings:
                     continue
-                fi.write(f"## {list_type.capitalize()}\n")
+                fi.write(f"## {policy_label(list_type).capitalize()}\n")
                 current_annotator = None
                 current_document = None
                 for finding in section_findings:
@@ -148,7 +149,7 @@ def render_finding_sections(
                         fi.write("| " + " | ".join(["--:"] * len(columns)) + " |\n")
                         current_document = document
                     overlap_layers = _format_overlap_layers(list(finding.ignore_overlaps))
-                    row = f"| {_markdown_cell(finding.layer or '')} | {_markdown_cell(finding.code or 'nan')} | {_markdown_cell(finding.covered_text)} | {_format_finding_offset(finding)} | {_markdown_cell(finding.reason)} | {_markdown_cell(overlap_layers)}"
+                    row = f"| {_markdown_cell(finding.layer or '')} | {_markdown_cell(finding.code or 'nan')} | {_markdown_cell(finding.covered_text)} | {_format_finding_offset(finding)} | {_markdown_cell(finding_reason_label(finding.reason))} | {_markdown_cell(overlap_layers)}"
                     if list_type == "blacklist":
                         row += f" | {_markdown_cell(finding.fsn or '')}"
                     fi.write(row + " |\n")
@@ -190,7 +191,7 @@ def log_final_tag_count(
         is_whitelist = list_type == "whitelist"
         type_ = "SNOMED CT codes" if is_whitelist else "semantic tags"
         out_.write(
-            f"_No {type_} found that are {'not ' if is_whitelist else ''}on the {list_type}_.\n"
+            f"_No {type_} found that are {'not ' if is_whitelist else ''}on the {policy_label(list_type)}_.\n"
         )
 
     for fi in [output_file, output_file_masked]:

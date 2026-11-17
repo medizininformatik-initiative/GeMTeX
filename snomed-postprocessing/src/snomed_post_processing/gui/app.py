@@ -1,140 +1,57 @@
-"""Streamlit GUI entrypoint."""
+"""Stable GUI launcher; Streamlit by default, NiceGUI via --frontend nicegui.
 
+Run with:
+    python -m snomed_post_processing.gui.app
+or:
+    python src/snomed_post_processing/gui/app.py
+
+Additional arguments are forwarded to the selected frontend:
+    --server.port 8502                 (Streamlit)
+    --frontend nicegui --port 8080     (NiceGUI read-only prototype)
+"""
 from __future__ import annotations
 
-import h5py
-import streamlit as st
-
-from snomed_post_processing.hdf5_handling.policy import decode_array
-
-from snomed_post_processing.hdf5_handling.metadata import (
-    format_hdf5_metadata_summary,
-    inspect_hdf5_metadata,
-)
-
-from snomed_post_processing.gui.files import save_uploaded_file
-from snomed_post_processing.gui.policy_tab import render_policy_tab
-from snomed_post_processing.gui.sanitization_check_tab import render_sanitization_check_tab
-from snomed_post_processing.gui.sanitization_run_tab import render_sanitization_run_tab
-from snomed_post_processing.gui.sidebar import render_sidebar
+import argparse
+import pathlib
+import subprocess
+import sys
+from typing import Optional, Sequence
 
 
-def _numeric_blacklist_rule_fsns(hdf5_path, numeric_rules: list[str]) -> dict[str, str]:
-    if hdf5_path is None or not numeric_rules:
-        return {}
-    requested = set(numeric_rules)
-    with h5py.File(hdf5_path, "r") as h5_file:
-        if "concepts" not in h5_file or "codes" not in h5_file["concepts"] or "fsn" not in h5_file["concepts"]:
-            return {}
-        concepts = h5_file["concepts"]
-        codes = decode_array(concepts["codes"][:])
-        fsns = decode_array(concepts["fsn"][:])
-    return {code: fsn for code, fsn in zip(codes, fsns) if code in requested and fsn}
+def _discard_local_nicegui_aliases(directory: pathlib.Path) -> None:
+    """Remove IDE-cached local aliases, never the installed SDK or project imports."""
+    for name, module in tuple(sys.modules.items()):
+        if name != "nicegui" and not name.startswith("nicegui."):
+            continue
+        origin = getattr(module, "__file__", None)
+        if origin and pathlib.Path(origin).resolve().is_relative_to(directory):
+            sys.modules.pop(name, None)
 
 
-def _format_blacklist_rule_for_gui(raw_rule: str, kind: str, numeric_rule_fsns: dict[str, str]) -> str:
-    if kind == "concept_descendants" and raw_rule in numeric_rule_fsns:
-        return f"{raw_rule} - {numeric_rule_fsns[raw_rule]}"
-    return raw_rule
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    """Launch either frontend in this environment; never start both."""
+    parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    parser.add_argument("--frontend", choices=("streamlit", "nicegui"), default="streamlit")
+    selected, arguments = parser.parse_known_args(sys.argv[1:] if argv is None else argv)
+    if selected.frontend == "nicegui":
+        # Import lazily: normal launcher imports do not load either framework.
+        # Run in-process so NiceGUI owns one server without another child process.
+        # File launches put gui/ first on sys.path. Its nicegui/ and streamlit/
+        # subpackages must not shadow the installed frameworks as top-level names.
+        original_path = sys.path[:]
+        launcher_directory = pathlib.Path(__file__).resolve().parent
+        try:
+            sys.path[:] = [entry for entry in sys.path if pathlib.Path(entry).resolve() != launcher_directory]
+            _discard_local_nicegui_aliases(launcher_directory / "nicegui")
+            from snomed_post_processing.gui.nicegui.app import main as nicegui_main
+            return nicegui_main(arguments)
+        finally:
+            sys.path[:] = original_path
+    app_path = pathlib.Path(__file__).resolve().parent / "streamlit" / "app.py"
+    return subprocess.call([
+        sys.executable, "-m", "streamlit", "run", str(app_path), *arguments,
+    ])
 
 
-st.set_page_config(page_title="GeMTeX SNOMED CT Postprocessing", layout="wide")
-
-st.title("SNOMED Postprocessing")
-st.write(
-    """Check SNOMED CT annotations in INCEpTION exports, generate replacement suggestions, and apply reviewed sanitization decisions to a copied project ZIP."""
-)
-
-inputs = render_sidebar()
-
-if inputs.target_view == "policy":
-    st.info(
-        "**Current target: Policy rules** — annotations must be valid in the "
-        "materialized policy view stored in the uploaded HDF5. To use another "
-        "policy date, select an HDF5 built for that date.",
-        icon="🎯",
-    )
-else:
-    blacklist_label = {
-        "none": "no blacklist",
-        "embedded": "embedded HDF5 blacklist",
-        "custom": "custom blacklist",
-        "embedded+custom": "embedded HDF5 blacklist + custom blacklist",
-    }.get(inputs.release_blacklist_mode, inputs.release_blacklist_mode)
-    st.info(
-        "**Current target: Active release** — annotations must be active concepts "
-        "in the materialized release view stored in the uploaded HDF5; blacklist "
-        f"mode: {blacklist_label}. To use another release snapshot, select an "
-        "HDF5 built for that snapshot.",
-        icon="🎯",
-    )
-
-if inputs.hdf5_file is not None:
-    st.success(f"HDF5 uploaded: {inputs.hdf5_file.name}")
-    try:
-        inputs.hdf5_temp_path = save_uploaded_file(inputs.hdf5_file, ".hdf5")
-        hdf5_summary = inspect_hdf5_metadata(inputs.hdf5_temp_path)
-        st.caption(
-            "HDF5 materialized view: "
-            f"release date `{hdf5_summary.concepts_release_date or 'unknown'}`, "
-            f"policy/view date `{hdf5_summary.concepts_policy_date or 'unknown'}`, "
-            f"RF2 view `{hdf5_summary.concepts_rf2_view or 'unknown'}`. "
-            "Checks and suggestions use this baked-in view; arbitrary earlier "
-            "dates cannot be selected from this HDF5 unless they were materialized."
-        )
-        with st.expander("HDF5 metadata summary", expanded=False):
-            st.markdown(
-                format_hdf5_metadata_summary(
-                    hdf5_summary,
-                    markdown=True,
-                    include_path=False,
-                    include_blacklist_rule_details=False,
-                )
-            )
-            if hdf5_summary.blacklist_metadata:
-                st.divider()
-                st.markdown("#### Embedded blacklist rule metadata")
-                for blacklist_metadata in hdf5_summary.blacklist_metadata:
-                    source = blacklist_metadata.source_name or "unknown"
-                    st.caption(
-                        f"blacklists/{blacklist_metadata.view_name} · "
-                        f"{len(blacklist_metadata.rules):,} rule(s) · source: {source}"
-                    )
-                    numeric_rule_fsns = _numeric_blacklist_rule_fsns(
-                        inputs.hdf5_temp_path,
-                        [rule.raw for rule in blacklist_metadata.rules if rule.kind == "concept_descendants"],
-                    )
-                    st.dataframe(
-                        [
-                            {
-                                "Rule kind": rule.kind,
-                                "Rule": _format_blacklist_rule_for_gui(rule.raw, rule.kind, numeric_rule_fsns),
-                            }
-                            for rule in blacklist_metadata.rules
-                        ],
-                        hide_index=True,
-                        width="stretch",
-                    )
-            elif any(policy == "blacklist" for policy, _, _ in hdf5_summary.policy_view_counts):
-                st.info(
-                    "This HDF5 contains a compact blacklist view, but no embedded blacklist rule metadata was found. "
-                    "Recreate or update the HDF5 with the current RF2 ingestion code to store the original blacklist rules."
-                )
-    except Exception as exc:
-        st.warning(f"Could not read HDF5 metadata: {exc}")
-
-check_label = "1. Check policy" if inputs.target_view == "policy" else "1. Check release view"
-suggest_label = "2. Suggest policy sanitization" if inputs.target_view == "policy" else "2. Suggest release normalization"
-run_label = "3. Review & apply"
-policy_tab, sanitization_check_tab, sanitization_run_tab = st.tabs(
-    [check_label, suggest_label, run_label]
-)
-
-with policy_tab:
-    render_policy_tab(inputs)
-
-with sanitization_check_tab:
-    render_sanitization_check_tab(inputs)
-
-with sanitization_run_tab:
-    render_sanitization_run_tab(inputs)
+if __name__ == "__main__":
+    raise SystemExit(main())

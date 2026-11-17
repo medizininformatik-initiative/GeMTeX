@@ -163,6 +163,7 @@ def suggest_sanitization_cli(
     bm25_min_score: float,
     bm25_min_lexical_score: float,
     bm25_max_candidates: int,
+    bm25_semantic_tag_boost_percent: float,
     use_snogit_cache: Optional[pathlib.Path],
     activate_historical_ancestor_fallback: bool,
     ancestor_max_distance: int,
@@ -183,6 +184,7 @@ def suggest_sanitization_cli(
         bm25_min_score=bm25_min_score,
         bm25_min_lexical_score=bm25_min_lexical_score,
         bm25_max_candidates=bm25_max_candidates,
+        bm25_semantic_tag_boost_percent=bm25_semantic_tag_boost_percent,
         use_snogit_cache=use_snogit_cache,
         activate_historical_ancestor_fallback=activate_historical_ancestor_fallback,
         ancestor_max_distance=None if ancestor_max_distance < 0 else ancestor_max_distance,
@@ -317,7 +319,7 @@ def build_inception_upload_artifacts_cli(
     no_repair_for_remote_upload: bool,
 ):
     """Build offline flattened sanitized CAS upload artifacts."""
-    decisions, _ = read_sanitization_decisions_json(decisions_path)
+    decisions, metadata = read_sanitization_decisions_json(decisions_path)
     result = build_inception_upload_artifacts(
         source_project=source_project,
         decisions=decisions,
@@ -327,6 +329,7 @@ def build_inception_upload_artifacts_cli(
         manual_review_layer=manual_review_layer,
         force=force,
         repair_for_remote_upload=not no_repair_for_remote_upload,
+        annotator_filter=metadata.get("annotators"),
     )
     click.echo(f"Artifacts written to: {result.output_dir.resolve()}")
     click.echo(f"Report written to: {result.report_path.resolve()}")

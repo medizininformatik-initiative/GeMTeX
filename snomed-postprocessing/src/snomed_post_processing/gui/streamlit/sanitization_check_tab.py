@@ -12,7 +12,11 @@ import h5py
 import pandas as pd
 import streamlit as st
 
-from snomed_post_processing.findings_io import read_critical_findings_json
+from snomed_post_processing.sanitization_context import masked_overview_csv
+from snomed_post_processing.findings_io import read_critical_findings_json_with_metadata
+from snomed_post_processing.sanitization.json_io import read_sanitization_suggestions_json_with_metadata
+from snomed_post_processing.terminology import policy_label
+from snomed_post_processing.sanitization.semantic_text import FSN_POSTFIX_PRESETS, normalize_fsn_postfixes
 from snomed_post_processing.hdf5_handling.metadata import inspect_hdf5_metadata
 from snomed_post_processing.hdf5_handling.policy import (
     read_blacklist_rule_file,
@@ -20,22 +24,48 @@ from snomed_post_processing.hdf5_handling.policy import (
 )
 from snomed_post_processing.sanitization import (
     ASSOCIATION_TYPE_DESCRIPTIONS,
-    DEFAULT_ALLOWED_ASSOCIATION_TYPES,
     SUPPORTED_ASSOCIATION_TYPES,
     SanitizationResolver,
     apply_semantic_bm25_fallback,
     build_snogit_sidecar,
-    format_association_type_descriptions,
     list_snogit_zip_members,
     sanitization_suggestions_json_text,
     write_sanitization_markdown_report,
 )
 
 from .downloads import download_json_report, download_md_report
+from .annotator_scope import sync_annotator_scope, reset_generic_review_for_new_suggestions
+from snomed_post_processing.uima_processing.scope import annotator_in_scope, scope_covers
 from .file_sources import list_server_files, render_file_source_selector
 from .files import save_uploaded_file
-from .sanitization_run_tab import _finding_context_label, _project_document_text_lookup
+from .sanitization_run_tab import _project_document_text_lookup
+from snomed_post_processing.review_context import ReviewContext
 from .sidebar import GuiInputs
+from .concept_rules import render_concept_rules_form
+
+
+# GUI suggestion defaults are intentionally broader than the conservative CLI/API defaults.
+DEFAULT_GUI_ASSOCIATION_TYPES = tuple(
+    association_type for association_type in SUPPORTED_ASSOCIATION_TYPES
+    if association_type not in {"MOVED_FROM", "REFERS_TO"}
+)
+
+
+def _read_source_bytes(source) -> bytes:
+    if isinstance(source, pathlib.Path):
+        return source.read_bytes()
+    return source.getvalue() if hasattr(source, "getvalue") else source.read()
+
+
+def _selected_source_key(source) -> str:
+    if isinstance(source, pathlib.Path):
+        stat = source.stat()
+        return f"{source.resolve()}:{stat.st_size}:{stat.st_mtime_ns}"
+    return f"{getattr(source, 'name', 'upload')}:{len(_read_source_bytes(source))}"
+
+
+def _selected_source_name(source) -> str:
+    return source.name if hasattr(source, "name") else pathlib.Path(source).name
 
 
 def _format_association_type_option(association_type: str) -> str:
@@ -66,10 +96,11 @@ def _uses_custom_blacklist(release_blacklist_mode: str) -> bool:
     return release_blacklist_mode in {"custom", "embedded+custom"}
 
 
-def _suggestion_context_metadata(suggestions: list[Any]) -> list[dict[str, Any]]:
-    document_texts = _project_document_text_lookup(st.session_state.get("zip_file"))
+def _suggestion_context_metadata(suggestions: list[Any], *, annotators=(), store_scope=None) -> list[dict[str, Any]]:
+    document_texts = _project_document_text_lookup(st.session_state.get("zip_file"), annotators=annotators, store_scope=store_scope)
     if not document_texts:
         return []
+    review_context = ReviewContext(document_texts=document_texts)
     contexts = []
     for suggestion in suggestions:
         finding = getattr(suggestion, "finding", None)
@@ -78,7 +109,7 @@ def _suggestion_context_metadata(suggestions: list[Any]) -> list[dict[str, Any]]
         offset = tuple(getattr(finding, "offset", ()) or ())
         if len(offset) != 2:
             continue
-        context = _finding_context_label(finding, document_texts)
+        context = review_context.label(finding)
         if not context or context.startswith("No full document context loaded:"):
             continue
         contexts.append(
@@ -115,17 +146,52 @@ def _resolve_custom_blacklist_indices(
 
 
 def render_sanitization_check_tab(inputs: GuiInputs) -> None:
+    inputs.annotators = sync_annotator_scope(inputs.annotators)
     if inputs.target_view == "release":
         st.info(
             "Release-view normalization suggestions are enabled. Replacement candidates only need to be active "
-            "in the release, unless the embedded and/or custom release blacklist is selected."
+            "in the release, unless the embedded and/or custom release exclusion list is selected."
         )
     st.write(
         "Generate sanitization suggestions from CriticalFindings JSON produced by "
         "the check step. Policy suggestions target the same materialized HDF5 "
         "policy/view date used for checking; release suggestions target active release concepts."
     )
+
+    st.subheader("Restore sanitization suggestions JSON")
+    st.caption("Load suggestions generated in an earlier session to see their overview here and review them in Review & apply, without rerunning analysis.")
+    suggestions_selection = render_file_source_selector(
+        "Sanitization suggestions JSON",
+        key="sanitization_check_suggestions_json",
+        data_dir=inputs.data_dir,
+        suffixes=(".json",),
+        upload_types=("json",),
+        default_source="Upload",
+        help="Load a saved sanitization suggestions artifact; reviewed decisions remain separate.",
+    )
+    if suggestions_selection.value is not None:
+        suggestions_key = _selected_source_key(suggestions_selection.value)
+        if st.session_state.get("loaded_sanitization_check_suggestions_key") != suggestions_key:
+            try:
+                suggestions, metadata = read_sanitization_suggestions_json_with_metadata(
+                    suggestions_selection.value
+                )
+                reset_generic_review_for_new_suggestions(suggestions)
+                st.session_state["sanitization_suggestions"] = suggestions
+                st.session_state["sanitization_suggestions_metadata"] = metadata
+                st.session_state["sanitization_suggestions_report_path"] = None
+                st.session_state["sanitization_suggestions_json_path"] = _selected_source_name(suggestions_selection.value)
+                st.session_state["loaded_sanitization_check_suggestions_key"] = suggestions_key
+                st.session_state["sanitization_last_load_message"] = (
+                    f"Loaded suggestions from {_selected_source_name(suggestions_selection.value)}."
+                )
+                st.success(st.session_state["sanitization_last_load_message"])
+            except Exception as exc:
+                st.error(f"Could not load sanitization suggestions JSON: {exc}")
     session_findings_available = st.session_state.get("critical_findings") is not None
+    if session_findings_available and not scope_covers(st.session_state.get("critical_findings_annotators", ()), inputs.annotators):
+        st.warning("Current findings were checked for a narrower annotator scope. Rerun the policy check or load matching findings JSON.")
+        session_findings_available = False
     uploaded_findings_file = None
     if session_findings_available:
         findings_source = st.segmented_control(
@@ -159,6 +225,8 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
         )
         uploaded_findings_file = findings_selection.value
 
+    render_concept_rules_form(inputs)
+
     st.subheader("Settings")
     st.caption("Change settings inside the form, then apply them. This avoids rerunning the app for every checkbox or threshold edit.")
     with st.form("sanitization_suggestion_settings_form"):
@@ -166,27 +234,27 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
         with fallback_col1:
             activate_historical_ancestor_fallback = st.checkbox(
                 "Historical ancestor fallback",
-                value=False,
+                value=True,
                 help=(
-                    "For unresolved whitelist findings: try nearest active whitelisted "
-                    "ancestor, then nearest active whitelisted ancestor reachable "
-                    "through stored inactive is-a fallback edges."
+                    "For unresolved inclusion-list findings, try the nearest active ancestor, including stored inactive is-a paths. "
+                    "Targets must satisfy the selected Policy rules or Active release requirements."
                 ),
             )
         sanitize_blacklist_suggestions = False
         with fallback_col2:
             sanitize_semantic_bm25_fallback = st.checkbox(
                 "Semantic BM25 fallback",
-                value=False,
+                value=True,
                 help="Suggest lexically similar active concepts for unresolved findings.",
             )
             sanitize_blacklist_suggestions = st.checkbox(
-                "Include blacklist findings in BM25 fallback",
-                value=False,
+                "Include exclusion-list findings in BM25 fallback",
+                value=True,
                 help=(
-                    "This only affects semantic BM25 fallback candidates. If "
-                    "Semantic BM25 fallback is off, this setting is saved but has no effect. "
-                    "Historical ancestor fallback does not resolve blacklist findings."
+                    "Generate BM25 suggestions for exclusion-list findings too; "
+                    "candidate validity rules still apply. If Semantic BM25 fallback "
+                    "is off, this setting is saved but has no effect. "
+                    "Historical ancestor fallback does not resolve exclusion-list findings."
                 ),
             )
 
@@ -199,25 +267,24 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
         selected_snogit_source_from_dir = None
         selected_snogit_members = []
 
-        with st.expander("Advanced suggestion settings"):
+        with st.expander("Advanced suggestion settings", expanded=True):
             st.markdown("#### Historical associations")
             sanitization_association_types = st.multiselect(
                 "Allowed historical association types",
                 options=list(SUPPORTED_ASSOCIATION_TYPES),
-                default=list(DEFAULT_ALLOWED_ASSOCIATION_TYPES),
+                default=list(DEFAULT_GUI_ASSOCIATION_TYPES),
                 format_func=_format_association_type_option,
                 help=(
                     "Choose which RF2 historical association types may propose "
                     "replacement candidates. Short explanations are shown in the "
-                    "dropdown labels and listed below."
+                    "dropdown labels. Suggestions still require a review decision."
                 ),
             )
-            st.caption("Association type explanations are listed below.")
             st.markdown("#### Ancestor fallback limits")
             use_absolute_ancestor_limit = st.checkbox(
                 "Use absolute ancestor distance limit",
                 value=True,
-                help="Used only when Historical ancestor fallback is enabled.",
+                help="Limit how many parent steps an ancestor replacement may be from the source concept.",
             )
             ancestor_max_distance = st.number_input(
                 "Maximum absolute ancestor distance",
@@ -225,12 +292,12 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                 max_value=20,
                 value=3,
                 step=1,
-                help="Used only when Historical ancestor fallback and absolute distance limiting are enabled.",
+                help="Maximum parent steps from source to ancestor. Used when the absolute limit is enabled.",
             )
             use_relative_ancestor_limit = st.checkbox(
                 "Use relative ancestor distance limit",
                 value=True,
-                help="Used only when Historical ancestor fallback is enabled.",
+                help="Limit ancestor distance relative to the source concept's depth in the hierarchy.",
             )
             ancestor_max_relative_distance = st.number_input(
                 "Maximum relative ancestor distance",
@@ -239,28 +306,47 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                 value=0.35,
                 step=0.05,
                 help=(
-                    "Used only when Historical ancestor fallback and relative distance limiting are enabled. "
-                    "Distance divided by source depth-to-root. Lower values reject broader jumps in shallow hierarchies."
+                    "Parent steps divided by source depth-to-root. Lower values allow smaller relative jumps. "
+                    "Used when the relative limit is enabled."
                 ),
             )
             st.markdown("#### BM25 thresholds")
             sanitize_bm25_min_score = st.number_input(
-                "Minimum BM25 score", min_value=0.0, value=1.5, step=0.1
+                "Minimum BM25 score", min_value=0.0, value=1.5, step=0.1,
+                help="Minimum score for the top BM25 hit to become a selectable proposal. Not a probability of correctness.",
             )
             sanitize_bm25_min_lexical_score = st.number_input(
                 "Minimum lexical overlap ratio",
                 min_value=0.0,
                 max_value=1.0,
-                value=0.15,
+                value=0.0,
                 step=0.05,
+                help="Minimum fraction of unique query tokens matched by the top hit; 0 disables this additional filter.",
             )
             sanitize_bm25_max_candidates = st.number_input(
-                "Maximum retained candidates", min_value=1, max_value=50, value=5, step=1
+                "Maximum retained candidates", min_value=1, max_value=50, value=5, step=1,
+                help="Soft maximum BM25 targets per finding; cutoff ties are retained together, subject to explicit safety caps. Automatic selection needs at least three distinct targets.",
             )
+            sanitize_bm25_semantic_tag_boost_percent = st.number_input(
+                "Matching semantic-tag boost (%)", min_value=0.0, max_value=100.0, value=10.0, step=1.0,
+                help="Increase BM25 scores when source and candidate FSN tags match. 10% multiplies by 1.10; 0% disables the boost. Lexical overlap is unchanged.",
+            )
+            st.caption(
+                "FSN semantic tags are excluded from word matching and lexical overlap. "
+                "The boost separately rewards matching tags. Regenerate suggestions after changing scoring settings."
+            )
+            st.markdown("#### Excluded FSN postfixes")
+            postfix_rows = st.data_editor(
+                pd.DataFrame([{"Exclude": postfix == "action", "Postfix": postfix} for postfix in FSN_POSTFIX_PRESETS]),
+                key="bm25_fsn_postfix_editor", num_rows="dynamic", hide_index=True, width="stretch",
+                column_config={"Exclude": st.column_config.CheckboxColumn("Exclude", default=False),
+                               "Postfix": st.column_config.TextColumn("Postfix", required=True)},
+            )
+            st.caption("Only selected literal postfixes after the last whitespace-surrounded hyphen are removed from FSN matching text. Unspaced hyphens, clinical text and SNOGIT terms remain unchanged. Optional presets may carry meaning; regenerate suggestions after changes. Uncheck all rows to disable.")
             st.markdown("#### Optional SNOGIT/interface terms")
             use_snogit_bm25 = st.checkbox(
                 "Use SNOGIT/interface terms for BM25 candidates",
-                value=False,
+                value=True,
                 help=(
                     "Use a processed SNOGIT cache if available. This setting is used only when Semantic BM25 fallback is enabled. "
                     "If no cache is available, create one from a SNOGIT ZIP or .dat file first; suggestion generation starts only after you explicitly run it with a cache."
@@ -314,10 +400,18 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                         st.caption(f"Default SNOGIT source/member: {default_members[0]}")
                 except Exception as exc:
                     st.warning(f"Could not inspect SNOGIT source: {exc}")
-            st.divider()
-            st.markdown("#### Association type meanings")
-            st.text(format_association_type_descriptions())
-        settings_applied = st.form_submit_button("Apply suggestion settings")
+        settings_applied = st.form_submit_button(
+            "Apply suggestion settings", help="Save these settings. Generate suggestions separately to use them.",
+        )
+    postfix_error = None
+    try:
+        excluded_fsn_postfixes = normalize_fsn_postfixes(
+            [row["Postfix"] for row in postfix_rows.to_dict("records") if row.get("Exclude")]
+        )
+    except ValueError as error:
+        excluded_fsn_postfixes = ()
+        postfix_error = str(error)
+        st.error(postfix_error)
     if settings_applied:
         st.success("Suggestion settings applied.")
 
@@ -464,6 +558,8 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
         bm25_min_score=float(sanitize_bm25_min_score),
         bm25_min_lexical_score=float(sanitize_bm25_min_lexical_score),
         bm25_max_candidates=int(sanitize_bm25_max_candidates),
+        bm25_semantic_tag_boost_percent=float(sanitize_bm25_semantic_tag_boost_percent),
+        bm25_excluded_fsn_postfixes=excluded_fsn_postfixes,
     )
 
     custom_blacklist_ready = (
@@ -471,12 +567,15 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
         or inputs.runtime_blacklist_file is not None
     )
     if _uses_custom_blacklist(inputs.release_blacklist_mode) and inputs.runtime_blacklist_file is None:
-        st.warning("Custom blacklist mode is selected. Select or upload a custom blacklist rule file before generating suggestions.")
+        st.warning("Custom exclusion-list mode is selected. Select or upload a custom exclusion-list rule file before generating suggestions.")
 
+    if any(not item.get("concept_rule") for item in st.session_state.get("sanitization_review_decisions", [])):
+        st.caption("Generating different suggestions resets generic review choices. Download reviewed decisions first if you need to retain them.")
     if st.button(
         "Generate sanitization suggestions",
+        help="Generate replacement proposals using the current settings. Review and select actions separately; no CAS files change.",
         type="primary",
-        disabled=not inputs.hdf5_file or not (use_session_findings or uploaded_findings_file) or not snogit_ready or not custom_blacklist_ready,
+        disabled=not inputs.hdf5_file or not (use_session_findings or uploaded_findings_file) or not snogit_ready or not custom_blacklist_ready or postfix_error is not None,
     ):
         try:
             with st.status(
@@ -497,26 +596,36 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                 custom_blacklist_path = None
                 if inputs.target_view == "release" and _uses_custom_blacklist(inputs.release_blacklist_mode):
                     if inputs.runtime_blacklist_file is None:
-                        raise ValueError("Custom blacklist mode is selected, but no custom blacklist rule file was provided.")
-                    st.write("Resolving custom release blacklist rules...")
+                        raise ValueError("Custom exclusion-list mode is selected, but no custom exclusion-list rule file was provided.")
+                    st.write("Resolving custom release exclusion-list rules...")
                     custom_blacklist_path, runtime_blacklist_indices = _resolve_custom_blacklist_indices(
                         inputs.hdf5_temp_path,
                         inputs.runtime_blacklist_file,
                     )
                     st.write(
-                        f"Resolved custom blacklist to {len(runtime_blacklist_indices):,} concept(s)."
+                        f"Resolved custom exclusion list to {len(runtime_blacklist_indices):,} concept(s)."
                     )
                 if use_session_findings:
                     findings = st.session_state["critical_findings"]
+                    findings_metadata = {"store_scope": st.session_state.get("critical_findings_store_scope")}
+                    if findings_metadata["store_scope"] is not None:
+                        source = st.session_state.get("zip_file")
+                        stamp = (str(source.resolve()), source.stat().st_size, source.stat().st_mtime_ns) if isinstance(source, pathlib.Path) else None
+                        if stamp != st.session_state.get("critical_findings_store_source"):
+                            raise ValueError("Annotation store changed. Run policy check again.")
                 else:
                     findings_path = save_uploaded_file(uploaded_findings_file, ".json")
-                    findings = read_critical_findings_json(findings_path)
+                    findings, findings_metadata = read_critical_findings_json_with_metadata(findings_path)
+                    if not scope_covers(findings_metadata.get("annotators", ()), inputs.annotators):
+                        raise ValueError("Findings JSON was produced for a narrower annotator scope. Recheck with the requested scope.")
+                if st.session_state.get("zip_file") is not None and findings_metadata.get("store_scope") != inputs.store_scope:
+                    raise ValueError("Findings annotation-store scope differs from the selected input. Run policy check again.")
+                findings = [finding for finding in findings if annotator_in_scope(finding.annotator, inputs.annotators)]
 
                 st.write("Creating resolver and loading SNOMED lookup data...")
                 resolver = SanitizationResolver(
                     inputs.hdf5_temp_path,
-                    allowed_association_types=sanitization_association_types
-                    or list(DEFAULT_ALLOWED_ASSOCIATION_TYPES),
+                    allowed_association_types=sanitization_association_types,
                     activate_historical_ancestor_fallback=activate_historical_ancestor_fallback,
                     ancestor_max_distance=(
                         int(ancestor_max_distance) if use_absolute_ancestor_limit else None
@@ -596,6 +705,8 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                         min_score=sanitize_bm25_min_score,
                         min_lexical_score=sanitize_bm25_min_lexical_score,
                         max_candidates=int(sanitize_bm25_max_candidates),
+                        semantic_tag_boost_percent=float(sanitize_bm25_semantic_tag_boost_percent),
+                        excluded_fsn_postfixes=excluded_fsn_postfixes,
                         allow_blacklist_findings=sanitize_blacklist_suggestions,
                         snogit_sidecar_path=snogit_sidecar_path,
                         target_view=inputs.target_view,
@@ -621,7 +732,7 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                 "custom_blacklist_path": str(custom_blacklist_path) if custom_blacklist_path is not None else None,
                 "custom_blacklist_concepts": len(runtime_blacklist_indices),
                 "allowed_association_types": list(
-                    sanitization_association_types or DEFAULT_ALLOWED_ASSOCIATION_TYPES
+                    sanitization_association_types
                 ),
                 "historical_ancestor_fallback": bool(activate_historical_ancestor_fallback),
                 "ancestor_max_distance": int(ancestor_max_distance) if use_absolute_ancestor_limit else None,
@@ -633,19 +744,25 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                 "bm25_min_score": float(sanitize_bm25_min_score),
                 "bm25_min_lexical_score": float(sanitize_bm25_min_lexical_score),
                 "bm25_max_candidates": int(sanitize_bm25_max_candidates),
+                "bm25_semantic_tag_boost_percent": float(sanitize_bm25_semantic_tag_boost_percent),
+                "bm25_excluded_fsn_postfixes": list(excluded_fsn_postfixes),
+                "bm25_fsn_semantic_tags_excluded": True,
                 "snogit_bm25": bool(use_snogit_bm25),
                 "snogit_members": list(selected_snogit_members),
                 "snogit_cache_path": str(snogit_sidecar_path) if snogit_sidecar_path is not None else None,
             }
             sanitization_metadata = {
                 "source": "streamlit_sanitization_check_tab",
+                "annotators": list(inputs.annotators),
                 "hdf5_file_name": getattr(inputs.hdf5_file, "name", None),
                 "hdf5_release_date": hdf5_summary.concepts_release_date,
                 "hdf5_policy_date": hdf5_summary.concepts_policy_date,
                 "hdf5_rf2_view": hdf5_summary.concepts_rf2_view,
                 "finding_count": len(findings),
                 "suggestion_count": len(suggestions),
-                "finding_contexts": _suggestion_context_metadata(suggestions),
+                "finding_contexts": _suggestion_context_metadata(suggestions, annotators=inputs.annotators, store_scope=inputs.store_scope),
+                "store_scope": inputs.store_scope if st.session_state.get("zip_file") is not None else findings_metadata.get("store_scope"),
+                "annotation_source_file": str(st.session_state.get("zip_file") or ""),
                 "settings": sanitization_settings,
             }
             with output_sanitization_md.open("w", encoding="utf-8") as sanitization_fi:
@@ -666,6 +783,7 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
                 expanded=False,
             )
 
+            reset_generic_review_for_new_suggestions(suggestions)
             st.session_state["sanitization_suggestions"] = suggestions
             st.session_state["sanitization_suggestions_metadata"] = sanitization_metadata
             st.session_state["sanitization_suggestions_report_path"] = str(output_sanitization_md)
@@ -674,10 +792,10 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
             sanitization_report_text = output_sanitization_md.read_text(encoding="utf-8")
             st.success("Sanitization suggestions finished.")
 
-            download_json_report(sanitization_json_text, output_sanitization_json, "sanitization suggestion")
-
-            st.subheader("Suggestion overview")
-            _render_suggestion_overview(suggestions)
+            download_json_report(
+                sanitization_json_text, output_sanitization_json, "sanitization suggestion",
+                help="Save generated candidates and settings to load in Review & apply. This is not a saved review state.",
+            )
 
             st.subheader("Reports")
             download_md_report(
@@ -690,9 +808,20 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
         except Exception as exc:
             st.error(f"Sanitization suggestion generation failed: {exc}")
 
+    suggestions = st.session_state.get("sanitization_suggestions")
+    if suggestions is not None:
+        st.subheader("Suggestion overview")
+        metadata = st.session_state.get("sanitization_suggestions_metadata") or {}
+        if scope_covers(metadata.get("annotators", ()), inputs.annotators):
+            _render_suggestion_overview(suggestions, annotators=inputs.annotators)
+        else:
+            st.warning("Suggestions were generated for a narrower annotator scope. Regenerate suggestions or load matching suggestions JSON.")
 
-def _render_suggestion_overview(suggestions: list[Any]) -> None:
-    rows = [_suggestion_overview_row(index, suggestion) for index, suggestion in enumerate(suggestions, start=1)]
+
+def _render_suggestion_overview(suggestions: list[Any], *, annotators=()) -> None:
+    rows = [_suggestion_overview_row(index, suggestion)
+            for index, suggestion in enumerate(suggestions, start=1)
+            if annotator_in_scope(suggestion.finding.annotator, annotators)]
     if not rows:
         st.info("No sanitization suggestions to preview.")
         return
@@ -714,13 +843,35 @@ def _render_suggestion_overview(suggestions: list[Any]) -> None:
             "Annotator": st.column_config.TextColumn("Annotator", width="small"),
             "Source code": st.column_config.TextColumn("Source code", width="small"),
             "Covered text": st.column_config.TextColumn("Covered text", width="medium"),
-            "Issue": st.column_config.TextColumn("Issue", width="small"),
-            "Status": st.column_config.TextColumn("Status", width="medium"),
+            "Offset": st.column_config.TextColumn("Offset", width="small"),
+            "Issue": st.column_config.TextColumn(
+                "Issue", width="small", help="Which policy check produced the source finding.",
+            ),
+            "Status": st.column_config.TextColumn(
+                "Status", width="medium", help="Suggestion-generation outcome, not a review approval.",
+            ),
             "Replacement code": st.column_config.TextColumn("Replacement code", width="small"),
             "Replacement FSN": st.column_config.TextColumn("Replacement FSN", width="large"),
             "Reason": st.column_config.TextColumn("Reason", width="large"),
-            "Top candidates": st.column_config.TextColumn("Top candidates", width="large"),
+            "Retrieval limits": st.column_config.TextColumn("Retrieval limits", width="medium",
+                help="A reached limit means further BM25 matches may exist; candidate counts are not complete totals."),
+            "Top candidates": st.column_config.TextColumn(
+                "Top candidates", width="large", help="Leading selectable proposals; not automatically approved replacements.",
+            ),
+            "Diagnostic candidates (not selectable)": st.column_config.TextColumn(
+                "Diagnostic candidates (not selectable)", width="large",
+                help="Rejected or below-threshold evidence. These targets cannot be selected as replacements.",
+            ),
         },
+    )
+    st.download_button(
+        "Download masked overview CSV",
+        data=masked_overview_csv(overview_df),
+        file_name="sanitization-suggestion-overview.masked.csv",
+        mime="text/csv",
+        key="sanitization_suggestion_overview_masked_csv",
+        on_click="ignore",
+        help="Downloads all overview rows with numbered document/annotator aliases. All other fields, including clinical text, remain unchanged. This is not full anonymization or a review-import artifact.",
     )
 
 
@@ -732,12 +883,15 @@ def _suggestion_overview_row(index: int, suggestion: Any) -> dict[str, Any]:
         "Annotator": finding.annotator,
         "Source code": finding.code or "",
         "Covered text": finding.covered_text,
-        "Issue": getattr(finding, "list_type", ""),
+        "Offset": ", ".join(map(str, finding.offset)),
+        "Issue": policy_label(getattr(finding, "list_type", "")),
         "Status": _status_text(getattr(suggestion, "status", "")),
         "Replacement code": getattr(suggestion, "replacement_code", None) or "",
         "Replacement FSN": getattr(suggestion, "replacement_fsn", None) or "",
         "Reason": getattr(suggestion, "reason", "") or "",
         "Top candidates": _candidate_summary(getattr(suggestion, "candidates", ())),
+        "Diagnostic candidates (not selectable)": _candidate_summary(getattr(suggestion, "context_candidates", ())),
+        "Retrieval limits": ", ".join(getattr(suggestion, "retrieval_limits", ())),
     }
 
 
@@ -772,6 +926,8 @@ def _render_active_settings_notice(
     bm25_min_score: float,
     bm25_min_lexical_score: float,
     bm25_max_candidates: int,
+    bm25_semantic_tag_boost_percent: float = 10.0,
+    bm25_excluded_fsn_postfixes: tuple[str, ...] = (),
 ) -> None:
     ancestor_bits = []
     if historical_ancestor_fallback:
@@ -782,7 +938,8 @@ def _render_active_settings_notice(
     ancestor_text = "on" + (f" ({', '.join(ancestor_bits)})" if ancestor_bits else "") if historical_ancestor_fallback else "off"
     bm25_text = (
         f"on (score ≥{bm25_min_score:.2f}, lexical ≥{bm25_min_lexical_score:.2f}, "
-        f"{bm25_max_candidates} candidate(s))"
+        f"{bm25_max_candidates} candidates + cutoff ties, tag boost {bm25_semantic_tag_boost_percent:g}%, "
+        f"excluded FSN postfixes: {', '.join(bm25_excluded_fsn_postfixes) or 'none'})"
         if semantic_bm25_fallback
         else "off"
     )
@@ -792,13 +949,13 @@ def _render_active_settings_notice(
         snogit_text = "on, cache ready" if snogit_cache_available else "on, cache missing"
     elif use_snogit_bm25:
         snogit_text = "selected, inactive until BM25 is on"
-    association_text = ", ".join(association_types or list(DEFAULT_ALLOWED_ASSOCIATION_TYPES))
+    association_text = ", ".join(association_types) or "none"
     st.info(
         "Active settings: "
         f"historical associations {association_text} · "
         f"ancestor fallback {ancestor_text} · "
         f"BM25 {bm25_text} · "
-        f"blacklist BM25 {blacklist_text} · "
+        f"exclusion-list BM25 {blacklist_text} · "
         f"SNOGIT {snogit_text}",
         icon="ℹ️",
     )

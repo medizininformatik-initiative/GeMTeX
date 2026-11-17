@@ -91,14 +91,12 @@ def sanitization_suggestion_to_dict(suggestion: SanitizationSuggestion | Semanti
         "candidate_count": int(suggestion.candidate_count),
         "candidates": [candidate_to_dict(candidate) for candidate in suggestion.candidates],
     }
+    payload["context_candidates"] = [
+        candidate_to_dict(candidate) for candidate in suggestion.context_candidates
+    ]
     if isinstance(suggestion, SemanticBm25Suggestion):
         payload["score"] = float(suggestion.score)
-        payload["context_candidates"] = [
-            sanitization_candidate_to_dict(candidate)
-            for candidate in suggestion.context_candidates
-        ]
-    else:
-        payload["context_candidates"] = []
+        payload["retrieval_limits"] = list(suggestion.retrieval_limits)
     return payload
 
 
@@ -122,7 +120,8 @@ def sanitization_suggestion_from_dict(data: dict[str, Any]) -> SanitizationSugge
             score=float(data.get("score", 0.0)),
             candidate_count=int(data.get("candidate_count", len(candidates))),
             candidates=tuple(candidate for candidate in candidates if isinstance(candidate, SemanticBm25Candidate)),
-            context_candidates=tuple(candidate for candidate in context_candidates if isinstance(candidate, SanitizationCandidate)),
+            context_candidates=context_candidates,
+            retrieval_limits=tuple(str(limit) for limit in data.get("retrieval_limits", [])),
         )
     return SanitizationSuggestion(
         finding=critical_finding_from_dict(data["finding"]),
@@ -133,6 +132,7 @@ def sanitization_suggestion_from_dict(data: dict[str, Any]) -> SanitizationSugge
         reason=str(data.get("reason", "")),
         candidate_count=int(data.get("candidate_count", len(candidates))),
         candidates=tuple(candidate for candidate in candidates if isinstance(candidate, SanitizationCandidate)),
+        context_candidates=tuple(candidate for candidate in context_candidates if isinstance(candidate, SanitizationCandidate)),
     )
 
 

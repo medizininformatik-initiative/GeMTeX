@@ -149,7 +149,7 @@ def create_concept_id_dump_options(fnc):
     fnc = click.option(
         "--force-overwrite",
         is_flag=True,
-        help="If this flag is set, the selected whitelist/blacklist HDF5 group will be overwritten.",
+        help="If this flag is set, the selected inclusion/exclusion-list HDF5 group will be overwritten.",
     )(fnc)
     fnc = click.option(
         "--not-recursive",
@@ -174,7 +174,7 @@ def create_concept_id_dump_options(fnc):
         "--dump-mode",
         default=DumpMode.VERSION,
         type=ClickEnumChoice(DumpMode),
-        help="Whether to whitelist ('version') or blacklist ('semantic') a code dump.",
+        help="Whether to create an inclusion-list ('version') or exclusion-list ('semantic') code dump.",
     )(fnc)
     fnc = click.option(
         "--branch",
@@ -285,7 +285,7 @@ def suggest_sanitization_options(fnc):
         default=None,
         type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
         help=(
-            "Optional custom blacklist rule file for --target-view release. Uses the same format as original blacklist filters: "
+            "Optional custom exclusion-list rule file for --target-view release. Uses the same format as exclusion-list filters: "
             "numeric SCTID lines exclude descendants-or-self; non-numeric lines exclude by FSN semantic tag."
         ),
     )(fnc)
@@ -293,8 +293,8 @@ def suggest_sanitization_options(fnc):
         "--enforce-embedded-blacklist",
         is_flag=True,
         help=(
-            "In --target-view release mode, exclude concepts listed in the selected HDF5 embedded blacklist. "
-            "By default, release mode ignores the embedded blacklist and allows all active release concepts."
+            "In --target-view release mode, exclude concepts listed in the selected HDF5 embedded exclusion list. "
+            "By default, release mode ignores the embedded exclusion list and allows all active release concepts."
         ),
     )(fnc)
     fnc = click.option(
@@ -303,8 +303,8 @@ def suggest_sanitization_options(fnc):
         show_default=True,
         type=click.Choice(["policy", "release"], case_sensitive=False),
         help=(
-            "Candidate validity mode for sanitization suggestions. 'policy' requires active + whitelist - blacklist; "
-            "'release' requires active release concepts and does not require whitelist membership."
+            "Candidate validity mode for sanitization suggestions. 'policy' requires active + inclusion list - exclusion list; "
+            "'release' requires active release concepts and does not require inclusion-list membership."
         ),
     )(fnc)
     fnc = click.option(
@@ -331,7 +331,7 @@ def suggest_sanitization_options(fnc):
         "--activate-historical-ancestor-fallback",
         is_flag=True,
         help=(
-            "After historical associations fail for whitelist findings, try nearest active "
+            "After historical associations fail for inclusion-list findings, try nearest active "
             "acceptable ancestors first from active ancestor arrays, then through "
             "stored inactive is-a fallback edges. Candidate validity follows --target-view."
         ),
@@ -341,7 +341,7 @@ def suggest_sanitization_options(fnc):
         default=5,
         show_default=True,
         type=int,
-        help="Maximum BM25 fallback candidates retained internally per finding.",
+        help="Soft maximum BM25 candidates per finding; retain cutoff ties together, subject to explicit safety caps.",
     )(fnc)
     fnc = click.option(
         "--bm25-min-lexical-score",
@@ -349,6 +349,13 @@ def suggest_sanitization_options(fnc):
         show_default=True,
         type=float,
         help="Minimum query-token overlap ratio required for semantic BM25 fallback suggestions.",
+    )(fnc)
+    fnc = click.option(
+        "--bm25-semantic-tag-boost-percent",
+        default=10.0,
+        show_default=True,
+        type=click.FloatRange(0.0, 100.0),
+        help="Percentage score boost for matching FSN semantic tags; 0 disables it. FSN tags are excluded from word matching.",
     )(fnc)
     fnc = click.option(
         "--bm25-min-score",
@@ -369,12 +376,12 @@ def suggest_sanitization_options(fnc):
     fnc = click.option(
         "--blacklist-suggestions",
         is_flag=True,
-        help="Allow suggestion-only BM25 replacement suggestions for blacklist findings. Requires --semantic-bm25-fallback.",
+        help="Allow suggestion-only BM25 replacement suggestions for exclusion-list findings. Requires --semantic-bm25-fallback.",
     )(fnc)
     fnc = click.option(
         "--semantic-bm25-fallback",
         is_flag=True,
-        help="Use semantic BM25 for unresolved whitelist findings as fallback.",
+        help="Use semantic BM25 for unresolved inclusion-list findings as fallback.",
     )(fnc)
     fnc = click.option(
         "--association-type",
