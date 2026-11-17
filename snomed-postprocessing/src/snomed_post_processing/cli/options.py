@@ -396,7 +396,7 @@ def suggest_sanitization_options(fnc):
         "--output",
         required=True,
         type=click.Path(dir_okay=False, path_type=pathlib.Path),
-        help="Output Markdown path for sanitization suggestions.",
+        help="Output Markdown path; also writes sibling .json and .masked.csv files. CSV masks document/annotator names, not clinical text.",
     )(fnc)
     fnc = click.option(
         "--critical-findings",

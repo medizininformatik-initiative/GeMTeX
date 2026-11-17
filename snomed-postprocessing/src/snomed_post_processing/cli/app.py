@@ -175,7 +175,7 @@ def suggest_sanitization_cli(
     custom_blacklist: Optional[pathlib.Path],
     log_level: str,
 ):
-    """Create sanitization suggestions from a CriticalFindings JSON artifact."""
+    """Create Markdown, JSON and identity-masked CSV sanitization suggestions."""
     run_sanitization_check(
         lists_path=lists_path,
         critical_findings=critical_findings,

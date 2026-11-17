@@ -28,7 +28,7 @@ sources:
 | `create-concepts-dump` | `cli.app:create_concept_id_dump` | Create SNOMED HDF5 from RF2 ZIP or Snowstorm. |
 | `summarize-hdf5` | `cli.app:summarize_hdf5` | Print HDF5 metadata summary. |
 | `build-snogit-cache` | `cli.app:build_snogit_cache_cli` | Create processed SNOGIT cache for BM25 evidence from a SNOGIT ZIP or single `.dat` file. |
-| `suggest-sanitization` | `cli.app:suggest_sanitization_cli` | Generate Markdown/JSON sanitization suggestions. |
+| `suggest-sanitization` | `cli.app:suggest_sanitization_cli` | Generate Markdown/JSON suggestions and an identity-masked overview CSV. |
 | `build-annotation-store` | `cli.app:build_annotation_store_cli` | Build a merged SQLite store of SNOMED annotation occurrences from INCEpTION export ZIPs. |
 | `check-annotation-store-document` | `cli.app:check_annotation_store_document_cli` | Check whether an external plain-text document content hash exists in an annotation store. |
 | `build-inception-shell-project` | `cli.app:build_inception_shell_project_cli` | Lower-level shell ZIP builder. |
@@ -74,6 +74,8 @@ uv run suggest-sanitization \
   --critical-findings critical_findings.json \
   --output sanitization_suggestions.md
 ```
+
+The command writes the requested Markdown file plus sibling `sanitization_suggestions.json` and `sanitization_suggestions.masked.csv` files (replace the Markdown suffix). JSON uses the existing suggestions schema and is GUI-importable, preserving complete selectable/diagnostic candidates, BM25 precision, retrieval limits, source scope/context/ID metadata and effective generation settings. It is not masked. The CSV reuses the Streamlit overview schema and shared masking helper: only Document/Annotator are replaced by export-local numbered aliases; clinical/free text is unchanged, so this is not anonymization. Empty inputs still produce valid JSON and a header-only CSV. Output files must be distinct and must not overwrite inputs; no scoring/defaults, review decisions or CAS changes are introduced.
 
 Important options:
 

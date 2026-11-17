@@ -139,7 +139,7 @@ Docker CLI example with local files mounted into `/app/data`:
 docker run \
   --volume ./data:/app/data \
   --rm \
-  ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:2.1.0 \
+  ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:2.1.1 \
   log-critical-documents \
   --lists-path /app/data/gemtex_snomedct_codes.hdf5 \
   /app/data/inception-export.zip
@@ -255,6 +255,13 @@ uv run suggest-sanitization \
   --critical-findings /path/to/critical_findings.json \
   --output /path/to/sanitization_suggestions.md
 ```
+
+This writes three files beside each other:
+- `sanitization_suggestions.md`: the Markdown report.
+- `sanitization_suggestions.json`: complete suggestions and settings, ready to load in the GUI.
+- `sanitization_suggestions.masked.csv`: the overview table with document/annotator names replaced by numbered aliases.
+
+The JSON retains original identities and full candidate evidence. CSV masking does **not** remove names or other identifying information from clinical/free text; it is not full anonymization. Output paths must not collide with input files.
 
 Release-view suggestions do not require inclusion-list membership and allow any active concept by default:
 
@@ -417,7 +424,7 @@ Or use Docker, then open `http://localhost:8501`:
 
 ```bash
 docker run --rm -p 8501:8501 \
-  ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:2.1.0 \
+  ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:2.1.1 \
   start-gui
 ```
 

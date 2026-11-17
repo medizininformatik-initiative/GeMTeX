@@ -12,10 +12,12 @@ import h5py
 import pandas as pd
 import streamlit as st
 
-from snomed_post_processing.sanitization_context import masked_overview_csv
+from snomed_post_processing.sanitization_context import (
+    masked_overview_csv,
+    suggestion_overview_row as _suggestion_overview_row,
+)
 from snomed_post_processing.findings_io import read_critical_findings_json_with_metadata
 from snomed_post_processing.sanitization.json_io import read_sanitization_suggestions_json_with_metadata
-from snomed_post_processing.terminology import policy_label
 from snomed_post_processing.sanitization.semantic_text import FSN_POSTFIX_PRESETS, normalize_fsn_postfixes
 from snomed_post_processing.hdf5_handling.metadata import inspect_hdf5_metadata
 from snomed_post_processing.hdf5_handling.policy import (
@@ -873,44 +875,6 @@ def _render_suggestion_overview(suggestions: list[Any], *, annotators=()) -> Non
         on_click="ignore",
         help="Downloads all overview rows with numbered document/annotator aliases. All other fields, including clinical text, remain unchanged. This is not full anonymization or a review-import artifact.",
     )
-
-
-def _suggestion_overview_row(index: int, suggestion: Any) -> dict[str, Any]:
-    finding = suggestion.finding
-    return {
-        "#": index,
-        "Document": finding.document,
-        "Annotator": finding.annotator,
-        "Source code": finding.code or "",
-        "Covered text": finding.covered_text,
-        "Offset": ", ".join(map(str, finding.offset)),
-        "Issue": policy_label(getattr(finding, "list_type", "")),
-        "Status": _status_text(getattr(suggestion, "status", "")),
-        "Replacement code": getattr(suggestion, "replacement_code", None) or "",
-        "Replacement FSN": getattr(suggestion, "replacement_fsn", None) or "",
-        "Reason": getattr(suggestion, "reason", "") or "",
-        "Top candidates": _candidate_summary(getattr(suggestion, "candidates", ())),
-        "Diagnostic candidates (not selectable)": _candidate_summary(getattr(suggestion, "context_candidates", ())),
-        "Retrieval limits": ", ".join(getattr(suggestion, "retrieval_limits", ())),
-    }
-
-
-def _candidate_summary(candidates: Any) -> str:
-    parts = []
-    for candidate in tuple(candidates or ())[:3]:
-        code = getattr(candidate, "code", "")
-        fsn = getattr(candidate, "fsn", None) or ""
-        association = getattr(candidate, "association_type", None)
-        source = getattr(candidate, "source", None)
-        score = getattr(candidate, "score", None)
-        source_hint = source or association or "candidate"
-        score_hint = f", score {float(score):.2f}" if score is not None else ""
-        parts.append(f"{code} — {fsn} ({source_hint}{score_hint})")
-    return " | ".join(parts)
-
-
-def _status_text(status: Any) -> str:
-    return getattr(status, "value", str(status))
 
 
 def _render_active_settings_notice(
