@@ -13,6 +13,33 @@ def _automatic_condition_label(item, *, include_target=True):
     return f"{label} → {target}" if label and include_target and target else label
 
 
+def _update_grid_rows(grid, rows):
+    """Update an initialized AG Grid without replacing its sort/filter model."""
+    previous = list(grid.options.get("rowData", ()))
+    if not previous:
+        grid.options["rowData"] = rows
+        grid.update()
+        return
+    # NiceGUI wraps options in deeply observable dictionaries. A regular
+    # assignment rebuilds the whole client grid and clears its sort/filter model.
+    # Keep the server snapshot in sync without firing that observer; the explicit
+    # AG Grid transaction below performs the client-side update.
+    dict.__setitem__(grid.options, "rowData", rows)
+    previous_by_id = {row["row_id"]: row for row in previous}
+    current_by_id = {row["row_id"]: row for row in rows}
+    def content(row):
+        return {key: value for key, value in row.items() if key != "current"}
+
+    transaction = {
+        "remove": [row for row_id, row in previous_by_id.items() if row_id not in current_by_id],
+        "add": [row for row_id, row in current_by_id.items() if row_id not in previous_by_id],
+        "update": [row for row_id, row in current_by_id.items()
+                   if row_id in previous_by_id and content(row) != content(previous_by_id[row_id])],
+    }
+    if any(transaction.values()):
+        grid.run_grid_method("applyTransaction", transaction)
+
+
 def _finding_rows(state, session=None):
     keys = ("row_id", "suggestion_index", "document", "annotator", "code", "text", "status", "policy_issue", "ignored")
     rows = [{key: getattr(row, key) for key in keys} for row in state.findings]
@@ -350,8 +377,7 @@ class ReviewPanelControls:
             if finding.document in rows:
                 rows[finding.document]["findings"] += 1
                 rows[finding.document]["pending"] += int(finding.row_id in session.drafts)
-        self.document_grid.options["rowData"] = list(rows.values())
-        self.document_grid.update()
+        _update_grid_rows(self.document_grid, list(rows.values()))
         names = list(rows)
         position = names.index(self.active_document) + 1 if self.active_document in rows else 0
         self.document_position.set_text(f"{len(names)} documents · Current: {position}/{len(names)}"
@@ -368,8 +394,8 @@ class ReviewPanelControls:
             return
         self.documents.set_value(token)
         self.change_document(token)
-        # Refreshing the current-row styling replaces AG Grid's row data and can
-        # reset its viewport. Restore the clicked row with minimum scrolling.
+        self.document_grid.run_row_method(token, "setSelected", True, True)
+        # Keep the clicked row visible after the document workspace changes.
         if type(row_index) is int and row_index >= 0:
             self.document_grid.run_grid_method("ensureIndexVisible", row_index)
 
