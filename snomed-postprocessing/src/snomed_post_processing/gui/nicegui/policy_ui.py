@@ -6,6 +6,7 @@ from snomed_post_processing.annotation_source import AnnotationStoreError
 from snomed_post_processing.pipelines.policy_check import PolicyResult, PolicySettings, check_policy
 from snomed_post_processing.terminology import policy_label
 from snomed_post_processing.uima_processing.scope import annotator_in_scope, normalize_annotators
+from .tables import resizable_table
 from .file_sources import FileSource
 
 
@@ -94,6 +95,7 @@ class PolicyCheckControls:
                                   "floatingFilter": True, "editable": False},
                 "rowData": [], ":getRowId": "params => String(params.data.row_id)",
             }).classes("w-full h-96 overflow-auto overscroll-contain")
+            resizable_table(self.grid)
             ui.button("Clear filters", on_click=self.clear_filters).props("flat dense")
             self.downloads = []
             self.report_buttons = {}

@@ -429,7 +429,7 @@ uv run src/snomed_post_processing/gui/app.py
 Or use Docker, then open `http://localhost:8501`:
 
 ```bash
-docker run --rm -p 8501:8501 \
+docker run --rm -p HOST_PORT:8501 \
   ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:2.0.2 \
   start-gui
 ```
@@ -442,7 +442,18 @@ For the experimental **NiceGUI** frontend:
 uv run --extra nicegui src/snomed_post_processing/gui/app.py --frontend nicegui --show
 ```
 
-See its [setup and limitations](src/snomed_post_processing/gui/nicegui/README.md). Preserved SQLite CAS can be downloaded there as an offline INCEpTION review package; direct remote deployment and ZIP-input write-back remain disconnected.
+For the same workflow in the project-authored navigation shell:
+
+```bash
+uv run --extra nicegui src/snomed_post_processing/gui/app.py --frontend workspace --show
+```
+
+During frontend development, add `--reload` to restart automatically when Python or
+CSS files under `src/snomed_post_processing` change. Reloading discards uploaded files,
+in-memory review state and unsaved decisions, and interrupts running background jobs;
+it remains disabled by default.
+
+See the NiceGUI [setup and limitations](src/snomed_post_processing/gui/nicegui/README.md) and the detailed [user guide](docs/user-guide.md#workspace-frontend). Preserved SQLite CAS can be downloaded there as an offline INCEpTION review package; direct remote deployment and ZIP-input write-back remain disconnected.
 
 ### Workflow (Streamlit)
 

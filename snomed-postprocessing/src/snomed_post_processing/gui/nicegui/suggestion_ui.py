@@ -13,6 +13,7 @@ from snomed_post_processing.sanitization.semantic_text import FSN_POSTFIX_PRESET
 from snomed_post_processing.sanitization.concept_rules import (
     ConceptRule, DEFAULT_CONCEPT_RULES, preserve_rule_edits, read_rules_json, rules_json_text, validate_rules,
 )
+from .tables import resizable_table
 from .file_sources import FileSource
 from .review import ReviewError
 from .suggestion_jobs import (
@@ -144,6 +145,8 @@ class SuggestionControls:
                 "defaultColDef": {"sortable": True, "filter": "agTextColumnFilter", "resizable": True, "editable": False},
                 "rowData": [], ":getRowId": "params => params.data.row_id",
             }).classes("w-full h-64 overflow-auto overscroll-contain")
+            for grid in (self.rule_editor, self.overview):
+                resizable_table(grid)
             with ui.row():
                 self.open_button = ui.button("Load in review (replaces review)", on_click=self.open_review)
                 ui.button("Download suggestions JSON", on_click=lambda: self.download("json"))
