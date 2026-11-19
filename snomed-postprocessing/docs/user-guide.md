@@ -5,8 +5,13 @@ expanding the main setup and workflow instructions.
 
 ## Contents
 
+- [Workspace frontend](#workspace-frontend)
 - [SQLite instead of an INCEpTION project](#sqlite-instead-of-an-inception-project)
 - [Masked suggestion overview download](#masked-suggestion-overview-download)
+- [Review keyboard navigation](#review-keyboard-navigation)
+- [Resizing tables](#resizing-tables)
+- [Document overview in review](#document-overview-in-review)
+- [Candidate row colors](#candidate-row-colors)
 - [Review summary counts](#review-summary-counts)
 - [Exclusion-list findings without replacements](#exclusion-list-findings-without-replacements)
 - [Diagnostic candidates](#diagnostic-candidates)
@@ -15,6 +20,34 @@ expanding the main setup and workflow instructions.
   - [What the three limits mean](#what-the-three-limits-mean)
   - [Term rows, hits and final candidates](#term-rows-hits-and-final-candidates)
   - [What to do when a limit is reported](#what-to-do-when-a-limit-is-reported)
+
+## Workspace frontend
+
+Launch the navigation shell using the same environment/extra as NiceGUI:
+
+```bash
+.venv-py311/Scripts/python -m snomed_post_processing.gui.app --frontend workspace --show
+```
+
+The project-authored shell adds a responsive header, collapsible workflow navigation,
+bordered work surfaces and a shared right-hand settings drawer around the **same**
+NiceGUI workflow. The navigation and three workflow tabs select the same persistent
+panels; switching stages does not start processing, replace review, approve changes
+or discard pending choices. **Inputs** opens the shared drawer from every stage.
+Both annotator selectors display selected names as chips; their dropdowns show checked
+icons and highlighted rows. Clearing all inclusion names still means **all annotators**,
+unless exclusions restrict that scope.
+
+On narrow screens, the menu button toggles navigation. Review remains bound to its
+loaded artifact rather than the drawer's current source settings. JSON/Markdown and
+masked CSV downloads behave as in the standard NiceGUI frontend. Reload still loses
+in-memory state; download artifacts and decisions before leaving.
+
+No login, account database, migrations, demo data, PWA/offline cache or additional
+processing capabilities are enabled. This shell is not a security boundary.
+Streamlit remains the default; `--frontend nicegui` retains its original shell. The
+workspace uses system fonts and project-authored CSS without external asset fetches.
+See the [workspace provenance](../src/snomed_post_processing/gui/workspace/PROVENANCE.md).
 
 ## SQLite instead of an INCEpTION project
 
@@ -84,6 +117,82 @@ import SCTID columns as text to avoid spreadsheet number conversion. It does not
 modify the displayed table, saved suggestions or review decisions, and is not an
 artifact for restoring review. Sorting the table in the browser does not change
 the source row order used for export.
+
+## Review keyboard navigation
+
+In either NiceGUI shell, while **Review & apply** is active:
+
+- **A / D**: inspect the previous / next finding in the current document.
+- **W / S**: open the previous / next document.
+
+Shortcuts use the respective table's current **filtered, sorted order**, without
+wrapping at either end. With no visible finding selected, D starts at the first
+visible finding and A at the last; the same first/last convention applies when the
+current document is filtered out. Empty filtered tables do nothing. Finding
+navigation highlights/reveals its row; document navigation clears inspection.
+
+Use unmodified letters: shortcuts ignore Ctrl/Alt/Meta/Shift, held-key repeats,
+and typing while inputs, selects, buttons or textareas have focus. **Arrow keys
+retain normal table/input behavior.** Navigation never applies candidates, marks
+documents reviewed, saves choices or changes export scope. Pending/saved decisions
+remain intact. A delayed navigation response is ignored after leaving Review,
+loading another artifact or changing the active document/finding.
+
+## Resizing tables
+
+In both NiceGUI shells, drag a table's **lower-right corner** up or down to resize
+its height in desktop browsers. This applies to policy findings, the rule editor,
+suggestion overview and all four review tables. Drag column-header borders to
+resize individual column widths; tables retain their full available page width.
+
+The document overview starts at a minimum **320 px**, enough for at least four
+rows below headers/filters at the default styling. Other tables can shrink to
+160 px. Resizing changes presentation only: it does not alter filters, selection,
+review decisions or export scope. Heights survive normal grid data refreshes but
+are not persisted to settings/artifacts and reset on page reload. Native drag
+handles may not be available on touch browsers.
+
+## Document overview in review
+
+Both NiceGUI shells replace carousel dots with a sortable, filterable **Documents
+in loaded artifact** table. Filter the Document column to find a name, or filter
+by saved review status/pending edits, then click a row to open that document. The
+current row is blue and a position label shows its index in the original artifact
+order. The table scrolls rather than showing an indistinguishable dot per document.
+
+**Findings** counts all findings for the document in the artifact scope. **Saved
+document review** reflects the explicit saved document flag, not whether every
+finding has an accepted replacement. **Pending edits** counts pending annotation
+choices/actions plus a pending document-review flag; concept-rule edits remain
+listed separately. Save and Discard refresh these indicators.
+
+Navigation clears inspection but preserves pending/saved choices. Table filtering
+and sorting do not change review/export scope or approve anything. Only documents
+represented by the loaded scoped findings appear—not unrepresented project files.
+
+## Candidate row colors
+
+In **Review & apply**, both NiceGUI-based shells distinguish inspection from an
+actual replacement choice:
+
+- **Pale yellow:** a selectable candidate matching the **Saved proposed SCTID**.
+  This is a saved suggestion, not an accepted or automatically selected choice.
+- **Blue:** the candidate currently being inspected. Clicking never stages Apply.
+- **Green:** the chosen replacement. **Review selection** says **pending Save** or
+  **saved**; green alone does not mean it has been saved or written to CAS.
+- If the green row is also being inspected, it has a **blue left edge** and an
+  additional **inspecting** label. Green takes priority over blue, then yellow;
+  proposal status remains in the text label when another color takes priority.
+  Other rows say **Not chosen**. A duplicate proposed SCTID can mark multiple
+  selectable evidence rows yellow; it never marks diagnostic-only rows or changes
+  the existing requirement to explicitly choose a target.
+
+Apply, Save, Discard, Keep, deletion/manual-review actions and restoring decisions
+refresh the indicator. Navigating away clears inspection, but not the underlying
+pending/saved choice. Diagnostic candidates can be inspected but never shown as
+chosen. Exact candidate identity/evidence distinguishes duplicate SCTIDs. For
+older decisions without an exact candidate ordinal, a unique selectable code can
+be highlighted; ambiguous duplicate-code candidates are not guessed.
 
 ## Review summary counts
 

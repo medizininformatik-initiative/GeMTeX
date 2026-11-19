@@ -1,0 +1,191 @@
+/* Project-authored workspace theme using standard NiceGUI and Quasar structure. */
+:root {
+  --workspace-canvas: #f5f7fb;
+  --workspace-surface: #ffffff;
+  --workspace-panel: #f8faff;
+  --workspace-text: #1b2738;
+  --workspace-muted: #657287;
+  --workspace-border: #d8e0ec;
+  --workspace-primary: #2457a7;
+  --workspace-primary-soft: #e5edfa;
+  --workspace-radius: 10px;
+}
+body {
+  color: var(--workspace-text);
+  background: var(--workspace-canvas);
+  font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+}
+.workspace-header {
+  height: 68px;
+  color: var(--workspace-text);
+  background: var(--workspace-surface);
+  border-bottom: 1px solid var(--workspace-border);
+  box-shadow: 0 1px 3px rgb(32 55 88 / 8%);
+}
+.workspace-product-icon {
+  padding: 8px;
+  color: var(--workspace-primary);
+  background: var(--workspace-primary-soft);
+  border-radius: 9px;
+}
+.workspace-product-name {
+  font-size: 1.2rem;
+  font-weight: 650;
+  letter-spacing: -.01em;
+}
+.workspace-navigation {
+  background: #eef3fa;
+}
+.workspace-navigation-content {
+  gap: 8px;
+  padding: 18px 10px;
+}
+.workspace-navigation-caption {
+  padding: 4px 10px 10px;
+  color: var(--workspace-muted);
+  font-size: .76rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.workspace-navigation-item {
+  width: 100%;
+  min-height: 44px;
+  padding-inline: 10px;
+  color: #34445b;
+  border-radius: 9px;
+  justify-content: flex-start;
+}
+.workspace-navigation-item .q-btn__content {
+  justify-content: flex-start;
+  gap: 10px;
+  flex-wrap: nowrap;
+}
+.workspace-navigation-item:hover {
+  background: rgb(255 255 255 / 70%);
+}
+.workspace-navigation-item-active {
+  color: #173e7c;
+  background: var(--workspace-primary-soft);
+  font-weight: 650;
+}
+.workspace-settings {
+  background: var(--workspace-panel);
+}
+.workspace-settings .q-drawer__content {
+  padding: 18px;
+}
+.workspace-settings .q-field {
+  width: 100%;
+}
+.workspace-settings .q-chip {
+  max-width: 100%;
+}
+.workspace-annotator-options .q-item--active {
+  color: #173e7c;
+  background: var(--workspace-primary-soft);
+  font-weight: 600;
+}
+.workspace-page {
+  width: 100%;
+  max-width: 1760px;
+  gap: 16px;
+  margin: 0 auto;
+  padding: 22px 26px;
+}
+.workspace-title {
+  font-size: 1.55rem;
+  font-weight: 680;
+  letter-spacing: -.015em;
+}
+.workspace-subtitle {
+  color: var(--workspace-muted);
+}
+.workspace-content {
+  width: 100%;
+  min-width: 0;
+}
+.workspace-content > .q-tab-panels {
+  background: var(--workspace-surface);
+  border: 1px solid var(--workspace-border);
+  border-radius: 12px;
+  box-shadow: 0 5px 18px rgb(35 57 91 / 6%);
+}
+.workspace-content > .q-tab-panels > .q-panel > .q-tab-panel {
+  padding: 24px;
+}
+.workspace-content .q-card {
+  border: 1px solid var(--workspace-border);
+  border-radius: var(--workspace-radius);
+  box-shadow: none;
+}
+.workspace-content .q-expansion-item {
+  overflow: hidden;
+  background: var(--workspace-surface);
+  border: 1px solid var(--workspace-border);
+  border-radius: var(--workspace-radius);
+}
+.workspace-content .q-expansion-item + .q-expansion-item {
+  margin-top: 8px;
+}
+.workspace-content .q-expansion-item > .q-expansion-item__container > .q-item {
+  min-height: 48px;
+  color: #34445b;
+  background: #f1f5fb;
+  font-weight: 600;
+}
+.workspace-content .q-expansion-item > .q-expansion-item__container > .q-item:hover {
+  background: #e9f0fa;
+}
+.workspace-content .q-expansion-item--expanded > .q-expansion-item__container > .q-item {
+  color: #173e7c;
+  background: var(--workspace-primary-soft);
+  border-bottom: 1px solid var(--workspace-border);
+}
+.workspace-content .q-expansion-item__toggle-icon {
+  color: var(--workspace-primary);
+}
+.workspace-page .q-btn,
+.workspace-settings .q-btn {
+  border-radius: 8px;
+  text-transform: none;
+  box-shadow: none;
+}
+.workspace-tabs {
+  color: var(--workspace-muted);
+  background: var(--workspace-panel);
+  border: 1px solid var(--workspace-border);
+  border-radius: var(--workspace-radius);
+}
+.workspace-tabs .q-tab {
+  min-height: 44px;
+  text-transform: none;
+}
+.workspace-tabs .q-tab--active {
+  color: var(--workspace-primary);
+  background: var(--workspace-primary-soft);
+}
+@media (max-width: 700px) {
+  .workspace-header {
+    height: 60px;
+    gap: 6px;
+  }
+  .workspace-header .workspace-product-icon,
+  .workspace-header .q-space {
+    display: none;
+  }
+  .workspace-product-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 1rem;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .workspace-page {
+    padding: 12px 8px;
+  }
+  .workspace-content > .q-tab-panels > .q-panel > .q-tab-panel {
+    padding: 12px;
+  }
+}

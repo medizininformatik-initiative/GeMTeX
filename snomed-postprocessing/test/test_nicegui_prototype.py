@@ -182,11 +182,25 @@ class NiceGuiBootstrapTest(unittest.TestCase):
 
     def test_registers_page_and_starts_one_server_without_reload_or_browser(self):
         ui = MagicMock()
-        with patch.object(app, "_load_ui", return_value=ui):
+        with patch.object(app, "_load_ui", return_value=(ui, object())):
             self.assertEqual(app.main([]), 0)
         ui.page.assert_called_once_with("/")
         ui.run.assert_called_once_with(host="127.0.0.1", port=8080, show=False,
-                                       reload=False, title="SNOMED Postprocessing — NiceGUI prototype")
+                                       reload=False, title="SNOMED Postprocessing — NiceGUI version")
+
+    def test_development_reload_watches_python_and_css_under_source_root(self):
+        ui = MagicMock()
+        with patch.object(app, "_load_ui", return_value=(ui, object())):
+            self.assertEqual(app.main(["--reload"]), 0)
+        ui.run.assert_called_once_with(
+            host="127.0.0.1",
+            port=8080,
+            show=False,
+            reload=True,
+            title="SNOMED Postprocessing — NiceGUI version",
+            uvicorn_reload_dirs=str(app.SOURCE_ROOT),
+            uvicorn_reload_includes="*.py,*.css",
+        )
 
     def test_runtime_error_is_reported_without_starting_server(self):
         with patch.object(app, "_load_ui", side_effect=RuntimeError("Separate environment required")), redirect_stderr(io.StringIO()) as output:

@@ -1,4 +1,6 @@
 """NiceGUI page shell and workflow tab composition; no CAS write-back."""
+from dataclasses import dataclass
+
 from .policy_ui import PolicyCheckControls
 from .shared_inputs import SharedInputControls
 from .review_panel import ReviewPanelControls
@@ -6,14 +8,28 @@ from .suggestion_ui import SuggestionControls
 from .store_restoration_ui import StoreRestorationControls
 
 
-def build_page(ui, events) -> None:
+@dataclass
+class WorkflowControls:
+    tabs: object
+    inputs: SharedInputControls
+    policy: PolicyCheckControls
+    suggestions: SuggestionControls
+    review: ReviewPanelControls
+
+
+def build_page(ui, events):
     """Build independent workflow panels once per visitor."""
-    review_controls = None
     with ui.left_drawer(bordered=True).props("width=360") as sidebar:
         shared_inputs = SharedInputControls(ui)
     with ui.header():
         ui.button("Inputs", icon="menu", on_click=sidebar.toggle).props("flat color=white").tooltip("Show or hide shared inputs")
         ui.label("SNOMED Postprocessing").classes("text-xl")
+    return build_workspace(ui, events, shared_inputs)
+
+
+def build_workspace(ui, events, shared_inputs):
+    """Compose the same persistent workflow inside either application shell."""
+    review_controls = None
     banner = ui.label().classes("text-amber-900 bg-amber-100 p-3 rounded w-full")
     source = ui.label().classes("text-sm")
     scope = ui.label().classes("text-sm")
@@ -34,7 +50,7 @@ def build_page(ui, events) -> None:
         check = ui.tab("check", label="1. Check policy")
         suggest = ui.tab("suggest", label="2. Suggest")
         review = ui.tab("review", label="3. Review & apply")
-    with ui.tab_panels(tabs, value=check).props("keep-alive").classes("w-full"):
+    with ui.tab_panels(tabs, value="check").props("keep-alive").classes("w-full"):
         with ui.tab_panel(check):
             policy_controls = PolicyCheckControls(ui, shared_inputs)
         with ui.tab_panel(suggest):
@@ -44,3 +60,4 @@ def build_page(ui, events) -> None:
             StoreRestorationControls(ui, shared_inputs, review_controls)
     suggestion_controls.connect_review()
     review_controls.keyboard.active = tabs.value == "review"
+    return WorkflowControls(tabs, shared_inputs, policy_controls, suggestion_controls, review_controls)

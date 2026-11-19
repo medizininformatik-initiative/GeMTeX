@@ -2,6 +2,7 @@
 from snomed_post_processing.review_context import ReviewContext
 
 from .state import PreviewState
+from .tables import resizable_table
 from .review_ui import ReviewControls
 
 
@@ -15,12 +16,39 @@ def _finding_rows(state, session=None):
     return rows
 
 
-def _candidate_rows(finding):
-    return [
-        {"row_id": item.row_id, "rank": item.rank, "code": item.code, "fsn": item.fsn,
-         "score": item.score, "role": "Selectable" if item.selectable else "Context only — not selectable"}
-        for item in finding.candidates
-    ]
+def _candidate_rows(finding, session=None, inspected_id=None):
+    chosen_id, chosen_label = None, ""
+    if session is not None and not session.protected(finding):
+        draft = session.drafts.get(finding.row_id)
+        saved = session.saved.get(finding.suggestion_index, {})
+        if draft is not None:
+            chosen_id = draft.candidate_id if draft.action == "replace" else None
+            chosen_label = "Chosen — pending Save"
+        elif saved.get("apply") and saved.get("valid_choice"):
+            ordinal = saved.get("manual_candidate_ordinal")
+            if type(ordinal) is int and 0 <= ordinal < len(finding.candidates):
+                chosen_id = finding.candidates[ordinal].row_id
+            else:
+                matches = [item for item in finding.candidates
+                           if item.selectable and item.code == saved.get("replacement_code")]
+                # Legacy decisions without exact evidence must not color duplicate-code rows alike.
+                chosen_id = matches[0].row_id if len(matches) == 1 else None
+            chosen_label = "Chosen — saved"
+    rows = []
+    for item in finding.candidates:
+        chosen = item.selectable and item.row_id == chosen_id
+        inspected = item.row_id == inspected_id
+        proposed = bool(item.selectable and finding.proposed_code and item.code == finding.proposed_code)
+        label = (chosen_label if chosen else "Inspecting only" if inspected
+                 else "Saved proposal — not accepted" if proposed else "Not chosen")
+        if chosen and inspected:
+            label += " · inspecting"
+        if proposed and (chosen or inspected):
+            label += " · saved proposal"
+        rows.append({"row_id": item.row_id, "rank": item.rank, "code": item.code, "fsn": item.fsn,
+                     "score": item.score, "role": "Selectable" if item.selectable else "Context only — not selectable",
+                     "chosen": chosen, "inspected": inspected, "proposed": proposed, "selection": label})
+    return rows
 
 
 class ReviewPanelControls:
@@ -32,14 +60,16 @@ class ReviewPanelControls:
         self.load_revision = 0
         self.active_document = None
         self.document_slides = {}
-        self.keyboard = ui.keyboard(on_key=self.handle_key)
+        self._keyboard_busy = False
+        self.keyboard = ui.keyboard(on_key=self.handle_key, repeating=False)
         self.keyboard.active = False
 
         ui.label("Restore suggestions in tab 2, then use Load in review (replaces review). Reviewed decisions can be restored below after their matching suggestions.").classes("text-sm")
         self.counts = ui.label().classes("text-sm")
+        self.document_navigator = ui.column().classes("w-full min-w-0")
         # Do not keep-alive slides: cached panels retain stale DOM for the moved grid.
-        self.documents = ui.carousel(arrows=False, navigation=True).props(
-            "height=auto navigation-position=top control-color=primary"
+        self.documents = ui.carousel(arrows=False, navigation=False).props(
+            "height=auto"
         ).classes("w-full")
         self.empty = ui.label("No findings in the current artifact scope.")
         with ui.column().classes("w-full min-w-0 gap-4") as self.workspace:
@@ -59,7 +89,7 @@ class ReviewPanelControls:
                     "rowData": [],
                     ":getRowId": "params => params.data.row_id",
                     "rowSelection": {"mode": "singleRow", "checkboxes": False, "enableClickSelection": True},
-                }).classes("w-full h-80 overflow-auto overscroll-contain")
+                }).classes("review-finding-grid w-full h-80 overflow-auto overscroll-contain")
             with ui.column().classes("w-full min-w-0"):
                 ui.label("Selected finding").classes("text-lg")
                 # identity = ui.label("Select a finding. Nothing is preselected.")
@@ -82,12 +112,18 @@ class ReviewPanelControls:
                          ":valueFormatter": "params => params.value == null ? '' : params.value.toFixed(2)",
                          "headerTooltip": "Displayed to two decimal places only. Sorting, ranks and saved JSON retain full precision; raw scores remain in candidate evidence."},
                         {"field": "role", "headerName": "Candidate role", "width": 200},
+                        {"field": "selection", "headerName": "Review selection", "minWidth": 240, "tooltipField": "selection"},
                     ],
                     "defaultColDef": {"sortable": True, "filter": "agTextColumnFilter", "resizable": True, "editable": False},
                     "rowData": [],
                     ":getRowId": "params => params.data.row_id",
-                    "rowSelection": {"mode": "singleRow", "checkboxes": False, "enableClickSelection": True},
-                }).classes("w-full h-64 overflow-auto overscroll-contain")
+                    ":getRowStyle": """params => ({
+                        backgroundColor: params.data.chosen ? '#dcfce7' : params.data.inspected ? '#dbeafe' : params.data.proposed ? '#fef9c3' : 'transparent',
+                        color: params.data.chosen ? '#14532d' : params.data.inspected ? '#1e3a8a' : params.data.proposed ? '#713f12' : 'inherit',
+                        boxShadow: params.data.inspected ? 'inset 4px 0 0 #2563eb' : 'none'
+                    })""",
+                }).classes("review-candidate-grid w-full h-64 overflow-auto overscroll-contain")
+                ui.label("Pale yellow = saved proposal, not accepted; blue = inspecting only; green = chosen replacement (pending or saved, see Review selection). A blue edge marks inspection of a green row. Clicking never applies a replacement.").classes("text-sm")
                 self.preview = ui.label("Candidate clicks only preview; they do not approve anything.")
                 self.evidence = ui.label().classes("text-sm whitespace-pre-wrap")
                 self.controls = ReviewControls(ui, lambda: self.state, lambda: self.load_revision,
@@ -110,6 +146,28 @@ class ReviewPanelControls:
             self.rule_source_download = ui.button("Download rule-only review source JSON", on_click=self.download_rule_source).props("flat dense")
             self.rule_source_download.tooltip("Save alongside reviewed decisions to restore a rule-only review after reload.")
             ui.label("Apply choices are staged. Save choices commits them; clearing rules leaves definitions and CAS unchanged.").classes("text-sm")
+        with self.document_navigator:
+            ui.label("Documents in loaded artifact — filter and click to open").classes("text-lg")
+            self.document_position = ui.label().classes("text-sm")
+            ui.label("A/D: previous/next finding · W/S: previous/next document (current table filters/order; no wrap). Typing and arrow keys are unchanged.").classes("text-sm")
+            ui.label("Tables: drag the lower-right corner to resize height; drag column borders to resize width.").classes("text-sm")
+            self.document_grid = ui.aggrid({
+                "columnDefs": [
+                    {"field": "document", "headerName": "Document", "flex": 2, "minWidth": 240},
+                    {"field": "findings", "headerName": "Findings", "width": 110, "filter": "agNumberColumnFilter"},
+                    {"field": "review", "headerName": "Saved document review", "minWidth": 200},
+                    {"field": "pending", "headerName": "Pending edits", "width": 150, "filter": "agNumberColumnFilter",
+                     "headerTooltip": "Pending candidate/action choices plus a pending document-review flag. Concept-rule edits are shown separately below."},
+                ],
+                "defaultColDef": {"sortable": True, "filter": "agTextColumnFilter", "floatingFilter": True,
+                                  "resizable": True, "editable": False},
+                "rowData": [], ":getRowId": "params => params.data.row_id",
+                ":getRowStyle": "params => ({backgroundColor: params.data.current ? '#dbeafe' : 'transparent', color: 'inherit'})",
+            }).classes("review-document-grid w-full h-80 overflow-auto overscroll-contain")
+            self.document_grid.on("rowClicked", self.select_document, args=["data", "rowIndex"])
+        for grid in (self.finding_grid, self.candidate_grid, self.rule_grid):
+            resizable_table(grid)
+        resizable_table(self.document_grid, min_height=320)
         self.documents.on_value_change(lambda event: self.change_document(event.value))
         # Native DOM right-clicks provide coordinates and immutable rendered row IDs;
         # AG Grid's serialized cellContextMenu event omits pointer coordinates.
@@ -196,15 +254,57 @@ class ReviewPanelControls:
             session.stage_rules(safe, session.active_rule_binding)
             self.controls.refresh()
 
-    def handle_key(self, event):
-        if self.document_slides:
-            self.ui.notify(event)
+    async def handle_key(self, event):
+        from types import SimpleNamespace
+
+        key = event.key.name
+        if (not self.keyboard.active or not self.document_slides or self._keyboard_busy
+                or not event.action.keydown or event.action.repeat or any(event.modifiers)
+                or key not in ("a", "d", "w", "s")):
+            return
+        documents = key in ("w", "s")
+        step = -1 if key in ("a", "w") else 1
+        grid = self.document_grid if documents else self.finding_grid
+        state = self.state
+        stamp = (self.load_revision, self.active_document, self.state.selected_finding_id)
+        self._keyboard_busy = True
+        try:
+            # Use displayed order, but trust only identities from the current artifact.
+            try:
+                rows = await grid.get_client_data(method="filtered_sorted")
+            except (TimeoutError, RuntimeError):
+                # A closing client/unavailable grid leaves inspection untouched.
+                return
+            if (not self.keyboard.active or self.state is not state or stamp !=
+                    (self.load_revision, self.active_document, self.state.selected_finding_id)):
+                return
+            allowed = (set(self.document_slides) if documents else
+                       {row.row_id for row in self.state.findings if row.document == self.active_document})
+            ids = list(dict.fromkeys(row["row_id"] for row in rows if isinstance(row, dict)
+                                     and isinstance(row.get("row_id"), str) and row["row_id"] in allowed))
+            current = (next((token for token, entry in self.document_slides.items()
+                             if entry[0] == self.active_document), None)
+                       if documents else self.state.selected_finding_id)
+            index = ids.index(current) + step if current in ids else (0 if step > 0 else len(ids) - 1)
+            if not 0 <= index < len(ids):
+                return
+            target = SimpleNamespace(args={"data": {"row_id": ids[index]}})
+            if documents:
+                self.select_document(target)
+            else:
+                self.select_finding(target)
+                grid.run_row_method(ids[index], "setSelected", True, True)
+            grid.run_grid_method("ensureIndexVisible", index)
+        finally:
+            self._keyboard_busy = False
 
     def begin_load(self):
         self.load_revision += 1
         return self.load_revision
 
     def refresh_documents(self, session):
+        self.refresh_document_overview(session)
+        self.refresh_candidates()
         self.finding_grid.options["rowData"] = [row for row in _finding_rows(self.state, session)
                                               if row["document"] == self.active_document]
         if hasattr(self, "rule_grid"):
@@ -221,6 +321,44 @@ class ReviewPanelControls:
             tip.set_text(action + (" (pending; Save choices)" if pending else ""))
             heading.classes(add="text-green-700 font-semibold" if reviewed else "",
                             remove="" if reviewed else "text-green-700 font-semibold")
+
+    def refresh_document_overview(self, session):
+        rows = {document: dict(row_id=token, document=document, findings=0,
+                               review="Reviewed" if document in session.reviewed_documents else "Not marked",
+                               pending=int(document in session.draft_reviewed), current=document == self.active_document)
+                for token, (document, *_) in self.document_slides.items()}
+        for finding in self.state.findings:
+            if finding.document in rows:
+                rows[finding.document]["findings"] += 1
+                rows[finding.document]["pending"] += int(finding.row_id in session.drafts)
+        self.document_grid.options["rowData"] = list(rows.values())
+        self.document_grid.update()
+        names = list(rows)
+        position = names.index(self.active_document) + 1 if self.active_document in rows else 0
+        self.document_position.set_text(f"{len(names)} documents · Current: {position}/{len(names)}"
+                                        + (f" · {self.active_document}" if position else ""))
+        self.document_navigator.set_visibility(bool(names))
+
+    def select_document(self, event):
+        try:
+            token = event.args["data"]["row_id"]
+            if token not in self.document_slides:
+                return
+            row_index = event.args.get("rowIndex")
+        except (AttributeError, KeyError, TypeError):
+            return
+        self.documents.set_value(token)
+        self.change_document(token)
+        # Refreshing the current-row styling replaces AG Grid's row data and can
+        # reset its viewport. Restore the clicked row with minimum scrolling.
+        if type(row_index) is int and row_index >= 0:
+            self.document_grid.run_grid_method("ensureIndexVisible", row_index)
+
+    def refresh_candidates(self):
+        finding = self.state.selected_finding
+        self.candidate_grid.options["rowData"] = (_candidate_rows(
+            finding, self.controls.session, self.state.selected_candidate_id) if finding else [])
+        self.candidate_grid.update()
 
     def clear_inspection(self):
         self.state.selected_finding_id = None
@@ -305,7 +443,7 @@ class ReviewPanelControls:
         self.proposed.set_text(f"Saved proposed SCTID: {finding.proposed_code or 'none'} (not automatically accepted)")
         self.rationale.set_text(finding.reason)
         # limits.set_text("Retrieval limits — candidate evidence may be incomplete:\n" + "\n".join(finding.retrieval_limits) if finding.retrieval_limits else "")
-        self.candidate_grid.options["rowData"] = _candidate_rows(finding)
+        self.refresh_candidates()
         self.preview.set_text("No candidate selected. Inspecting a candidate stages no decision.")
         self.evidence.set_text("")
         self.controls.refresh(update_grid=False)
@@ -320,6 +458,7 @@ class ReviewPanelControls:
         role = "Selectable candidate" if candidate.selectable else "Diagnostic context only — not selectable"
         self.preview.set_text(f"{role}: {candidate.code} — {candidate.fsn}. No decision staged.")
         self.evidence.set_text("\n".join(f"{key}: {value}" for key, value in candidate.details))
+        self.refresh_candidates()
         self.controls.refresh(update_grid=False)
         return candidate
 
