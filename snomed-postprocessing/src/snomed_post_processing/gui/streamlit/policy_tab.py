@@ -18,7 +18,7 @@ from .file_sources import render_file_source_selector
 from .report_generation import generate_report
 from .sidebar import GuiInputs
 from .annotator_scope import sync_annotator_scope
-from snomed_post_processing.uima_processing.scope import normalize_annotators
+from snomed_post_processing.uima_processing.scope import normalize_annotators, resolve_annotator_scope
 
 
 def render_policy_tab(inputs: GuiInputs) -> None:
@@ -37,6 +37,9 @@ def render_policy_tab(inputs: GuiInputs) -> None:
             "date stored in the uploaded HDF5."
         )
     annotator_selection = list(normalize_annotators(getattr(inputs, "annotators", ())))
+    excluded_text = st.session_state.get("processing_annotators_exclusion_text", "")
+    excluded_selection = list(normalize_annotators(excluded_text.replace(",", "\n").splitlines()))
+    available_annotators = ()
     zip_temp_path = None
 
     st.subheader("Restore CriticalFindings JSON")
@@ -100,21 +103,39 @@ def render_policy_tab(inputs: GuiInputs) -> None:
                     st.rerun()
                 elif annotators:
                     labels = {name.lower(): name for name in annotators}
+                    available_annotators = tuple(labels)
                     annotator_selection = st.multiselect(
                         "Select annotators to include",
                         options=sorted(set(labels) | set(annotator_selection)),
                         format_func=lambda name: labels.get(name, name),
                         default=annotator_selection,
                         key="processing_annotators_selector",
-                        help="Shared scope for all tabs, including concept rules and export/upload. Empty means all. Changing scope discards out-of-scope decisions and resets review progress.",
+                        help="Shared scope for all tabs. Empty means all unless exclusions are selected.",
                     )
+                    excluded_text = st.text_area(
+                        "Annotators to exclude (comma- or line-separated)",
+                        value=excluded_text,
+                        key="processing_annotators_exclusion_text",
+                        help="A non-empty exclusion list takes precedence over the inclusion list for all tabs.",
+                    )
+                    excluded_selection = list(normalize_annotators(excluded_text.replace(",", "\n").splitlines()))
                 else:
                     st.info("No annotators found in ZIP.")
             except Exception as exc:
                 st.warning(f"Could not load annotators: {exc}")
 
-    inputs.annotators = sync_annotator_scope(annotator_selection)
-    st.caption("Processing scope for all tabs: " + (", ".join(inputs.annotators) if inputs.annotators else "all annotators"))
+    try:
+        effective_annotators = resolve_annotator_scope(
+            available_annotators, annotator_selection, excluded_selection
+        ) if excluded_selection else normalize_annotators(annotator_selection)
+    except ValueError as error:
+        st.error(str(error))
+        return
+    inputs.annotators = sync_annotator_scope(effective_annotators)
+    if excluded_selection:
+        st.caption("Processing scope for all tabs after exclusions: " + ", ".join(inputs.annotators))
+    else:
+        st.caption("Processing scope for all tabs: " + (", ".join(inputs.annotators) if inputs.annotators else "all annotators"))
 
     if st.button(
         "Run policy check",

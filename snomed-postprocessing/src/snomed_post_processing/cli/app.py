@@ -31,6 +31,16 @@ from ..pipelines import (
 from ..sanitization.decisions_json import read_sanitization_decisions_json
 
 
+def _resolve_cli_annotators(source, included=(), excluded=(), *, store_scope=None):
+    from ..annotation_source import is_annotation_store
+    from ..pipelines.policy_check import project_annotators
+    from ..uima_processing.scope import resolve_annotator_scope
+    if not excluded:
+        return resolve_annotator_scope((), included, ())
+    scope = store_scope if is_annotation_store(source) else None
+    return resolve_annotator_scope(project_annotators(source, store_scope=scope), included, excluded)
+
+
 @click.command()
 @log_documents_options
 def log_documents(
@@ -365,6 +375,8 @@ def build_inception_upload_artifacts_cli(
     help="Directory for shell ZIP, repaired upload artifacts, and reports.",
 )
 @click.option("--store-scope", default=None, help="SQLite export/view scope; defaults to the reviewed decisions scope.")
+@click.option("--annotator", multiple=True, help="Include only these annotators; empty means the reviewed scope or all.")
+@click.option("--exclude-annotator", multiple=True, help="Exclude these annotators; a non-empty exclusion list takes precedence over --annotator.")
 @click.option("--project-template", default=None, type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
               help="INCEpTION project ZIP supplying configuration when it was absent from a preserved export.")
 @click.option("--project-name", default=None, help="Name for the sanitized INCEpTION project.")
@@ -403,6 +415,8 @@ def apply_decisions_to_inception_cli(
     decisions_path: pathlib.Path,
     output_dir: pathlib.Path,
     store_scope: Optional[str],
+    annotator: tuple[str, ...],
+    exclude_annotator: tuple[str, ...],
     project_template: Optional[pathlib.Path],
     project_name: Optional[str],
     project_slug: Optional[str],
@@ -422,6 +436,15 @@ def apply_decisions_to_inception_cli(
     apply_changes: bool,
 ):
     """Run the full reviewed-decisions -> INCEpTION deployment workflow."""
+    effective_scope = store_scope
+    if exclude_annotator and effective_scope is None:
+        _, metadata = read_sanitization_decisions_json(decisions_path)
+        effective_scope = metadata.get("store_scope")
+    try:
+        annotators = _resolve_cli_annotators(source_project, annotator, exclude_annotator,
+                                             store_scope=effective_scope)
+    except Exception as error:
+        raise click.ClickException(str(error)) from error
     result = apply_decisions_and_upload_to_inception(
         source_project=source_project,
         decisions_path=decisions_path,
@@ -444,6 +467,7 @@ def apply_decisions_to_inception_cli(
         check_connection=check_connection,
         verify_tls=not no_verify_tls,
         force=force,
+        annotator_filter=annotators if annotator or exclude_annotator else None,
     )
     click.echo(f"Pipeline report written to: {result.pipeline_report_path.resolve()}")
     click.echo(f"Shell project: {result.shell_project.resolve()}")
@@ -663,14 +687,16 @@ def build_annotation_store_cli(
 @click.option("--output", required=True, type=click.Path(dir_okay=False, path_type=pathlib.Path), help="New restored CAS workspace ZIP; existing files are never overwritten.")
 @click.option("--store-scope", default=None, help="Export/view scope, e.g. 1:annotation. Restoration requires one export.")
 @click.option("--annotator", multiple=True, help="Include only these annotators; empty means all.")
+@click.option("--exclude-annotator", multiple=True, help="Exclude these annotators; a non-empty exclusion list takes precedence over --annotator.")
 @click.option("--project-template", default=None, type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
               help="Project ZIP supplying configuration if the original export did not contain it.")
-def restore_annotation_store_cas_cli(store, output, store_scope, annotator, project_template):
+def restore_annotation_store_cas_cli(store, output, store_scope, annotator, exclude_annotator, project_template):
     """Restore preserved CAS for the existing INCEpTION shell/artifact workflow."""
     from ..annotation_store.restoration import restore_annotation_store_cas
     try:
+        annotators = _resolve_cli_annotators(store, annotator, exclude_annotator, store_scope=store_scope)
         result = restore_annotation_store_cas(store, output, store_scope=store_scope,
-                                              annotators=annotator, project_template=project_template)
+                                              annotators=annotators, project_template=project_template)
     except Exception as error:
         raise click.ClickException(str(error)) from error
     click.echo(f"Restored CAS project: {result.output_project.resolve()}")

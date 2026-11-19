@@ -174,11 +174,12 @@ class PolicyCheckControls:
         project, lists = self.inputs.project.snapshot(), self.inputs.lists.snapshot()
         if self.closed or self.busy or project is None or lists is None:
             return
-        revision, settings = self.revision, self.inputs.settings()
+        revision = self.revision
         self.busy = True
         self.status.set_text("Checking policy…")
         self.refresh()
         try:
+            settings = self.inputs.settings()
             result, stamps = await run.io_bound(_checked_policy, project, lists, settings)
             if self.closed:
                 return
@@ -193,7 +194,7 @@ class PolicyCheckControls:
             self.status.set_text("Policy check finished. No annotations changed.")
             for listener in self.result_listeners:
                 listener()
-        except AnnotationStoreError as error:
+        except (AnnotationStoreError, ValueError) as error:
             if not self.closed and revision == self.revision:
                 self.status.set_text(f"Policy check failed: {error}. Previous successful result retained.")
         except Exception:

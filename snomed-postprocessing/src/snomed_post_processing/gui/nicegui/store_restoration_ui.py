@@ -41,10 +41,10 @@ class StoreRestorationControls:
         project = self.inputs.project.snapshot()
         template = self.template.snapshot()
         store_scope = self.inputs.scope.value
-        annotators = tuple(self.inputs.annotators.value or ())
         self.busy = True
         self.refresh()
         try:
+            annotators = self.inputs.effective_annotators()
             if project is None or self.inputs.scope.value is None or self.template.uploading:
                 raise ReviewError('Select a completed SQLite input, export scope and optional template first.')
             if session.dirty:

@@ -20,7 +20,9 @@ from click.testing import CliRunner
 from snomed_post_processing.annotation_source import AnnotationStoreError
 from snomed_post_processing.annotation_store.cas_views import iter_cas_views
 from snomed_post_processing.annotation_store.restoration import cas_restoration_status, restore_annotation_store_cas
-from snomed_post_processing.cli.app import build_annotation_store_cli, restore_annotation_store_cas_cli
+from snomed_post_processing.cli.app import (
+    apply_decisions_to_inception_cli, build_annotation_store_cli, restore_annotation_store_cas_cli,
+)
 from snomed_post_processing.pipelines.annotation_store import run_build_annotation_store
 from snomed_post_processing.pipelines.inception_apply_upload import apply_decisions_and_upload_to_inception
 from snomed_post_processing.pipelines.policy_check import check_policy, PolicySettings
@@ -464,7 +466,7 @@ def test_offline_controller_rejects_stale_download_without_nicegui_dependency(tm
     project = SourceFile(path)
     shared = SimpleNamespace(is_store=True, closed=False, revision=0, listeners=[], data_dir=SimpleNamespace(value='data'),
                              project=SimpleNamespace(snapshot=lambda: project), scope=SimpleNamespace(value='1:annotation'),
-                             annotators=SimpleNamespace(value=['alice']))
+                             effective_annotators=lambda: ('alice',))
     review = SimpleNamespace(state=state, controls=SimpleNamespace(session=ReviewSession(state), before_export=None))
     ui = MagicMock()
     control = StoreRestorationControls(ui, shared, review)
@@ -512,7 +514,9 @@ def test_nicegui_offline_download_and_stale_review_protection(tmp_path, inputs):
             shared.store.mode.set_value('Server path')
             shared.store.path.set_value(str(path))
             shared.scope.set_options({'1:annotation': 'Export 1'}, value='1:annotation')
-            shared.annotators.set_options({'alice': 'Alice'}, value=['alice'])
+            shared.available_annotators = ('alice', 'bob')
+            shared.annotators.set_options({'alice': 'Alice', 'bob': 'Bob'}, value=['alice'])
+            shared.excluded_annotators.set_options({'alice': 'Alice', 'bob': 'Bob'}, value=[])
             review = SimpleNamespace(state=state, controls=SimpleNamespace(session=ReviewSession(state), before_export=None))
             control = StoreRestorationControls(ui, shared, review)
 
@@ -554,7 +558,25 @@ def test_cli_build_and_restore(tmp_path, inputs):
     assert 'Distinct preserved type systems: 1' in result.output
     restored = tmp_path / 'cli-restored.zip'
     result = runner.invoke(restore_annotation_store_cas_cli, ['--store', str(path), '--output', str(restored),
-                                                           '--store-scope', '1:annotation', '--annotator', 'alice'])
+                                                           '--store-scope', '1:annotation', '--annotator', 'alice',
+                                                           '--exclude-annotator', 'alice'])
     assert result.exit_code == 0, (result.output, result.exception)
     assert 'CAS views: 3' in result.output
-    assert {view.annotator for view in iter_cas_views(restored)} == {'alice'}
+    assert {view.annotator for view in iter_cas_views(restored)} == {'bob'}
+    rejected = runner.invoke(restore_annotation_store_cas_cli, ['--store', str(path),
+        '--output', str(tmp_path / 'none.zip'), '--store-scope', '1:annotation',
+        '--exclude-annotator', 'alice', '--exclude-annotator', 'bob'])
+    assert rejected.exit_code != 0
+    assert 'removes all available annotators' in rejected.output
+
+    deployment = tmp_path / 'cli-deployment'
+    applied = runner.invoke(apply_decisions_to_inception_cli, [
+        '--source-project', str(path), '--decisions', str(FIXTURE / 'staged-decisions.json'),
+        '--output-dir', str(deployment), '--store-scope', '1:annotation',
+        '--annotator', 'alice', '--exclude-annotator', 'alice',
+    ])
+    assert applied.exit_code == 0, (applied.output, applied.exception)
+    assert 'Artifacts: 3' in applied.output
+    report = json.loads((deployment / 'inception-upload-artifacts' /
+                         'inception-upload-artifacts-report.json').read_text(encoding='utf-8'))
+    assert {item['source_annotator'] for item in report['uploads']} == {'bob'}

@@ -1,6 +1,6 @@
 """Page-local shared input controls, settings and explicit annotator inspection."""
 from snomed_post_processing.pipelines.policy_check import PolicySettings, project_annotators
-from snomed_post_processing.uima_processing.scope import normalize_annotators
+from snomed_post_processing.uima_processing.scope import normalize_annotators, resolve_annotator_scope
 from .file_sources import FileSource
 from snomed_post_processing.annotation_source import store_scopes, default_store_scope, AnnotationStoreError
 
@@ -17,6 +17,7 @@ class SharedInputControls:
     def __init__(self, ui):
         self.revision = 0
         self.busy = self.closed = self.ready = False
+        self.available_annotators = ()
         self.project_path = None
         self.listeners = []
         ui.label("Shared inputs").classes("text-lg font-medium")
@@ -36,8 +37,10 @@ class SharedInputControls:
                     self.inspect_store = ui.button("Inspect SQLite scopes", on_click=self.load_store_scopes)
                 self.lists = FileSource(ui, "SNOMED HDF5", (".hdf5", ".h5"), self.data_dir, self.changed)
             with ui.row().classes("w-full items-center"):
-                self.annotators = ui.select({}, label="Annotators (empty = all)", multiple=True,
+                self.annotators = ui.select({}, label="Include annotators (empty = all)", multiple=True,
                                             new_value_mode="add-unique", value=[], on_change=self.changed).classes("grow")
+                self.excluded_annotators = ui.select({}, label="Exclude annotators (takes precedence)", multiple=True,
+                                                     new_value_mode="add-unique", value=[], on_change=self.changed).classes("grow")
                 self.load_names = ui.button("Load annotators", on_click=self.load_annotators)
             with ui.expansion("Annotation settings").classes("w-full"):
                 self.layers = ui.textarea("Target annotation types (one per line)",
@@ -53,9 +56,13 @@ class SharedInputControls:
         self.ready = True
         self.refresh()
 
+    def effective_annotators(self):
+        return resolve_annotator_scope(self.available_annotators, self.annotators.value or (),
+                                       self.excluded_annotators.value or ())
+
     def settings(self):
         lines = lambda text: tuple(line.strip() for line in (text or "").splitlines() if line.strip())
-        return PolicySettings(normalize_annotators(self.annotators.value or ()),
+        return PolicySettings(self.effective_annotators(),
                               lines(self.layers.value) or ("gemtex.Concept",), lines(self.ignore.value),
                               self.overlap.value, "" if self.is_store else self.prefix.value or "",
                               "sctid" if self.is_store else (self.feature.value or "").strip(),
@@ -73,6 +80,8 @@ class SharedInputControls:
         if self.ready and not self.closed:
             self.project_path = None
             self.annotators.set_options({}, value=[])
+            self.excluded_annotators.set_options({}, value=[])
+            self.available_annotators = ()
             self.scope.set_options({}, value=None)
             self.project_changed()
 
@@ -116,6 +125,8 @@ class SharedInputControls:
                 if path != self.project_path:
                     self.project_path = path
                     self.annotators.set_options({}, value=[])
+                    self.excluded_annotators.set_options({}, value=[])
+                    self.available_annotators = ()
                     self.scope.set_options({}, value=None)
             self.changed()
 
@@ -150,9 +161,12 @@ class SharedInputControls:
             names = await run.io_bound(_annotators, project, **({"scope": self.scope.value} if self.is_store else {}))
             if not self.closed and revision == self.revision:
                 selected = list(normalize_annotators(self.annotators.value or ()))
-                options = {**{name: name for name in selected}, **names}
+                excluded = list(normalize_annotators(self.excluded_annotators.value or ()))
+                self.available_annotators = tuple(names)
+                options = {**{name: name for name in selected + excluded}, **names}
                 self.annotators.set_options(options, value=selected)
-                self.status.set_text("Annotators loaded. Empty selection includes all annotators.")
+                self.excluded_annotators.set_options(options, value=excluded)
+                self.status.set_text("Annotators loaded. Exclusions take precedence; empty selections include all.")
         except AnnotationStoreError as error:
             if not self.closed and revision == self.revision:
                 self.status.set_text(str(error))
