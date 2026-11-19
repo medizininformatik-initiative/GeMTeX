@@ -29,6 +29,7 @@ sources:
 | `summarize-hdf5` | `cli.app:summarize_hdf5` | Print HDF5 metadata summary. |
 | `build-snogit-cache` | `cli.app:build_snogit_cache_cli` | Create processed SNOGIT cache for BM25 evidence from a SNOGIT ZIP or single `.dat` file. |
 | `suggest-sanitization` | `cli.app:suggest_sanitization_cli` | Generate Markdown/JSON suggestions and an identity-masked overview CSV. |
+| `restore-annotation-store-cas` | `cli.app:restore_annotation_store_cas_cli` | Restore preserved CAS/type systems from one SQLite export into a new workspace ZIP. |
 | `build-annotation-store` | `cli.app:build_annotation_store_cli` | Build a merged SQLite store of SNOMED annotation occurrences from INCEpTION export ZIPs. |
 | `check-annotation-store-document` | `cli.app:check_annotation_store_document_cli` | Check whether an external plain-text document content hash exists in an annotation store. |
 | `build-inception-shell-project` | `cli.app:build_inception_shell_project_cli` | Lower-level shell ZIP builder. |
@@ -65,6 +66,14 @@ uv run create-concepts-dump \
 ```
 
 Use `--filter-list` in version mode to add an embedded blacklist. Use `--dump-mode semantic` to create/update a blacklist policy view.
+
+## Preserve/restore complete CAS in SQLite
+
+`build-annotation-store --store-cas` is an opt-in for new stores (also required for later append). It implies full document text and preserves complete JSONCAS/XMI payloads, SHA-256-referenced external type systems and optional project configuration. Existing stores are not upgraded. Different type-system XML is retained separately; identical bytes share one compressed blob globally.
+
+`restore-annotation-store-cas --store STORE.sqlite --store-scope 1:annotation --output restored.zip` restores a new JSON/XMI workspace, with optional repeatable `--annotator` and explicit `--project-template compatible-project.zip` when project configuration was absent. It never overwrites an existing output or modifies the DB, and is not a native `.ser`-based full-project backup. Use the workspace with shell/artifact deployment.
+
+`apply-decisions-to-inception` also accepts a CAS-enabled SQLite `--source-project`, plus `--store-scope` (otherwise saved review scope) and optional `--project-template`. It temporarily restores CAS, restores original CAS ID settings, and reuses existing repair/deployment gates. Scopes must match reviewed metadata; remote writes still require `--apply`. See [preservation workflow](../workflows/annotation-store.md#optional-complete-cas-preservation-and-restoration).
 
 ## Generate suggestions
 

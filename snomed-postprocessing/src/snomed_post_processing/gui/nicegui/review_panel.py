@@ -92,7 +92,7 @@ class ReviewPanelControls:
                 self.evidence = ui.label().classes("text-sm whitespace-pre-wrap")
                 self.controls = ReviewControls(ui, lambda: self.state, lambda: self.load_revision,
                                                self.begin_load, self.refresh_documents)
-        ui.label("Review JSON only. ZIP write-back and deployment remain disconnected.")
+        ui.label("Direct remote deployment is not connected here. Preserved SQLite CAS can be prepared offline below; ZIP-input write-back remains disconnected.")
         with ui.expansion("Explicit concept rule decisions", value=True).classes("w-full") as self.rule_area:
             self.rule_summary = ui.label().classes("text-sm")
             self.rule_grid = ui.aggrid({
@@ -180,7 +180,7 @@ class ReviewPanelControls:
     def download_rule_source(self):
         if self.state.source_name is not None and not self.state.source_suggestions:
             from snomed_post_processing.sanitization.json_io import sanitization_suggestions_json_text
-            keys = ("annotators", "id_prefix", "id_feature", "nicegui_generation_binding", "target_view")
+            keys = ("annotators", "id_prefix", "id_feature", "nicegui_generation_binding", "target_view", "store_scope", "annotation_source_file")
             metadata = {key: self.state.metadata[key] for key in keys if key in self.state.metadata}
             self.ui.download.content(sanitization_suggestions_json_text([], metadata=metadata), "rule-only-suggestions.json")
 

@@ -243,9 +243,15 @@ class ReviewSession:
         # Suggestions metadata may contain full-document finding_contexts for
         # excluded annotators. Like Streamlit, carry write-back settings across,
         # not the entire suggestions metadata/clinical context into a review file.
-        names = ("id_prefix", "id_feature", "manual_review_layer", "suggestions_json_path", "suggestions_report_path", "nicegui_generation_binding")
+        names = ("id_prefix", "id_feature", "manual_review_layer", "suggestions_json_path", "suggestions_report_path",
+                 "nicegui_generation_binding", "store_scope", "annotation_source_file")
         metadata = {key: copy.deepcopy(self.source.metadata[key]) for key in names if key in self.source.metadata}
         metadata.update(copy.deepcopy(self.imported_metadata))
+        # Store identity belongs to the currently loaded suggestions/rule source;
+        # an imported review cannot retarget it to another SQLite scope/file.
+        for key in ("store_scope", "annotation_source_file"):
+            if key in self.source.metadata:
+                metadata[key] = copy.deepcopy(self.source.metadata[key])
         if "finding_contexts" in metadata:
             from snomed_post_processing.uima_processing.scope import annotator_in_scope
             contexts = metadata["finding_contexts"]

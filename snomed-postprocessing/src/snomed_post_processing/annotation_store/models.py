@@ -70,6 +70,8 @@ class AnnotationStoreSummary:
     annotation_views: int = 0
     annotations: int = 0  # Shared, deduplicated annotation rows.
     annotation_occurrences: int = 0  # Provenance links, not shared-data rows.
+    preserved_cas_views: int = 0
+    preserved_type_systems: int = 0
     known_sctids: int = 0
     missing_sctid_occurrences: int = 0
     unknown_sctids: set[str] = dataclasses.field(default_factory=set)

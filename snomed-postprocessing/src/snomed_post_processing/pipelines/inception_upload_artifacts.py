@@ -87,8 +87,15 @@ def build_inception_upload_artifacts(
     output_dir = pathlib.Path(output_dir)
     if not source_project.exists() or not source_project.is_file():
         raise FileNotFoundError(f"Source project does not exist: {source_project}")
+    if output_dir.exists() and not output_dir.is_dir():
+        raise FileExistsError(f"Output directory path is an existing file: {output_dir}")
     if output_dir.exists() and any(output_dir.iterdir()) and not force:
         raise FileExistsError(f"Output directory is not empty: {output_dir}")
+    from ..utils.output_paths import guard_output_paths
+    try:
+        guard_output_paths((source_project,), (), flat_directories=(output_dir,))
+    except ValueError as error:
+        raise InceptionUploadArtifactsError(str(error)) from error
     output_dir.mkdir(parents=True, exist_ok=True)
 
     artifacts: list[InceptionUploadArtifact] = []

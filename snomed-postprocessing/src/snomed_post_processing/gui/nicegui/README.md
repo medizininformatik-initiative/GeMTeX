@@ -3,7 +3,8 @@
 Preview **synthetic data or uploaded suggestions JSON**, then deliberately stage
 and save manual choices and download/restore reviewed-decisions JSON.
 Policy checking, explicit concept rules and suggestion generation are connected.
-CAS write-back and deployment are not connected.
+Preserved SQLite CAS supports an offline INCEpTION review-package download.
+Direct remote deployment and ZIP-input write-back are not connected.
 Both frontends use the standard Python 3.11 project environment, `.venv`.
 The shared `gui/app.py` defaults to Streamlit; select NiceGUI explicitly.
 
@@ -66,9 +67,28 @@ then check policy, generate suggestions or scan rules as usual, without a ZIP/AP
 Combined scopes reject ambiguous document/annotator identities and conflicting text.
 The same source supplies review context; stored SCTIDs and exact layer names are used,
 while the selected HDF5 remains authoritative for policy and terminology. The database
-is read-only; no migration, CAS reconstruction or write-back is added. Use a closed,
+is read-only; no migration or database write-back occurs. Use a closed,
 checkpointed snapshot, not a live WAL database. See the
 [user guide](../../../../docs/user-guide.md#sqlite-instead-of-an-inception-project).
+
+### Preserved CAS for INCEpTION review
+
+Build a **new** store with `build-annotation-store --store-cas`. Complete JSONCAS/XMI
+payloads, full document text, project configuration (when present) and
+content-addressed type systems are retained. Identical external type systems share
+one SHA-256-addressed blob; different definitions remain separate.
+
+Select one export/view scope **before generating suggestions/rules**, then save
+review choices. In tab 3 open **SQLite CAS restoration / INCEpTION review** and
+choose **Download INCEpTION review package (offline)**. It includes a schema shell,
+repaired scoped CAS artifacts, portable artifact report, reviewed decisions and
+explicit deployment instructions. No server connection or upload occurs. Pending
+choices, stale rules, incompatible scopes and concurrent input/review changes block
+the download. Excluded annotator CAS is omitted. If project configuration was absent
+from the export, supply a compatible project-template ZIP in the optional selector.
+Protect the download as clinical data. Old stores without preserved CAS remain
+analysis/review-JSON-only. Real NiceGUI SDK/browser and live INCEpTION validation of
+this new control remain outstanding in the current environment (optional extra absent).
 
 ## Restore computed states
 

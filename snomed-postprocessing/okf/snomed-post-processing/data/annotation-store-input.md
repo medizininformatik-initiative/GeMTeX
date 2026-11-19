@@ -56,9 +56,15 @@ reports for SQLite go into a temporary directory, not beside the database.
 
 Connections use `mode=ro&immutable=1`, query-only mode and explicit close. Use a closed,
 checkpointed snapshot; pending WAL is rejected. No DDL, migrations, database updates,
-WAL/SHM creation, CAS reconstruction or SQLite-backed project write-back/deployment.
+WAL/SHM creation or database write-back. CAS restoration/write-back/deployment is available only for the optional preservation extension described below.
 Source stat changes during a read reject results. Only fixed `AnnotationStoreError`
 messages may be displayed by NiceGUI; unrelated failures retain non-echoing errors.
+
+## Optional complete CAS restoration
+
+New stores built with `--store-cas` preserve raw complete JSONCAS/XMI, content-addressed type systems and optional original project configuration. Full document text is included. The core reader still checks stored exact layer names/SCTIDs without reconstructing CAS; preservation does not alter policy semantics. No old-store upgrades occur. See [schema extension](annotation-store-sqlite.md#optional-cas-restoration-extension).
+
+Restoration requires one export/view scope (select it before generating review), complete CAS coverage, and a compatible explicit project-template ZIP if the export lacked configuration. `restore-annotation-store-cas` emits a new JSON/XMI workspace for existing shell/artifact deployment, not a native Java-serialized project backup. `run_sanitization` and `apply_decisions_and_upload_to_inception` restore internally; original ID settings are recovered automatically. Local sanitized ZIPs preserve excluded CAS unchanged; remote artifacts omit excluded CAS. Streamlit enables its existing controls only for eligible stores/scopes. NiceGUI adds an explicit offline review-package download with source/review revision guards; live deployment remains separate. Old stores remain analysis/review-JSON-only. Source DB bytes stay unchanged and metadata paths are never opened.
 
 ## Verification
 

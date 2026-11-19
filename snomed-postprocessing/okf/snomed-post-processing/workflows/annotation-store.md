@@ -31,6 +31,23 @@ uv run build-annotation-store \
 
 The command accepts either individual ZIPs or directories containing ZIPs. Multiple `--input` values are allowed.
 
+# Optional complete CAS preservation and restoration
+
+Add `--store-cas` when creating a **new** output database. This is off by default, implies full document text storage, and preserves each loaded JSONCAS/XMI's complete raw payload with a reference to its SHA-256-deduplicated type-system XML. Different definitions remain separate. Project configuration/properties are retained when present. This adds sensitive clinical data and storage. Existing stores are not migrated; append to CAS-enabled stores must explicitly include the flag again.
+
+```bash
+uv run restore-annotation-store-cas \
+  --store semantic_snomed_annotations.sqlite \
+  --store-scope 1:annotation \
+  --output restored-project.zip
+```
+
+`--annotator alice` can narrow restoration (repeatable, case-insensitive; empty means all). Restoration requires a single export and rejects ambiguous identities, missing/corrupt data, unsafe names, inconsistent text and existing output paths. If the original export lacked `exportedproject.json`, provide `--project-template compatible-project.zip`. The type system is recovered from stored content, never by reopening export paths in metadata. No DB writes or network calls occur. The workspace uses canonical JSON/XMI paths while retaining original CAS payload bytes. Builder replacement/report and restoration outputs are preflighted against ZIP/HDF5/store/template inputs by resolved identity and existing hard-link identity before any unlink/write; output aliases are rejected. It is input to the existing shell/repaired-artifact workflow, **not a native full-project restore**; `.ser` generation is unsupported.
+
+For reviewed SQLite decisions, `apply-decisions-to-inception --source-project STORE.sqlite --store-scope 1:annotation --decisions decisions.json --output-dir deployment` restores temporarily and uses original CAS ID settings automatically. The scope must match reviewed metadata; without explicit scope it uses the saved scope. Remote writes still require `--apply`. Select one export scope before policy/rules/suggestion generation. Streamlit exposes its existing write-back/deployment controls for preserved stores; NiceGUI offers an offline review package after Save choices. See [SQLite input integration](../data/annotation-store-input.md) and [deployment](inception-deployment.md).
+
+Synthetic regression covers byte-identical full CAS, full feature/type preservation, shared/different type systems, idempotent append, no old-store upgrade, scoped local/remote output, nested ZIPs, non-BMP offsets, corrupted hashes, unsafe identities, template fallback, portable package revalidation and stale-download rejection. NiceGUI SDK/browser and live INCEpTION validation remain unperformed in the current environment; the optional NiceGUI extra is absent.
+
 # Imported views
 
 The importer includes:

@@ -110,6 +110,12 @@ def deploy_inception_sanitized_project(
         warnings=warnings,
         errors=errors,
     )
+    from ..utils.output_paths import guard_output_paths
+    try:
+        guard_output_paths((shell_project, artifact_report_path, *(item.artifact_path for item in plan)),
+                           (deployment_report_path,))
+    except ValueError as error:
+        raise InceptionDeploymentError(str(error)) from error
 
     imported_project_id: Optional[int] = None
     imported_project_name: Optional[str] = None

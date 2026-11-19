@@ -49,9 +49,18 @@ for project ZIP/API data. Explicit **Inspect SQLite scopes** populates an export
 choice; selected occurrences feed existing policy/suggestion/rule engines and stored
 text supplies review context. HDF5 remains the policy/terminology source. Source and
 scope changes never trigger analysis or reset loaded review. Read-only schema v2 only;
-no migration, SQLite/CAS write-back or deployment. Combined scopes reject ambiguous
-identities. See [SQLite input details](../data/annotation-store-input.md) and the
+no migration or database write-back. Combined scopes reject ambiguous identities.
+Optional complete CAS preservation now enables the existing Streamlit write-back/deployment
+controls and NiceGUI offline package preparation (below); old stores remain review-JSON-only. See [SQLite input details](../data/annotation-store-input.md) and the
 [user guide](../../../docs/user-guide.md#sqlite-instead-of-an-inception-project).
+
+## Preserved SQLite CAS review output
+
+Build a new store with `--store-cas`, then select one export/view scope before generating suggestions/rules. Streamlit performs metadata-only capability/scope checks and enables normal Run sanitization / deployment only when selected CAS are preserved. Optional project-template ZIP upload supplies missing project configuration. Run/export restores a temporary workspace and original CAS ID feature/prefix; the database is never edited. Local outputs retain excluded annotators unchanged, while deployment artifacts omit them. Reviewed JSON now carries the selected store scope.
+
+NiceGUI `store_restoration_ui.py:StoreRestorationControls` adds **SQLite CAS restoration / INCEpTION review → Download INCEpTION review package (offline)** in tab 3 for SQLite inputs. Save choices first; stale/conflicting rule choices remain blocked by the existing export checks. A `run.cpu_bound` worker calls `pipelines/store_review_package.py` and the existing apply/artifact pipeline with network disabled (paths/text only; input upload owners remain held while awaiting), returning a schema shell, repaired scoped CAS, portable artifact report (relative paths), scoped reviewed JSON and deployment instructions. Optional template input uses the existing Upload/Data directory/Server path component. Input/review revisions, source stamps, source selection and client closure are rechecked before publication; old or failed work cannot replace review state. Direct NiceGUI remote deployment and ZIP-input write-back remain disconnected. Full CAS/type-system preservation is documented in [SQLite schema](../data/annotation-store-sqlite.md#optional-cas-restoration-extension).
+
+Offline synthetic engine/Streamlit/controller checks are covered. The current environment lacks the optional NiceGUI extra, so the installed-SDK test is skipped; existing NiceGUI runtime tests requiring it cannot execute. Browser and live INCEpTION reimport/review remain unverified.
 
 # Shared review context
 
@@ -83,7 +92,7 @@ The unchanged backend decisions reader/writer produce version-1 artifacts. Expor
 
 Import explicitly replaces current saved/pending choices and reviewed flags only after full successful parsing/validation (50 MiB). Invalid, oversized or unreadable imports retain review and do not echo content. Shared revision guards reject stale imports after newer uploads; an edit revision prevents a slow import overwriting newer manual work. Successful new suggestions reset all local review with a visible notice. Reload discards page state: only an explicit JSON download persists review, and that download may contain clinical text.
 
-Imported rules are preserved read-only, reserve their source identities and conflict with selected/manual generic decisions rather than overwriting them. Imported deletion/manual-edit/ID-removal actions are protected; edit them in Streamlit. No rule/HDF5 revalidation or rule generation is claimed. Unrelated saves preserve automatic provenance; explicit human confirmation removes affected automatic ownership. CAS write-back and deployment stay disconnected.
+Imported rules are preserved read-only, reserve their source identities and conflict with selected/manual generic decisions rather than overwriting them. Imported deletion/manual-edit/ID-removal actions are protected; edit them in Streamlit. No rule/HDF5 revalidation or rule generation is claimed. Unrelated saves preserve automatic provenance; explicit human confirmation removes affected automatic ownership. Direct ZIP write-back and remote deployment stay disconnected; preserved SQLite CAS has the explicit offline package path described above.
 
 97 focused tests pass, including exact synthetic Streamlit decisions round-trip, scope, original indices, protected actions, duplicate evidence, safe failures and race handling. Actual NiceGUI polling and WebSocket clients exercised listener events, scoped staging, Keep, Save, flags, binary JSON download, replacing import and failed-import retention without ASGI errors. Owned servers stopped; no clinical/external-service inputs. Full-suite and visual/browser-JavaScript checks were not performed for this increment; baseline default failures remain unresolved.
 
@@ -181,7 +190,7 @@ SNOGIT is on by default with cache/source selectors initially in Data directory 
 
 The collapsed rules editor supports add/remove/edit and schema-v1 JSON load/download. **Apply rules to review** invokes the existing original-annotation scanner: ID-only/no chaining, selected layers/scope, active existing targets and optional list override. It stages `ReviewSession.draft_rules`; **Save choices** atomically commits generic/rule/document choices, and pending changes block downloads. A source-bound empty review supports rule-only runs, including Date annotations without findings. Download its rule-only source JSON alongside reviewed decisions for later restore; explicit reapplication can rebind restored rule-only state to new uploaded inputs only after checking preserved annotation identities/text/definitions. Tab 3 exposes rule Apply checkboxes, pending discard/clear and **Keep manual decisions for conflicts**; manual/draft/document ownership is checked before save/export. Human-edited rule choices survive reapplication and same-input generation handoff. Imported rules remain read-only until explicit reapplication revalidates preserved identities, text, definitions and targets. Changed rule inputs mark local rules stale; export rechecks their source stamps. Unrelated loaded suggestions cannot silently receive rule decisions. Generated reviews additionally persist an optional project/scope binding, avoiding empty-suggestions fingerprint collisions for rule-only files; no schema version changes are needed.
 
-`test/test_nicegui_generation.py` covers synthetic backend/SDK generation, actual BM25 and custom exclusions, scope, rule-only/save/restore/conflicts, preserved edits, stale workers/downloads/imports and actual tiny SNOGIT cache creation. No live clinical project, API or browser-rendering validation is implied. Conditions, local CAS write-back and deployment remain future work.
+`test/test_nicegui_generation.py` covers synthetic backend/SDK generation, actual BM25 and custom exclusions, scope, rule-only/save/restore/conflicts, preserved edits, stale workers/downloads/imports and actual tiny SNOGIT cache creation. No live clinical project, API or browser-rendering validation is implied. Conditions, direct ZIP write-back and remote deployment remain future work; preserved SQLite CAS supports the explicit offline package path above.
 
 # Annotation ID feature and prefix
 

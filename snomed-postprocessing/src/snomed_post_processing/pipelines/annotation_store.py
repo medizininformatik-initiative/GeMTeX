@@ -6,6 +6,7 @@ import datetime as _dt
 import json
 import logging
 import pathlib
+import zipfile
 from collections import defaultdict
 from typing import Iterable, Optional, Union, Any
 
@@ -19,6 +20,7 @@ from ..annotation_store import (
     parse_export_filename,
 )
 from ..annotation_store.sqlite import AnnotationStoreWriter
+from ..annotation_store.restoration import preserve_cas, preserve_project
 from ..cli import set_log_level
 
 
@@ -38,6 +40,7 @@ def run_build_annotation_store(
     report: Optional[Union[str, pathlib.Path]],
     log_level: str,
     log_summary: bool = True,
+    store_cas: bool = False,
 ) -> AnnotationStoreSummary:
     """Run the annotation-store import pipeline."""
     set_log_level(log_level)
@@ -46,15 +49,17 @@ def run_build_annotation_store(
     snomed_hdf5 = pathlib.Path(snomed_hdf5)
     if replace and append:
         raise ValueError("--replace and --append are mutually exclusive.")
+    zip_paths = _resolve_zip_inputs(input_paths)
+    if not zip_paths:
+        raise ValueError("No ZIP files found in input path(s).")
+    report_path = pathlib.Path(report) if report is not None else None
+    from ..utils.output_paths import guard_output_paths
+    guard_output_paths((*zip_paths, snomed_hdf5), (output, report_path) if report_path is not None else (output,))
     if output.exists() and not (replace or append):
         raise FileExistsError(f"Output DB already exists: {output}. Use --replace or --append.")
     if replace and output.exists():
         output.unlink()
     output.parent.mkdir(parents=True, exist_ok=True)
-
-    zip_paths = _resolve_zip_inputs(input_paths)
-    if not zip_paths:
-        raise ValueError("No ZIP files found in input path(s).")
     if site is not None and len(zip_paths) > 1:
         logging.warning("--site applies to all input ZIPs; inferred filename sites are overridden.")
     if (batch_index is None) != (batch_total is None):
@@ -69,8 +74,9 @@ def run_build_annotation_store(
     summary = AnnotationStoreSummary()
     imported_at = _dt.datetime.now(tz=_dt.timezone.utc).isoformat()
     writer = AnnotationStoreWriter(output)
+    archive = None
     try:
-        writer.initialize()
+        writer.initialize(store_cas=store_cas)
         for export_path in zip_paths:
             export_meta = parse_export_filename(
                 export_path,
@@ -81,6 +87,10 @@ def run_build_annotation_store(
             logging.info("Processing export %s", export_path)
             export_id = writer.insert_export(export_meta, export_path, imported_at)
             summary.exports_processed += 1
+            if store_cas:
+                before = export_path.stat()
+                archive = zipfile.ZipFile(export_path)
+                preserve_project(writer.connection, export_id, archive, id_prefix)
 
             failures_before = len(summary.failed_cas_members)
             for view in iter_cas_views(
@@ -98,7 +108,7 @@ def run_build_annotation_store(
                 if text is not None:
                     text_hash = document_text_hash(text)
                     document_hash_id = writer.insert_document_hash(text_hash)
-                    if store_document_text:
+                    if store_document_text or store_cas:
                         document_text_id = writer.insert_document_text(
                             document_hash_id,
                             text,
@@ -113,6 +123,8 @@ def run_build_annotation_store(
                     view.annotator,
                     view.cas_path,
                 )
+                if store_cas:
+                    preserve_cas(writer.connection, view_id, view, archive)
                 for occurrence in iter_annotation_occurrences(
                     view,
                     snomed_lookup,
@@ -129,6 +141,12 @@ def run_build_annotation_store(
                     if writer.insert_annotation(view_id, occurrence):
                         summary.annotation_occurrences += 1
 
+            if archive is not None:
+                archive.close()
+                archive = None
+                after = export_path.stat()
+                if (before.st_size, before.st_mtime_ns, before.st_ino) != (after.st_size, after.st_mtime_ns, after.st_ino):
+                    raise ValueError("Source export changed during CAS preservation. Build from an unchanged snapshot.")
             if len(summary.failed_cas_members) > failures_before and fail_fast:
                 break
             writer.commit()
@@ -152,12 +170,17 @@ def run_build_annotation_store(
             writer.connection.execute("select count(*) as n from annotation_occurrence_links o join annotations a on a.id = o.annotation_id where a.sctid is null").fetchone()["n"]
         )
         summary.missing_batches = _missing_batches_from_db(writer)
+        if store_cas:
+            summary.preserved_cas_views = writer.count("cas_restore_views")
+            summary.preserved_type_systems = writer.connection.execute("SELECT count(DISTINCT typesystem_hash) FROM cas_restore_views").fetchone()[0]
         writer.commit()
     finally:
+        if archive is not None:
+            archive.close()
         writer.close()
 
-    if report is not None:
-        _write_report(pathlib.Path(report), summary)
+    if report_path is not None:
+        _write_report(report_path, summary)
 
     if log_summary:
         _log_summary(summary, output)
@@ -219,6 +242,8 @@ def _summary_as_dict(summary: AnnotationStoreSummary) -> dict:
         "annotation_views": summary.annotation_views,
         "annotations": summary.annotations,
         "annotation_occurrences": summary.annotation_occurrences,
+        "preserved_cas_views": summary.preserved_cas_views,
+        "preserved_type_systems": summary.preserved_type_systems,
         "known_sctids": summary.known_sctids,
         "missing_sctid_occurrences": summary.missing_sctid_occurrences,
         "unknown_sctids": sorted(summary.unknown_sctids),
@@ -241,6 +266,8 @@ def _log_summary(summary: AnnotationStoreSummary, output: pathlib.Path) -> None:
     logging.info("Annotation views: %s", summary.annotation_views)
     logging.info("Shared annotations: %s", summary.annotations)
     logging.info("Annotation occurrences: %s", summary.annotation_occurrences)
+    if summary.preserved_cas_views:
+        logging.info("Preserved CAS views: %s; distinct type systems: %s", summary.preserved_cas_views, summary.preserved_type_systems)
     logging.info("Known SCTID occurrences: %s", summary.known_sctids)
     logging.info(
         "Unknown SCTIDs: %s (%s missing/empty/null-like ids)",
