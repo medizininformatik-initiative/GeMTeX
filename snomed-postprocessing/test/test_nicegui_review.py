@@ -6,11 +6,11 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from snomed_post_processing.gui.nicegui.state import PreviewState
 from snomed_post_processing.gui.nicegui.review import ReviewError, ReviewSession, load_review
-from snomed_post_processing.gui.nicegui.review_panel import _finding_rows
+from snomed_post_processing.gui.nicegui.review_panel import _finding_rows, _update_grid_rows
 from snomed_post_processing.gui.nicegui.suggestions import load_suggestions_preview
 from snomed_post_processing.sanitization.decisions_json import read_sanitization_decisions_json
 from test.test_nicegui_suggestions import payload, encoded, fake_ui, upload_event, open_context, switch_document
@@ -28,6 +28,24 @@ def artifact(decisions, metadata=None):
 
 
 class ReviewSessionTest(unittest.TestCase):
+    def test_document_navigation_does_not_touch_sorted_grid_rows(self):
+        previous = [dict(row_id="0", document="a", current=True, review="Not marked"),
+                    dict(row_id="1", document="b", current=False, review="Not marked")]
+        navigated = [dict(row_id="0", document="a", current=False, review="Not marked"),
+                     dict(row_id="1", document="b", current=True, review="Not marked")]
+        grid = MagicMock()
+        grid.options = {"rowData": previous}
+        _update_grid_rows(grid, navigated)
+        self.assertEqual(grid.options["rowData"], navigated)
+        grid.update.assert_not_called()
+        grid.run_grid_method.assert_not_called()
+
+        changed = [dict(navigated[0], review="Reviewed"), navigated[1]]
+        _update_grid_rows(grid, changed)
+        grid.run_grid_method.assert_called_once_with("applyTransaction", {
+            "remove": [], "add": [], "update": [changed[0]],
+        })
+
     def test_navigation_does_not_stage_or_save_and_empty_page_cannot_export(self):
         source = state()
         source.select_finding(source.findings[0].row_id)
