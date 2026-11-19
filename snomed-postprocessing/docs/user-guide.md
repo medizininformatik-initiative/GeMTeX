@@ -23,10 +23,10 @@ expanding the main setup and workflow instructions.
 
 ## Workspace frontend
 
-Launch the navigation shell using the same environment/extra as NiceGUI:
+Launch the default navigation workspace from the standard project environment:
 
 ```bash
-.venv-py311/Scripts/python -m snomed_post_processing.gui.app --frontend workspace --show
+uv run src/snomed_post_processing/gui/app.py --show
 ```
 
 The project-authored shell adds a responsive header, collapsible workflow navigation,
@@ -45,8 +45,9 @@ in-memory state; download artifacts and decisions before leaving.
 
 No login, account database, migrations, demo data, PWA/offline cache or additional
 processing capabilities are enabled. This shell is not a security boundary.
-Streamlit remains the default; `--frontend nicegui` retains its original shell. The
-workspace uses system fonts and project-authored CSS without external asset fetches.
+The workspace is the default frontend. Use `--frontend streamlit` for the previous
+Streamlit UI or `--frontend nicegui` for the plain NiceGUI shell. The workspace uses
+system fonts and project-authored CSS without external asset fetches.
 See the [workspace provenance](../src/snomed_post_processing/gui/workspace/PROVENANCE.md).
 
 ## SQLite instead of an INCEpTION project

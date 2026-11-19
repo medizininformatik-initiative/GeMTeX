@@ -9,7 +9,7 @@ if [[ $# -eq 0 ]] ; then
 fi
 
 if [[ $1 = "start-gui" ]] ; then
-  uv run python -m snomed_post_processing.gui.app
+  uv run python -m snomed_post_processing.gui.app --host 0.0.0.0 --port 8501
 elif [[ $1 = "log-critical-documents" ]] ; then
     log-critical-documents "${@:2}" --forbid-prompt
 else

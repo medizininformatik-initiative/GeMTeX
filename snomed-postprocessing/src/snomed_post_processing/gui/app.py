@@ -1,4 +1,4 @@
-"""Stable GUI launcher; Streamlit by default, with NiceGUI workspace options.
+"""Stable GUI launcher; workspace by default, with explicit frontend options.
 
 Run with:
     python -m snomed_post_processing.gui.app
@@ -6,9 +6,9 @@ or:
     python src/snomed_post_processing/gui/app.py
 
 Additional arguments are forwarded to the selected frontend:
-    --server.port 8502                 (Streamlit)
-    --frontend nicegui --port 8080     (NiceGUI workspace)
-    --frontend workspace --port 8080   (navigation workspace)
+    --port 8081                        (default workspace)
+    --frontend streamlit --server.port 8502
+    --frontend nicegui --port 8080     (plain NiceGUI shell)
 """
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ def _discard_local_nicegui_aliases(directory: pathlib.Path) -> None:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     """Launch one frontend in this environment."""
     parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
-    parser.add_argument("--frontend", choices=("streamlit", "nicegui", "workspace"), default="streamlit")
+    parser.add_argument("--frontend", choices=("streamlit", "nicegui", "workspace"), default="workspace")
     selected, arguments = parser.parse_known_args(sys.argv[1:] if argv is None else argv)
     if selected.frontend in ("nicegui", "workspace"):
         # Import lazily: normal launcher imports do not load either framework.

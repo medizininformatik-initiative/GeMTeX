@@ -18,33 +18,36 @@ class GuiLauncherTest(unittest.TestCase):
         self.assertTrue(frontend.is_file())
         return [sys.executable, "-m", "streamlit", "run", str(frontend), *arguments]
 
-    def test_forwards_explicit_arguments_and_exit_code(self):
-        with patch.object(app.subprocess, "call", return_value=17) as launch:
-            result = app.main(["--server.port", "8502"])
+    def test_default_workspace_forwards_explicit_arguments_and_exit_code(self):
+        with patch("snomed_post_processing.gui.workspace.app.main", return_value=17) as workspace, patch.object(
+            app.subprocess, "call"
+        ) as streamlit:
+            result = app.main(["--port", "8081"])
         self.assertEqual(result, 17)
-        launch.assert_called_once_with(self.command("--server.port", "8502"))
+        workspace.assert_called_once_with(["--port", "8081"])
+        streamlit.assert_not_called()
 
     def test_defaults_to_command_line_arguments(self):
-        with patch.object(sys, "argv", ["launcher", "--server.headless", "true"]), patch.object(
-            app.subprocess, "call", return_value=0
-        ) as launch:
+        with patch.object(sys, "argv", ["launcher", "--show"]), patch(
+            "snomed_post_processing.gui.workspace.app.main", return_value=0
+        ) as workspace:
             self.assertEqual(app.main(), 0)
-        launch.assert_called_once_with(self.command("--server.headless", "true"))
+        workspace.assert_called_once_with(["--show"])
 
     def test_explicit_empty_arguments_do_not_inherit_runner_arguments(self):
-        with patch.object(sys, "argv", ["test-runner", "--unrelated"]), patch.object(
-            app.subprocess, "call", return_value=0
-        ) as launch:
+        with patch.object(sys, "argv", ["test-runner", "--unrelated"]), patch(
+            "snomed_post_processing.gui.workspace.app.main", return_value=0
+        ) as workspace:
             self.assertEqual(app.main([]), 0)
-        launch.assert_called_once_with(self.command())
+        workspace.assert_called_once_with([])
 
     def test_direct_script_execution_uses_main_and_propagates_exit_code(self):
-        with patch.object(sys, "argv", [app.__file__]), patch.object(
-            app.subprocess, "call", return_value=7
-        ) as launch, self.assertRaises(SystemExit) as exited:
+        with patch.object(sys, "argv", [app.__file__]), patch(
+            "snomed_post_processing.gui.workspace.app.main", return_value=7
+        ) as workspace, self.assertRaises(SystemExit) as exited:
             runpy.run_path(app.__file__, run_name="__main__")
         self.assertEqual(exited.exception.code, 7)
-        launch.assert_called_once_with(self.command())
+        workspace.assert_called_once_with([])
 
     def test_reload_multiprocessing_child_reenters_without_exiting_bootstrap(self):
         with patch.object(sys, "argv", [app.__file__, "--frontend", "workspace", "--reload"]), patch(
@@ -129,10 +132,10 @@ class GuiLauncherTest(unittest.TestCase):
                 launch.assert_not_called()
                 nicegui.assert_not_called()
 
-    def test_backend_help_is_forwarded(self):
-        with patch.object(app.subprocess, "call", return_value=0) as launch:
+    def test_backend_help_is_forwarded_to_default_workspace(self):
+        with patch("snomed_post_processing.gui.workspace.app.main", return_value=0) as workspace:
             self.assertEqual(app.main(["--help"]), 0)
-        launch.assert_called_once_with(self.command("--help"))
+        workspace.assert_called_once_with(["--help"])
 
     def test_importing_launcher_does_not_import_gui_frameworks(self):
         result = subprocess.run(
