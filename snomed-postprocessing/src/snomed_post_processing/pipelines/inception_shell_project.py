@@ -64,8 +64,11 @@ def build_inception_shell_project(
     output_project = pathlib.Path(output_project)
     if not source_project.exists() or not source_project.is_file():
         raise FileNotFoundError(f"Source project does not exist: {source_project}")
-    if source_project.resolve() == output_project.resolve():
-        raise InceptionShellProjectError("Output project must be different from source project.")
+    from ..utils.output_paths import guard_output_paths
+    try:
+        guard_output_paths((source_project,), (output_project,))
+    except ValueError as error:
+        raise InceptionShellProjectError(str(error)) from error
     if output_project.exists() and not force:
         raise FileExistsError(f"Output project already exists: {output_project}")
 

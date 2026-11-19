@@ -115,7 +115,7 @@ class AnnotationStoreWriter:
     def close(self) -> None:
         self.connection.close()
 
-    def initialize(self) -> None:
+    def initialize(self, *, store_cas: bool = False) -> None:
         # Only empty databases or this application's current schema are accepted.
         version = self.connection.execute("pragma user_version").fetchone()[0]
         has_tables = self.connection.execute(
@@ -126,8 +126,17 @@ class AnnotationStoreWriter:
                 "Unsupported annotation-store schema. Build a new database at a different "
                 "output path; automatic migration is not supported."
             )
+        from .restoration import CAS_STORAGE_SQL, has_cas_storage
+        preserved = has_cas_storage(self.connection)
+        if has_tables and store_cas and not preserved:
+            raise ValueError("CAS preservation requires a new store; existing databases are not upgraded.")
+        if preserved and not store_cas:
+            raise ValueError("Appending to a CAS-enabled store requires --store-cas.")
         self.connection.executescript(SCHEMA_SQL)
-        self.connection.execute("pragma user_version = 2")
+        if store_cas:
+            self.connection.executescript(CAS_STORAGE_SQL)
+        if version != 2:
+            self.connection.execute("pragma user_version = 2")
         self.connection.commit()
 
     def insert_export(self, metadata: ExportMetadata, export_path: pathlib.Path, imported_at: str) -> int:

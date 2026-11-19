@@ -103,6 +103,8 @@ def run_sanitization(
     id_feature: str = "id",
     manual_review_layer: str = "webanno.custom.ManualReview",
     sanitized_project_suffix: str = "sanitized",
+    store_scope: Optional[str] = None,
+    project_template: Optional[pathlib.Path] = None,
 ) -> SanitizationRunResult:
     """Apply reviewed sanitization decisions to copied INCEpTION/UIMA project ZIP.
 
@@ -116,6 +118,20 @@ def run_sanitization(
         raise FileNotFoundError(f"Input project does not exist: {input_project}")
     if input_project.resolve() == output_project.resolve():
         raise SanitizationRunError("Output project must be different from input project.")
+    from ..utils.output_paths import guard_output_paths
+    try:
+        guard_output_paths((input_project, project_template), (output_project,))
+    except ValueError as error:
+        raise SanitizationRunError(str(error)) from error
+    from ..annotation_source import is_annotation_store
+    if is_annotation_store(input_project):
+        from ..annotation_store.restoration import prepared_cas_project
+        # Local ZIPs retain excluded annotators unchanged; remote artifacts omit them.
+        with prepared_cas_project(input_project, store_scope=store_scope, project_template=project_template) as prepared:
+            return run_sanitization(prepared.output_project, decisions, output_project,
+                                    annotator_filter=annotator_filter, id_prefix=prepared.id_prefix,
+                                    id_feature=prepared.id_feature, manual_review_layer=manual_review_layer,
+                                    sanitized_project_suffix=sanitized_project_suffix)
 
     manual_review_layer = str(manual_review_layer or "").strip() or "webanno.custom.ManualReview"
     sanitized_project_suffix = str(sanitized_project_suffix or "").strip() or "sanitized"

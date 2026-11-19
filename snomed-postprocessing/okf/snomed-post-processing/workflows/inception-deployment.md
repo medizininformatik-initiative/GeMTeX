@@ -34,6 +34,12 @@ dry-run report OR pycaprio remote deployment
 
 This avoids generating Java-serialized `.ser` CAS files from Python.
 
+# Optional preserved SQLite source
+
+`apply-decisions-to-inception --source-project STORE.sqlite` accepts stores created with `build-annotation-store --store-cas`. It restores selected complete CAS/type systems into a temporary workspace before reusing this same shell/artifact pipeline. `--store-scope` selects one export/view and must match reviewed metadata; otherwise the saved scope is used. A compatible `--project-template ZIP` is needed if the export lacked project configuration. The original CAS `id` feature and builder URI prefix are recovered automatically, rather than using the policy reader's normalized `sctid`/empty-prefix settings. No DB updates, metadata-path reads, archive reconstruction from covered-text fragments or new target-validation layer are added. Direct shell/artifact/deployment APIs and the combined pipeline preflight file outputs/artifact directories against source projects, reviewed JSON, templates, shell/report/CAS inputs, symlink-resolved paths and existing hard links before writing. Artifact directories cannot contain inputs or other pipeline outputs; `force` does not bypass these source-protection guards. Network defaults and explicit apply/connection gates remain unchanged.
+
+NiceGUI can prepare a scoped portable offline review-package ZIP containing the shell, repaired artifacts/report and reviewed decisions; no remote call occurs during preparation. Its report uses relative artifact filenames so the extracted package can be validated/deployed after temporary workspaces are gone. Streamlit enables its existing deployment controls for preserved stores. Plain stores remain review-JSON-only. This is not native full-project `.ser` restoration. Synthetic offline dry-runs pass; live reimport/review and the new NiceGUI installed-SDK/browser path remain unverified in the current environment.
+
 # Public one-step command
 
 Dry-run/offline preparation:

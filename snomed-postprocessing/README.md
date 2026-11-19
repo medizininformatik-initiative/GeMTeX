@@ -393,6 +393,19 @@ uv run build-annotation-store \
 
 By default, annotation provenance, offsets, covered text, SCTID, FSN, semantic tag, active status, and a SHA-256 hash of the complete CAS document text are stored. Full CAS document text can be stored explicitly with `--store-document-text`.
 
+For later CAS write-back/INCEpTION review, add **`--store-cas` when creating a new store**. This preserves complete JSONCAS/XMI payloads, project configuration when available, and SHA-256-deduplicated type systems; it also stores full document text. Different type systems remain separate. Existing stores are not upgraded; appending to a CAS-enabled store requires the flag again. The extra data contains clinical text and all original annotation features.
+
+Restore one export's CAS into a new workspace ZIP:
+
+```bash
+uv run restore-annotation-store-cas \
+  --store semantic_snomed_annotations.sqlite \
+  --store-scope 1:annotation \
+  --output restored-project.zip
+```
+
+Use this ZIP with the existing INCEpTION shell/artifact workflow, **not as a native full-project backup**. Alternatively, `apply-decisions-to-inception --source-project STORE.sqlite --store-scope 1:annotation ...` restores temporarily and applies reviewed decisions directly; it remains offline unless `--apply` is supplied. If the original export had no project configuration, supply `--project-template original-project.zip`.
+
 Check whether an external plain-text document is represented in the store by content hash. This deliberately does not rely on document names.
 
 ```bash
@@ -429,7 +442,7 @@ For the experimental **NiceGUI** frontend:
 uv run --extra nicegui src/snomed_post_processing/gui/app.py --frontend nicegui --show
 ```
 
-See its [setup and limitations](src/snomed_post_processing/gui/nicegui/README.md); CAS write-back and deployment are not yet connected there.
+See its [setup and limitations](src/snomed_post_processing/gui/nicegui/README.md). Preserved SQLite CAS can be downloaded there as an offline INCEpTION review package; direct remote deployment and ZIP-input write-back remain disconnected.
 
 ### Workflow (Streamlit)
 

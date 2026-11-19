@@ -34,8 +34,8 @@ policy source; SQLite supplies the annotations, documents, annotators and text.
 Annotation occurrences are preserved even when their payloads are deduplicated in
 SQLite. Stored `sctid` values are used directly: ID-feature/prefix settings apply
 only to project input. Stored FSNs/activity flags do not override the selected HDF5.
-SQLite has no CAS type system, so layer selection matches exact names rather than
-expanding inherited types. A requested ignore-overlap layer absent from the selected
+SQLite policy checking matches exact stored layer names rather than expanding
+inherited types, even when optional CAS/type-system preservation is enabled. A requested ignore-overlap layer absent from the selected
 data causes an explicit error. If document text is missing, full context is unavailable;
 covered text and saved snippets remain usable.
 
@@ -43,8 +43,28 @@ The database is opened read-only, with no migration, updates or WAL/SHM creation
 Live databases with pending WAL content are rejected. Findings and suggestions retain
 `store_scope` and source-file provenance in metadata; existing artifact formats remain
 unchanged. Changing inputs does not run analysis or replace loaded review decisions.
-**Project sanitization/deployment is unavailable for SQLite-backed review**; download
-reviewed decisions instead. No CAS reconstruction or SQLite write-back is performed.
+For later INCEpTION review, create a **new** store with `build-annotation-store --store-cas`.
+This optional mode preserves complete JSONCAS/XMI, full document text and project
+configuration. Identical external type systems are stored once by SHA-256 and referenced;
+different definitions remain separate. It retains all original features/layers, not
+just extracted SNOMED annotations, and therefore adds sensitive clinical data and storage.
+Existing stores are not upgraded.
+
+Choose a **single export/view scope before generating the review**. Streamlit then
+enables its normal sanitization/deployment controls for preserved CAS, restoring a
+temporary project and the original ID feature/prefix automatically. Local sanitized
+ZIPs retain excluded annotators unchanged; remote artifacts omit them. NiceGUI offers
+**SQLite CAS restoration / INCEpTION review → Download INCEpTION review package (offline)**
+after saving choices: extract it and follow its explicit deployment instructions.
+No remote calls occur during NiceGUI preparation. If the export lacked project
+configuration, select a compatible project-template ZIP. Stores without preserved CAS
+remain review-JSON-only.
+
+For a standalone restoration, use `restore-annotation-store-cas --store STORE.sqlite
+--store-scope 1:annotation --output restored-project.zip`. This is a JSON/XMI workspace
+for the shell/artifact workflow, **not a native full-project backup**: no Java `.ser`
+files are generated. Restoring never edits the database. Live INCEpTION import/review
+validation remains outstanding.
 
 ## Masked suggestion overview download
 
