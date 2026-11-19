@@ -1097,6 +1097,7 @@ dependencies = [
     { name = "click" },
     { name = "dkpro-cassis" },
     { name = "h5py" },
+    { name = "nicegui" },
     { name = "pandas" },
     { name = "pycaprio" },
     { name = "pydantic" },
@@ -1105,11 +1106,6 @@ dependencies = [
     { name = "scttsrapy" },
     { name = "streamlit" },
     { name = "yaspin" },
-]
-
-[package.optional-dependencies]
-nicegui = [
-    { name = "nicegui" },
 ]
 
 [package.dev-dependencies]
@@ -1122,7 +1118,7 @@ requires-dist = [
     { name = "click", specifier = ">=8.1.8" },
     { name = "dkpro-cassis", specifier = ">=0.10.1" },
     { name = "h5py", specifier = ">=3.14.0" },
-    { name = "nicegui", marker = "extra == 'nicegui'", specifier = "==4.0.0" },
+    { name = "nicegui", specifier = "==4.0.0" },
     { name = "pandas", specifier = ">=2.3.3" },
     { name = "pycaprio", specifier = ">=0.3.0" },
     { name = "pydantic", specifier = ">=2.12.5" },
@@ -1132,7 +1128,6 @@ requires-dist = [
     { name = "streamlit", specifier = ">=1.50.0" },
     { name = "yaspin", specifier = ">=3.3.0" },
 ]
-provides-extras = ["nicegui"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=8.4.0,<9" }]

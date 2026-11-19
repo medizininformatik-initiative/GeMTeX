@@ -89,8 +89,6 @@ The project requires **Python 3.11.x** and uses the standard **`.venv`** environ
 uv sync --locked
 ```
 
-To also install the optional NiceGUI frontend, use `uv sync --locked --extra nicegui`. Keep `--extra nicegui` on subsequent uv run/sync commands when using that frontend so its packages are retained.
-
 On Windows, select `.venv/Scripts/python.exe` in your IDE; on other systems use `.venv/bin/python`.
 
 ## CLI usage
@@ -427,10 +425,10 @@ If the SHA-256 hash matches a stored `document_text_hash`, annotation offsets ar
 
 ### Start the GUI
 
-From the repository root, start the default **Streamlit** GUI:
+From the repository root, start the default project-authored **workspace** frontend:
 
 ```bash
-uv run src/snomed_post_processing/gui/app.py
+uv run src/snomed_post_processing/gui/app.py --show
 ```
 
 Or use Docker, then open `http://localhost:8501`:
@@ -446,12 +444,23 @@ The Docker convenience script is `bash start-gui.sh 8501`.
 For the experimental **NiceGUI** frontend:
 
 ```bash
-uv run --extra nicegui src/snomed_post_processing/gui/app.py --frontend nicegui --show
+uv run src/snomed_post_processing/gui/app.py --frontend nicegui --show
 ```
 
-See its [setup and limitations](src/snomed_post_processing/gui/nicegui/README.md). Preserved SQLite CAS can be downloaded there as an offline INCEpTION review package; direct remote deployment and ZIP-input write-back remain disconnected.
+To use the previous Streamlit frontend:
 
-### Workflow (Streamlit)
+```bash
+uv run src/snomed_post_processing/gui/app.py --frontend streamlit
+```
+
+During frontend development, add `--reload` to restart automatically when Python or
+CSS files under `src/snomed_post_processing` change. Reloading discards uploaded files,
+in-memory review state and unsaved decisions, and interrupts running background jobs;
+it remains disabled by default.
+
+See the NiceGUI [setup and limitations](src/snomed_post_processing/gui/nicegui/README.md) and the detailed [user guide](docs/user-guide.md#workspace-frontend). Preserved SQLite CAS can be downloaded there as an offline INCEpTION review package; direct remote deployment and ZIP-input write-back remain disconnected.
+
+### Workflow
 
 1. **Check policy:** Select the annotation source and HDF5 policy file, choose annotators/layers, and run the check. Download reports and findings JSON.
 2. **Sanitization suggestions:** Use current-session or saved findings, configure rules and optional fallback methods, and generate suggestions. You can also load suggestions JSON from an earlier run; the overview appears in this tab.

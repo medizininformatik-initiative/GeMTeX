@@ -6,32 +6,33 @@ Policy checking, explicit concept rules and suggestion generation are connected.
 Preserved SQLite CAS supports an offline INCEpTION review-package download.
 Direct remote deployment and ZIP-input write-back are not connected.
 Both frontends use the standard Python 3.11 project environment, `.venv`.
-The shared `gui/app.py` defaults to Streamlit; select NiceGUI explicitly.
+The shared `gui/app.py` defaults to the project-authored workspace shell.
 
-## Run NiceGUI
+## Run the workspace
 
 From the repository root:
 
 ```bash
-uv run --extra nicegui src/snomed_post_processing/gui/app.py --frontend nicegui --show
+uv run src/snomed_post_processing/gui/app.py --show
 ```
 
 The module form is also supported:
 
 ```bash
-uv run --extra nicegui python -m snomed_post_processing.gui.app --frontend nicegui --show
+uv run python -m snomed_post_processing.gui.app --show
 ```
 
 In your IDE, select `.venv/Scripts/python.exe`, use `gui/app.py` as the
-script, and set its parameters to `--frontend nicegui --show`.
+script, and set its parameters to `--show`.
 
 Default URL: `http://127.0.0.1:8080`. Omit `--show` to avoid opening a browser;
 use `--port 8081` to select another port. NiceGUI runs in-process with reload
 disabled: this launcher does not start Streamlit as well.
 Do not launch this file using `streamlit run`.
 
-For Streamlit, omit `--frontend` or use `--frontend streamlit`.
-Its options remain unchanged, e.g. `--server.port 8502`.
+Use `--frontend nicegui` for the plain NiceGUI shell or `--frontend streamlit`
+for the previous Streamlit UI. Streamlit options remain unchanged, for example
+`--frontend streamlit --server.port 8502`.
 
 ## Check policy
 
@@ -261,21 +262,19 @@ is display-only and never limits decision export. No CAS files are changed.
 
 ## Install/update the shared environment
 
-`nicegui==4.0.0` is pinned in the project's **optional `nicegui` extra** and
-resolved in `uv.lock`, not a separate backend-less runtime. No `PYTHONPATH`
-setting or `--no-project` command is needed. Use the standard project `.venv`
-for both frontends; no `UV_PROJECT_ENVIRONMENT` override is required.
+`nicegui==4.0.0` is a standard project dependency resolved in `uv.lock`, not a
+separate backend-less runtime. No `PYTHONPATH` setting, optional GUI extra or
+`--no-project` command is needed. Use the standard project `.venv` for both
+frontends; no `UV_PROJECT_ENVIRONMENT` override is required.
 
 ```bash
-uv sync --locked --extra nicegui
-uv run --locked --extra nicegui src/snomed_post_processing/gui/app.py --frontend nicegui --show
+uv sync --locked
+uv run --locked src/snomed_post_processing/gui/app.py --show
 ```
 
-Keep `--extra nicegui` on uv run/sync commands for this environment; otherwise
-uv can remove the optional packages. Direct `.venv/Scripts/python` launches
-do not sync packages. Other systems use the environment's `bin/python` path.
-Setup commands may download dependencies. Docker still defaults to Streamlit
-and does not install the optional extra automatically.
+Direct `.venv/Scripts/python` launches do not sync packages. Other systems use
+the environment's `bin/python` path. Setup commands may download dependencies.
+Docker installs the same locked dependencies and starts the workspace by default.
 
 ## Prototype contents and limits
 
