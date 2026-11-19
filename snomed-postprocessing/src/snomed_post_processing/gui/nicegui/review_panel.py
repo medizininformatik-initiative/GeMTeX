@@ -40,6 +40,27 @@ def _update_grid_rows(grid, rows):
         grid.run_grid_method("applyTransaction", transaction)
 
 
+async def _displayed_row_ids(grid):
+    """Return row IDs in the exact order currently displayed by AG Grid."""
+    if getattr(grid.client, "has_socket_connection", False):
+        try:
+            row_ids = await grid.client.run_javascript(f'''
+                const api = getElement({grid.id}).api;
+                const rowIds = [];
+                for (let index = 0; index < api.getDisplayedRowCount(); index++) {{
+                    const rowId = api.getDisplayedRowAtIndex(index)?.data?.row_id;
+                    if (typeof rowId === 'string') rowIds.push(rowId);
+                }}
+                return rowIds;
+            ''')
+            if isinstance(row_ids, list) and all(isinstance(row_id, str) for row_id in row_ids):
+                return row_ids
+        except (AttributeError, TypeError, RuntimeError, TimeoutError):
+            pass
+    rows = await grid.get_client_data(method="filtered_sorted")
+    return [row["row_id"] for row in rows if isinstance(row, dict) and isinstance(row.get("row_id"), str)]
+
+
 def _finding_rows(state, session=None):
     keys = ("row_id", "suggestion_index", "document", "annotator", "code", "text", "status", "policy_issue", "ignored")
     rows = [{key: getattr(row, key) for key in keys} for row in state.findings]
@@ -308,7 +329,7 @@ class ReviewPanelControls:
         try:
             # Use displayed order, but trust only identities from the current artifact.
             try:
-                rows = await grid.get_client_data(method="filtered_sorted")
+                displayed_ids = await _displayed_row_ids(grid)
             except (TimeoutError, RuntimeError):
                 # A closing client/unavailable grid leaves inspection untouched.
                 return
@@ -317,8 +338,7 @@ class ReviewPanelControls:
                 return
             allowed = (set(self.document_slides) if documents else
                        {row.row_id for row in self.state.findings if row.document == self.active_document})
-            ids = list(dict.fromkeys(row["row_id"] for row in rows if isinstance(row, dict)
-                                     and isinstance(row.get("row_id"), str) and row["row_id"] in allowed))
+            ids = list(dict.fromkeys(row_id for row_id in displayed_ids if row_id in allowed))
             current = (next((token for token, entry in self.document_slides.items()
                              if entry[0] == self.active_document), None)
                        if documents else self.state.selected_finding_id)

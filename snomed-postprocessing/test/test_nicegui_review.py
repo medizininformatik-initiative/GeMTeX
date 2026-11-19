@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from snomed_post_processing.gui.nicegui.state import PreviewState
 from snomed_post_processing.gui.nicegui.review import ReviewError, ReviewSession, load_review
-from snomed_post_processing.gui.nicegui.review_panel import _finding_rows, _update_grid_rows
+from snomed_post_processing.gui.nicegui.review_panel import _displayed_row_ids, _finding_rows, _update_grid_rows
 from snomed_post_processing.gui.nicegui.suggestions import load_suggestions_preview
 from snomed_post_processing.sanitization.decisions_json import read_sanitization_decisions_json
 from test.test_nicegui_suggestions import payload, encoded, fake_ui, upload_event, open_context, switch_document
@@ -358,6 +358,17 @@ class ReviewUiTest(unittest.IsolatedAsyncioTestCase):
             await source_handler(upload_event(encoded(payload())))
         buttons = {call.args[0]: call.kwargs.get("on_click") for call in ui.button.call_args_list if call.args}
         return ui, grids, labels, source_handler, review_handler, buttons
+
+    async def test_keyboard_order_comes_from_displayed_grid_rows(self):
+        grid = MagicMock()
+        grid.id = 42
+        grid.client.has_socket_connection = True
+        grid.client.run_javascript = AsyncMock(return_value=["sorted-second", "sorted-first"])
+        grid.get_client_data = AsyncMock()
+        self.assertEqual(await _displayed_row_ids(grid), ["sorted-second", "sorted-first"])
+        script = grid.client.run_javascript.await_args.args[0]
+        self.assertIn("getDisplayedRowAtIndex", script)
+        grid.get_client_data.assert_not_awaited()
 
     async def test_automatic_threshold_fields_are_wide_and_wrap_responsively(self):
         ui, *_ = await self.setup_page()
