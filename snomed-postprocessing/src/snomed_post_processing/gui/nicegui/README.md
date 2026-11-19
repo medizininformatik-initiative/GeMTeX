@@ -225,11 +225,19 @@ Load suggestions first; staging/import/export are disabled until then.
    confirming a document protects its unchanged rows as human-reviewed Keeps; it
    removes automatic ownership, not the chosen targets. **Discard pending changes**
    leaves saved choices and flags intact. Unmarking does not undo manual choices.
-5. **Download reviewed decisions JSON** uses the backend version-1 format and is
+5. **Automatic conditions** explicitly applies selected historical-association rules
+   and, when enabled, conservative BM25 score-gap thresholds. BM25 and its separate
+   exclusion-list option are off by default. Manual/imported/rule choices are protected;
+   pending edits must first be saved or discarded. **Undo Automatic Conditions** reverses
+   only the last changed run and preserves later manual changes. The findings grid
+   shows the condition and selected target; the document overview aggregates affected
+   condition types and distinguishes automatically reviewed documents. These actions
+   change review JSON state only, never CAS files.
+6. **Download reviewed decisions JSON** uses the backend version-1 format and is
    blocked until pending changes are saved or discarded. Reload loses page state;
    download explicitly to retain review. Download serialization runs in a worker;
    a concurrent review change invalidates that download. Downloads may contain clinical text.
-6. **Load reviewed decisions JSON (replaces current review)** restores matching
+7. **Load reviewed decisions JSON (replaces current review)** restores matching
    choices, provenance and flags atomically (50 MiB limit). Import replaces rather
    than merges prior saved/pending review. Invalid/read-error imports leave it intact.
 
@@ -288,8 +296,9 @@ different finding updates details/candidates, not the main grid. Text renders as
 text, not HTML; filters are display-only. Reloading discards per-page preview
 state. There is no persistent/global review state or cookie secret.
 
-**Not connected:** automatic conditions, generic ID-removal choices, ZIP sanitization
-or INCEpTION API fetching/deployment. Explicit concept-rule ID removal is connected.
+**Not connected:** generic ID-removal choices, ZIP sanitization or INCEpTION API
+fetching/deployment. Explicit concept-rule ID removal and review-only automatic
+historical/BM25 conditions are connected.
 Startup is empty. Only explicitly selected policy inputs and uploaded
 suggestions/review JSON are read.
 

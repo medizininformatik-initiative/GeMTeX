@@ -60,6 +60,7 @@ class ReviewSession:
     draft_rule_binding: str | None = None
     rules_stale: bool = False
     draft_rules_stale: bool = False
+    conditions_undo: dict | None = None
 
     @property
     def effective_rules(self):
@@ -170,6 +171,77 @@ class ReviewSession:
             decision["manual_candidate"] = candidate_to_dict(self.source.source_suggestions[row.suggestion_index].candidates[ordinal])
         return decision
 
+    def apply_automatic_conditions(self, association_types, *, bm25_enabled=False,
+                                   bm25_min_dominance=2 / 3, bm25_min_relative_lead=0.20,
+                                   bm25_include_exclusion_findings=False):
+        """Apply conservative backend conditions to saved review state only."""
+        self._require_source()
+        if self.dirty:
+            raise ReviewError("Save choices or discard pending changes before applying automatic conditions.")
+        from snomed_post_processing.sanitization.conditions import apply_conditions
+        decisions = copy.deepcopy(self.rules)
+        decisions.extend(copy.deepcopy(self.saved.get(row.suggestion_index, self._decision(row)))
+                         for row in self.source.findings)
+        protected = {index for index, item in self.saved.items() if not item.get("automatic_condition")}
+        protected.update(row.suggestion_index for row in self.source.findings if self.protected(row))
+        choices = {row.suggestion_index: tuple(
+            f"{candidate.code} — {candidate.fsn}" for candidate in row.candidates if candidate.selectable
+        ) for row in self.source.findings}
+        result = apply_conditions(
+            self.source.source_suggestions, decisions, association_types, choices,
+            self.reviewed_documents, protected,
+            bm25_enabled=bm25_enabled,
+            bm25_min_dominance=bm25_min_dominance,
+            bm25_min_relative_lead=bm25_min_relative_lead,
+            bm25_include_exclusion_findings=bm25_include_exclusion_findings,
+        )
+        self._publish_condition_result(result, applying=True)
+        if result.undo is not None:
+            self.conditions_undo = copy.deepcopy(result.undo)
+        return result
+
+    def undo_automatic_conditions(self):
+        self._require_source()
+        if self.dirty:
+            raise ReviewError("Save choices or discard pending changes before undoing automatic conditions.")
+        if self.conditions_undo is None:
+            raise ReviewError("There is no automatic-condition run to undo.")
+        from snomed_post_processing.sanitization.conditions import undo_automatic_conditions
+        decisions = copy.deepcopy(self.rules)
+        decisions.extend(copy.deepcopy(self.saved.get(row.suggestion_index, self._decision(row)))
+                         for row in self.source.findings)
+        automatic_documents = set(self.imported_metadata.get("automatic_reviewed_documents", []))
+        protected_documents = (self.reviewed_documents - automatic_documents) | {
+            item["document"] for item in decisions if item.get("reviewed_by_human")
+        }
+        result = undo_automatic_conditions(
+            decisions, self.reviewed_documents, self.conditions_undo, protected_documents,
+        )
+        self._publish_condition_result(result, applying=False)
+        self.conditions_undo = None
+        return result
+
+    def _publish_condition_result(self, result, *, applying):
+        rows = {row.suggestion_index: row for row in self.source.findings}
+        changed = False
+        for item in result.decisions:
+            index = item.get("suggestion_index")
+            row = rows.get(index)
+            if row is None:
+                continue
+            current = self.saved.get(index, self._decision(row))
+            if item != current:
+                self.saved[index] = copy.deepcopy(item)
+                changed = True
+        previous_reviewed = set(self.reviewed_documents)
+        self.reviewed_documents = set(result.reviewed_documents)
+        automatic = set(self.imported_metadata.get("automatic_reviewed_documents", []))
+        if applying:
+            automatic |= self.reviewed_documents - previous_reviewed
+        self.imported_metadata["automatic_reviewed_documents"] = sorted(automatic & self.reviewed_documents)
+        if changed or previous_reviewed != self.reviewed_documents:
+            self.revision += 1
+
     def save(self):
         self._require_source()
         if self.invalid_rules:
@@ -224,7 +296,10 @@ class ReviewSession:
         if item.get("manual_edit"):
             return "Saved manual review"
         if item.get("apply"):
-            return f"Saved replacement: {item.get('replacement_code')}"
+            condition = (item.get("automatic_condition") or {}).get("kind")
+            label = {"historical_association": "historical condition", "bm25_gap": "BM25 gap"}.get(condition)
+            return (f"Automatic {label}: {item.get('replacement_code')}" if label
+                    else f"Saved replacement: {item.get('replacement_code')}")
         return "Saved Keep" if item.get("reviewed_by_human") else "Unreviewed"
 
     def export_text(self):
