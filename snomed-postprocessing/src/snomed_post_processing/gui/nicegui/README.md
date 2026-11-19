@@ -42,8 +42,13 @@ policy inputs** hold one persistent set of ZIP/HDF5, server-directory, annotator
 and annotation settings; tab changes do not recreate uploads or run processing.
 Both the project ZIP
 and SNOMED HDF5 support **Upload**, **Data directory** and **Server path**, matching
-Streamlit's file-source modes. Directory selection lists matching files directly
-inside the configured server directory, without recursion. Uploads are limited to
+Streamlit's file-source modes. For an INCEpTION project, **Use INCEpTION API** mirrors
+the Streamlit setup: enter the API URL and REMOTE-role credentials, click **Get
+Projects**, then select a project to download its JSONCAS export into a page-owned
+temporary directory. The existing `get_project_zip` adapter is reused with the same
+TLS-verification setting as Streamlit. Credentials stay in page memory and are not
+logged. Directory selection lists matching files directly inside the configured
+server directory, without recursion. Uploads are limited to
 200 MiB each and streamed to page-owned temporary files; use server files for
 larger inputs. Input files are never overwritten and reports are kept in memory.
 
@@ -58,7 +63,7 @@ last successful result. File identity/size/mtime checks detect changed source fi
 during analysis and before download. No application persistence is added.
 
 Policy checking does not alter loaded suggestions or their saved review scope.
-INCEpTION API fetching/deployment remain separate future work.
+INCEpTION API project fetching is connected; remote deployment remains separate future work.
 
 ## SQLite project replacement
 
@@ -281,7 +286,7 @@ Docker installs the same locked dependencies and starts the workspace by default
 - `app.py`: NiceGUI bootstrap, also accessible directly as a module.
 - `transport.py`: Socket.IO ASGI early-disconnect and response-header guard.
 - `page.py`: page shell, drawer/tab composition and shared review-info placement.
-- `shared_inputs.py`: `SharedInputControls` owns sidebar widgets, ZIP/HDF5 sources, settings/scope, explicit annotator inspection, input revisions/listeners and source cleanup. Policy and suggestion controllers receive the same instance directly; closing either does not close shared inputs.
+- `shared_inputs.py`: `SharedInputControls` owns sidebar widgets, ZIP/HDF5 and INCEpTION API project sources, settings/scope, explicit annotator inspection, input revisions/listeners and source cleanup. Policy and suggestion controllers receive the same instance directly; closing either does not close shared inputs.
 - `policy_ui.py`: policy checks, findings restoration, results and report downloads; shared inputs are injected, not constructed here.
 - `review_panel.py`: per-page `ReviewPanelControls`, with a carousel with one slide per document, containing the vertically stacked, full-width Community AG Grid findings/candidate workspace. The Document column is omitted; each slide has a document-name heading. A single workspace is reused rather than creating grids for every document. Changing slides clears inspection/stale menus, not pending or saved decisions; Save choices and JSON export still include all documents in artifact scope. Covered text has a 400 px minimum and expands when space permits, including after uploads. Candidates sit below findings at every screen size; compact rank/score columns leave more room for FSNs, with internal horizontal scrolling on very narrow screens. Selected-finding annotation details and rationale/retrieval warnings use two columns (stacking on phones), with the saved proposed SCTID on the rationale side. Original index and saved candidate count are not displayed; both remain intact internally for artifact identity/provenance. Ignored is the last findings column. Document reviewed is no longer a separate column: saved reviewed documents have green, emphasized slide headings and explanatory tooltips. Pending flags do not change that color until Save choices; saved unmark/reset removes it. Green indicates saved review progress, not a replacement for every finding. Table scores display two decimal places only; sorting, competition ranks, raw candidate evidence and JSON retain full precision.
 - `state.py`: framework-independent, per-page navigation state with stable row IDs.
@@ -296,7 +301,7 @@ text, not HTML; filters are display-only. Reloading discards per-page preview
 state. There is no persistent/global review state or cookie secret.
 
 **Not connected:** generic ID-removal choices, ZIP sanitization or INCEpTION API
-fetching/deployment. Explicit concept-rule ID removal and review-only automatic
+deployment. API project listing/export loading is connected. Explicit concept-rule ID removal and review-only automatic
 historical/BM25 conditions are connected.
 Startup is empty. Only explicitly selected policy inputs and uploaded
 suggestions/review JSON are read.
