@@ -2,6 +2,7 @@
 import asyncio
 from importlib.util import find_spec
 from pathlib import Path
+import shutil
 import unittest
 from unittest.mock import AsyncMock, patch
 
@@ -43,6 +44,61 @@ class SharedInputControlsTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(inputs.annotators.value, ["alice"])
         self.assertEqual(set(inputs.annotators.options), {"alice", "bob"})
         self.io.assert_awaited_once()
+
+    async def test_inception_api_lists_and_downloads_project_like_streamlit(self):
+        inputs = self.inputs
+        inputs.use_api.set_value(True)
+        inputs.api_url.set_value("https://synthetic.invalid")
+        inputs.api_username.set_value("remote-user")
+        inputs.api_password.set_value("placeholder-password")
+        calls = []
+
+        def fake_get_project_zip(directory, url, username, password, project, verify_ssl):
+            calls.append((directory, url, username, password, project, verify_ssl))
+            if project is None:
+                return ["Synthetic project", "Second project"]
+            target = Path(directory) / "synthetic-project.zip"
+            shutil.copyfile(FIXTURE / "project.zip", target)
+            return target
+
+        with patch("snomed_post_processing.gui.nicegui.shared_inputs.get_project_zip", side_effect=fake_get_project_zip):
+            self.io.assert_not_awaited()
+            await inputs.load_api_projects()
+            self.assertEqual(inputs.api_project.options, ["Synthetic project", "Second project"])
+            self.assertIsNone(inputs.project.snapshot())
+            inputs.api_project.value = "Synthetic project"
+            await inputs.api_project_changed()
+
+        project = inputs.project.snapshot()
+        self.assertIsNotNone(project)
+        self.assertTrue(project.path.is_file())
+        self.assertEqual(calls[0][1:], ("https://synthetic.invalid", "remote-user", "placeholder-password", None, False))
+        self.assertEqual(calls[1][1:], ("https://synthetic.invalid", "remote-user", "placeholder-password",
+                                       "Synthetic project", False))
+        await inputs.load_annotators()
+        self.assertEqual(set(inputs.annotators.options), {"alice", "bob"})
+
+    async def test_changed_api_source_rejects_delayed_project_list(self):
+        inputs = self.inputs
+        inputs.use_api.set_value(True)
+        inputs.api_url.set_value("https://synthetic.invalid")
+        inputs.api_username.set_value("remote-user")
+        inputs.api_password.set_value("placeholder-password")
+        entered, release = asyncio.Event(), asyncio.Event()
+
+        async def delayed(function, *args):
+            entered.set()
+            await release.wait()
+            return ["Old project"]
+
+        with patch("nicegui.run.io_bound", side_effect=delayed):
+            task = asyncio.create_task(inputs.load_api_projects())
+            await entered.wait()
+            inputs.use_api.set_value(False)
+            release.set()
+            await task
+        self.assertFalse(inputs.api_project.options)
+        self.assertIsNone(inputs.project.snapshot())
 
     async def test_changed_or_closed_inputs_reject_pending_annotator_results(self):
         self.select_project()
