@@ -6,12 +6,20 @@ from .tables import resizable_table
 from .review_ui import ReviewControls
 
 
+def _automatic_condition_label(item, *, include_target=True):
+    kind = (item.get("automatic_condition") or {}).get("kind") if isinstance(item, dict) else None
+    label = {"historical_association": "Historical", "bm25_gap": "BM25 gap"}.get(kind, "")
+    target = item.get("replacement_code") if isinstance(item, dict) else None
+    return f"{label} → {target}" if label and include_target and target else label
+
+
 def _finding_rows(state, session=None):
     keys = ("row_id", "suggestion_index", "document", "annotator", "code", "text", "status", "policy_issue", "ignored")
     rows = [{key: getattr(row, key) for key in keys} for row in state.findings]
     if session is not None:
         for values, row in zip(rows, state.findings):
             values["review"] = session.status(row)
+            values["automatic_condition"] = _automatic_condition_label(session.saved.get(row.suggestion_index, {}))
             values["document_reviewed"] = row.document in session.reviewed_documents
     return rows
 
@@ -82,7 +90,8 @@ class ReviewPanelControls:
                         {"field": "text", "headerName": "Covered text", "flex": 2, "minWidth": 350},
                         {"field": "status", "headerName": "Status", "minWidth": 220},
                         {"field": "policy_issue", "headerName": "Policy check"},
-                        {"field": "review", "headerName": "Manual review", "minWidth": 250},
+                        {"field": "review", "headerName": "Review state", "minWidth": 250},
+                        {"field": "automatic_condition", "headerName": "Automatic condition", "minWidth": 210},
                         {"field": "ignored", "headerName": "Ignored", "maxWidth": 100},
                     ],
                     "defaultColDef": {"sortable": True, "filter": "agTextColumnFilter", "floatingFilter": True, "resizable": True, "editable": False},
@@ -156,6 +165,7 @@ class ReviewPanelControls:
                     {"field": "document", "headerName": "Document", "flex": 2, "minWidth": 240},
                     {"field": "findings", "headerName": "Findings", "width": 110, "filter": "agNumberColumnFilter"},
                     {"field": "review", "headerName": "Saved document review", "minWidth": 200},
+                    {"field": "automatic", "headerName": "Automatic conditions", "minWidth": 190},
                     {"field": "pending", "headerName": "Pending edits", "width": 150, "filter": "agNumberColumnFilter",
                      "headerTooltip": "Pending candidate/action choices plus a pending document-review flag. Concept-rule edits are shown separately below."},
                 ],
@@ -323,10 +333,19 @@ class ReviewPanelControls:
                             remove="" if reviewed else "text-green-700 font-semibold")
 
     def refresh_document_overview(self, session):
-        rows = {document: dict(row_id=token, document=document, findings=0,
-                               review="Reviewed" if document in session.reviewed_documents else "Not marked",
-                               pending=int(document in session.draft_reviewed), current=document == self.active_document)
-                for token, (document, *_) in self.document_slides.items()}
+        automatic = {}
+        for item in session.saved.values():
+            label = _automatic_condition_label(item, include_target=False)
+            if label:
+                automatic.setdefault(item.get("document"), set()).add(label)
+        automatically_reviewed = set(session.imported_metadata.get("automatic_reviewed_documents", []))
+        rows = {document: dict(
+                    row_id=token, document=document, findings=0,
+                    review=("Automatically reviewed" if document in automatically_reviewed
+                            else "Reviewed" if document in session.reviewed_documents else "Not marked"),
+                    automatic=", ".join(sorted(automatic.get(document, ()))),
+                    pending=int(document in session.draft_reviewed), current=document == self.active_document,
+                ) for token, (document, *_) in self.document_slides.items()}
         for finding in self.state.findings:
             if finding.document in rows:
                 rows[finding.document]["findings"] += 1

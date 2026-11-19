@@ -1,6 +1,9 @@
 """Event adapters for explicit review; no framework imports at module load."""
 import copy
 
+from snomed_post_processing.sanitization import ASSOCIATION_TYPE_DESCRIPTIONS, SUPPORTED_ASSOCIATION_TYPES
+from snomed_post_processing.sanitization.conditions import DEFAULT_CONDITION_ASSOCIATIONS
+
 from .review import MAX_DECISIONS_BYTES, ReviewError, ReviewSession, load_review
 
 
@@ -18,6 +21,37 @@ class ReviewControls:
         with ui.row():
             self.save = ui.button("Save choices", on_click=lambda: self.command("save"))
             self.discard = ui.button("Discard pending changes", on_click=lambda: self.command("discard"))
+        with ui.expansion("Automatic conditions", value=True).classes("w-full"):
+            ui.label(
+                "Historical associations apply only to inclusion-list findings. BM25 gap selection is an opt-in heuristic. "
+                "Manual, imported and concept-rule decisions are preserved; no CAS files change here."
+            ).classes("text-sm")
+            self.condition_associations = ui.select(
+                {name: f"{name} — {ASSOCIATION_TYPE_DESCRIPTIONS.get(name, '')}"
+                 for name in SUPPORTED_ASSOCIATION_TYPES},
+                multiple=True,
+                value=list(DEFAULT_CONDITION_ASSOCIATIONS),
+                label="Historical association types",
+            ).props("use-chips clearable").classes("w-full")
+            self.condition_bm25 = ui.checkbox("Enable BM25 automatic selection (heuristic)", value=False)
+            self.condition_bm25_exclusions = ui.checkbox(
+                "Include exclusion-list findings in BM25 automatic selection", value=False,
+            )
+            with ui.row().classes("w-full gap-4 flex-wrap"):
+                self.condition_dominance = ui.number(
+                    "Minimum BM25 gap dominance", value=2 / 3, min=0, max=1, step=0.05,
+                ).classes("w-full md:flex-1 md:min-w-80")
+                self.condition_lead = ui.number(
+                    "Minimum BM25 relative lead", value=0.20, min=0, max=1, step=0.05,
+                ).classes("w-full md:flex-1 md:min-w-80")
+            ui.label(
+                "BM25 requires at least three distinct comparable targets, a unique leader and complete retrieval. "
+                "D compares the first score gap with the largest later gap; M is the first gap divided by the top score."
+            ).classes("text-sm")
+            with ui.row():
+                self.apply_conditions_button = ui.button("Apply Conditions", on_click=self.apply_conditions)
+                self.undo_conditions_button = ui.button("Undo Automatic Conditions", on_click=self.undo_conditions)
+            self.condition_status = ui.label().classes("text-sm whitespace-pre-wrap")
         with ui.row():
             self.export = ui.button("Download reviewed decisions JSON", on_click=self.download)
         ui.label("Save document flags with Save choices. Reviewed is progress, not proof of replacements for all findings.")
@@ -29,6 +63,7 @@ class ReviewControls:
 
     def reset(self):
         self.session = ReviewSession(self.get_state())
+        self.condition_status.set_text("")
         self.refresh()
 
     def refresh(self, *, update_grid=True):
@@ -41,6 +76,8 @@ class ReviewControls:
         self.discard.set_enabled(enabled and self.session.dirty)
         self.export.set_enabled(enabled and not self.session.dirty and not self.session.invalid_rules)
         self.upload.set_enabled(enabled)
+        self.apply_conditions_button.set_enabled(enabled)
+        self.undo_conditions_button.set_enabled(enabled and self.session.conditions_undo is not None)
         self.status.set_text((self.session.status(row) + " · " if row else "")
                              + f"{len(self.session.drafts)} pending choices · {len(self.session.draft_reviewed)} pending document flags · "
                              + f"{len(self.session.reviewed_documents)} saved reviewed documents · {len(self.session.effective_rules)} rule decisions"
@@ -118,6 +155,35 @@ class ReviewControls:
         except ReviewError as error:
             self.ui.notify(str(error), type="warning")
 
+    def apply_conditions(self):
+        try:
+            reviewed_before = set(self.session.reviewed_documents)
+            result = self.session.apply_automatic_conditions(
+                tuple(self.condition_associations.value or ()),
+                bm25_enabled=bool(self.condition_bm25.value),
+                bm25_min_dominance=float(self.condition_dominance.value),
+                bm25_min_relative_lead=float(self.condition_lead.value),
+                bm25_include_exclusion_findings=bool(self.condition_bm25_exclusions.value),
+            )
+            self.condition_status.set_text(
+                f"Conditions updated {result.changed} row(s); left {result.skipped} unchanged; "
+                f"newly reviewed {len(result.reviewed_documents - reviewed_before)} document(s)."
+            )
+            self.refresh()
+        except (ReviewError, TypeError, ValueError) as error:
+            self.ui.notify(str(error), type="warning")
+
+    def undo_conditions(self):
+        try:
+            result = self.session.undo_automatic_conditions()
+            self.condition_status.set_text(
+                f"Undid {result.changed} automatic selection(s); "
+                f"preserved {result.skipped} changed/manual selection(s)."
+            )
+            self.refresh()
+        except ReviewError as error:
+            self.ui.notify(str(error), type="warning")
+
     async def download(self):
         original_state, original_session = self.get_state(), self.session
         revision = original_session.revision
@@ -166,6 +232,7 @@ class ReviewControls:
             self.upload.reset()
             return
         self.session = loaded
+        self.condition_status.set_text("")
         self.refresh()
         self.status.set_text("Reviewed decisions restored; prior saved/pending choices and flags replaced. No CAS changed.")
         self.upload.reset()

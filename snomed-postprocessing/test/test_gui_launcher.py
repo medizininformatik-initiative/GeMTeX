@@ -46,6 +46,13 @@ class GuiLauncherTest(unittest.TestCase):
         self.assertEqual(exited.exception.code, 7)
         launch.assert_called_once_with(self.command())
 
+    def test_reload_multiprocessing_child_reenters_without_exiting_bootstrap(self):
+        with patch.object(sys, "argv", [app.__file__, "--frontend", "workspace", "--reload"]), patch(
+            "snomed_post_processing.gui.workspace.app.main", return_value=0
+        ) as workspace:
+            runpy.run_path(app.__file__, run_name="__mp_main__")
+        workspace.assert_called_once_with(["--reload"])
+
     def test_explicit_streamlit_selector_is_not_forwarded(self):
         with patch.object(app.subprocess, "call", return_value=0) as launch:
             self.assertEqual(app.main(["--frontend", "streamlit", "--server.port", "8502"]), 0)

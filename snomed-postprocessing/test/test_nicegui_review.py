@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, patch
 
 from snomed_post_processing.gui.nicegui.state import PreviewState
 from snomed_post_processing.gui.nicegui.review import ReviewError, ReviewSession, load_review
+from snomed_post_processing.gui.nicegui.review_panel import _finding_rows
 from snomed_post_processing.gui.nicegui.suggestions import load_suggestions_preview
 from snomed_post_processing.sanitization.decisions_json import read_sanitization_decisions_json
 from test.test_nicegui_suggestions import payload, encoded, fake_ui, upload_event, open_context, switch_document
@@ -203,6 +204,55 @@ class ReviewSessionTest(unittest.TestCase):
                 review.stage(source.findings[0].row_id)
             self.assertEqual(json.loads(review.export_text())["decisions"], data["decisions"])
 
+    def test_historical_conditions_apply_and_undo_with_provenance(self):
+        source = load_suggestions_preview((FIXTURE / "suggestions.json").read_bytes())
+        review = ReviewSession(source)
+        result = review.apply_automatic_conditions(["REPLACED_BY"])
+        automatic = [item for item in review.saved.values() if item.get("automatic_condition")]
+        self.assertEqual(result.changed, 2)
+        self.assertEqual({item["replacement_code"] for item in automatic}, {"990000201"})
+        self.assertTrue(all(item["automatic_condition"]["kind"] == "historical_association" for item in automatic))
+        self.assertEqual(review.reviewed_documents, {"automatic.txt"})
+        self.assertEqual(review.imported_metadata["automatic_reviewed_documents"], ["automatic.txt"])
+        self.assertIn("historical condition", review.status(source.findings[1]))
+        marked = [row for row in _finding_rows(source, review) if row["automatic_condition"]]
+        self.assertEqual(len(marked), 2)
+        self.assertTrue(all(row["automatic_condition"] == "Historical → 990000201" for row in marked))
+        undone = review.undo_automatic_conditions()
+        self.assertEqual(undone.changed, 2)
+        self.assertFalse(any(item.get("automatic_condition") for item in review.saved.values()))
+        self.assertFalse(review.reviewed_documents)
+        self.assertIsNone(review.conditions_undo)
+
+    def test_bm25_condition_is_explicit_and_preserves_manual_choices(self):
+        data = payload()
+        suggestion = data["suggestions"][0]
+        suggestion.update(status="semantic_bm25_replacement", retrieval_limits=[])
+        suggestion["finding"]["ignored"] = False
+        suggestion["candidates"][0]["score"] = 9.0
+        suggestion["candidates"][1]["score"] = 4.0
+        suggestion["candidates"][2]["score"] = 3.0
+        source = load_suggestions_preview(encoded(data))
+        review = ReviewSession(source)
+        disabled = review.apply_automatic_conditions([], bm25_enabled=False)
+        self.assertEqual(disabled.changed, 0)
+        enabled = review.apply_automatic_conditions([], bm25_enabled=True)
+        self.assertEqual(enabled.changed, 1)
+        self.assertEqual(review.saved[0]["replacement_code"], "990000201")
+        self.assertEqual(review.saved[0]["automatic_condition"]["kind"], "bm25_gap")
+        review.stage(source.findings[0].row_id)
+        review.save()
+        self.assertNotIn("automatic_condition", review.saved[0])
+        preserved = review.undo_automatic_conditions()
+        self.assertEqual(preserved.changed, 0)
+        self.assertTrue(review.saved[0]["reviewed_by_human"])
+
+    def test_conditions_require_pending_manual_changes_to_be_resolved(self):
+        source = state(); review = ReviewSession(source)
+        review.stage(source.findings[0].row_id)
+        with self.assertRaisesRegex(ReviewError, "Save choices or discard"):
+            review.apply_automatic_conditions([])
+
     def test_unrelated_save_preserves_imported_automatic_provenance(self):
         source = load_suggestions_preview((FIXTURE / "suggestions.json").read_bytes())
         review = load_review((FIXTURE / "staged-decisions.json").read_bytes(), source)
@@ -290,6 +340,16 @@ class ReviewUiTest(unittest.IsolatedAsyncioTestCase):
             await source_handler(upload_event(encoded(payload())))
         buttons = {call.args[0]: call.kwargs.get("on_click") for call in ui.button.call_args_list if call.args}
         return ui, grids, labels, source_handler, review_handler, buttons
+
+    async def test_automatic_threshold_fields_are_wide_and_wrap_responsively(self):
+        ui, *_ = await self.setup_page()
+        classes = [call.args[0] for call in ui.number.return_value.classes.call_args_list]
+        self.assertEqual(classes[-2:], [
+            "w-full md:flex-1 md:min-w-80",
+            "w-full md:flex-1 md:min-w-80",
+        ])
+        self.assertTrue(any(call.args == ("w-full gap-4 flex-wrap",)
+                            for call in ui.row.return_value.classes.call_args_list))
 
     async def test_click_stage_save_flags_and_download_are_deliberate(self):
         ui, grids, labels, _, _, buttons = await self.setup_page()
