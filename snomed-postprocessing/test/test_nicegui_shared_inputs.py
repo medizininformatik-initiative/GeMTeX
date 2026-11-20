@@ -77,6 +77,7 @@ class SharedInputControlsTest(unittest.IsolatedAsyncioTestCase):
         project = inputs.project.snapshot()
         self.assertIsNotNone(project)
         self.assertTrue(project.path.is_file())
+        self.assertEqual(inputs.api_note.text, "Downloaded project 'Synthetic project'.")
         self.assertEqual(calls[0][1:], ("https://synthetic.invalid", "remote-user", "placeholder-password", None, False))
         self.assertEqual(calls[1][1:], ("https://synthetic.invalid", "remote-user", "placeholder-password",
                                        "Synthetic project", False))

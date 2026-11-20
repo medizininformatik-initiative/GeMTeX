@@ -298,8 +298,8 @@ class SharedInputControls:
             if self.closed or revision != self.revision or not self.is_api or self.api_project.value != project:
                 return
             self.api_source.replace(source)
+            self.project_path = source.path
             source = None
-            self.project_path = self.api_source.snapshot().path
             self.annotators.set_options({}, value=[])
             self.excluded_annotators.set_options({}, value=[])
             self.available_annotators = ()
