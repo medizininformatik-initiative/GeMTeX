@@ -230,8 +230,7 @@ class SharedInputControls:
         self.feature.set_visibility(not self.is_store)
         self.prefix.set_visibility(not self.is_store)
         self.inspect_store.set_enabled(self.store.snapshot() is not None and not self.busy)
-        credentials = all((self.api_url.value, self.api_username.value, self.api_password.value))
-        self.api_projects_button.set_enabled(self.is_api and credentials and not self.busy)
+        self.api_projects_button.set_enabled(self.is_api and not self.busy)
         self.api_project.set_enabled(self.is_api and bool(self.api_project.options) and not self.busy)
         self.load_names.set_enabled(self.project.snapshot() is not None and not self.busy
                                     and (not self.is_store or self.scope.value is not None))
@@ -241,8 +240,6 @@ class SharedInputControls:
         if self.closed or self.busy or not self.is_api:
             return
         credentials = (self.api_url.value or "", self.api_username.value or "", self.api_password.value or "")
-        if not all(credentials):
-            return
         revision = self.revision
         self.busy = True
         self.api_note.set_text("Connecting to INCEpTION…")
