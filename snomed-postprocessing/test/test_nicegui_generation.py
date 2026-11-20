@@ -18,7 +18,9 @@ from unittest.mock import AsyncMock, patch
 from snomed_post_processing.findings_io import read_critical_findings_json_with_metadata
 from snomed_post_processing.gui.nicegui.file_sources import SourceFile
 from snomed_post_processing.gui.nicegui.review import ReviewError, ReviewSession, load_review
-from snomed_post_processing.gui.nicegui.suggestion_jobs import SuggestionJob, create_cache, inspect_members, run_generation, run_rules
+from snomed_post_processing.gui.nicegui.suggestion_jobs import (
+    InvalidSnogitCacheError, SuggestionJob, create_cache, inspect_members, run_generation, run_rules,
+)
 from snomed_post_processing.gui.nicegui.suggestion_ui import SuggestionControls, rule_records
 from snomed_post_processing.gui.nicegui.suggestions import load_suggestions_preview
 from snomed_post_processing.pipelines.policy_check import PolicySettings, check_policy
@@ -109,6 +111,15 @@ class GenerationBackendTest(unittest.TestCase):
         job = SuggestionJob(SourceFile(FIXTURE / "project.zip"), SourceFile(FIXTURE / "policy.hdf5"), PolicySettings(), self.settings,
                             session_result=SimpleNamespace(), session_stamps=())
         with self.assertRaisesRegex(ValueError, "current policy"):
+            run_generation(job)
+
+    def test_generation_rejects_snomed_hdf5_selected_as_snogit_cache(self):
+        findings = SourceFile(FIXTURE / "critical-findings.json")
+        lists = SourceFile(FIXTURE / "policy.hdf5")
+        settings = replace(self.settings, semantic_bm25_fallback=True, snogit_bm25=True)
+        job = SuggestionJob(SourceFile(FIXTURE / "project.zip"), lists, PolicySettings(), settings,
+                            cache=lists, findings_file=findings, findings_stamp=findings.stamp())
+        with self.assertRaisesRegex(InvalidSnogitCacheError, "processed SNOGIT cache"):
             run_generation(job)
 
     def test_processed_cache_actual_backend_with_named_dat_and_owned_output(self):
@@ -453,6 +464,11 @@ class GenerationControlsTest(unittest.IsolatedAsyncioTestCase):
             await self.panel.generate()
         self.assertIs(self.panel.completed, previous)
         self.assertNotIn("private contents", self.panel.status.text)
+        with patch("snomed_post_processing.gui.nicegui.suggestion_ui.run_generation",
+                   side_effect=InvalidSnogitCacheError("Select a compatible processed SNOGIT cache.")):
+            await self.panel.generate()
+        self.assertIs(self.panel.completed, previous)
+        self.assertIn("compatible processed SNOGIT cache", self.panel.status.text)
         entered, release = asyncio.Event(), asyncio.Event()
         async def delayed(function, *args, **kwargs):
             if function is run_generation:
