@@ -30,6 +30,13 @@ class DocumentOverviewTest(unittest.IsolatedAsyncioTestCase):
     def rows(self):
         return self.panel.document_grid.options["rowData"]
 
+    async def test_document_highlight_uses_single_row_selection_not_stale_row_style(self):
+        options = self.panel.document_grid.options
+        self.assertEqual(options["rowSelection"], {
+            "mode": "singleRow", "checkboxes": False, "enableClickSelection": True,
+        })
+        self.assertNotIn(":getRowStyle", options)
+
     async def test_overview_counts_navigation_preserves_choices_and_clears_inspection(self):
         panel = self.panel
         self.assertEqual([row["findings"] for row in self.rows()], [1, 1])
