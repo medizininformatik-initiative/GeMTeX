@@ -1,4 +1,5 @@
 """Page-local shared input controls, settings and explicit annotator inspection."""
+import logging
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -7,6 +8,19 @@ from snomed_post_processing.pipelines.policy_check import PolicySettings, projec
 from snomed_post_processing.uima_processing.scope import normalize_annotators, resolve_annotator_scope
 from .file_sources import FileSource, SourceFile
 from snomed_post_processing.annotation_source import store_scopes, default_store_scope, AnnotationStoreError
+
+
+LOGGER = logging.getLogger(__name__)
+
+
+def _api_error_message(error, *secrets):
+    message = " ".join(str(error).split()) or "No error details returned."
+    for secret in secrets:
+        if secret:
+            message = message.replace(secret, "[redacted]")
+    if len(message) > 500:
+        message = message[:497] + "..."
+    return f"{type(error).__name__}: {message}"
 
 
 def _inception_projects(url, username, password):
@@ -254,15 +268,14 @@ class SharedInputControls:
             self.api_project.set_options(projects, value=None)
             self.project_changed()
             self.api_note.set_text(f"Found {len(projects)} projects.")
-        except RuntimeError:
+        except Exception as error:
+            details = _api_error_message(error, credentials[1], credentials[2])
+            LOGGER.error("Could not list INCEpTION projects: %s", details)
             if not self.closed and revision == self.revision:
                 self.api_credentials = None
                 self.api_project.set_options({}, value=None)
-                self.api_note.set_text("Could not connect to INCEpTION API. Please check credentials and URL.")
-        except Exception:
-            if not self.closed and revision == self.revision:
-                self.api_project.set_options({}, value=None)
-                self.api_note.set_text("Could not list INCEpTION projects.")
+                self.api_note.set_text(
+                    f"Could not connect to INCEpTION API. Please check credentials and URL. {details}")
         finally:
             self.busy = False
             if not self.closed:
@@ -292,9 +305,11 @@ class SharedInputControls:
             self.available_annotators = ()
             self.changed()
             self.api_note.set_text(f"Downloaded project '{project}'.")
-        except Exception:
+        except Exception as error:
+            details = _api_error_message(error, credentials[1], credentials[2])
+            LOGGER.error("Could not download INCEpTION project %r: %s", project, details)
             if not self.closed and revision == self.revision:
-                self.api_note.set_text("Could not load project from INCEpTION API.")
+                self.api_note.set_text(f"Could not load project from INCEpTION API. {details}")
         finally:
             _release(source)
             self.api_source.uploading = False
