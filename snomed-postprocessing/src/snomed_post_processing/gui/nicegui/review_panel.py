@@ -221,7 +221,7 @@ class ReviewPanelControls:
                 "defaultColDef": {"sortable": True, "filter": "agTextColumnFilter", "floatingFilter": True,
                                   "resizable": True, "editable": False},
                 "rowData": [], ":getRowId": "params => params.data.row_id",
-                ":getRowStyle": "params => ({backgroundColor: params.data.current ? '#dbeafe' : 'transparent', color: 'inherit'})",
+                "rowSelection": {"mode": "singleRow", "checkboxes": False, "enableClickSelection": True},
             }).classes("review-document-grid w-full h-80 overflow-auto overscroll-contain")
             self.document_grid.on("rowClicked", self.select_document, args=["data", "rowIndex"])
         for grid in (self.finding_grid, self.candidate_grid, self.rule_grid):
@@ -417,7 +417,6 @@ class ReviewPanelControls:
             return
         self.documents.set_value(token)
         self.change_document(token)
-        self.document_grid.run_row_method(token, "setSelected", True, True)
         # Keep the clicked row visible after the document workspace changes.
         if type(row_index) is int and row_index >= 0:
             self.document_grid.run_grid_method("ensureIndexVisible", row_index)
@@ -443,6 +442,7 @@ class ReviewPanelControls:
         if entry is None or entry[0] == self.active_document:
             return
         self.active_document = entry[0]
+        self.document_grid.run_row_method(value, "setSelected", True, True)
         self.workspace.move(entry[1])
         self.clear_inspection()
         self.controls.refresh()
