@@ -36,7 +36,10 @@ panels; switching stages does not start processing, replace review, approve chan
 or discard pending choices. **Inputs** opens the shared drawer from every stage.
 Both annotator selectors display selected names as chips; their dropdowns show checked
 icons and highlighted rows. Clearing all inclusion names still means **all annotators**,
-unless exclusions restrict that scope.
+unless exclusions restrict that scope. After saving review choices for a ZIP/API project,
+use **3. Review & apply → Local ZIP write-back → Run sanitization** to create and download
+a separate sanitized project ZIP. The selected ZIP filename must match the source recorded
+by the review; the original source is never modified and no remote request is made.
 
 On narrow screens, the menu button toggles navigation. Review remains bound to its
 loaded artifact rather than the drawer's current source settings. JSON/Markdown and
