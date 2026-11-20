@@ -156,7 +156,10 @@ class GenerationProcessTest(unittest.IsolatedAsyncioTestCase):
             self.assertIs(job.project.owner, owner)
             loop = asyncio.get_running_loop()
             with ProcessPoolExecutor(max_workers=1, mp_context=multiprocessing.get_context("spawn")) as pool:
-                result, preview, snapshot = await loop.run_in_executor(pool, run_generation, payload)
+                progress_path = root / "generation-progress.json"
+                result, preview, snapshot = await loop.run_in_executor(pool, run_generation, payload, progress_path)
+                progress = json.loads(progress_path.read_text(encoding="utf-8"))
+                self.assertEqual(progress, {"value": 1.0, "label": "Sanitization suggestions finished."})
                 self.assertEqual(result.binding, job.binding())
                 self.assertEqual(len(preview.findings), 10)
                 self.assertEqual(len(preview.source_suggestions), 10)
@@ -217,6 +220,8 @@ class GenerationControlsTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(self.panel.generate_button.enabled)
         await self.panel.generate()
         self.assertIsNotNone(self.panel.completed, self.panel.status.text)
+        self.assertEqual(self.panel.progress.value, 1.0)
+        self.assertEqual(self.panel.progress_label.text, "Sanitization suggestions finished.")
         self.assertIs(self.cpu.await_args.args[0], run_generation)
         self.assertFalse(any(call.args[0] is run_generation for call in self.io.await_args_list))
 

@@ -39,7 +39,7 @@ def project_annotators(project: Path, *, store_scope=None) -> dict[str, str]:
     return {name.strip().lower(): name for name in sorted(names)}
 
 
-def check_policy(project: Path, lists: Path, settings: PolicySettings) -> PolicyResult:
+def check_policy(project: Path, lists: Path, settings: PolicySettings, *, progress_obj=None) -> PolicyResult:
     """Use the existing policy engine; never write alongside the source files."""
     settings = replace(settings, annotators=normalize_annotators(settings.annotators))
     if not settings.id_feature.strip():
@@ -57,7 +57,7 @@ def check_policy(project: Path, lists: Path, settings: PolicySettings) -> Policy
         raise ValueError("Project processing failed.")
     markdown, masked = StringIO(), StringIO()
     report, findings = {}, []
-    count = create_log_from_results(corpus, markdown, masked, lists,
+    count = create_log_from_results(corpus, markdown, masked, lists, progress_obj=progress_obj,
                                    dump_dict=report, critical_findings=findings)
     metadata = dict(source="nicegui-policy-check", annotators=list(settings.annotators),
                     lists_path=str(lists), annotation_types=list(settings.annotation_types) or ["gemtex.Concept"],

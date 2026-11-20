@@ -73,7 +73,12 @@ class SuggestionJob:
         return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
 
-def run_generation(job):
+def _write_generation_progress(path, value, label):
+    if path is not None:
+        Path(path).write_text(json.dumps({"value": max(0.0, min(1.0, value)), "label": label}), encoding="utf-8")
+
+
+def run_generation(job, progress_path=None):
     before = stamps(job.sources)
     binding = job.binding()
     if job.findings_file is None:
@@ -92,7 +97,8 @@ def run_generation(job):
             findings, metadata = read_critical_findings_json_with_metadata(stream)
     result = generate_suggestions(job.lists.path, findings, metadata, job.policy, job.settings, binding=binding,
                                   project=job.project.path if job.project else None,
-                                  cache=job.cache.path if job.cache else None, custom=job.custom.path if job.custom else None)
+                                  cache=job.cache.path if job.cache else None, custom=job.custom.path if job.custom else None,
+                                  progress_callback=lambda value, label: _write_generation_progress(progress_path, value, label))
     # Build review off-thread too; publication is a separate explicit user action.
     preview = load_suggestions_preview(result.json.encode("utf-8"), "generated-suggestions.json")
     if before != stamps(job.sources) or binding != job.binding():
