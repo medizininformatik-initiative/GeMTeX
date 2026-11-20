@@ -21,7 +21,8 @@ from .tables import resizable_table
 from .file_sources import FileSource
 from .review import ReviewError
 from .suggestion_jobs import (
-    SuggestionJob, create_cache, inspect_members, restore_suggestions, run_generation, run_rules, stamps, validate_preserved_rules,
+    InvalidSnogitCacheError, SuggestionJob, create_cache, inspect_members, restore_suggestions, run_generation, run_rules,
+    stamps, validate_preserved_rules,
 )
 from .suggestions import MAX_SUGGESTIONS_BYTES, SuggestionsPreviewError, load_suggestions_preview
 
@@ -127,7 +128,7 @@ class SuggestionControls:
             ui.button("Add postfix", on_click=lambda: self.add_postfix()).props("flat dense")
             ui.label("Only selected literal postfixes after the last whitespace-surrounded hyphen are removed from FSN matching text. Clinical text, unspaced hyphens and SNOGIT remain unchanged. Optional presets may carry meaning; regenerate suggestions after changes. Uncheck all to disable.").classes("text-sm")
             self.snogit = ui.checkbox("Use SNOGIT/interface terms for BM25 candidates", value=True, on_change=self.changed)
-            self.cache = FileSource(ui, "Processed SNOGIT cache HDF5", (".hdf5", ".h5"), inputs.data_dir, self.changed)
+            self.cache = FileSource(ui, "Processed SNOGIT cache HDF5 (not the SNOMED HDF5)", (".hdf5", ".h5"), inputs.data_dir, self.changed)
             self.snogit_source = FileSource(ui, "SNOGIT ZIP or .dat source", (".zip", ".dat"), inputs.data_dir, self.snogit_changed)
             with ui.row():
                 self.inspect_button = ui.button("Inspect SNOGIT members", on_click=self.inspect_snogit)
@@ -352,6 +353,9 @@ class SuggestionControls:
             self.completed = result, preview, job, snapshot, version
             self.render_artifact()
             self.status.set_text("Suggestions ready. Load them in review separately; no decisions approved.")
+        except InvalidSnogitCacheError as error:
+            if not self.closed and version == self.version:
+                self.status.set_text(str(error) + " Previous successful generation retained.")
         except Exception:
             if not self.closed and version == self.version:
                 self.status.set_text("Generation failed. Check CriticalFindings JSON (up to 50 MiB), scope/ID settings, replacement requirements, HDF5 and SNOGIT compatibility. Previous successful generation retained.")

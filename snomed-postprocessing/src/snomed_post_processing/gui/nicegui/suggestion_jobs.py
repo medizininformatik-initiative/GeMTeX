@@ -10,7 +10,9 @@ from snomed_post_processing.findings_io import read_critical_findings_json_with_
 from snomed_post_processing.pipelines.policy_check import PolicyResult, PolicySettings
 from snomed_post_processing.pipelines.suggestion_generation import GenerationResult, SuggestionSettings, generate_suggestions, replacement_constraints
 from snomed_post_processing.sanitization.concept_rules import preview_concept_rules, validate_rule_targets
-from snomed_post_processing.sanitization.snogit_sidecar import build_snogit_sidecar, list_snogit_zip_members
+from snomed_post_processing.sanitization.snogit_sidecar import (
+    build_snogit_sidecar, list_snogit_zip_members, validate_snogit_sidecar_compatibility,
+)
 from .file_sources import SourceFile
 from .suggestions import MAX_SUGGESTIONS_BYTES, load_suggestions_preview
 
@@ -78,9 +80,21 @@ def _write_generation_progress(path, value, label):
         Path(path).write_text(json.dumps({"value": max(0.0, min(1.0, value)), "label": label}), encoding="utf-8")
 
 
+class InvalidSnogitCacheError(ValueError):
+    """Raised with a safe message when the selected cache is not a compatible sidecar."""
+
+
 def run_generation(job, progress_path=None):
     before = stamps(job.sources)
     binding = job.binding()
+    if job.cache is not None:
+        try:
+            validate_snogit_sidecar_compatibility(job.cache.path, job.lists.path)
+        except (KeyError, OSError, ValueError) as error:
+            raise InvalidSnogitCacheError(
+                "The selected processed SNOGIT cache is invalid or was built for a different SNOMED HDF5. "
+                "Select a SNOGIT cache created from the currently selected SNOMED HDF5, create a new cache, or turn SNOGIT off."
+            ) from error
     if job.findings_file is None:
         if job.session_result is None or job.project is None or stamps((job.project, job.lists)) != job.session_stamps:
             raise ValueError("Run a current policy check, or select saved CriticalFindings JSON.")
