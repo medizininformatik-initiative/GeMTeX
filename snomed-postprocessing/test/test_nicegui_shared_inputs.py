@@ -83,6 +83,23 @@ class SharedInputControlsTest(unittest.IsolatedAsyncioTestCase):
         await inputs.load_annotators()
         self.assertEqual(set(inputs.annotators.options), {"alice", "bob"})
 
+    async def test_inception_download_error_is_visible_logged_and_redacted(self):
+        inputs = self.inputs
+        inputs.use_api.set_value(True)
+        inputs.api_credentials = ("https://synthetic.invalid", "remote-user", "placeholder-password")
+        inputs.api_project.set_options(["Synthetic project"], value=None)
+        inputs.api_project.value = "Synthetic project"
+        self.io.side_effect = ValueError("export failed for remote-user with placeholder-password")
+        with patch("snomed_post_processing.gui.nicegui.shared_inputs.LOGGER.error") as log:
+            await inputs.api_project_changed()
+        self.assertIn("ValueError: export failed", inputs.api_note.text)
+        self.assertIn("[redacted]", inputs.api_note.text)
+        self.assertNotIn("remote-user", inputs.api_note.text)
+        self.assertNotIn("placeholder-password", inputs.api_note.text)
+        logged = " ".join(str(value) for value in log.call_args.args)
+        self.assertNotIn("remote-user", logged)
+        self.assertNotIn("placeholder-password", logged)
+
     async def test_changed_api_source_rejects_delayed_project_list(self):
         inputs = self.inputs
         inputs.use_api.set_value(True)
