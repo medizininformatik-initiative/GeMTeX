@@ -1,5 +1,9 @@
 """Explicit, page-local policy checks; does not change suggestions or review state."""
+import asyncio
 from io import StringIO
+import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from snomed_post_processing.findings_io import read_critical_findings_json_with_metadata
 from snomed_post_processing.annotation_source import AnnotationStoreError
@@ -42,9 +46,27 @@ def _saved_findings(source):
     return PolicyResult(settings, findings, count, {"critical-findings.json": text}), before
 
 
-def _checked_policy(project, lists, settings):
+class _PolicyProgress:
+    def __init__(self, path):
+        self.path = Path(path)
+
+    def update(self, value, label):
+        self.path.write_text(json.dumps({"value": max(0.0, min(1.0, value)), "label": label}), encoding="utf-8")
+
+    def progress(self, value, text):
+        check = "inclusion-list" if "Inclusion" in text else "exclusion-list"
+        self.update(0.15 + 0.75 * value, f"Checking {check} policy across documents… {value:.0%}")
+
+
+def _checked_policy(project, lists, settings, progress_path=None):
     before = _stamps(project, lists)
-    result = check_policy(project.path, lists.path, settings)
+    progress = _PolicyProgress(progress_path) if progress_path is not None else None
+    if progress is not None:
+        progress.update(0.05, "Preparing annotation source and policy inputs…")
+    result = check_policy(project.path, lists.path, settings,
+                          progress_obj={"obj": progress} if progress is not None else None)
+    if progress is not None:
+        progress.update(0.95, "Building policy reports…")
     if before != _stamps(project, lists):
         raise ValueError("Inputs changed during checking.")
     return result, before
@@ -72,9 +94,10 @@ class PolicyCheckControls:
             self.saved_findings = FileSource(ui, "CriticalFindings JSON", (".json",), inputs.data_dir, self.restore_changed)
             self.restore_button = ui.button("Load saved findings", on_click=self.load_saved)
             ui.label("Restores findings without ZIP/HDF5 or analysis. Full policy reports are not contained in this artifact. Limit: 50 MiB.").classes("text-sm")
-        with ui.row().classes("items-center"):
-            self.run_button = ui.button("Run policy check", on_click=self.run_check)
-            self.spinner = ui.spinner()
+        self.run_button = ui.button("Run policy check", on_click=self.run_check)
+        with ui.column().classes("w-full gap-1") as self.progress_container:
+            self.progress_label = ui.label().classes("text-sm")
+            self.progress = ui.linear_progress(value=0).classes("w-full")
         self.status = ui.label().classes("text-sm")
         with ui.column().classes("w-full min-w-0") as self.results:
             self.summary = ui.label().classes("text-sm")
@@ -165,7 +188,7 @@ class PolicyCheckControls:
         selected = (self.inputs.project.snapshot() is not None and self.inputs.lists.snapshot() is not None
                     and (not self.inputs.is_store or self.inputs.scope.value is not None))
         self.run_button.set_enabled(selected and not self.busy)
-        self.spinner.set_visibility(self.busy)
+        self.progress_container.set_visibility(self.busy)
         self.restore_button.set_enabled(not self.busy and self.saved_findings.snapshot() is not None)
         self.results.set_visibility(self.result_current)
         for filename, button in self.report_buttons.items():
@@ -179,10 +202,25 @@ class PolicyCheckControls:
         revision = self.revision
         self.busy = True
         self.status.set_text("Checking policy…")
+        self.progress.set_value(0.0)
+        self.progress_label.set_text("Preparing policy check…")
         self.refresh()
+        progress_owner = TemporaryDirectory(prefix="snomed-nicegui-policy-progress-")
+        progress_path = Path(progress_owner.name) / "progress.json"
         try:
             settings = self.inputs.settings()
-            result, stamps = await run.io_bound(_checked_policy, project, lists, settings)
+            task = asyncio.create_task(run.io_bound(_checked_policy, project, lists, settings, progress_path))
+            while not task.done():
+                await asyncio.sleep(0.15)
+                try:
+                    update = json.loads(progress_path.read_text(encoding="utf-8"))
+                    self.progress.set_value(float(update["value"]))
+                    self.progress_label.set_text(str(update["label"]))
+                except (FileNotFoundError, json.JSONDecodeError, KeyError, TypeError, ValueError):
+                    pass
+            result, stamps = await task
+            self.progress.set_value(1.0)
+            self.progress_label.set_text("Policy check finished.")
             if self.closed:
                 return
             if revision != self.revision:
@@ -203,6 +241,7 @@ class PolicyCheckControls:
             if not self.closed and revision == self.revision:
                 self.status.set_text("Policy check failed. Check the annotation source, HDF5 and annotation settings. Previous successful result retained.")
         finally:
+            progress_owner.cleanup()
             self.busy = False
             if not self.closed:
                 self.refresh()

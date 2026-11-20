@@ -241,6 +241,8 @@ class PolicyControlsTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(p.result)
         self.assertEqual(len(p.grid.options["rowData"]), 10)
         self.assertTrue(p.results.visible)
+        self.assertEqual(p.progress.value, 1.0)
+        self.assertEqual(p.progress_label.text, "Policy check finished.")
         result = p.result
         calls = self.worker_mock.await_count
         with patch.object(p.grid, "run_grid_method", new=AsyncMock()) as grid_method:

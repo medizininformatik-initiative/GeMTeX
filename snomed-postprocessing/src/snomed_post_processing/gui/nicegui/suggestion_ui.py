@@ -1,7 +1,11 @@
 """Explicit rules and suggestion generation, sharing tab 1 inputs and backend engines."""
+import asyncio
 import copy
 from dataclasses import asdict
 import io
+import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import uuid
 
 import pandas as pd
@@ -132,9 +136,10 @@ class SuggestionControls:
                 self.cache_button = ui.button("Create processed SNOGIT cache", on_click=self.build_cache)
                 self.cache_download = ui.button("Download created SNOGIT cache", on_click=self.download_cache)
             ui.label("Select/create a compatible cache or turn SNOGIT off. Cache creation never starts generation; generated caches are temporary until downloaded.").classes("text-sm")
-        with ui.row():
-            self.generate_button = ui.button("Generate sanitization suggestions", on_click=self.generate)
-            self.spinner = ui.spinner()
+        self.generate_button = ui.button("Generate sanitization suggestions", on_click=self.generate)
+        with ui.column().classes("w-full gap-1") as self.progress_container:
+            self.progress_label = ui.label().classes("text-sm")
+            self.progress = ui.linear_progress(value=0).classes("w-full")
         self.requirements = ui.label().classes("text-sm whitespace-pre-wrap").props("role=status aria-live=polite")
         self.status = ui.label().classes("text-sm whitespace-pre-wrap")
         with ui.column().classes("w-full") as self.results:
@@ -247,7 +252,7 @@ class SuggestionControls:
         self.inspect_button.set_enabled(not self.busy and self.snogit_source.snapshot() is not None)
         self.cache_button.set_enabled(not self.busy and available and self.member_stamp is not None and bool(self.members.value))
         self.cache_download.set_enabled(not self.busy and self.created_cache is not None)
-        self.spinner.set_visibility(self.busy)
+        self.progress_container.set_visibility(self.busy)
         self.uploader.set_enabled(not self.busy)
         self.results.set_visibility(self.artifact_current and not self.busy)
 
@@ -322,11 +327,26 @@ class SuggestionControls:
         token = self.artifact_revision
         self.busy = True
         self.status.set_text("Generating suggestions… No review or CAS changes.")
+        self.progress.set_value(0.0)
+        self.progress_label.set_text("Preparing suggestion generation…")
         self.refresh()
+        progress_owner = TemporaryDirectory(prefix="snomed-nicegui-generation-progress-")
+        progress_path = Path(progress_owner.name) / "progress.json"
         try:
             # Native HDF5/BM25 work can hold the GIL even in a thread and starve
             # Socket.IO heartbeats. Keep the owning job here, send only data/paths.
-            result, preview, snapshot = await run.cpu_bound(run_generation, job.for_process())
+            task = asyncio.create_task(run.cpu_bound(run_generation, job.for_process(), progress_path))
+            while not task.done():
+                await asyncio.sleep(0.15)
+                try:
+                    update = json.loads(progress_path.read_text(encoding="utf-8"))
+                    self.progress.set_value(float(update["value"]))
+                    self.progress_label.set_text(str(update["label"]))
+                except (FileNotFoundError, json.JSONDecodeError, KeyError, TypeError, ValueError):
+                    pass
+            result, preview, snapshot = await task
+            self.progress.set_value(1.0)
+            self.progress_label.set_text("Sanitization suggestions finished.")
             if self.closed or version != self.version or token != self.artifact_revision:
                 return
             self.completed = result, preview, job, snapshot, version
@@ -336,6 +356,7 @@ class SuggestionControls:
             if not self.closed and version == self.version:
                 self.status.set_text("Generation failed. Check CriticalFindings JSON (up to 50 MiB), scope/ID settings, replacement requirements, HDF5 and SNOGIT compatibility. Previous successful generation retained.")
         finally:
+            progress_owner.cleanup()
             self.busy = False
             if not self.closed:
                 self.refresh()
