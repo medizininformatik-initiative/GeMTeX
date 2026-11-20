@@ -3,8 +3,9 @@
 Preview **synthetic data or uploaded suggestions JSON**, then deliberately stage
 and save manual choices and download/restore reviewed-decisions JSON.
 Policy checking, explicit concept rules and suggestion generation are connected.
+ZIP/API project sources support explicit local sanitized-ZIP write-back after choices are saved.
 Preserved SQLite CAS supports an offline INCEpTION review-package download.
-Direct remote deployment and ZIP-input write-back are not connected.
+Direct remote deployment is not connected.
 Both frontends use the standard Python 3.11 project environment, `.venv`.
 The shared `gui/app.py` defaults to the project-authored workspace shell.
 
@@ -302,9 +303,7 @@ different finding updates details/candidates, not the main grid. Text renders as
 text, not HTML; filters are display-only. Reloading discards per-page preview
 state. There is no persistent/global review state or cookie secret.
 
-**Not connected:** generic ID-removal choices, ZIP sanitization or INCEpTION API
-deployment. API project listing/export loading is connected. Explicit concept-rule ID removal and review-only automatic
-historical/BM25 conditions are connected.
+**Not connected:** generic ID-removal choices or INCEpTION API deployment. API project listing/export loading and local ZIP sanitization are connected. Local write-back requires saved choices and the selected ZIP filename to match the source recorded in review metadata; it writes a new ZIP in a process worker, rejects stale results and leaves the source unchanged. Explicit concept-rule ID removal and review-only automatic historical/BM25 conditions are connected.
 Startup is empty. Only explicitly selected policy inputs and uploaded
 suggestions/review JSON are read.
 

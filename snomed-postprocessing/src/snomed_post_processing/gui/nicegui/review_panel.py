@@ -117,6 +117,7 @@ class ReviewPanelControls:
         self.active_document = None
         self.document_slides = {}
         self._keyboard_busy = False
+        self.writeback = None
         self.keyboard = ui.keyboard(on_key=self.handle_key, repeating=False)
         self.keyboard.active = False
 
@@ -185,7 +186,7 @@ class ReviewPanelControls:
                 self.evidence = ui.label().classes("text-sm whitespace-pre-wrap")
                 self.controls = ReviewControls(ui, lambda: self.state, lambda: self.load_revision,
                                                self.begin_load, self.refresh_documents)
-        ui.label("Direct remote deployment is not connected here. Preserved SQLite CAS can be prepared offline below; ZIP-input write-back remains disconnected.")
+        ui.label("Local ZIP write-back is available below. Direct remote deployment remains disconnected; preserved SQLite CAS uses the separate offline-package workflow.")
         with ui.expansion("Explicit concept rule decisions", value=True).classes("w-full") as self.rule_area:
             self.rule_summary = ui.label().classes("text-sm")
             self.rule_grid = ui.aggrid({
@@ -366,6 +367,8 @@ class ReviewPanelControls:
                                               if row["document"] == self.active_document]
         if hasattr(self, "rule_grid"):
             self.refresh_rules(session)
+        if self.writeback is not None:
+            self.writeback.review_changed()
         for document, _, heading, toggle, tip in self.document_slides.values():
             reviewed = document in session.reviewed_documents
             pending = document in session.draft_reviewed

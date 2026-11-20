@@ -97,7 +97,7 @@ class PolicyCheckControls:
         self.run_button = ui.button("Run policy check", on_click=self.run_check)
         with ui.column().classes("w-full gap-1") as self.progress_container:
             self.progress_label = ui.label().classes("text-sm")
-            self.progress = ui.linear_progress(value=0).classes("w-full")
+            self.progress = ui.linear_progress(value=0, show_value=False).classes("w-full")
         self.status = ui.label().classes("text-sm")
         with ui.column().classes("w-full min-w-0") as self.results:
             self.summary = ui.label().classes("text-sm")

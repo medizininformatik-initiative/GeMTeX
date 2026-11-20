@@ -139,7 +139,7 @@ class SuggestionControls:
         self.generate_button = ui.button("Generate sanitization suggestions", on_click=self.generate)
         with ui.column().classes("w-full gap-1") as self.progress_container:
             self.progress_label = ui.label().classes("text-sm")
-            self.progress = ui.linear_progress(value=0).classes("w-full")
+            self.progress = ui.linear_progress(value=0, show_value=False).classes("w-full")
         self.requirements = ui.label().classes("text-sm whitespace-pre-wrap").props("role=status aria-live=polite")
         self.status = ui.label().classes("text-sm whitespace-pre-wrap")
         with ui.column().classes("w-full") as self.results:
