@@ -50,7 +50,7 @@ class SharedInputControlsTest(unittest.IsolatedAsyncioTestCase):
         self.inputs.use_api.set_value(True)
         self.assertTrue(self.inputs.api_projects_button.enabled)
 
-    async def test_inception_api_lists_and_downloads_project_like_streamlit(self):
+    async def test_inception_api_lists_then_explicitly_downloads_project(self):
         inputs = self.inputs
         inputs.use_api.set_value(True)
         inputs.api_url.set_value("https://synthetic.invalid")
@@ -72,12 +72,18 @@ class SharedInputControlsTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(inputs.api_project.options, ["Synthetic project", "Second project"])
             self.assertIsNone(inputs.project.snapshot())
             inputs.api_project.value = "Synthetic project"
-            await inputs.api_project_changed()
+            inputs.api_project_changed()
+            self.assertIsNone(inputs.project.snapshot())
+            self.assertTrue(inputs.api_download.visible)
+            self.assertEqual(inputs.api_note.text, "Select Download project to fetch the export for local processing.")
+            self.assertEqual(self.io.await_count, 1)
+            await inputs.download_api_project()
 
         project = inputs.project.snapshot()
         self.assertIsNotNone(project)
         self.assertTrue(project.path.is_file())
         self.assertEqual(inputs.api_note.text, "Downloaded project 'Synthetic project'.")
+        self.assertFalse(inputs.api_download.visible)
         self.assertEqual(calls[0][1:], ("https://synthetic.invalid", "remote-user", "placeholder-password", None, False))
         self.assertEqual(calls[1][1:], ("https://synthetic.invalid", "remote-user", "placeholder-password",
                                        "Synthetic project", False))
@@ -90,13 +96,15 @@ class SharedInputControlsTest(unittest.IsolatedAsyncioTestCase):
         inputs.api_credentials = ("https://synthetic.invalid", "remote-user", "placeholder-password")
         inputs.api_project.set_options(["Synthetic project"], value=None)
         inputs.api_project.value = "Synthetic project"
+        inputs.api_project_changed()
         self.io.side_effect = ValueError("export failed for remote-user with placeholder-password")
         with patch("snomed_post_processing.gui.nicegui.shared_inputs.LOGGER.error") as log:
-            await inputs.api_project_changed()
+            await inputs.download_api_project()
         self.assertIn("ValueError: export failed", inputs.api_note.text)
         self.assertIn("[redacted]", inputs.api_note.text)
         self.assertNotIn("remote-user", inputs.api_note.text)
         self.assertNotIn("placeholder-password", inputs.api_note.text)
+        self.assertTrue(inputs.api_download.visible)
         logged = " ".join(str(value) for value in log.call_args.args)
         self.assertNotIn("remote-user", logged)
         self.assertNotIn("placeholder-password", logged)

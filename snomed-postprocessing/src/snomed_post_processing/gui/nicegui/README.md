@@ -44,8 +44,10 @@ Both the project ZIP
 and SNOMED HDF5 support **Upload**, **Data directory** and **Server path**, matching
 Streamlit's file-source modes. For an INCEpTION project, **Use INCEpTION API** mirrors
 the Streamlit setup: enter the API URL and REMOTE-role credentials, click **Get
-Projects**, then select a project to download its JSONCAS export into a page-owned
-temporary directory. The existing `get_project_zip` adapter is reused with the same
+Projects**, select a project, and click the resulting **Download project** button
+to fetch its JSONCAS export into a page-owned temporary directory. The button hides
+after a successful download and remains available after a failure. The existing
+`get_project_zip` adapter is reused with the same
 TLS-verification setting as Streamlit. Credentials stay in page memory and are not
 logged. Directory selection lists matching files directly inside the configured
 server directory, without recursion. Uploads are limited to

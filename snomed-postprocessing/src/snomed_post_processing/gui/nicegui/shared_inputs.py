@@ -86,6 +86,7 @@ class SharedInputControls:
         self.project_path = None
         self.listeners = []
         self.api_credentials = None
+        self.api_downloaded_project = None
         self.api_source = _InceptionApiSource()
         ui.label("Shared inputs").classes("text-lg font-medium")
         ui.label("Used by Check policy and Suggest. Changing inputs never starts processing.").classes("text-sm")
@@ -108,6 +109,7 @@ class SharedInputControls:
                         "Connect to INCEpTION and list projects available to this account.")
                     self.api_project = ui.select({}, label="Select project", value=None,
                                                  on_change=self.api_project_changed).classes("w-full")
+                    self.api_download = ui.button("Download project", on_click=self.download_api_project)
                     self.api_note = ui.label().classes("text-sm")
                 self.store = FileSource(ui, "Annotation store SQLite", (".sqlite", ".sqlite3", ".db"), self.data_dir, self.project_changed)
                 with ui.column().classes("w-full") as self.store_selection:
@@ -164,6 +166,7 @@ class SharedInputControls:
     def source_changed(self, _=None):
         if self.ready and not self.closed:
             self.api_source.clear()
+            self.api_downloaded_project = None
             self.api_project.set_options({}, value=None)
             self.api_credentials = None
             self.project_path = None
@@ -176,6 +179,7 @@ class SharedInputControls:
     def project_mode_changed(self, _=None):
         if self.ready and not self.closed:
             self.api_source.clear()
+            self.api_downloaded_project = None
             self.project_path = None
             self.annotators.set_options({}, value=[])
             self.excluded_annotators.set_options({}, value=[])
@@ -246,6 +250,11 @@ class SharedInputControls:
         self.inspect_store.set_enabled(self.store.snapshot() is not None and not self.busy)
         self.api_projects_button.set_enabled(self.is_api and not self.busy)
         self.api_project.set_enabled(self.is_api and bool(self.api_project.options) and not self.busy)
+        selected_project = self.api_project.value
+        downloaded = (selected_project is not None and selected_project == self.api_downloaded_project
+                      and self.api_source.snapshot() is not None)
+        self.api_download.set_visibility(self.is_api and selected_project is not None and not downloaded)
+        self.api_download.set_enabled(self.is_api and selected_project is not None and not self.busy and not downloaded)
         self.load_names.set_enabled(self.project.snapshot() is not None and not self.busy
                                     and (not self.is_store or self.scope.value is not None))
 
@@ -264,6 +273,7 @@ class SharedInputControls:
                 return
             self.api_credentials = credentials
             self.api_source.clear()
+            self.api_downloaded_project = None
             self.project_path = None
             self.api_project.set_options(projects, value=None)
             self.project_changed()
@@ -281,7 +291,20 @@ class SharedInputControls:
             if not self.closed:
                 self.refresh()
 
-    async def api_project_changed(self, _=None):
+    def api_project_changed(self, _=None):
+        if self.closed or self.busy or not self.is_api:
+            return
+        self.api_source.clear()
+        self.api_downloaded_project = None
+        self.project_path = None
+        self.annotators.set_options({}, value=[])
+        self.excluded_annotators.set_options({}, value=[])
+        self.available_annotators = ()
+        self.changed()
+        self.api_note.set_text("Select Download project to fetch the export for local processing."
+                               if self.api_project.value else "")
+
+    async def download_api_project(self, _=None):
         from nicegui import run
         project = self.api_project.value
         credentials = self.api_credentials
@@ -298,6 +321,7 @@ class SharedInputControls:
             if self.closed or revision != self.revision or not self.is_api or self.api_project.value != project:
                 return
             self.api_source.replace(source)
+            self.api_downloaded_project = project
             self.project_path = source.path
             source = None
             self.annotators.set_options({}, value=[])
