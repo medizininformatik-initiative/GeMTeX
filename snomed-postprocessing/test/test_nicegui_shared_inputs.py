@@ -45,6 +45,11 @@ class SharedInputControlsTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(set(inputs.annotators.options), {"alice", "bob"})
         self.io.assert_awaited_once()
 
+    async def test_inception_api_button_does_not_require_prefilled_credentials(self):
+        self.assertFalse(self.inputs.api_projects_button.enabled)
+        self.inputs.use_api.set_value(True)
+        self.assertTrue(self.inputs.api_projects_button.enabled)
+
     async def test_inception_api_lists_and_downloads_project_like_streamlit(self):
         inputs = self.inputs
         inputs.use_api.set_value(True)
