@@ -6,6 +6,7 @@ expanding the main setup and workflow instructions.
 ## Contents
 
 - [Workspace frontend](#workspace-frontend)
+- [Deploying a reviewed project to INCEpTION](#deploying-a-reviewed-project-to-inception)
 - [SQLite instead of an INCEpTION project](#sqlite-instead-of-an-inception-project)
 - [Masked suggestion overview download](#masked-suggestion-overview-download)
 - [Review keyboard navigation](#review-keyboard-navigation)
@@ -52,6 +53,28 @@ The workspace is the default frontend. Use `--frontend streamlit` for the previo
 Streamlit UI or `--frontend nicegui` for the plain NiceGUI shell. The workspace uses
 system fonts and project-authored CSS without external asset fetches.
 See the [workspace provenance](../src/snomed_post_processing/gui/workspace/PROVENANCE.md).
+
+## Deploying a reviewed project to INCEpTION
+
+After saving review choices, open **3. Review & apply → INCEpTION deployment**.
+Deployment deliberately uses a separate URL, username, password, annotation-user and
+TLS interface; it does not inherit the connection form used to download a source
+project. The implementation reuses the existing INCEpTION API/client and deployment
+pipeline functions.
+
+First select **Prepare deployment artifacts**. This validates the review/source
+binding and creates a frozen schema shell plus repaired flattened CAS artifacts. It
+performs no network upload. The shell, artifacts and reports can be downloaded for
+inspection. For SQLite sources with preserved CAS, select an export scope and provide
+a compatible project-template ZIP when the store lacks project configuration.
+
+Use **Test deployment connection** for an explicit read-only connection check. To
+write remotely, select the confirmation checkbox and then **Upload as new INCEpTION
+project**. This imports a new sanitized project and uploads the prepared annotations;
+the source project is never overwritten. After a failed or uncertain upload, inspect
+INCEpTION before retrying because a project may have been imported before a later
+artifact failed. Disabling TLS verification weakens connection security and should be
+used only when the server certificate cannot yet be trusted correctly.
 
 ## SQLite instead of an INCEpTION project
 

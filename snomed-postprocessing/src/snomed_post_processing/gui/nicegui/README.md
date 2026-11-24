@@ -5,7 +5,7 @@ and save manual choices and download/restore reviewed-decisions JSON.
 Policy checking, explicit concept rules and suggestion generation are connected.
 ZIP/API project sources support explicit local sanitized-ZIP write-back after choices are saved.
 Preserved SQLite CAS supports an offline INCEpTION review-package download.
-Direct remote deployment is not connected.
+Direct remote deployment is connected through an explicit prepare-then-upload workflow that always imports a new project.
 Both frontends use the standard Python 3.11 project environment, `.venv`.
 The shared `gui/app.py` defaults to the project-authored workspace shell.
 
@@ -66,7 +66,7 @@ last successful result. File identity/size/mtime checks detect changed source fi
 during analysis and before download. No application persistence is added.
 
 Policy checking does not alter loaded suggestions or their saved review scope.
-INCEpTION API project fetching is connected; remote deployment remains separate future work.
+INCEpTION API project fetching and explicit new-project remote deployment are connected. Deployment uses its own connection form and credentials.
 
 ## SQLite project replacement
 
@@ -171,8 +171,8 @@ silently reused: first load matching generated suggestions. Policy checks and
 rules never overwrite input files. Generated metadata uses scoped snippets from
 the explicitly selected ZIP, never paths embedded in metadata.
 
-Conditions, ZIP write-back and deployment remain disconnected. Testing uses the
-artificial fixture and installed SDK, not live clinical projects/browser rendering.
+Automatic conditions, ZIP write-back and deployment are connected. Testing uses the
+artificial fixture and installed SDK; live clinical-project deployment remains unverified.
 
 ## Load saved suggestions
 
@@ -304,7 +304,7 @@ different finding updates details/candidates, not the main grid. Text renders as
 text, not HTML; filters are display-only. Reloading discards per-page preview
 state. There is no persistent/global review state or cookie secret.
 
-**Not connected:** INCEpTION API deployment. API project listing/export loading, manual/concept-rule ID removal and local ZIP sanitization are connected. Local write-back requires saved choices and the selected ZIP filename to match the source recorded in review metadata; it writes a new ZIP in a process worker, rejects stale results and leaves the source unchanged. Review-only automatic historical/BM25 conditions are connected.
+API project listing/export loading, manual/concept-rule ID removal, local ZIP sanitization and explicit INCEpTION deployment are connected. Deployment has a separate URL/credential/TLS interface: prepare and validate frozen shell/repaired-CAS artifacts first, then confirm an explicit upload that imports a new project and never overwrites the source. Local write-back requires saved choices and the selected ZIP filename to match the source recorded in review metadata; it writes a new ZIP in a process worker, rejects stale results and leaves the source unchanged. Review-only automatic historical/BM25 conditions are connected. Live INCEpTION deployment validation still requires an approved server/project.
 Startup is empty. Only explicitly selected policy inputs and uploaded
 suggestions/review JSON are read.
 

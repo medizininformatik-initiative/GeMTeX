@@ -23,9 +23,9 @@ def _api_error_message(error, *secrets):
     return f"{type(error).__name__}: {message}"
 
 
-def _inception_projects(url, username, password):
+def _inception_projects(url, username, password, verify_ssl=False):
     with TemporaryDirectory(prefix="snomed-nicegui-inception-list-") as directory:
-        projects = get_project_zip(directory, url, username, password, None, False)
+        projects = get_project_zip(directory, url, username, password, None, verify_ssl)
     if not isinstance(projects, list) or any(not isinstance(project, str) for project in projects):
         raise ValueError("INCEpTION did not return a project list.")
     return projects

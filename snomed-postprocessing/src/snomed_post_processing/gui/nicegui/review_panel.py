@@ -118,11 +118,13 @@ class ReviewPanelControls:
         self.document_slides = {}
         self._keyboard_busy = False
         self.writeback = None
+        self.deployment = None
         self.keyboard = ui.keyboard(on_key=self.handle_key, repeating=False)
         self.keyboard.active = False
 
         ui.label("Restore suggestions in tab 2, then use Load in review (replaces review). Reviewed decisions can be restored below after their matching suggestions.").classes("text-sm")
         self.counts = ui.label().classes("text-sm")
+        self.conditions = ui.column().classes("w-full min-w-0")
         self.document_navigator = ui.column().classes("w-full min-w-0")
         # Do not keep-alive slides: cached panels retain stale DOM for the moved grid.
         self.documents = ui.carousel(arrows=False, navigation=False).props(
@@ -185,8 +187,9 @@ class ReviewPanelControls:
                 self.preview = ui.label("Candidate clicks only preview; they do not approve anything.")
                 self.evidence = ui.label().classes("text-sm whitespace-pre-wrap")
                 self.controls = ReviewControls(ui, lambda: self.state, lambda: self.load_revision,
-                                               self.begin_load, self.refresh_documents)
-        ui.label("Local ZIP write-back is available below. Direct remote deployment remains disconnected; preserved SQLite CAS uses the separate offline-package workflow.")
+                                               self.begin_load, self.refresh_documents,
+                                               conditions_container=self.conditions)
+        ui.label("Local ZIP write-back, preserved-SQLite offline packages and explicit new-project INCEpTION deployment are available below.")
         with ui.expansion("Explicit concept rule decisions", value=True).classes("w-full") as self.rule_area:
             self.rule_summary = ui.label().classes("text-sm")
             self.rule_grid = ui.aggrid({
@@ -369,6 +372,8 @@ class ReviewPanelControls:
             self.refresh_rules(session)
         if self.writeback is not None:
             self.writeback.review_changed()
+        if self.deployment is not None:
+            self.deployment.review_changed()
         for document, _, heading, toggle, tip in self.document_slides.values():
             reviewed = document in session.reviewed_documents
             pending = document in session.draft_reviewed

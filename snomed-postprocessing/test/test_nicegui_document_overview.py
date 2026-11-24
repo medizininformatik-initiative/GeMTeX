@@ -30,6 +30,11 @@ class DocumentOverviewTest(unittest.IsolatedAsyncioTestCase):
     def rows(self):
         return self.panel.document_grid.options["rowData"]
 
+    async def test_automatic_conditions_are_above_document_table(self):
+        panel = self.panel
+        self.assertLess(panel.conditions.id, panel.document_navigator.id)
+        self.assertIs(panel.controls.conditions_panel.parent_slot.parent, panel.conditions)
+
     async def test_document_highlight_uses_single_row_selection_not_stale_row_style(self):
         options = self.panel.document_grid.options
         self.assertEqual(options["rowSelection"], {
