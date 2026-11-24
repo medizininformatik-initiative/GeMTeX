@@ -166,7 +166,7 @@ def _prepare_shell_project_json(
 
     if clear_source_documents:
         project["source_documents"] = []
-        _clear_source_document_learning_records(project)
+        _clear_source_document_automation_metadata(project)
     else:
         project.setdefault("source_documents", [])
 
@@ -181,11 +181,12 @@ def _prepare_shell_project_json(
             project[key] = []
 
 
-def _clear_source_document_learning_records(project: dict[str, Any]) -> None:
-    """Drop recommendation history which cannot exist without source documents."""
+def _clear_source_document_automation_metadata(project: dict[str, Any]) -> None:
+    """Drop automation metadata whose documents or external files are omitted."""
     for key in tuple(project):
         normalized = "".join(char for char in str(key).lower() if char.isalnum())
-        if "learning" in normalized and "record" in normalized:
+        if (("learning" in normalized and "record" in normalized)
+                or "recommender" in normalized or "knowledgebase" in normalized):
             project[key] = []
 
 

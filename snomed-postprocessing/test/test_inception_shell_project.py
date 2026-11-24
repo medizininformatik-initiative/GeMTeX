@@ -68,6 +68,8 @@ class TestInceptionShellProject(unittest.TestCase):
             "recommenders": [{"name": "Example recommender"}],
             "learning_records": [{"document_name": "doc.txt", "user": "annotator-a"}],
             "recommendationLearningRecords": [{"documentName": "doc.txt"}],
+            "knowledge_bases": [{"name": "Example KB", "file": "knowledge_bases/example.bin"}],
+            "knowledgeBaseMappings": [{"knowledgeBase": "Example KB"}],
         }
         with zipfile.ZipFile(path, "w") as zip_file:
             zip_file.writestr("exportedproject.json", json.dumps(exported_project))
@@ -106,7 +108,9 @@ class TestInceptionShellProject(unittest.TestCase):
             self.assertEqual(project["annotation_documents"], [])
             self.assertEqual(project["learning_records"], [])
             self.assertEqual(project["recommendationLearningRecords"], [])
-            self.assertEqual(project["recommenders"], [{"name": "Example recommender"}])
+            self.assertEqual(project["recommenders"], [])
+            self.assertEqual(project["knowledge_bases"], [])
+            self.assertEqual(project["knowledgeBaseMappings"], [])
             layer_names = {layer.get("name") for layer in project.get("layers", [])}
             self.assertIn("gemtex.Concept", layer_names)
             self.assertIn("webanno.custom.ManualReview", layer_names)
@@ -194,6 +198,9 @@ class TestInceptionShellProject(unittest.TestCase):
             self.assertEqual(project["annotation_documents"], [])
             self.assertEqual(len(project["learning_records"]), 1)
             self.assertEqual(len(project["recommendationLearningRecords"]), 1)
+            self.assertEqual(len(project["recommenders"]), 1)
+            self.assertEqual(len(project["knowledge_bases"]), 1)
+            self.assertEqual(len(project["knowledgeBaseMappings"]), 1)
 
     def test_invalid_explicit_slug_is_rejected_before_inception_import(self):
         with tempfile.TemporaryDirectory() as tmp:

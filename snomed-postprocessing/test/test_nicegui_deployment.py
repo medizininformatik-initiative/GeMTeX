@@ -47,6 +47,7 @@ def fake_ui():
     ui.input.side_effect = lambda _label, value="", **_kwargs: element(value)
     ui.checkbox.side_effect = lambda _label, value=False, **_kwargs: element(value)
     ui.linear_progress.side_effect = lambda value=0.0, **_kwargs: element(value)
+    ui.spinner.side_effect = lambda *_args, **_kwargs: element()
     ui.button.side_effect = lambda *_args, **_kwargs: element()
     return ui
 
@@ -117,6 +118,14 @@ class DeploymentControlsTest(unittest.IsolatedAsyncioTestCase):
             controls = InceptionDeploymentControls(ui, inputs, review)
         return ui, inputs, review, controls
 
+    async def test_preparation_needs_no_connection_fields_or_connection_test(self):
+        _, _, _, controls = self.setup_controls()
+        self.assertEqual(controls.username.value, "")
+        self.assertEqual(controls.password.value, "")
+        self.assertTrue(controls.prepare_button.enabled)
+        self.assertIn("no INCEpTION connection", controls.prepare_readiness.text)
+        controls.close()
+
     async def test_connection_interface_is_separate_and_reuses_project_listing_helper(self):
         _, _, _, controls = self.setup_controls()
         controls.url.value = "https://inception.invalid"
@@ -149,14 +158,23 @@ class DeploymentControlsTest(unittest.IsolatedAsyncioTestCase):
             deployment_report_path=Path("deployment-report.json"), planned_upload_count=4,
             warnings=(), errors=(), imported_project_id=42, imported_project_name="sanitized",
         )
+        async def upload_worker(function, *args, **kwargs):
+            self.assertTrue(controls.uploading)
+            self.assertTrue(controls.upload_spinner.visible)
+            self.assertTrue(controls.upload_activity.visible)
+            return function(*args, **kwargs)
+
         with patch("snomed_post_processing.gui.nicegui.deployment_ui.upload_prepared_deployment", return_value=result) as upload, \
-                patch("nicegui.run.cpu_bound", new=AsyncMock(side_effect=lambda function, *args, **kwargs: function(*args, **kwargs))):
+                patch("nicegui.run.cpu_bound", new=AsyncMock(side_effect=upload_worker)):
             await controls.upload()
         upload.assert_called_once_with(
             prepared, inception_url="https://inception.invalid", username="deploy-user", password="secret",
             annotation_user="annotation-user", verify_tls=True,
         )
         self.assertTrue(controls.upload_attempted)
+        self.assertFalse(controls.uploading)
+        self.assertFalse(controls.upload_spinner.visible)
+        self.assertFalse(controls.upload_activity.visible)
         self.assertIn("new INCEpTION project sanitized (ID 42)", controls.connection_status.text)
         controls.close()
 

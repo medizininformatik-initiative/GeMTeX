@@ -114,7 +114,7 @@ def _write_decisions(output_dir: Path, decisions_text: str) -> Path:
 class InceptionDeploymentControls:
     def __init__(self, ui, inputs, review):
         self.ui, self.inputs, self.review = ui, inputs, review
-        self.busy = self.closed = False
+        self.busy = self.closed = self.uploading = False
         self.owner: TemporaryDirectory | None = None
         self.prepared: PreparedDeployment | None = None
         self.prepared_token = None
@@ -135,6 +135,7 @@ class InceptionDeploymentControls:
             self.progress = ui.linear_progress(value=0.0, show_value=False).classes("w-full")
             self.progress_label = ui.label("Save review choices, then prepare deployment artifacts.").classes("text-sm")
             self.prepare_button = ui.button("Prepare deployment artifacts", on_click=self.prepare)
+            self.prepare_readiness = ui.label().classes("text-sm whitespace-pre-wrap")
             with ui.row().classes("w-full flex-wrap"):
                 self.sanitized_download = ui.button("Download sanitized project ZIP", on_click=self.download_sanitized)
                 self.shell_download = ui.button("Download shell project ZIP", on_click=self.download_shell)
@@ -160,6 +161,9 @@ class InceptionDeploymentControls:
                     "I understand this imports a new project and uploads annotations", value=False, on_change=self.connection_changed,
                 )
                 self.upload_button = ui.button("Upload as new INCEpTION project", on_click=self.upload)
+                with ui.row().classes("items-center gap-2"):
+                    self.upload_spinner = ui.spinner("dots", size="lg")
+                    self.upload_activity = ui.label("Importing project and uploading annotations…").classes("text-sm")
                 self.connection_status = ui.label().classes("text-sm whitespace-pre-wrap")
         inputs.listeners.append(self.inputs_changed)
         review.deployment = self
@@ -221,15 +225,29 @@ class InceptionDeploymentControls:
         project = self.inputs.project.snapshot()
         session = self.review.controls.session
         template = self.template.snapshot()
-        can_prepare = (
-            project is not None and self.review.state.source_name is not None and not session.dirty
-            and not session.invalid_rules and not self.busy and not self.template.uploading
-            and (not self.inputs.is_store or self.inputs.scope.value is not None)
-        )
+        preparation_blockers = []
+        if project is None:
+            preparation_blockers.append("select the matching annotation source")
+        if self.review.state.source_name is None:
+            preparation_blockers.append("load suggestions or a rule-only review")
+        if session.dirty:
+            preparation_blockers.append("save or discard pending review choices")
+        if session.invalid_rules:
+            preparation_blockers.append("reapply or clear stale concept rules")
+        if self.template.uploading:
+            preparation_blockers.append("wait for the project-template upload")
+        if self.inputs.is_store and self.inputs.scope.value is None:
+            preparation_blockers.append("select a SQLite export scope")
+        can_prepare = not preparation_blockers and not self.busy
         prepared = self.prepared is not None
         connection_ready = bool((self.url.value or "").strip() and (self.username.value or "").strip() and self.password.value)
         self.template.container.set_visibility(self.inputs.is_store)
         self.prepare_button.set_enabled(can_prepare)
+        self.prepare_readiness.set_text(
+            "Preparation is currently running."
+            if self.busy else "Ready to prepare offline; no INCEpTION connection or credentials are required."
+            if not preparation_blockers else "Preparation unavailable: " + "; ".join(preparation_blockers) + "."
+        )
         self.sanitized_download.set_visibility(bool(prepared and self.prepared.sanitized_project_zip is not None))
         self.sanitized_download.set_enabled(bool(prepared and self.prepared.sanitized_project_zip is not None and not self.busy))
         for button in (self.shell_download, self.artifacts_download, self.pipeline_report_download, self.deployment_report_download):
@@ -239,6 +257,8 @@ class InceptionDeploymentControls:
         self.upload_button.set_enabled(
             prepared and connection_ready and bool(self.confirm.value) and not self.busy and not self.upload_attempted
         )
+        self.upload_spinner.set_visibility(self.uploading)
+        self.upload_activity.set_visibility(self.uploading)
 
     def close(self):
         self.closed = True
@@ -370,6 +390,7 @@ class InceptionDeploymentControls:
             return
         prepared = self.prepared
         self.busy = True
+        self.uploading = True
         self.upload_attempted = True
         self.progress.set_value(0.65)
         self.progress_label.set_text("Importing a new project and uploading prepared annotations…")
@@ -407,6 +428,7 @@ class InceptionDeploymentControls:
                     "The upload failed. Check INCEpTION for a partially imported project before preparing or attempting another upload."
                 )
         finally:
+            self.uploading = False
             self.busy = False
             self.refresh()
 
