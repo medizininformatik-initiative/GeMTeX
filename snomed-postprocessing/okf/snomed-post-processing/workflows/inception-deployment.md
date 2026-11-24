@@ -87,6 +87,7 @@ Remote writes require explicit `--apply`; otherwise the deployment step validate
 - preserves layer definitions from `exportedproject.json`;
 - ensures `webanno.custom.ManualReview` exists;
 - clears source and annotation document metadata by default;
+- clears recommendation learning-record metadata that references removed source documents, while retaining recommender definitions;
 - clears curated/curation metadata to avoid stale curation records;
 - omits annotation/curation content folders and `.ser` files;
 - may retain support files such as `TypeSystem.xml` and `project.properties`.

@@ -3,7 +3,7 @@
 Preview **synthetic data or uploaded suggestions JSON**, then deliberately stage
 and save manual choices and download/restore reviewed-decisions JSON.
 Policy checking, explicit concept rules and suggestion generation are connected.
-ZIP/API project sources support explicit local sanitized-ZIP write-back after choices are saved.
+For ZIP/API sources, deployment preparation also provides a complete sanitized-project ZIP download after choices are saved.
 Preserved SQLite CAS supports an offline INCEpTION review-package download.
 Direct remote deployment is connected through an explicit prepare-then-upload workflow that always imports a new project.
 Both frontends use the standard Python 3.11 project environment, `.venv`.
@@ -171,7 +171,7 @@ silently reused: first load matching generated suggestions. Policy checks and
 rules never overwrite input files. Generated metadata uses scoped snippets from
 the explicitly selected ZIP, never paths embedded in metadata.
 
-Automatic conditions, ZIP write-back and deployment are connected. Testing uses the
+Automatic conditions, combined sanitized-ZIP/deployment preparation and remote deployment are connected. Testing uses the
 artificial fixture and installed SDK; live clinical-project deployment remains unverified.
 
 ## Load saved suggestions
@@ -304,7 +304,7 @@ different finding updates details/candidates, not the main grid. Text renders as
 text, not HTML; filters are display-only. Reloading discards per-page preview
 state. There is no persistent/global review state or cookie secret.
 
-API project listing/export loading, manual/concept-rule ID removal, local ZIP sanitization and explicit INCEpTION deployment are connected. Deployment has a separate URL/credential/TLS interface: prepare and validate frozen shell/repaired-CAS artifacts first, then confirm an explicit upload that imports a new project and never overwrites the source. Local write-back requires saved choices and the selected ZIP filename to match the source recorded in review metadata; it writes a new ZIP in a process worker, rejects stale results and leaves the source unchanged. Review-only automatic historical/BM25 conditions are connected. Live INCEpTION deployment validation still requires an approved server/project.
+API project listing/export loading, manual/concept-rule ID removal, local ZIP sanitization and explicit INCEpTION deployment are connected. One combined deployment panel has a separate URL/credential/TLS interface: prepare and validate a complete sanitized project ZIP plus frozen shell/repaired-CAS artifacts first, then optionally confirm an upload that imports a new project and never overwrites the source. Source filename/review binding, scope and stale-result protections remain enforced. Review-only automatic historical/BM25 conditions are connected. Live INCEpTION deployment validation still requires an approved server/project.
 Startup is empty. Only explicitly selected policy inputs and uploaded
 suggestions/review JSON are read.
 

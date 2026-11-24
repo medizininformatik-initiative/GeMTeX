@@ -6,7 +6,6 @@ from .shared_inputs import SharedInputControls
 from .review_panel import ReviewPanelControls
 from .suggestion_ui import SuggestionControls
 from .store_restoration_ui import StoreRestorationControls
-from .zip_writeback_ui import ZipWritebackControls
 from .deployment_ui import InceptionDeploymentControls
 
 
@@ -59,7 +58,6 @@ def build_workspace(ui, events, shared_inputs):
             suggestion_controls = SuggestionControls(ui, shared_inputs, policy_controls, lambda: review_controls)
         with ui.tab_panel(review) as review_panel:
             review_controls = ReviewPanelControls(ui, review_panel, banner=banner, source=source, scope=scope)
-            ZipWritebackControls(ui, shared_inputs, review_controls)
             StoreRestorationControls(ui, shared_inputs, review_controls)
             InceptionDeploymentControls(ui, shared_inputs, review_controls)
     suggestion_controls.connect_review()

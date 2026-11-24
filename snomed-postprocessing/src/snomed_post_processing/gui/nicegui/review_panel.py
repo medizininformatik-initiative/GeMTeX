@@ -120,7 +120,6 @@ class ReviewPanelControls:
         self.document_slides = {}
         self._keyboard_busy = False
         self._finding_grid_binding = None
-        self.writeback = None
         self.deployment = None
         self.keyboard = ui.keyboard(on_key=self.handle_key, repeating=False)
         self.keyboard.active = False
@@ -192,7 +191,7 @@ class ReviewPanelControls:
                 self.controls = ReviewControls(ui, lambda: self.state, lambda: self.load_revision,
                                                self.begin_load, self.refresh_documents,
                                                conditions_container=self.conditions)
-        ui.label("Local ZIP write-back, preserved-SQLite offline packages and explicit new-project INCEpTION deployment are available below.")
+        ui.label("Sanitized-ZIP download and explicit new-project upload are combined under INCEpTION deployment; preserved SQLite CAS also retains its offline-package workflow.")
         with ui.expansion("Explicit concept rule decisions", value=True).classes("w-full") as self.rule_area:
             self.rule_summary = ui.label().classes("text-sm")
             self.rule_grid = ui.aggrid({
@@ -380,8 +379,6 @@ class ReviewPanelControls:
             self._finding_grid_binding = binding
         if hasattr(self, "rule_grid"):
             self.refresh_rules(session)
-        if self.writeback is not None:
-            self.writeback.review_changed()
         if self.deployment is not None:
             self.deployment.review_changed()
         for document, _, heading, toggle, tip in self.document_slides.values():

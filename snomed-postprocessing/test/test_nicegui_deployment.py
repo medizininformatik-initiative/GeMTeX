@@ -83,6 +83,8 @@ class DeploymentWorkerTest(unittest.TestCase):
             client.assert_not_called()
             self.assertTrue(prepared.result.shell_project.is_file())
             self.assertTrue(prepared.artifacts_zip.is_file())
+            self.assertIsNotNone(prepared.sanitized_project_zip)
+            self.assertTrue(prepared.sanitized_project_zip.is_file())
             self.assertGreater(prepared.result.deployment_result.planned_upload_count, 0)
             self.assertFalse(prepared.result.applied)
 
@@ -132,6 +134,7 @@ class DeploymentControlsTest(unittest.IsolatedAsyncioTestCase):
         _, _, _, controls = self.setup_controls()
         prepared = MagicMock(spec=PreparedDeployment)
         prepared.result = MagicMock()
+        prepared.sanitized_project_zip = Path("sanitized.zip")
         controls.prepared = prepared
         controls.prepared_token = controls._token()
         controls.url.value = "https://inception.invalid"

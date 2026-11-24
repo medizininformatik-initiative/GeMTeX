@@ -28,6 +28,7 @@ from .zip_writeback_ui import _actionable, _source_name
 class PreparedDeployment:
     result: InceptionApplyUploadResult
     artifacts_zip: Path
+    sanitized_project_zip: Path | None
 
 
 def prepare_review_deployment(
@@ -50,6 +51,16 @@ def prepare_review_deployment(
         raise ReviewError("The selected annotation source does not match the source recorded by this review.")
     if not any(_actionable(item) for item in decisions):
         raise ReviewError("Select and save at least one replacement, deletion, ID removal or manual-review action.")
+    sanitized_project_zip = None
+    if metadata.get("store_scope") is None:
+        from .zip_writeback_ui import build_sanitized_zip
+        sanitized_project_zip = output_dir / f"{source_project.stem}-sanitized.zip"
+        build_sanitized_zip(
+            source_project,
+            decisions_text,
+            sanitized_project_zip,
+            manual_review_layer=manual_review_layer,
+        )
     result = apply_decisions_and_upload_to_inception(
         source_project=source_project,
         decisions_path=_write_decisions(output_dir, decisions_text),
@@ -67,7 +78,7 @@ def prepare_review_deployment(
         for path in sorted(result.upload_artifacts_dir.rglob("*")):
             if path.is_file():
                 archive.write(path, path.relative_to(result.upload_artifacts_dir).as_posix())
-    return PreparedDeployment(result, artifacts_zip)
+    return PreparedDeployment(result, artifacts_zip, sanitized_project_zip)
 
 
 def upload_prepared_deployment(
@@ -125,6 +136,7 @@ class InceptionDeploymentControls:
             self.progress_label = ui.label("Save review choices, then prepare deployment artifacts.").classes("text-sm")
             self.prepare_button = ui.button("Prepare deployment artifacts", on_click=self.prepare)
             with ui.row().classes("w-full flex-wrap"):
+                self.sanitized_download = ui.button("Download sanitized project ZIP", on_click=self.download_sanitized)
                 self.shell_download = ui.button("Download shell project ZIP", on_click=self.download_shell)
                 self.artifacts_download = ui.button("Download repaired artifacts ZIP", on_click=self.download_artifacts)
                 self.pipeline_report_download = ui.button("Download preparation report JSON", on_click=self.download_pipeline_report)
@@ -218,6 +230,8 @@ class InceptionDeploymentControls:
         connection_ready = bool((self.url.value or "").strip() and (self.username.value or "").strip() and self.password.value)
         self.template.container.set_visibility(self.inputs.is_store)
         self.prepare_button.set_enabled(can_prepare)
+        self.sanitized_download.set_visibility(bool(prepared and self.prepared.sanitized_project_zip is not None))
+        self.sanitized_download.set_enabled(bool(prepared and self.prepared.sanitized_project_zip is not None and not self.busy))
         for button in (self.shell_download, self.artifacts_download, self.pipeline_report_download, self.deployment_report_download):
             button.set_visibility(prepared)
             button.set_enabled(prepared and not self.busy)
@@ -403,6 +417,11 @@ class InceptionDeploymentControls:
         if not url or not username or not password:
             raise ReviewError("Enter the deployment URL, username and password.")
         return url, username, password
+
+    def download_sanitized(self):
+        if self.prepared is not None and self.prepared.sanitized_project_zip is not None:
+            path = self.prepared.sanitized_project_zip
+            self.ui.download.file(path, filename=path.name)
 
     def download_shell(self):
         if self.prepared is not None:

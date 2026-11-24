@@ -38,9 +38,10 @@ or discard pending choices. **Inputs** opens the shared drawer from every stage.
 Both annotator selectors display selected names as chips; their dropdowns show checked
 icons and highlighted rows. Clearing all inclusion names still means **all annotators**,
 unless exclusions restrict that scope. After saving review choices for a ZIP/API project,
-use **3. Review & apply → Local ZIP write-back → Run sanitization** to create and download
-a separate sanitized project ZIP. The selected ZIP filename must match the source recorded
-by the review; the original source is never modified and no remote request is made.
+use **3. Review & apply → INCEpTION deployment → Prepare deployment artifacts**. Preparation
+creates both a complete sanitized project ZIP and the shell/repaired artifacts used for
+remote deployment. The selected ZIP filename must match the source recorded by the review;
+the original source is never modified and preparation makes no remote request.
 
 On narrow screens, the menu button toggles navigation. Review remains bound to its
 loaded artifact rather than the drawer's current source settings. JSON/Markdown and
@@ -63,9 +64,9 @@ project. The implementation reuses the existing INCEpTION API/client and deploym
 pipeline functions.
 
 First select **Prepare deployment artifacts**. This validates the review/source
-binding and creates a frozen schema shell plus repaired flattened CAS artifacts. It
-performs no network upload. The shell, artifacts and reports can be downloaded for
-inspection. For SQLite sources with preserved CAS, select an export scope and provide
+binding and creates a complete sanitized project ZIP plus a frozen schema shell and
+repaired flattened CAS artifacts. It performs no network upload. The sanitized project,
+shell, artifacts and reports can be downloaded for inspection. For SQLite sources with preserved CAS, select an export scope and provide
 a compatible project-template ZIP when the store lacks project configuration.
 
 Use **Test deployment connection** for an explicit read-only connection check. To

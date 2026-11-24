@@ -166,6 +166,7 @@ def _prepare_shell_project_json(
 
     if clear_source_documents:
         project["source_documents"] = []
+        _clear_source_document_learning_records(project)
     else:
         project.setdefault("source_documents", [])
 
@@ -177,6 +178,14 @@ def _prepare_shell_project_json(
     # Avoid importing stale curation metadata without matching sanitized CAS content.
     for key in ("curated_documents", "curation_documents"):
         if key in project:
+            project[key] = []
+
+
+def _clear_source_document_learning_records(project: dict[str, Any]) -> None:
+    """Drop recommendation history which cannot exist without source documents."""
+    for key in tuple(project):
+        normalized = "".join(char for char in str(key).lower() if char.isalnum())
+        if "learning" in normalized and "record" in normalized:
             project[key] = []
 
 
