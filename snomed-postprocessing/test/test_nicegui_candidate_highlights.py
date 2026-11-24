@@ -3,6 +3,7 @@ import copy
 from importlib.util import find_spec
 from types import SimpleNamespace
 import unittest
+from unittest.mock import MagicMock
 
 from snomed_post_processing.gui.nicegui.review import ReviewSession, load_review
 from snomed_post_processing.gui.nicegui.review_panel import _candidate_rows
@@ -115,10 +116,18 @@ class CandidateHighlightPanelTest(unittest.IsolatedAsyncioTestCase):
                 finding = panel.state.findings[0]
                 event = lambda row: SimpleNamespace(args={"data": {"row_id": row.row_id}})
                 panel.select_finding(event(finding))
+                panel.candidate_grid.update = MagicMock()
+                panel.candidate_grid.run_grid_method = MagicMock()
+                panel.finding_grid.run_grid_method = MagicMock()
                 panel.select_candidate(event(finding.candidates[1]))
+                panel.candidate_grid.update.assert_not_called()
+                self.assertTrue(any(call.args[0] == "applyTransaction"
+                                    for call in panel.candidate_grid.run_grid_method.call_args_list))
                 self.assertEqual(panel.candidate_grid.options["rowData"][1]["selection"], "Inspecting only")
                 self.assertFalse(panel.controls.session.dirty)
                 panel.controls.command("candidate")
+                self.assertTrue(any(call.args[0] == "applyTransaction"
+                                    for call in panel.finding_grid.run_grid_method.call_args_list))
                 self.assertEqual(panel.candidate_grid.options["rowData"][1]["selection"], "Chosen — pending Save · inspecting")
                 panel.controls.command("save")
                 self.assertEqual(panel.candidate_grid.options["rowData"][1]["selection"], "Chosen — saved · inspecting")

@@ -1,4 +1,6 @@
 """Per-page review panel: inspection, document navigation and review JSON controls."""
+import hashlib
+
 from snomed_post_processing.review_context import ReviewContext
 
 from .state import PreviewState
@@ -117,6 +119,7 @@ class ReviewPanelControls:
         self.active_document = None
         self.document_slides = {}
         self._keyboard_busy = False
+        self._finding_grid_binding = None
         self.writeback = None
         self.deployment = None
         self.keyboard = ui.keyboard(on_key=self.handle_key, repeating=False)
@@ -264,16 +267,18 @@ class ReviewPanelControls:
     def refresh_rules(self, session):
         binding = session.active_rule_binding
         self.rule_source_download.set_visibility(not self.state.source_suggestions)
-        self.rule_rows = {f"{self.load_revision}:{session.revision}:{index}": index
-                          for index, _ in enumerate(session.effective_rules)}
-        self.rule_grid.options["rowData"] = [dict(
+        self.rule_rows = {
+            f"{self.load_revision}:{hashlib.sha256(repr((item.get('document'), item.get('annotator'), item.get('layer'), item.get('offset'), item.get('source_code'), (item.get('concept_rule') or {}).get('rule_id'), index)).encode()).hexdigest()[:16]}": index
+            for index, item in enumerate(session.effective_rules)
+        }
+        rows = [dict(
             row_id=key, apply=bool(item.get("apply")), editable=binding is not None,
             document=item["document"], annotator=item["annotator"], layer=item["layer"], offset=str(item["offset"]),
             source=item["source_code"], action=item["action"], target=item.get("replacement_code") or "",
             rule=item["concept_rule"]["rule_id"], override_allowed=bool(item["concept_rule"].get("override_policy")),
             override=bool(item.get("policy_overridden")))
             for key, index in self.rule_rows.items() for item in (session.effective_rules[index],)]
-        self.rule_grid.update()
+        _update_grid_rows(self.rule_grid, rows)
         self.rule_area.set_visibility(bool(session.effective_rules) or session.draft_rules is not None)
         self.rule_summary.set_text(f"{len(session.effective_rules)} rules · {len(session.rule_conflicts()[1])} manual conflicts"
                                    + (" · inputs changed; reapply or clear" if session.invalid_rules else "")
@@ -366,8 +371,13 @@ class ReviewPanelControls:
     def refresh_documents(self, session):
         self.refresh_document_overview(session)
         self.refresh_candidates()
-        self.finding_grid.options["rowData"] = [row for row in _finding_rows(self.state, session)
-                                              if row["document"] == self.active_document]
+        rows = [row for row in _finding_rows(self.state, session) if row["document"] == self.active_document]
+        binding = (self.state, self.active_document)
+        if binding == self._finding_grid_binding:
+            _update_grid_rows(self.finding_grid, rows)
+        else:
+            self.finding_grid.options["rowData"] = rows
+            self._finding_grid_binding = binding
         if hasattr(self, "rule_grid"):
             self.refresh_rules(session)
         if self.writeback is not None:
@@ -426,11 +436,14 @@ class ReviewPanelControls:
         if type(row_index) is int and row_index >= 0:
             self.document_grid.run_grid_method("ensureIndexVisible", row_index)
 
-    def refresh_candidates(self):
+    def refresh_candidates(self, *, preserve_view=True):
         finding = self.state.selected_finding
-        self.candidate_grid.options["rowData"] = (_candidate_rows(
-            finding, self.controls.session, self.state.selected_candidate_id) if finding else [])
-        self.candidate_grid.update()
+        rows = _candidate_rows(finding, self.controls.session, self.state.selected_candidate_id) if finding else []
+        if preserve_view:
+            _update_grid_rows(self.candidate_grid, rows)
+        else:
+            self.candidate_grid.options["rowData"] = rows
+            self.candidate_grid.update()
 
     def clear_inspection(self):
         self.state.selected_finding_id = None
@@ -516,7 +529,7 @@ class ReviewPanelControls:
         self.proposed.set_text(f"Saved proposed SCTID: {finding.proposed_code or 'none'} (not automatically accepted)")
         self.rationale.set_text(finding.reason)
         # limits.set_text("Retrieval limits — candidate evidence may be incomplete:\n" + "\n".join(finding.retrieval_limits) if finding.retrieval_limits else "")
-        self.refresh_candidates()
+        self.refresh_candidates(preserve_view=False)
         self.preview.set_text("No candidate selected. Inspecting a candidate stages no decision.")
         self.evidence.set_text("")
         self.controls.refresh(update_grid=False)

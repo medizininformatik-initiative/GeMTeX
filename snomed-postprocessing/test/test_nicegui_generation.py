@@ -13,7 +13,7 @@ from tempfile import TemporaryDirectory
 import time
 from types import SimpleNamespace
 import unittest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from snomed_post_processing.findings_io import read_critical_findings_json_with_metadata
 from snomed_post_processing.gui.nicegui.file_sources import SourceFile
@@ -495,8 +495,13 @@ class GenerationControlsTest(unittest.IsolatedAsyncioTestCase):
         self.review.controls.command("save")
         self.assertEqual(len(session.rules), 4)
         self.assertFalse(session.dirty)
+        row_ids = [row["row_id"] for row in self.review.rule_grid.options["rowData"]]
+        self.review.rule_grid.run_grid_method = MagicMock()
         row = dict(self.review.rule_grid.options["rowData"][0], apply=False)
         self.review.toggle_rule(SimpleNamespace(args={"data": row}))
+        self.assertEqual([row["row_id"] for row in self.review.rule_grid.options["rowData"]], row_ids)
+        self.assertTrue(any(call.args[0] == "applyTransaction"
+                            for call in self.review.rule_grid.run_grid_method.call_args_list))
         self.review.controls.command("save")
         self.assertFalse(session.rules[0]["apply"])
         self.assertTrue(session.rules[0]["rule_reviewed_by_human"])
