@@ -174,6 +174,16 @@ Navigation clears inspection but preserves pending/saved choices. Table filterin
 and sorting do not change review/export scope or approve anything. Only documents
 represented by the loaded scoped findings appear—not unrepresented project files.
 
+## Finding review actions
+
+In **Review & apply**, right-click a finding to stage one mutually exclusive action:
+**Accept Suggestion**, **Remove concept ID**, **Delete**, **Manual Review**, or
+**Keep Original**. Removing the concept ID preserves the annotation, span, type,
+literal and other features; write-back clears only the ID feature configured in
+Inputs/review metadata. Delete removes the annotation instead. Save choices before
+exporting or running local write-back. Imported protected actions and concept-rule
+reservations remain read-only in the generic menu.
+
 ## Candidate row colors
 
 In **Review & apply**, both NiceGUI-based shells distinguish inspection from an

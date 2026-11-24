@@ -17,7 +17,7 @@ class ReviewControls:
         self.status = ui.label().classes("text-sm whitespace-pre-wrap")
         self.menu = ui.context_menu().props("no-parent-event")
         self.menu_target = None
-        ui.label("Findings: right-click for Accept Suggestion, Delete, Manual Review or Keep Original. Selected finding candidates: right-click for Apply. Save choices commits staged actions; Shift + right-click opens the browser menu.").classes("text-sm")
+        ui.label("Findings: right-click for Accept Suggestion, Remove concept ID, Delete, Manual Review or Keep Original. Selected finding candidates: right-click for Apply. Save choices commits staged actions; Shift + right-click opens the browser menu.").classes("text-sm")
         with ui.row():
             self.save = ui.button("Save choices", on_click=lambda: self.command("save"))
             self.discard = ui.button("Discard pending changes", on_click=lambda: self.command("discard"))
@@ -55,7 +55,7 @@ class ReviewControls:
         with ui.row():
             self.export = ui.button("Download reviewed decisions JSON", on_click=self.download)
         ui.label("Save document flags with Save choices. Reviewed is progress, not proof of replacements for all findings.")
-        ui.label("Import replaces current review. Imported deletions/manual edits remain protected. Reapply imported rules against current inputs in tab 2 to edit their Apply choices.")
+        ui.label("Import replaces current review. Imported deletions/manual edits/ID removals remain protected. Reapply imported rules against current inputs in tab 2 to edit their Apply choices.")
         self.upload = ui.upload(label="Load reviewed decisions JSON (replaces current review)", on_upload=self.load,
                                 auto_upload=True, multiple=False, max_file_size=MAX_DECISIONS_BYTES,
                                 on_rejected=lambda: self.status.set_text("Decisions upload rejected; current review unchanged.")) \
@@ -113,6 +113,7 @@ class ReviewControls:
         enabled = state.source_name is not None and not self.session.protected(row)
         actions = (("Apply", "candidate", enabled and bool(candidate and candidate.selectable)),) if candidates else (
             ("Accept Suggestion", "accept", enabled and self.session.proposed_candidate(row.row_id) is not None),
+            ("Remove concept ID", "clear_id", enabled),
             ("Delete", "delete", enabled),
             ("Manual Review", "manual_edit", enabled),
             ("Keep Original", "keep", enabled),
@@ -143,7 +144,7 @@ class ReviewControls:
                 if state.selected_candidate_id is None:
                     raise ReviewError("Inspect a selectable candidate first.")
                 self.session.stage(state.selected_finding_id, state.selected_candidate_id)
-            elif command in ("delete", "manual_edit"):
+            elif command in ("clear_id", "delete", "manual_edit"):
                 self.session.stage(state.selected_finding_id, action=command)
             elif command == "keep":
                 self.session.stage(state.selected_finding_id)

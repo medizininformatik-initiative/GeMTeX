@@ -75,8 +75,8 @@ class ReviewSessionTest(unittest.TestCase):
         self.assertEqual(item["covered_text"], row.text)
         self.assertTrue(item["apply"] and item["valid_choice"] and item["reviewed_by_human"])
 
-    def test_delete_and_manual_review_are_exclusive_saved_actions_with_backend_flags(self):
-        for action, resolved in (("delete", True), ("manual_edit", False)):
+    def test_nonreplacement_actions_are_exclusive_and_use_backend_flags(self):
+        for action, resolved in (("clear_id", True), ("delete", True), ("manual_edit", False)):
             with self.subTest(action=action):
                 source = state(); row = source.findings[0]; review = ReviewSession(source)
                 review.stage(row.row_id, row.candidates[0].row_id)
@@ -89,8 +89,8 @@ class ReviewSessionTest(unittest.TestCase):
                 self.assertEqual(item["delete_annotation"], action == "delete")
                 self.assertEqual(item["manual_edit"], action == "manual_edit")
                 self.assertEqual(item["resolved"], resolved)
-                self.assertFalse(item["apply"])
-                self.assertFalse(item["valid_choice"])
+                self.assertEqual(item["apply"], action == "clear_id")
+                self.assertEqual(item["valid_choice"], action == "clear_id")
                 self.assertTrue(item["reviewed_by_human"])
                 self.assertIsNone(item["replacement_code"])
                 self.assertNotIn("manual_candidate", item)
@@ -135,7 +135,7 @@ class ReviewSessionTest(unittest.TestCase):
 
     def test_nonreplacement_actions_cannot_smuggle_candidate_evidence(self):
         source = state(); row = source.findings[0]; review = ReviewSession(source)
-        for action in ("delete", "manual_edit", "none", "unsupported"):
+        for action in ("clear_id", "delete", "manual_edit", "none", "unsupported"):
             with self.assertRaises(ReviewError):
                 review.stage(row.row_id, row.candidates[0].row_id, action=action)
         with self.assertRaises(ReviewError):
@@ -401,9 +401,14 @@ class ReviewUiTest(unittest.IsolatedAsyncioTestCase):
         ui, grids, labels, _, _, buttons = await self.setup_page()
         row = grids[0].options["rowData"][0]
         actions = open_context(ui, grids[0], row)
-        self.assertEqual(list(actions), ["Accept Suggestion", "Delete", "Manual Review", "Keep Original"])
+        self.assertEqual(list(actions), ["Accept Suggestion", "Remove concept ID", "Delete", "Manual Review", "Keep Original"])
         self.assertFalse(actions["Accept Suggestion"].enabled)
         self.assertEqual(grids[0].options["rowData"][0]["review"], "Unreviewed")
+        actions["Remove concept ID"].callback(None)
+        self.assertEqual(grids[0].options["rowData"][0]["review"], "Pending ID removal")
+        buttons["Save choices"]()
+        self.assertEqual(grids[0].options["rowData"][0]["review"], "Saved ID removal")
+        actions = open_context(ui, grids[0], row)
         actions["Delete"].callback(None)
         self.assertEqual(grids[0].options["rowData"][0]["review"], "Pending deletion")
         buttons["Save choices"]()

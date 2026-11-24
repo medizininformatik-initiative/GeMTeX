@@ -211,14 +211,15 @@ only data you intend to show in this browser session.
 Load suggestions first; staging/import/export are disabled until then.
 
 1. Click a finding and inspect candidates/evidence. Navigation never approves a target.
-2. The **Findings** right-click menu offers **Accept Suggestion**, **Delete**,
-   **Manual Review**, and **Keep Original**, with no Apply action. Accept Suggestion
+2. The **Findings** right-click menu offers **Accept Suggestion**, **Remove concept ID**,
+   **Delete**, **Manual Review**, and **Keep Original**, with no Apply action. Accept Suggestion
    uses the saved proposed SCTID only if exactly one selectable candidate matches it;
    missing, unavailable, context-only or duplicate-channel proposals are disabled.
    It never chooses the inspected/first candidate instead. The **Selected finding**
    candidate-table menu offers only **Apply**, targeting the right-clicked selectable
    candidate; diagnostic context cannot be applied.
-   **Delete** stages annotation removal, not ID clearing. **Manual Review** stages
+   **Remove concept ID** preserves the annotation and clears only the configured SNOMED ID feature.
+   **Delete** stages complete annotation removal. **Manual Review** stages
    `manual_edit`: preserve the original and add a ManualReview marker during later
    backend write-back; this remains unresolved, not a completed fix. **Keep Original**
    resets an action to a human-reviewed unchanged annotation. Actions are mutually
@@ -303,7 +304,7 @@ different finding updates details/candidates, not the main grid. Text renders as
 text, not HTML; filters are display-only. Reloading discards per-page preview
 state. There is no persistent/global review state or cookie secret.
 
-**Not connected:** generic ID-removal choices or INCEpTION API deployment. API project listing/export loading and local ZIP sanitization are connected. Local write-back requires saved choices and the selected ZIP filename to match the source recorded in review metadata; it writes a new ZIP in a process worker, rejects stale results and leaves the source unchanged. Explicit concept-rule ID removal and review-only automatic historical/BM25 conditions are connected.
+**Not connected:** INCEpTION API deployment. API project listing/export loading, manual/concept-rule ID removal and local ZIP sanitization are connected. Local write-back requires saved choices and the selected ZIP filename to match the source recorded in review metadata; it writes a new ZIP in a process worker, rejects stale results and leaves the source unchanged. Review-only automatic historical/BM25 conditions are connected.
 Startup is empty. Only explicitly selected policy inputs and uploaded
 suggestions/review JSON are read.
 

@@ -1,7 +1,7 @@
 """Page-local manual review commands using the existing backend JSON format.
 
 Navigation is not staging, staging is not saving, and exporting never applies CAS
-changes. Imported rule/delete/manual-edit decisions are preserved and protected.
+changes. Imported rule/delete/manual-edit/ID-removal decisions are preserved and protected.
 No HDF5/project is opened and no paths from metadata are followed.
 """
 from __future__ import annotations
@@ -116,9 +116,9 @@ class ReviewSession:
     def stage(self, row_id, candidate_id=None, *, action=None):
         row = self._row(row_id)
         if self.protected(row):
-            raise ReviewError("This finding has a concept rule or protected imported action. Use rule Apply choices or clear rules; imported deletions/manual edits remain read-only.")
+            raise ReviewError("This finding has a concept rule or protected imported action. Use rule Apply choices or clear rules; imported deletions/manual edits/ID removals remain read-only.")
         action = action or ("replace" if candidate_id is not None else "none")
-        if action not in ("replace", "none", "delete", "manual_edit") or (action != "replace" and candidate_id is not None):
+        if action not in ("replace", "none", "delete", "manual_edit", "clear_id") or (action != "replace" and candidate_id is not None):
             raise ReviewError("Select one review action for this finding.")
         if action == "replace":
             candidate = next((item for item in row.candidates if item.row_id == candidate_id and item.selectable), None)
@@ -155,11 +155,12 @@ class ReviewSession:
     def _decision(self, row, candidate_id=None, *, human=False, action=None):
         candidate = next((item for item in row.candidates if item.row_id == candidate_id and item.selectable), None)
         action = action or ("replace" if candidate else "none")
+        applies = bool(candidate) or action == "clear_id"
         decision = dict(suggestion_index=row.suggestion_index, document=row.document, annotator=row.annotator,
                     layer=row.layer, offset=list(row.offset or ()), source_code=row.code, covered_text=row.text,
-                    action=action, apply=bool(candidate), delete_annotation=action == "delete",
-                    manual_edit=action == "manual_edit", reviewed_by_human=human, valid_choice=bool(candidate),
-                    resolved=bool(candidate) or action == "delete",
+                    action=action, apply=applies, delete_annotation=action == "delete",
+                    manual_edit=action == "manual_edit", reviewed_by_human=human, valid_choice=applies,
+                    resolved=applies or action == "delete",
                     replacement_code=candidate.code if candidate else None,
                     replacement_fsn=candidate.fsn if candidate else None,
                     replacement_choice=f"{candidate.code} — {candidate.fsn}".strip() if candidate else NO_REPLACEMENT,
@@ -285,7 +286,8 @@ class ReviewSession:
             choice = self.drafts[row.row_id]
             candidate = next((c for c in row.candidates if c.row_id == choice.candidate_id), None)
             return (f"Pending replacement: {candidate.code}" if candidate else
-                    {"delete": "Pending deletion", "manual_edit": "Pending manual review", "none": "Pending Keep"}[choice.action])
+                    {"delete": "Pending deletion", "manual_edit": "Pending manual review",
+                     "clear_id": "Pending ID removal", "none": "Pending Keep"}[choice.action])
         if any(_identity(rule) == _finding_identity(row) for rule in self.effective_rules):
             return "Reserved by concept rule"
         if self.protected(row):
@@ -295,6 +297,8 @@ class ReviewSession:
             return "Saved deletion"
         if item.get("manual_edit"):
             return "Saved manual review"
+        if item.get("action") == "clear_id" and item.get("apply"):
+            return "Saved ID removal"
         if item.get("apply"):
             condition = (item.get("automatic_condition") or {}).get("kind")
             label = {"historical_association": "historical condition", "bm25_gap": "BM25 gap"}.get(condition)
