@@ -1,409 +1,286 @@
-# User guide: interpreting results and warnings
+# GUI user guide
 
-This companion to the [README](../README.md) collects detailed explanations without
-expanding the main setup and workflow instructions.
+This guide covers the default NiceGUI workspace and the retained Streamlit fallback.
+For installation and CLI usage, see the [main README](../README.md).
 
 ## Contents
 
 - [Workspace frontend](#workspace-frontend)
+- [Core workflow](#core-workflow)
 - [Deploying a reviewed project to INCEpTION](#deploying-a-reviewed-project-to-inception)
 - [SQLite instead of an INCEpTION project](#sqlite-instead-of-an-inception-project)
+- [Review workspace](#review-workspace)
 - [Masked suggestion overview download](#masked-suggestion-overview-download)
-- [Review keyboard navigation](#review-keyboard-navigation)
-- [Resizing tables](#resizing-tables)
-- [Document overview in review](#document-overview-in-review)
-- [Candidate row colors](#candidate-row-colors)
-- [Review summary counts](#review-summary-counts)
-- [Exclusion-list findings without replacements](#exclusion-list-findings-without-replacements)
-- [Diagnostic candidates](#diagnostic-candidates)
+- [Suggestion warnings and diagnostics](#suggestion-warnings-and-diagnostics)
 - [FSN postfix exclusions](#fsn-postfix-exclusions)
 - [SNOGIT retrieval limits](#snogit-retrieval-limits)
-  - [What the three limits mean](#what-the-three-limits-mean)
-  - [Term rows, hits and final candidates](#term-rows-hits-and-final-candidates)
-  - [What to do when a limit is reported](#what-to-do-when-a-limit-is-reported)
 
 ## Workspace frontend
 
-Launch the default navigation workspace from the standard project environment:
+Launch the default NiceGUI workspace from the repository root:
 
 ```bash
 uv run src/snomed_post_processing/gui/app.py --show
 ```
 
-The project-authored shell adds a responsive header, collapsible workflow navigation,
-bordered work surfaces and a shared right-hand settings drawer around the **same**
-NiceGUI workflow. The navigation and three workflow tabs select the same persistent
-panels; switching stages does not start processing, replace review, approve changes
-or discard pending choices. **Inputs** opens the shared drawer from every stage.
-Both annotator selectors display selected names as chips; their dropdowns show checked
-icons and highlighted rows. Clearing all inclusion names still means **all annotators**,
-unless exclusions restrict that scope. After saving review choices for a ZIP/API project,
-use **3. Review & apply → INCEpTION deployment → Prepare deployment artifacts**. Preparation
-creates both a complete sanitized project ZIP and the shell/repaired artifacts used for
-remote deployment. The selected ZIP filename must match the source recorded by the review;
-the original source is never modified and preparation makes no remote request.
+The public frontend choices are:
 
-On narrow screens, the menu button toggles navigation. Review remains bound to its
-loaded artifact rather than the drawer's current source settings. JSON/Markdown and
-masked CSV downloads behave consistently across the workspace. Reload still loses
-in-memory state; download artifacts and decisions before leaving.
+```bash
+--frontend nicegui     # default workspace
+--frontend streamlit   # previous UI
+```
 
-No login, account database, migrations, demo data, PWA/offline cache or additional
-processing capabilities are enabled. This shell is not a security boundary.
-NiceGUI is the default frontend and presents the workspace shell; `--frontend nicegui`
-selects it explicitly. Use `--frontend streamlit` for the previous Streamlit UI. The former
-plain NiceGUI shell is no longer exposed separately. The workspace uses
-system fonts and project-authored CSS without external asset fetches.
-See the [workspace provenance](../src/snomed_post_processing/gui/nicegui/PROVENANCE.md).
+NiceGUI listens on `127.0.0.1:8080` by default. Use `--port`, `--host`, or
+`--show` as needed. **Inputs** opens the shared settings drawer from every workflow
+stage. Changing tabs does not start processing, approve findings, or discard review
+choices.
+
+Inputs, credentials, review state, and generated results are page-local. Restarting
+or using development reload discards them, so download decisions and output artifacts
+before leaving. The source ZIP, SQLite database, HDF5, cache, and project template are
+always treated as read-only inputs.
+
+Annotator scope applies across checking, generation, rules, review, write-back, and
+deployment. Empty inclusion means all annotators; exclusions take precedence.
+
+## Core workflow
+
+1. **Check policy**
+   - Select a project ZIP, INCEpTION API export, or SQLite annotation store.
+   - Select the SNOMED HDF5, annotation layers, ID settings, and annotator scope.
+   - Run a policy check or restore a compatible CriticalFindings JSON artifact.
+2. **Suggestions & rules**
+   - Generate suggestions from the current findings, or restore suggestions JSON.
+   - Optionally configure SNOGIT/BM25 and explicit concept rules.
+   - Use **Load in review (replaces review)** to hand generated or restored suggestions
+     to the review stage. Generation alone does not replace review state.
+3. **Review & apply**
+   - Inspect findings and candidates, stage actions, and save choices.
+   - Optionally apply guarded historical/BM25 automatic conditions; Undo affects only
+     their automatic ownership, not later manual choices.
+   - Download reviewed-decisions JSON before write-back or deployment.
+4. **Prepare output**
+   - Prepare a complete sanitized project ZIP and deployment artifacts.
+   - Optionally upload them as a new INCEpTION project.
+
+Restored artifacts retain their recorded scope and settings. Broader or incompatible
+inputs are rejected instead of being silently combined. Failed or stale background
+work does not replace the last valid result.
 
 ## Deploying a reviewed project to INCEpTION
 
-After saving review choices, open **3. Review & apply → INCEpTION deployment**.
-Deployment deliberately uses a separate URL, username, password, annotation-user and
-TLS interface; it does not inherit the connection form used to download a source
-project. The implementation reuses the existing INCEpTION API/client and deployment
-pipeline functions.
+After saving review choices, open **Review & apply → INCEpTION deployment**.
 
-First select **Prepare deployment artifacts**. This validates the review/source
-binding and creates a complete sanitized project ZIP plus a frozen schema shell and
-repaired flattened CAS artifacts. It performs no network upload. The sanitized project,
-shell, artifacts and reports can be downloaded for inspection. For SQLite sources with preserved CAS, select an export scope and provide
-a compatible project-template ZIP when the store lacks project configuration.
+### Prepare offline
 
-Use **Test deployment connection** for an explicit read-only connection check. To
-write remotely, select the confirmation checkbox and then **Upload as new INCEpTION
-project**. This imports a new sanitized project and uploads the prepared annotations;
-the source project is never overwritten. After a failed or uncertain upload, inspect
-INCEpTION before retrying because a project may have been imported before a later
-artifact failed. Disabling TLS verification weakens connection security and should be
-used only when the server certificate cannot yet be trusted correctly.
+Select **Prepare deployment artifacts**. No INCEpTION connection or credentials are
+required. Preparation validates the source/review binding and creates:
+
+- a complete sanitized project ZIP for ZIP/API sources;
+- a schema-only project shell;
+- repaired CAS upload artifacts;
+- preparation and deployment reports.
+
+These files are frozen together; changing the source or review invalidates them.
+Preparation never modifies the source or contacts INCEpTION.
+
+### Upload remotely
+
+Deployment uses a separate URL, username, password, annotation user, and TLS setting.
+Connection testing is optional and read-only. To upload, provide the required
+connection fields, confirm the operation, and select **Upload as new INCEpTION
+project**.
+
+Deployment always creates a separate project and never overwrites the source. If an
+upload fails after project import, inspect INCEpTION before retrying; the new project
+may already exist. Prepare fresh artifacts before another attempt. Disable TLS
+verification only when the certificate cannot yet be trusted correctly.
 
 ## SQLite instead of an INCEpTION project
 
-Both frontends accept **Annotation source → Annotation store (SQLite)** instead of
-an INCEpTION project ZIP/API source. The selected HDF5 remains the terminology and
-policy source; SQLite supplies the annotations, documents, annotators and text.
+Select **Annotation source → Annotation store (SQLite)** to use a read-only schema-v2
+annotation store instead of a project ZIP/API export.
 
-1. Select a closed, checkpointed **schema v2** database using Upload, Data directory
-   or Server path. For a large database outside `data`, use Server path.
-2. Click **Inspect SQLite scopes**, then select **SQLite export / view**. A sole
-   view kind is selected automatically. Combined exports/views are allowed only
-   when each document/annotator identity is unambiguous; otherwise select a single
-   export/view. Conflicting text for one document name is also rejected.
-3. Select annotators and exact stored layer names, then **Run policy check**.
-   Continue with suggestions, concept rules and review as usual; no ZIP/API is needed.
+1. Select a closed, checkpointed database. Live databases with pending WAL content
+   are rejected.
+2. Select **Inspect SQLite scopes**, then choose one export/view scope. Combined scopes
+   are accepted only when document, annotator, text, and annotation identities remain
+   unambiguous.
+3. Select exact stored layer names and annotator scope, then continue with policy
+   checking, suggestions, rules, and review.
 
-Annotation occurrences are preserved even when their payloads are deduplicated in
-SQLite. Stored `sctid` values are used directly: ID-feature/prefix settings apply
-only to project input. Stored FSNs/activity flags do not override the selected HDF5.
-SQLite policy checking matches exact stored layer names rather than expanding
-inherited types, even when optional CAS/type-system preservation is enabled. A requested ignore-overlap layer absent from the selected
-data causes an explicit error. If document text is missing, full context is unavailable;
-covered text and saved snippets remain usable.
+SQLite supplies annotations, provenance, document text, and annotators. The selected
+HDF5 remains authoritative for SNOMED policy, FSNs, and activity. The database is never
+migrated or modified.
 
-The database is opened read-only, with no migration, updates or WAL/SHM creation.
-Live databases with pending WAL content are rejected. Findings and suggestions retain
-`store_scope` and source-file provenance in metadata; existing artifact formats remain
-unchanged. Changing inputs does not run analysis or replace loaded review decisions.
-For later INCEpTION review, create a **new** store with `build-annotation-store --store-cas`.
-This optional mode preserves complete JSONCAS/XMI, full document text and project
-configuration. Identical external type systems are stored once by SHA-256 and referenced;
-different definitions remain separate. It retains all original features/layers, not
-just extracted SNOMED annotations, and therefore adds sensitive clinical data and storage.
-Existing stores are not upgraded.
+### Preserved CAS output
 
-Choose a **single export/view scope before generating the review**. Streamlit then
-enables its normal sanitization/deployment controls for preserved CAS, restoring a
-temporary project and the original ID feature/prefix automatically. Local sanitized
-ZIPs retain excluded annotators unchanged; remote artifacts omit them. NiceGUI offers
-**SQLite CAS restoration / INCEpTION review → Download INCEpTION review package (offline)**
-after saving choices: extract it and follow its explicit deployment instructions.
-No remote calls occur during NiceGUI preparation. If the export lacked project
-configuration, select a compatible project-template ZIP. Stores without preserved CAS
-remain review-JSON-only.
+Ordinary schema-v2 stores are analysis/review-JSON-only. To support complete CAS
+restoration, create a new store with:
 
-For a standalone restoration, use `restore-annotation-store-cas --store STORE.sqlite
---store-scope 1:annotation --output restored-project.zip`. This is a JSON/XMI workspace
-for the shell/artifact workflow, **not a native full-project backup**: no Java `.ser`
-files are generated. Restoring never edits the database. Live INCEpTION import/review
-validation remains outstanding.
+```bash
+build-annotation-store --store-cas
+```
+
+This preserves complete JSONCAS/XMI, document text, type systems, and available project
+configuration. It therefore stores sensitive clinical data and can be substantially
+larger.
+
+Choose a single scope before generating the review. After saving choices, use the
+SQLite restoration/offline-package control or the deployment preparation flow. If the
+store lacks project configuration, provide a compatible project-template ZIP.
+Excluded annotator CAS is omitted from remote deployment artifacts.
+
+Standalone restoration is also available:
+
+```bash
+restore-annotation-store-cas \
+  --store STORE.sqlite \
+  --store-scope 1:annotation \
+  --output restored-project.zip
+```
+
+The result is a JSON/XMI workspace, not a native Java `.ser` backup. Restoration never
+edits the database.
+
+## Review workspace
+
+### Document and finding navigation
+
+The **Documents in loaded artifact** table is sortable and filterable. Clicking a row
+opens that document. Its finding count covers the loaded artifact scope; saved review
+status is an explicit progress flag, not proof that every finding has a replacement.
+Filtering and sorting change presentation only and never limit export.
+
+#### Review keyboard navigation
+
+While **Review & apply** is active:
+
+- **A / D** — previous / next visible finding.
+- **W / S** — previous / next visible document.
+
+Navigation follows the current filtered and sorted table order and does not wrap.
+Shortcuts are ignored while typing, when modifiers are pressed, or while another tab is
+active. Navigation never stages or saves a decision.
+
+#### Resizing tables
+
+On desktop browsers, drag a table's lower-right corner to change its height and drag
+column-header borders to resize columns. Heights survive normal data refreshes but reset
+on page reload. Resizing affects presentation only.
+
+### Finding review actions
+
+Right-click a finding to stage one mutually exclusive action:
+
+- **Accept Suggestion** — uses the saved proposed SCTID only when it uniquely matches a
+  selectable candidate.
+- **Remove concept ID** — preserves the annotation and clears only its configured ID
+  feature during write-back.
+- **Delete** — removes the annotation during write-back.
+- **Manual Review** — preserves the annotation and adds a ManualReview marker.
+- **Keep Original** — records explicit human review without changing the annotation.
+
+Right-click a selectable candidate and choose **Apply** to stage that exact candidate.
+Diagnostic candidates cannot be applied. Imported protected decisions and concept-rule
+reservations remain read-only until explicitly revalidated through their owning workflow.
+
+Use **Save choices** before downloading decisions or preparing output. **Discard pending
+changes** restores the last saved state. Reloading the page is not a save operation.
+
+### Candidate row colors
+
+- **Pale yellow** — matches the saved proposed SCTID; it is not accepted automatically.
+- **Blue** — currently inspected; clicking does not stage Apply.
+- **Green** — chosen replacement; the row text distinguishes pending Save from saved.
+- **Green with a blue edge** — chosen and currently inspected.
+
+Exact candidate identity is retained, including duplicate SCTIDs from different evidence
+channels. Diagnostic rows can be inspected but never appear as chosen.
+
+### Review summary counts
+
+In Streamlit, the generic suggestion summary partitions rows into:
+
+- **Single/no-choice** — selectable replacement without a per-row choice form.
+- **Need choice** — selectable candidates requiring an explicit choice, including saved
+  choices.
+- **No replacement** — no selectable replacement exists.
+
+These categories sum to Suggestions. They describe candidate availability, not approval
+or pending-review state. Documents is a separate document count.
 
 ## Masked suggestion overview download
 
-In Streamlit's **Suggest policy sanitization → Suggestion overview**, or NiceGUI's
-**2. Suggest** results, use **Download masked overview CSV** to export all overview rows with only the
-**Document** and **Annotator** columns pseudonymized. Repeated names get consistent
-numbered aliases within that table (`document-1`, `annotator-1`, etc.). The aliases
-are assigned by first appearance and are not shared with the masked policy report.
+**Download masked overview CSV** replaces only the Document and Annotator columns with
+stable numbered aliases within that export. All other columns, including covered or free
+text, remain unchanged.
 
-All other columns remain unchanged. NiceGUI exports document, annotator, source code,
-status, replacement code, candidate count and covered text; Streamlit's richer overview
-also includes offsets, candidate summaries and reasons. NiceGUI exports the loaded
-artifact's scoped rows, for both generated and restored suggestions, regardless of
-grid sorting/filtering. Stale generated results cannot be downloaded. **This is not full anonymization:** names may still
-appear in free text. The UTF-8 CSV includes a BOM for spreadsheet compatibility;
-import SCTID columns as text to avoid spreadsheet number conversion. It does not
-modify the displayed table, saved suggestions or review decisions, and is not an
-artifact for restoring review. Sorting the table in the browser does not change
-the source row order used for export.
+This is therefore **not anonymization**. Names or identifying information may still
+appear in text fields. The CSV covers the full scoped result, independent of displayed
+sorting/filtering, and cannot be used to restore review state. SCTID columns should be
+imported into spreadsheet software as text.
 
-## Review keyboard navigation
+## Suggestion warnings and diagnostics
 
-In either NiceGUI shell, while **Review & apply** is active:
+### Exclusion-list findings without replacements
 
-- **A / D**: inspect the previous / next finding in the current document.
-- **W / S**: open the previous / next document.
+`exclusion_list_no_replacement` means that no selectable replacement was produced and
+manual review is required. BM25 may still have run but found no acceptable result.
+Older artifacts using `blacklisted_no_auto_sanitization` must be regenerated; they are
+not converted automatically.
 
-Shortcuts use the respective table's current **filtered, sorted order**, without
-wrapping at either end. With no visible finding selected, D starts at the first
-visible finding and A at the last; the same first/last convention applies when the
-current document is filtered out. Empty filtered tables do nothing. Finding
-navigation highlights/reveals its row; document navigation clears inspection.
+### Diagnostic candidates
 
-Use unmodified letters: shortcuts ignore Ctrl/Alt/Meta/Shift, held-key repeats,
-and typing while inputs, selects, buttons or textareas have focus. **Arrow keys
-retain normal table/input behavior.** Navigation never applies candidates, marks
-documents reviewed, saves choices or changes export scope. Pending/saved decisions
-remain intact. A delayed navigation response is ignored after leaving Review,
-loading another artifact or changing the active document/finding.
-
-## Resizing tables
-
-In both NiceGUI shells, drag a table's **lower-right corner** up or down to resize
-its height in desktop browsers. This applies to policy findings, the rule editor,
-suggestion overview and all four review tables. Drag column-header borders to
-resize individual column widths; tables retain their full available page width.
-
-The document overview starts at a minimum **320 px**, enough for at least four
-rows below headers/filters at the default styling. Other tables can shrink to
-160 px. Resizing changes presentation only: it does not alter filters, selection,
-review decisions or export scope. Heights survive normal grid data refreshes but
-are not persisted to settings/artifacts and reset on page reload. Native drag
-handles may not be available on touch browsers.
-
-## Document overview in review
-
-Both NiceGUI shells replace carousel dots with a sortable, filterable **Documents
-in loaded artifact** table. Filter the Document column to find a name, or filter
-by saved review status/pending edits, then click a row to open that document. The
-current row is blue and a position label shows its index in the original artifact
-order. The table scrolls rather than showing an indistinguishable dot per document.
-
-**Findings** counts all findings for the document in the artifact scope. **Saved
-document review** reflects the explicit saved document flag, not whether every
-finding has an accepted replacement. **Pending edits** counts pending annotation
-choices/actions plus a pending document-review flag; concept-rule edits remain
-listed separately. Save and Discard refresh these indicators.
-
-Navigation clears inspection but preserves pending/saved choices. Table filtering
-and sorting do not change review/export scope or approve anything. Only documents
-represented by the loaded scoped findings appear—not unrepresented project files.
-
-## Finding review actions
-
-In **Review & apply**, right-click a finding to stage one mutually exclusive action:
-**Accept Suggestion**, **Remove concept ID**, **Delete**, **Manual Review**, or
-**Keep Original**. Removing the concept ID preserves the annotation, span, type,
-literal and other features; write-back clears only the ID feature configured in
-Inputs/review metadata. Delete removes the annotation instead. Save choices before
-exporting or running local write-back. Imported protected actions and concept-rule
-reservations remain read-only in the generic menu.
-
-## Candidate row colors
-
-In **Review & apply**, both NiceGUI-based shells distinguish inspection from an
-actual replacement choice:
-
-- **Pale yellow:** a selectable candidate matching the **Saved proposed SCTID**.
-  This is a saved suggestion, not an accepted or automatically selected choice.
-- **Blue:** the candidate currently being inspected. Clicking never stages Apply.
-- **Green:** the chosen replacement. **Review selection** says **pending Save** or
-  **saved**; green alone does not mean it has been saved or written to CAS.
-- If the green row is also being inspected, it has a **blue left edge** and an
-  additional **inspecting** label. Green takes priority over blue, then yellow;
-  proposal status remains in the text label when another color takes priority.
-  Other rows say **Not chosen**. A duplicate proposed SCTID can mark multiple
-  selectable evidence rows yellow; it never marks diagnostic-only rows or changes
-  the existing requirement to explicitly choose a target.
-
-Apply, Save, Discard, Keep, deletion/manual-review actions and restoring decisions
-refresh the indicator. Navigating away clears inspection, but not the underlying
-pending/saved choice. Diagnostic candidates can be inspected but never shown as
-chosen. Exact candidate identity/evidence distinguishes duplicate SCTIDs. For
-older decisions without an exact candidate ordinal, a unique selectable code can
-be highlighted; ambiguous duplicate-code candidates are not guessed.
-
-## Review summary counts
-
-In Streamlit's **Review & apply**, the three candidate categories partition
-**Suggestions**:
-
-- **Single/no-choice:** a selectable replacement without a per-row choice form.
-- **Need choice:** selectable candidates routed to the per-row choice form,
-  including rows where a choice has already been saved.
-- **No replacement:** no selectable replacement candidate is available.
-
-An unselected tied result counts only under **Need choice**, not **No replacement**.
-These are candidate categories, not approval or pending-review counts. The total
-covers in-scope generic suggestions after concept-rule reservations; explicit rule
-decisions are shown separately. **Documents** counts documents, not suggestions,
-and is not part of the sum.
-
-## Exclusion-list findings without replacements
-
-The status **`exclusion_list_no_replacement`** means no selectable replacement
-suggestion was generated for an exclusion-list finding; **manual review is required**.
-It does not mean BM25 was necessarily disabled or never attempted.
-
-- The initial structured resolver leaves exclusion-list findings unresolved.
-- When BM25 suggestions for exclusion-list findings are enabled, a qualifying
-  match changes the status to a BM25 suggestion or ambiguity. Other exclusion-list
-  findings can therefore have suggestions in the same run.
-- If BM25 finds no acceptable match or fails score thresholds, the no-replacement
-  status remains and the reason explains the unsuccessful BM25 attempt.
-
-This identifier replaces `blacklisted_no_auto_sanitization`. Older suggestions
-files containing that identifier must be regenerated; no automatic conversion is
-performed. Regeneration creates a new suggestions snapshot, so previously exported
-reviewed decisions may no longer match it. Keep existing paired artifacts backed up.
-
-## Diagnostic candidates
-
-**Diagnostic candidates** are matches retained for explanation, **not selectable
-replacements**. Examples include historical targets that fail the selected target
-requirements, ancestors outside the configured distance limits, and BM25 matches
-below score or lexical-overlap thresholds.
-
-They help explain why no replacement was suggested or why other candidates were
-retained. They do not count toward the selectable candidate count. After changing
-relevant settings, regenerate suggestions; existing diagnostics are not
-automatically promoted to selectable candidates.
+Diagnostic candidates explain discarded or insufficient evidence, such as inactive or
+policy-ineligible historical targets, distant ancestors, or BM25 matches below the
+configured thresholds. They do not count as selectable candidates and cannot be applied.
+Changing settings requires regeneration; existing diagnostics are not promoted in place.
 
 ## FSN postfix exclusions
 
-In **Advanced suggestion settings → Excluded FSN postfixes**, each row has an
-**Exclude** checkbox and a **Postfix** value. Only `action` is selected by default;
-the other presets are available but unchecked. Uncheck every row to disable
-postfix exclusion. In Streamlit, add/delete custom rows in the table and submit
-**Apply suggestion settings**; in NiceGUI, use **Add postfix** or a row's remove
-button. Editing settings never starts generation or changes existing review choices.
+**Advanced suggestion settings → Excluded FSN postfixes** removes selected trailing
+classification-like phrases from FSN text used for BM25 matching. It does not alter the
+stored FSN, annotation text, SCTID, semantic tag, or SNOGIT terms.
 
-These are recurring **classification-like suffixes**, not guaranteed meaningless
-text. They are candidates for reducing repetitive lexical evidence, not a general
-recommendation to discard concept distinctions.
+The GUI defaults to excluding only `action`. Optional presets are:
 
-| Postfix | Exclude by default | Active concepts in local scan | Verified example FSN | SCTID |
-|---|---|---:|---|---|
-| `action` | Yes | 324 | Evaluation - action (qualifier value) | `129265001` |
-| `unit of product usage` | No | 58 | Applicator - unit of product usage (qualifier value) | `1641000175108` |
-| `dosing instruction fragment` | No | 35 | At - dosing instruction fragment (qualifier value) | `420246001` |
-| `dosing instruction imperative` | No | 25 | Apply - dosing instruction imperative (qualifier value) | `417924000` |
+- `unit of product usage`
+- `dosing instruction fragment`
+- `dosing instruction imperative`
 
-Counts are from the read-only scan of
-`data/gemtex_snomedct_codes_release20260401_policy20240401.hdf5`, not a global
-SNOMED count or a count of policy-eligible replacements. All active matches for
-these four postfixes had the semantic tag `qualifier value` in this snapshot.
+These phrases can still carry meaning. Suffixes such as `non-surgical`, `open`, `closed`,
+and `normal` are deliberately not presets because removing them can erase clinically
+important distinctions. BM25 similarity is not clinical replacement confidence.
 
-Postfixes such as `non-surgical`, `open`, `closed`, and `normal` are **not**
-presets: removing them can erase clinically meaningful distinctions. Even the
-optional presets above can carry useful context; different concepts may become
-lexically indistinguishable after stripping. BM25 similarity is not clinical
-replacement confidence.
-
-Matching removes the trailing semantic tag first, then inspects the last ASCII
-hyphen surrounded by whitespace on **both sides**. Only a complete,
-case-insensitive match to a selected literal postfix is removed, and only if a
-nonempty first part remains. For example, selected `action` turns
-`Evaluation - action (qualifier value)` into `Evaluation` for matching, while
-`Evaluation-action (qualifier value)` remains `Evaluation-action`.
-Ordinary internal hyphens remain intact; tokenization itself does not change.
-
-The same cleanup applies to FSN index text and the source-FSN part of queries,
-not annotation text or SNOGIT terms. Full FSNs, SCTIDs, semantic tags and the
-separate tag boost remain unchanged. Selected postfixes are recorded in suggestion
-metadata as `settings.bm25_excluded_fsn_postfixes`, with duplicates removed and
-case/outer whitespace normalized. Changed settings require explicitly regenerating
-suggestions, not rebuilding the processed SNOGIT cache. Standalone resolver/API and
-CLI defaults retain postfixes; programmatic callers can opt in through
-`excluded_fsn_postfixes`. The GUI default is `action` only.
+Matching is case-insensitive and requires a complete suffix after an ASCII hyphen with
+spaces on both sides. For example, selected `action` changes
+`Evaluation - action (qualifier value)` to `Evaluation` for matching, while
+`Evaluation-action (qualifier value)` is unchanged. Unchecking every row disables this
+cleanup. Changes require regeneration, not rebuilding the SNOGIT cache.
 
 ## SNOGIT retrieval limits
 
-SNOGIT supplies additional lexical evidence for BM25 suggestions. These search
-limits bound processing time and memory; they are **not clinical confidence
-thresholds** and do not relax inclusion/exclusion-list or active-target checks.
+SNOGIT provides lexical evidence for BM25. Retrieval limits bound runtime and memory;
+they are not clinical confidence thresholds.
 
-The search has several stages:
-
-```text
-Query tokens
-  → collect matching SNOGIT term rows (postings and candidate-row limits)
-  → score the accepted rows with BM25
-  → retain top term hits (hit limit, with boundary ties)
-  → apply target/score gates and merge evidence by SCTID
-  → retain final suggestion candidates (a separate, tie-aware limit)
-```
-
-### What the three limits mean
-
-| Warning | What is limited | Current default and behaviour |
+| Warning | Meaning | Default behavior |
 |---|---|---|
-| **SNOGIT postings limit** | Matches for one query token. A posting identifies an indexed term row containing that token. | If the token occurs in more than **250,000 term rows**, skip the entire token, rather than taking its first 250,000 matches. |
-| **SNOGIT candidate-row limit** | The combined pool of distinct term rows accepted across query tokens. | If adding a token would expand that pool beyond **100,000 rows**, skip that entire token. Tokens are processed from rarest to most common, so more selective tokens are considered first. |
-| **SNOGIT hit limit** | The scored term matches returned from SNOGIT, before final target filtering and SCTID deduplication. | Suggestion generation requests **`max(20 × requested candidate count, 50)` hits**. Lower-scoring hits are omitted; score ties at the boundary are retained subject to a safety cap. |
+| **Postings limit** | One query token occurs in too many indexed term rows. | Skip that token above 250,000 rows. |
+| **Candidate-row limit** | Accepted rows across query tokens would become too large. | Skip the token that would exceed 100,000 rows. |
+| **Hit limit** | Lower-scoring term hits were omitted after scoring. | Request `max(20 × candidate count, 50)` hits and retain boundary ties within the safety cap. |
+| **Tied-hit limit** | A very large boundary tie exceeded its cap. | Cap at `max(requested hit budget, 2,000)` term hits. |
 
-The first two limits apply **before scoring**. A skipped token contributes neither
-new matching rows nor score contributions to rows already accepted through other
-tokens. Consequently, these limits can affect both coverage and ranking. The hit
-limit applies **after scoring** and trims the returned results.
+A term row is an indexed SNOGIT term entry, a hit is a scored term row, and a final
+candidate is a distinct SCTID remaining after target checks and evidence merging.
+Several hits can map to one SCTID, and some hits may be rejected, so the hit budget does
+not guarantee the requested number of final candidates.
 
-The postings and candidate-row defaults are internal search safeguards, not
-separate GUI controls. The requested final candidate count influences the hit
-budget, but does not change either of those two safeguards. The low-level SNOGIT
-search function itself defaults to 50 hits; the generation pipeline supplies the
-larger budget shown above.
+Any retrieval-limit warning means evidence may be incomplete. It does not prove a shown
+candidate is wrong, but it blocks automatic BM25 acceptance. Manual review remains
+available. Regenerating with unchanged inputs and limits may reproduce the same warning;
+increasing the requested candidate count changes the hit budget but does not resolve
+postings or candidate-row omissions.
 
-Boundary ties use full-precision scores, not rounded display values. Tie expansion
-is capped at **`max(requested SNOGIT hit budget, 2,000)` term hits**. If that cap
-cuts a tie group, an additional **SNOGIT tied-hit limit (N)** warning records the
-actual cap. A hit-limit warning may appear alongside it.
-
-### Term rows, hits and final candidates
-
-These counts are different:
-
-- A **term row** is an indexed SNOGIT term entry, not a project annotation or a
-  unique SNOMED CT concept. Multiple terms can refer to the same SCTID.
-- A **hit** is a term row returned with a BM25 score.
-- A **final candidate** is a distinct target SCTID remaining after target/score
-  checks and evidence merging. SNOMED FSN evidence may also contribute.
-
-For example, requesting **5 final candidates** gives SNOGIT a budget of **100 term
-hits**, potentially more when boundary ties are retained. Several hits may share
-an SCTID, and some may fail target or score checks, so this does not guarantee
-five final candidates. The final candidate limit separately retains cutoff ties,
-subject to its own safety cap.
-
-### What to do when a limit is reported
-
-A warning means **retrieval was incomplete**, not necessarily that a displayed
-candidate is wrong. Saved counts describe the retrieved/saved evidence, not the
-complete number of possible matches.
-
-- Review the available candidates and their evidence manually; do not interpret
-  the first displayed match as a guaranteed best match over the complete index.
-- Any recorded retrieval limit blocks the automatic BM25-acceptance heuristic.
-  Manual choices remain available. This does not introduce automatic acceptance
-  into frontends where that workflow is not connected.
-- Loading a saved artifact cannot recover omitted matches. Regenerating with the
-  same inputs and limits may produce the same warning; more complete retrieval
-  requires investigating the limiting search stage first.
-- Changing the requested candidate count can increase the hit budget, but does
-  not fix postings/candidate-row omissions. Increasing internal safeguards can
-  increase memory use and runtime and is not a confidence improvement.
-
-These SNOGIT limits concern its evidence channel, not the separate SNOMED FSN
-search. A limit on either channel still means the combined evidence is incomplete.
-
-Implementation references: [SNOGIT search](../src/snomed_post_processing/sanitization/snogit_sidecar.py)
-and [BM25 generation/merging](../src/snomed_post_processing/sanitization/semantic_bm25.py).
+Implementation details are documented in the local
+[SNOGIT/BM25 knowledge page](../okf/snomed-post-processing/workflows/snogit-bm25.md).
