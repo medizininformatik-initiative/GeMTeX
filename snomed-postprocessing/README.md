@@ -439,9 +439,7 @@ docker run --rm -p HOST_PORT:8501 \
   start-gui
 ```
 
-The Docker convenience script is `bash start-gui.sh 8501`.
-
-For the experimental **NiceGUI** frontend:
+The Docker convenience script is `bash start-gui.sh 8501`. The frontend can also be selected explicitly as NiceGUI:
 
 ```bash
 uv run src/snomed_post_processing/gui/app.py --frontend nicegui --show
@@ -458,7 +456,7 @@ CSS files under `src/snomed_post_processing` change. Reloading discards uploaded
 in-memory review state and unsaved decisions, and interrupts running background jobs;
 it remains disabled by default.
 
-See the NiceGUI [setup and limitations](src/snomed_post_processing/gui/nicegui/README.md) and the detailed [user guide](docs/user-guide.md#workspace-frontend). Preserved SQLite CAS can be downloaded there as an offline INCEpTION review package; direct remote deployment and ZIP-input write-back remain disconnected.
+See the general [GUI notes](src/snomed_post_processing/gui/README.md) and the detailed [user guide](docs/user-guide.md#workspace-frontend). Preserved SQLite CAS can be downloaded there as an offline INCEpTION review package; reviewed ZIP/API projects support sanitized-ZIP preparation and explicit new-project deployment.
 
 ### Workflow
 

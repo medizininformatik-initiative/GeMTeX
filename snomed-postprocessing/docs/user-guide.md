@@ -45,13 +45,14 @@ the original source is never modified and preparation makes no remote request.
 
 On narrow screens, the menu button toggles navigation. Review remains bound to its
 loaded artifact rather than the drawer's current source settings. JSON/Markdown and
-masked CSV downloads behave as in the standard NiceGUI frontend. Reload still loses
+masked CSV downloads behave consistently across the workspace. Reload still loses
 in-memory state; download artifacts and decisions before leaving.
 
 No login, account database, migrations, demo data, PWA/offline cache or additional
 processing capabilities are enabled. This shell is not a security boundary.
-The workspace is the default frontend. Use `--frontend streamlit` for the previous
-Streamlit UI or `--frontend nicegui` for the plain NiceGUI shell. The workspace uses
+NiceGUI is the default frontend and presents the workspace shell; `--frontend nicegui`
+selects it explicitly. Use `--frontend streamlit` for the previous Streamlit UI. The former
+plain NiceGUI shell is no longer exposed separately. The workspace uses
 system fonts and project-authored CSS without external asset fetches.
 See the [workspace provenance](../src/snomed_post_processing/gui/workspace/PROVENANCE.md).
 

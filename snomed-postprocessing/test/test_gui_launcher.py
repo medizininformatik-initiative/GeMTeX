@@ -50,7 +50,7 @@ class GuiLauncherTest(unittest.TestCase):
         workspace.assert_called_once_with([])
 
     def test_reload_multiprocessing_child_reenters_without_exiting_bootstrap(self):
-        with patch.object(sys, "argv", [app.__file__, "--frontend", "workspace", "--reload"]), patch(
+        with patch.object(sys, "argv", [app.__file__, "--frontend", "nicegui", "--reload"]), patch(
             "snomed_post_processing.gui.workspace.app.main", return_value=0
         ) as workspace:
             runpy.run_path(app.__file__, run_name="__mp_main__")
@@ -61,15 +61,6 @@ class GuiLauncherTest(unittest.TestCase):
             self.assertEqual(app.main(["--frontend", "streamlit", "--server.port", "8502"]), 0)
         launch.assert_called_once_with(self.command("--server.port", "8502"))
 
-    def test_nicegui_runs_in_same_process_with_forwarded_options(self):
-        for selector in (["--frontend", "nicegui"], ["--frontend=nicegui"]):
-            with self.subTest(selector=selector), patch(
-                "snomed_post_processing.gui.nicegui.app.main", return_value=7
-            ) as nicegui, patch.object(app.subprocess, "call") as streamlit:
-                self.assertEqual(app.main([*selector, "--port", "8081", "--show"]), 7)
-                nicegui.assert_called_once_with(["--port", "8081", "--show"])
-                streamlit.assert_not_called()
-
     def test_file_launch_does_not_shadow_frameworks_and_restores_search_path(self):
         directory = str(pathlib.Path(app.__file__).resolve().parent)
         original = [directory, *sys.path]
@@ -79,12 +70,12 @@ class GuiLauncherTest(unittest.TestCase):
             return 0
 
         with patch.object(sys, "path", original[:]), patch(
-            "snomed_post_processing.gui.nicegui.app.main", side_effect=check_path
+            "snomed_post_processing.gui.workspace.app.main", side_effect=check_path
         ):
             self.assertEqual(app.main(["--frontend", "nicegui"]), 0)
             self.assertEqual(sys.path, original)
         with patch.object(sys, "path", original[:]), patch(
-            "snomed_post_processing.gui.nicegui.app.main", side_effect=RuntimeError("startup failed")
+            "snomed_post_processing.gui.workspace.app.main", side_effect=RuntimeError("startup failed")
         ):
             with self.assertRaisesRegex(RuntimeError, "startup failed"):
                 app.main(["--frontend", "nicegui"])
@@ -100,10 +91,10 @@ class GuiLauncherTest(unittest.TestCase):
         def check_aliases(arguments):
             self.assertNotIn("nicegui", sys.modules)
             self.assertNotIn("nicegui.app", sys.modules)
-            self.assertIn("snomed_post_processing.gui.nicegui.app", sys.modules)
+            self.assertIn("snomed_post_processing.gui.workspace.app", sys.modules)
             return 0
 
-        with patch("snomed_post_processing.gui.nicegui.app.main", side_effect=check_aliases), patch.dict(
+        with patch("snomed_post_processing.gui.workspace.app.main", side_effect=check_aliases), patch.dict(
             sys.modules, {"nicegui": local, "nicegui.app": child}
         ):
             self.assertEqual(app.main(["--frontend", "nicegui"]), 0)
@@ -116,21 +107,21 @@ class GuiLauncherTest(unittest.TestCase):
             self.assertIs(sys.modules["nicegui"], sdk)
             return 0
 
-        with patch("snomed_post_processing.gui.nicegui.app.main", side_effect=check_sdk), patch.dict(
+        with patch("snomed_post_processing.gui.workspace.app.main", side_effect=check_sdk), patch.dict(
             sys.modules, {"nicegui": sdk}
         ):
             self.assertEqual(app.main(["--frontend", "nicegui"]), 0)
 
     def test_invalid_or_missing_frontend_starts_neither_server(self):
-        for arguments in (["--frontend", "other"], ["--frontend"]):
+        for arguments in (["--frontend", "workspace"], ["--frontend", "other"], ["--frontend"]):
             with self.subTest(arguments=arguments), patch.object(app.subprocess, "call") as launch, patch(
-                "snomed_post_processing.gui.nicegui.app.main"
-            ) as nicegui, redirect_stderr(io.StringIO()):
+                "snomed_post_processing.gui.workspace.app.main"
+            ) as workspace, redirect_stderr(io.StringIO()):
                 with self.assertRaises(SystemExit) as exited:
                     app.main(arguments)
                 self.assertEqual(exited.exception.code, 2)
                 launch.assert_not_called()
-                nicegui.assert_not_called()
+                workspace.assert_not_called()
 
     def test_backend_help_is_forwarded_to_default_workspace(self):
         with patch("snomed_post_processing.gui.workspace.app.main", return_value=0) as workspace:

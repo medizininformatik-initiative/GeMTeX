@@ -12,7 +12,7 @@ from snomed_post_processing.gui.workspace.page import ASSETS, ASSET_URL, STYLESH
 
 class WorkspaceBootstrapTest(unittest.TestCase):
     def test_launcher_forwards_options_without_starting_streamlit(self):
-        for selector in (["--frontend", "workspace"], ["--frontend=workspace"]):
+        for selector in (["--frontend", "nicegui"], ["--frontend=nicegui"]):
             with patch.object(app, "main", return_value=7) as start, patch.object(launcher.subprocess, "call") as streamlit:
                 self.assertEqual(launcher.main([*selector, "--port", "8081", "--show"]), 7)
                 start.assert_called_once_with(["--port", "8081", "--show"])

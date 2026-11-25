@@ -1,4 +1,4 @@
-"""NiceGUI prototype entry point, also selected by gui.app --frontend nicegui."""
+"""Internal guarded NiceGUI runtime used by the workspace frontend."""
 from __future__ import annotations
 
 import argparse
@@ -64,7 +64,3 @@ def main(argv: Optional[Sequence[str]] = None, *, page_builder=None, setup=None,
     ui.run(host=arguments.host, port=arguments.port, show=arguments.show,
            reload=arguments.reload, title=title, **run_options)
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
