@@ -6,7 +6,6 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from snomed_post_processing.findings_io import read_critical_findings_json_with_metadata
-from snomed_post_processing.annotation_source import AnnotationStoreError
 from snomed_post_processing.pipelines.policy_check import PolicyResult, PolicySettings, check_policy
 from snomed_post_processing.terminology import policy_label
 from snomed_post_processing.uima_processing.scope import annotator_in_scope, normalize_annotators
@@ -234,9 +233,6 @@ class PolicyCheckControls:
             self.status.set_text("Policy check finished. No annotations changed.")
             for listener in self.result_listeners:
                 listener()
-        except (AnnotationStoreError, ValueError) as error:
-            if not self.closed and revision == self.revision:
-                self.status.set_text(f"Policy check failed: {error}. Previous successful result retained.")
         except Exception:
             if not self.closed and revision == self.revision:
                 self.status.set_text("Policy check failed. Check the annotation source, HDF5 and annotation settings. Previous successful result retained.")

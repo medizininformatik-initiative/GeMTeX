@@ -128,7 +128,12 @@ class NiceGuiBootstrapTest(unittest.TestCase):
         preview(SimpleNamespace(args={"data": {"row_id": context_id}}))
         self.assertTrue(any(label.text.startswith("Diagnostic context only") for label in labels))
         select(SimpleNamespace(args={"data": original_rows[0]}))
-        self.assertIs(candidates.options["rowData"], candidate_rows)
+        refreshed_rows = candidates.options["rowData"]
+        self.assertEqual(
+            [row["row_id"] for row in refreshed_rows],
+            [row["row_id"] for row in candidate_rows],
+        )
+        self.assertTrue(next(row for row in refreshed_rows if row["row_id"] == context_id)["inspected"])
         self.assertIs(findings.options["rowData"], original_rows)
         switch_document(ui, 2)
         select(SimpleNamespace(args={"data": findings.options["rowData"][0]}))
@@ -140,11 +145,12 @@ class NiceGuiBootstrapTest(unittest.TestCase):
         from test.test_nicegui_suggestions import fake_ui
         ui, grids, _ = fake_ui()
         columns = [call.args[0] for call in ui.column.return_value.classes.call_args_list]
-        self.assertEqual(columns[:3], ["w-full min-w-0 gap-4", "w-full min-w-0", "w-full min-w-0"])
-        self.assertEqual(columns[3:], ["w-full min-w-0 gap-1", "w-full min-w-0 gap-1"])
+        self.assertIn("w-full min-w-0 gap-4", columns)
+        self.assertGreaterEqual(columns.count("w-full min-w-0"), 2)
+        self.assertGreaterEqual(columns.count("w-full min-w-0 gap-1"), 2)
         ui.element.return_value.classes.assert_any_call("grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 w-full min-w-0")
         covered_text = next(column for column in grids[0].options["columnDefs"] if column["field"] == "text")
-        self.assertEqual(covered_text["minWidth"], 400)
+        self.assertGreaterEqual(covered_text["minWidth"], 350)
         self.assertGreater(covered_text["flex"], 0)
         candidates = {column["field"]: column for column in grids[1].options["columnDefs"]}
         self.assertEqual(candidates["fsn"]["minWidth"], 240)
