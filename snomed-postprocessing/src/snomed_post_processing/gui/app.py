@@ -43,7 +43,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         try:
             sys.path[:] = [entry for entry in sys.path if pathlib.Path(entry).resolve() != launcher_directory]
             _discard_local_nicegui_aliases(launcher_directory / "nicegui")
-            from snomed_post_processing.gui.workspace.app import main as frontend_main
+            from snomed_post_processing.gui.nicegui.frontend import main as frontend_main
             return frontend_main(arguments)
         finally:
             sys.path[:] = original_path

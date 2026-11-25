@@ -3,8 +3,8 @@ from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
 
-from ..nicegui.page import WorkflowControls, build_workspace
-from ..nicegui.shared_inputs import SharedInputControls
+from .page import WorkflowControls, build_workspace
+from .shared_inputs import SharedInputControls
 
 ASSETS = Path(__file__).parent / "assets"
 ASSET_URL = "/workspace-assets"

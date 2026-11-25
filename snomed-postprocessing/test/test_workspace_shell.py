@@ -6,8 +6,8 @@ from importlib.util import find_spec
 from unittest.mock import MagicMock, patch
 
 from snomed_post_processing.gui import app as launcher
-from snomed_post_processing.gui.workspace import app
-from snomed_post_processing.gui.workspace.page import ASSETS, ASSET_URL, STYLESHEET_VERSION, register_assets
+from snomed_post_processing.gui.nicegui import frontend as app
+from snomed_post_processing.gui.nicegui.workspace import ASSETS, ASSET_URL, STYLESHEET_VERSION, register_assets
 
 
 class WorkspaceBootstrapTest(unittest.TestCase):
@@ -20,8 +20,8 @@ class WorkspaceBootstrapTest(unittest.TestCase):
 
     def test_imports_have_no_framework_or_server_side_effects(self):
         result = subprocess.run([sys.executable, "-I", "-c",
-            "import sys; import snomed_post_processing.gui.workspace.app; "
-            "import snomed_post_processing.gui.workspace.page; "
+            "import sys; import snomed_post_processing.gui.nicegui.frontend; "
+            "import snomed_post_processing.gui.nicegui.workspace; "
             "assert 'nicegui' not in sys.modules; assert 'streamlit' not in sys.modules; "
             "assert 'sqlalchemy' not in sys.modules"], capture_output=True, text=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -30,7 +30,7 @@ class WorkspaceBootstrapTest(unittest.TestCase):
         from snomed_post_processing.gui.nicegui import app as runtime
         ui, events = MagicMock(), object()
         with patch.object(runtime, "_load_ui", return_value=(ui, events)), patch(
-            "snomed_post_processing.gui.workspace.page.register_assets") as assets:
+            "snomed_post_processing.gui.nicegui.workspace.register_assets") as assets:
             self.assertEqual(app.main(["--port", "8081"]), 0)
         assets.assert_called_once()
         ui.run.assert_called_once_with(host="127.0.0.1", port=8081, show=False,
@@ -57,7 +57,7 @@ class WorkspaceShellTest(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         from nicegui import Client, events, ui
         from nicegui.page import page
-        from snomed_post_processing.gui.workspace.page import build_page
+        from snomed_post_processing.gui.nicegui.workspace import build_page
         self.client = Client(page("/workspace-test"))
         self.other = None
         with self.client:
@@ -113,7 +113,7 @@ class WorkspaceShellTest(unittest.IsolatedAsyncioTestCase):
     async def test_clients_have_independent_state(self):
         from nicegui import Client, events, ui
         from nicegui.page import page
-        from snomed_post_processing.gui.workspace.page import build_page
+        from snomed_post_processing.gui.nicegui.workspace import build_page
         self.other = Client(page("/workspace-other-test"))
         with self.other:
             other = build_page(ui, events)

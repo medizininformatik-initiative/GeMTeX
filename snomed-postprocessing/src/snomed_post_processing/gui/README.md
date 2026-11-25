@@ -21,9 +21,8 @@ options after `--frontend streamlit`, for example `--server.port 8502`.
 ## Structure
 
 - `app.py` — stable launcher; imports only the selected framework.
-- `workspace/` — public NiceGUI shell, navigation, and project-authored styling.
-- `nicegui/` — shared NiceGUI runtime and workflow controllers used internally by
-  the workspace; it is not a separate frontend.
+- `nicegui/` — public workspace shell, project styling, guarded runtime, and shared
+  NiceGUI workflow controllers.
 - `streamlit/` — retained Streamlit implementation.
 - Framework-neutral GUI modules in this directory hold shared terminology,
   validation, scope, report, and artifact logic.

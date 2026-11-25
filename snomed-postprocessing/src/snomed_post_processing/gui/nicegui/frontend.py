@@ -1,9 +1,9 @@
-"""Workspace shell using the guarded NiceGUI runtime."""
-from ..nicegui.app import main as run_nicegui
+"""Public NiceGUI frontend using the guarded runtime and workspace shell."""
+from .app import main as run_nicegui
 
 
 def main(argv=None):
-    from .page import build_page, register_assets
+    from .workspace import build_page, register_assets
 
     def setup():
         from nicegui import app

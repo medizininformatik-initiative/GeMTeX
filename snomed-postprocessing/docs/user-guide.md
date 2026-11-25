@@ -54,7 +54,7 @@ NiceGUI is the default frontend and presents the workspace shell; `--frontend ni
 selects it explicitly. Use `--frontend streamlit` for the previous Streamlit UI. The former
 plain NiceGUI shell is no longer exposed separately. The workspace uses
 system fonts and project-authored CSS without external asset fetches.
-See the [workspace provenance](../src/snomed_post_processing/gui/workspace/PROVENANCE.md).
+See the [workspace provenance](../src/snomed_post_processing/gui/nicegui/PROVENANCE.md).
 
 ## Deploying a reviewed project to INCEpTION
 
