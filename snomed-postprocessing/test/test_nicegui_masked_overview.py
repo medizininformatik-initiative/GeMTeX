@@ -19,7 +19,7 @@ class MaskedOverviewTest(unittest.TestCase):
         self.assertTrue(content.startswith(b"\xef\xbb\xbf"))
         reader = csv.DictReader(io.StringIO(content.decode("utf-8-sig")))
         exported = list(reader)
-        self.assertEqual(reader.fieldnames, ["Document", "Annotator", "Source code", "Status", "Replacement code", "Candidate count", "Covered text"])
+        self.assertEqual(reader.fieldnames, ["Document", "Annotator", "Source code", "Status", "Replacement code", "Candidate count", "Top candidates", "Diagnostic candidates (not selectable)", "Covered text"])
         self.assertEqual([row["Document"] for row in exported], ["document-1", "document-2", "document-1"])
         self.assertEqual([row["Annotator"] for row in exported], ["annotator-1", "annotator-2", "annotator-2"])
         for row in exported:

@@ -27,12 +27,34 @@ from .suggestion_jobs import (
 from .suggestions import MAX_SUGGESTIONS_BYTES, SuggestionsPreviewError, load_suggestions_preview
 
 
+MASKED_CSV_CANDIDATE_LIMIT = 10
+
+
+def _candidate_summary(candidates, limit=MASKED_CSV_CANDIDATE_LIMIT):
+    candidates = tuple(candidates or ())
+    values = [f"{candidate.code} — {candidate.fsn or '(FSN unavailable)'}" for candidate in candidates[:limit]]
+    if len(candidates) > limit:
+        values.append(f"… ({len(candidates) - limit} more)")
+    return " | ".join(values)
+
+
 def masked_preview_csv(preview):
     columns = {"document": "Document", "annotator": "Annotator", "code": "Source code",
                "status": "Status", "proposed_code": "Replacement code", "candidate_count": "Candidate count",
+               "top_candidates": "Top candidates", "diagnostic_candidates": "Diagnostic candidates (not selectable)",
                "text": "Covered text"}
-    frame = pd.DataFrame([{name: getattr(row, name) for name in columns} for row in preview.findings],
-                         columns=list(columns)).rename(columns=columns)
+    rows = []
+    for row in preview.findings:
+        candidates = tuple(getattr(row, "candidates", ()))
+        rows.append({
+            "document": row.document, "annotator": row.annotator, "code": row.code,
+            "status": row.status, "proposed_code": row.proposed_code,
+            "candidate_count": row.candidate_count,
+            "top_candidates": _candidate_summary(candidate for candidate in candidates if candidate.selectable),
+            "diagnostic_candidates": _candidate_summary(candidate for candidate in candidates if not candidate.selectable),
+            "text": row.text,
+        })
+    frame = pd.DataFrame(rows, columns=list(columns)).rename(columns=columns)
     return masked_overview_csv(frame)
 
 
@@ -61,6 +83,15 @@ class SuggestionControls:
         self.rule_job = self.rule_stamps = None
         self.records = rule_records(DEFAULT_CONCEPT_RULES)
         ui.label("Uses the shared Inputs sidebar for HDF5, annotator scope and annotation settings. Saved findings require HDF5 but no project input; a ZIP or read-only SQLite store supplies annotations for policy checks/rules and optional context. Inputs never start processing.").classes("text-sm")
+        with ui.expansion("Restore suggestions JSON", value=False).classes("w-full"):
+            self.saved_suggestions = FileSource(
+                ui, "Suggestions JSON", (".json",), inputs.data_dir, self.restore_changed,
+                max_upload_bytes=MAX_SUGGESTIONS_BYTES,
+            )
+            self.uploader = self.saved_suggestions.uploader
+            self.restore_button = ui.button("Load saved suggestions", on_click=self.load_saved)
+            self.restore_status = ui.label("Restores the suggestions table without analysis or HDF5/project access. Review stays unchanged until Load in review. Limit: 50 MiB.").classes("text-sm")
+        self.findings_source = ui.label().classes("text-sm")
         with ui.expansion("Concept rules", value=False).classes("w-full"):
             ui.label("Match original IDs across all selected layers and annotators, including annotations without findings. ID-only changes; no chaining.").classes("text-sm")
             self.rule_editor = ui.aggrid({
@@ -86,15 +117,6 @@ class SuggestionControls:
             self.apply_button = ui.button("Apply rules to review", on_click=self.apply_rules)
             ui.button("Clear all pending rule decisions", on_click=self.clear_rules).props("flat dense")
             ui.label("Apply stages decisions in tab 3; Save choices commits them. Loading/editing definitions does not apply rules or change CAS.").classes("text-sm")
-        with ui.expansion("Restore suggestions JSON", value=False).classes("w-full"):
-            self.saved_suggestions = FileSource(
-                ui, "Suggestions JSON", (".json",), inputs.data_dir, self.restore_changed,
-                max_upload_bytes=MAX_SUGGESTIONS_BYTES,
-            )
-            self.uploader = self.saved_suggestions.uploader
-            self.restore_button = ui.button("Load saved suggestions", on_click=self.load_saved)
-            self.restore_status = ui.label("Restores the suggestions table without analysis or HDF5/project access. Review stays unchanged until Load in review. Limit: 50 MiB.").classes("text-sm")
-        self.findings_source = ui.label().classes("text-sm")
         with ui.expansion("Replacement requirements", value=False).classes("w-full"):
             self.target = ui.select({"policy": "Policy rules", "release": "Active release"}, value="policy", on_change=self.requirements_changed)
             self.exclusion = ui.select({"none": "No exclusion list", "embedded": "Embedded exclusion list",
