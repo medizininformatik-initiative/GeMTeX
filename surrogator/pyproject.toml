@@ -33,6 +33,7 @@ dependencies = [
     "openpyxl",
     "overpy",
     "anytree",
+    "setuptools<=80.10.2",
 ]
 
 classifiers = [
