@@ -84,7 +84,6 @@ class WorkspaceShellTest(unittest.IsolatedAsyncioTestCase):
             self.assertIs(workflow.review.controls.session, session)
             self.assertTrue(session.drafts)
             self.assertEqual(workflow.review.keyboard.active, target == "review")
-            self.assertIn("workspace-navigation-item-active", shell.navigation_buttons[target]._classes)
         self.assertFalse(workflow.inputs.closed)
         self.assertFalse(session.saved)
         self.assertIsNone(workflow.suggestions.completed)

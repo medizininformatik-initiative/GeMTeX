@@ -9,20 +9,10 @@ from .shared_inputs import SharedInputControls
 ASSETS = Path(__file__).parent / "assets"
 ASSET_URL = "/workspace-assets"
 STYLESHEET_VERSION = sha256((ASSETS / "shell.css").read_bytes()).hexdigest()[:12]
-STEPS = (
-    ("check", "Check policy", "fact_check"),
-    ("suggest", "Suggestions & rules", "auto_fix_high"),
-    ("review", "Review & apply", "rate_review"),
-)
-
-
 @dataclass
 class ShellControls:
     workflow: WorkflowControls
-    navigation: object
     inputs_drawer: object
-    navigation_buttons: dict
-    collapse_button: object
 
 
 def register_assets(app):
@@ -60,41 +50,7 @@ def build_page(ui, events):
         _decorate_annotator_select(shared_inputs.annotators)
         _decorate_annotator_select(shared_inputs.excluded_annotators)
 
-    buttons = {}
-    compact_navigation = False
-    with ui.left_drawer(bordered=True).props("width=236 breakpoint=980").classes(
-        "workspace-navigation"
-    ) as navigation:
-        with ui.column().classes("w-full workspace-navigation-content"):
-            caption = ui.label("Workflow").classes("workspace-navigation-caption")
-            for key, label, icon in STEPS:
-                buttons[key] = ui.button(
-                    label,
-                    icon=icon,
-                    on_click=lambda _, target=key: workflow.tabs.set_value(target),
-                ).props("flat no-caps").classes("workspace-navigation-item").tooltip(label)
-            ui.separator().classes("my-2")
-
-            def collapse():
-                nonlocal compact_navigation
-                compact_navigation = not compact_navigation
-                navigation.props(f"width={72 if compact_navigation else 236}")
-                caption.set_visibility(not compact_navigation)
-                for key, label, _ in STEPS:
-                    buttons[key].set_text("" if compact_navigation else label)
-                collapse_button.set_text("" if compact_navigation else "Collapse")
-                collapse_button.props(f"icon={'chevron_right' if compact_navigation else 'chevron_left'}")
-
-            collapse_button = ui.button(
-                "Collapse", icon="chevron_left", on_click=collapse
-            ).props("flat no-caps").classes("workspace-navigation-item").tooltip(
-                "Expand or collapse navigation"
-            )
-
     with ui.header().classes("workspace-header items-center px-4 gap-3"):
-        ui.button(icon="menu", on_click=navigation.toggle).props("flat round").tooltip(
-            "Show or hide navigation"
-        )
         ui.icon("account_tree").classes("workspace-product-icon text-2xl")
         ui.label("SNOMED Postprocessing").classes("workspace-product-name")
         ui.space()
@@ -112,13 +68,4 @@ def build_page(ui, events):
             workflow = build_workspace(ui, events, shared_inputs)
             workflow.tabs.classes("workspace-tabs")
 
-    def highlight(value):
-        for key, button in buttons.items():
-            button.classes(
-                add="workspace-navigation-item-active" if key == value else "",
-                remove="" if key == value else "workspace-navigation-item-active",
-            )
-
-    workflow.tabs.on_value_change(lambda event: highlight(event.value))
-    highlight(workflow.tabs.value)
-    return ShellControls(workflow, navigation, inputs_drawer, buttons, collapse_button)
+    return ShellControls(workflow, inputs_drawer)
