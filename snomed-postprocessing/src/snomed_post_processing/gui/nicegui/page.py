@@ -34,7 +34,7 @@ def build_workspace(ui, events, shared_inputs):
     banner = ui.label().classes("text-amber-900 bg-amber-100 p-3 rounded w-full")
     source = ui.label().classes("text-sm")
     scope = ui.label().classes("text-sm")
-    with ui.expansion("Saved suggestions scope").classes("w-full") as saved_scope:
+    with ui.expansion("Saved suggestions scope", value=False).classes("w-full") as saved_scope:
         ui.label("Loaded suggestions inherit their saved annotator scope; it cannot be broadened here.")
         ui.label("Saved generation settings are displayed as provenance, not revalidated against a project or HDF5.")
         ui.label("Grid filters affect display only, not the source artifact or its annotator scope.")
@@ -57,7 +57,8 @@ def build_workspace(ui, events, shared_inputs):
         with ui.tab_panel(suggest):
             suggestion_controls = SuggestionControls(ui, shared_inputs, policy_controls, lambda: review_controls)
         with ui.tab_panel(review) as review_panel:
-            review_controls = ReviewPanelControls(ui, review_panel, banner=banner, source=source, scope=scope)
+            review_controls = ReviewPanelControls(ui, review_panel, banner=banner, source=source, scope=scope,
+                                                  data_dir=shared_inputs.data_dir)
             StoreRestorationControls(ui, shared_inputs, review_controls)
             InceptionDeploymentControls(ui, shared_inputs, review_controls)
     suggestion_controls.connect_review()

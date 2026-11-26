@@ -269,7 +269,7 @@ def render_sanitization_check_tab(inputs: GuiInputs) -> None:
         selected_snogit_source_from_dir = None
         selected_snogit_members = []
 
-        with st.expander("Advanced suggestion settings", expanded=True):
+        with st.expander("Advanced suggestion settings", expanded=False):
             st.markdown("#### Historical associations")
             sanitization_association_types = st.multiselect(
                 "Allowed historical association types",

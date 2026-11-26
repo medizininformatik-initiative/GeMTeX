@@ -110,9 +110,10 @@ def _candidate_rows(finding, session=None, inspected_id=None):
 
 
 class ReviewPanelControls:
-    def __init__(self, ui, panel, *, banner, source, scope):
+    def __init__(self, ui, panel, *, banner, source, scope, data_dir=None):
         self.ui, self.panel = ui, panel
         self.banner, self.source, self.scope = banner, source, scope
+        self.data_dir = data_dir or "data"
         self.state = PreviewState()
         self.review_context = ReviewContext()
         self.load_revision = 0
@@ -124,6 +125,10 @@ class ReviewPanelControls:
         self.keyboard = ui.keyboard(on_key=self.handle_key, repeating=False)
         self.keyboard.active = False
 
+        with ui.expansion("Restore reviewed decisions", value=False).classes("w-full") as self.restore_review:
+            self.restore_review_note = ui.label(
+                "Restore decisions after loading the matching suggestions in tab 2. Import replaces the current review; no CAS is changed."
+            ).classes("text-sm")
         ui.label("Restore suggestions in tab 2, then use Load in review (replaces review). Reviewed decisions can be restored below after their matching suggestions.").classes("text-sm")
         self.counts = ui.label().classes("text-sm")
         self.conditions = ui.column().classes("w-full min-w-0")
@@ -190,9 +195,11 @@ class ReviewPanelControls:
                 self.evidence = ui.label().classes("text-sm whitespace-pre-wrap")
                 self.controls = ReviewControls(ui, lambda: self.state, lambda: self.load_revision,
                                                self.begin_load, self.refresh_documents,
-                                               conditions_container=self.conditions)
+                                               conditions_container=self.conditions,
+                                               restore_container=self.restore_review,
+                                               data_dir=self.data_dir)
         ui.label("Sanitized-ZIP download and explicit new-project upload are combined under INCEpTION deployment; preserved SQLite CAS also retains its offline-package workflow.")
-        with ui.expansion("Explicit concept rule decisions", value=True).classes("w-full") as self.rule_area:
+        with ui.expansion("Explicit concept rule decisions", value=False).classes("w-full") as self.rule_area:
             self.rule_summary = ui.label().classes("text-sm")
             self.rule_grid = ui.aggrid({
                 "columnDefs": [{"field": "apply", "headerName": "Apply", "cellDataType": "boolean",

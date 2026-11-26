@@ -89,7 +89,7 @@ class PolicyCheckControls:
         self.restore_revision = 0
         self.result_listeners = []
         ui.label("Check inclusion/exclusion-list policy. No annotations are changed.").classes("text-sm")
-        with ui.expansion("Restore CriticalFindings JSON").classes("w-full"):
+        with ui.expansion("Restore CriticalFindings JSON", value=False).classes("w-full"):
             self.saved_findings = FileSource(ui, "CriticalFindings JSON", (".json",), inputs.data_dir, self.restore_changed)
             self.restore_button = ui.button("Load saved findings", on_click=self.load_saved)
             ui.label("Restores findings without ZIP/HDF5 or analysis. Full policy reports are not contained in this artifact. Limit: 50 MiB.").classes("text-sm")

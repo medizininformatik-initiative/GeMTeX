@@ -2,7 +2,7 @@
 
 SNOMED Postprocessing checks SNOMED CT annotations in INCEpTION/UIMA exports against a materialized SNOMED HDF5 file. In policy mode, annotations are checked against inclusion/exclusion-list policy views. The tool reports annotations outside the inclusion list or on the exclusion list, can generate sanitization suggestions, and can apply reviewed replacement/delete decisions to a copied project ZIP.
 
-The project can be used from the command line or through a Streamlit GUI.
+The project can be used from the command line or through the default NiceGUI workspace. Streamlit remains available as an optional fallback frontend.
 
 User-facing wording uses **inclusion list** / **exclusion list**. Existing technical identifiers remain unchanged: CLI flags such as `--custom-blacklist`, HDF5 paths such as `policy_views/whitelist`, and JSON values such as `list_type="blacklist"` retain their established names. No artifact migration is required.
 
@@ -83,10 +83,14 @@ BM25 and SNOGIT are suggestion-only evidence. Candidates must still pass the sel
 
 ## Python runtime
 
-The project requires **Python 3.11.x** and uses the standard **`.venv`** environment for the CLI and both GUI frontends. No separate frontend environment is needed.
+The project requires **Python 3.11.x**. NiceGUI is the default GUI and is installed with the standard dependencies. Streamlit is an optional fallback frontend:
 
 ```bash
+# CLI and default NiceGUI workspace
 uv sync --locked
+
+# Also install the Streamlit fallback
+uv sync --locked --extra streamlit
 ```
 
 On Windows, select `.venv/Scripts/python.exe` in your IDE; on other systems use `.venv/bin/python`.

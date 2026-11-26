@@ -61,6 +61,7 @@ This bundle is the agent-readable knowledge layer for the Python app under [`/sr
 
 - [Design decisions and invariants](/snomed-post-processing/decisions/design-decisions.md)
 - [Follow-ups and validation](/snomed-post-processing/operations/follow-ups.md)
+- [Future work](/snomed-post-processing/operations/future-work.md)
 
 ## Lossless imported docs
 

@@ -143,7 +143,7 @@ class InceptionDeploymentControls:
                 self.pipeline_report_download = ui.button("Download preparation report JSON", on_click=self.download_pipeline_report)
                 self.deployment_report_download = ui.button("Download deployment report JSON", on_click=self.download_deployment_report)
             self.status = ui.label().classes("text-sm whitespace-pre-wrap")
-            with ui.expansion("Deployment connection", value=True).classes("w-full"):
+            with ui.expansion("Deployment connection", value=False).classes("w-full"):
                 ui.label("This connection is independent of the project-download connection in Inputs.").classes("text-sm")
                 self.url = ui.input("INCEpTION URL", value="http://localhost:8080", on_change=self.connection_changed).classes("w-full")
                 with ui.row().classes("w-full gap-4 flex-wrap"):

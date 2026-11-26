@@ -22,13 +22,18 @@ dependencies = [
     "randomname>=0.2.1",
     "requests==2.27.1",
     "scttsrapy",
-    "streamlit>=1.50.0",
     "yaspin>=3.3.0",
+]
+
+[project.optional-dependencies]
+streamlit = [
+    "streamlit>=1.50.0",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=8.4.0,<9",
+    "streamlit>=1.50.0",
 ]
 
 [tool.uv.sources]

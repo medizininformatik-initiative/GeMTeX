@@ -61,7 +61,7 @@ class SuggestionControls:
         self.rule_job = self.rule_stamps = None
         self.records = rule_records(DEFAULT_CONCEPT_RULES)
         ui.label("Uses the shared Inputs sidebar for HDF5, annotator scope and annotation settings. Saved findings require HDF5 but no project input; a ZIP or read-only SQLite store supplies annotations for policy checks/rules and optional context. Inputs never start processing.").classes("text-sm")
-        with ui.expansion("Concept rules").classes("w-full"):
+        with ui.expansion("Concept rules", value=False).classes("w-full"):
             ui.label("Match original IDs across all selected layers and annotators, including annotations without findings. ID-only changes; no chaining.").classes("text-sm")
             self.rule_editor = ui.aggrid({
                 "columnDefs": [
@@ -86,14 +86,16 @@ class SuggestionControls:
             self.apply_button = ui.button("Apply rules to review", on_click=self.apply_rules)
             ui.button("Clear all pending rule decisions", on_click=self.clear_rules).props("flat dense")
             ui.label("Apply stages decisions in tab 3; Save choices commits them. Loading/editing definitions does not apply rules or change CAS.").classes("text-sm")
-        with ui.expansion("Restore suggestions JSON", value=True).classes("w-full"):
-            self.uploader = ui.upload(label="Load suggestions JSON", on_upload=self.load_suggestions,
-                                      auto_upload=True, multiple=False, max_file_size=MAX_SUGGESTIONS_BYTES,
-                                      on_rejected=lambda: self.restore_status.set_text("Upload rejected. Choose suggestions JSON up to 50 MiB; previous state retained.")) \
-                .props("accept=.json").classes("max-w-full")
-            self.restore_status = ui.label("Restores the suggestions table without analysis or HDF5/project access. Review stays unchanged until Load in review.").classes("text-sm")
+        with ui.expansion("Restore suggestions JSON", value=False).classes("w-full"):
+            self.saved_suggestions = FileSource(
+                ui, "Suggestions JSON", (".json",), inputs.data_dir, self.restore_changed,
+                max_upload_bytes=MAX_SUGGESTIONS_BYTES,
+            )
+            self.uploader = self.saved_suggestions.uploader
+            self.restore_button = ui.button("Load saved suggestions", on_click=self.load_saved)
+            self.restore_status = ui.label("Restores the suggestions table without analysis or HDF5/project access. Review stays unchanged until Load in review. Limit: 50 MiB.").classes("text-sm")
         self.findings_source = ui.label().classes("text-sm")
-        with ui.expansion("Replacement requirements", value=True).classes("w-full"):
+        with ui.expansion("Replacement requirements", value=False).classes("w-full"):
             self.target = ui.select({"policy": "Policy rules", "release": "Active release"}, value="policy", on_change=self.requirements_changed)
             self.exclusion = ui.select({"none": "No exclusion list", "embedded": "Embedded exclusion list",
                                         "custom": "Custom exclusion list", "embedded+custom": "Embedded and custom exclusion lists"},
@@ -105,7 +107,7 @@ class SuggestionControls:
             self.ancestor = ui.checkbox("Historical ancestor fallback", value=True, on_change=self.changed)
             self.bm25 = ui.checkbox("Semantic BM25 fallback", value=True, on_change=self.changed)
             self.blacklist_bm25 = ui.checkbox("Include exclusion-list findings in BM25 fallback", value=True, on_change=self.changed)
-        with ui.expansion("Advanced suggestion settings", value=True).classes("w-full"):
+        with ui.expansion("Advanced suggestion settings", value=False).classes("w-full"):
             self.associations = ui.select({name: f"{name} — {ASSOCIATION_TYPE_DESCRIPTIONS.get(name, '')}" for name in SUPPORTED_ASSOCIATION_TYPES},
                                           multiple=True, value=list(DEFAULT_ASSOCIATIONS), label="Allowed historical association types",
                                           on_change=self.changed).classes("w-full")
@@ -254,7 +256,8 @@ class SuggestionControls:
         self.cache_button.set_enabled(not self.busy and available and self.member_stamp is not None and bool(self.members.value))
         self.cache_download.set_enabled(not self.busy and self.created_cache is not None)
         self.progress_container.set_visibility(self.busy)
-        self.uploader.set_enabled(not self.busy)
+        self.saved_suggestions.set_enabled(not self.busy)
+        self.restore_button.set_enabled(not self.busy and self.saved_suggestions.snapshot() is not None)
         self.results.set_visibility(self.artifact_current and not self.busy)
 
     def add_postfix(self, postfix="", *, enabled=False):
@@ -379,6 +382,35 @@ class SuggestionControls:
             statuses[finding.status] = statuses.get(finding.status, 0) + 1
         self.summary.set_text(f"Source: {preview.source_name} · {len(preview.findings)} suggestions · " +
                               " · ".join(f"{key}: {value}" for key, value in sorted(statuses.items())))
+
+    def restore_changed(self):
+        if self.ready and not self.closed:
+            self.artifact_revision += 1
+            self.refresh()
+
+    async def load_saved(self):
+        from nicegui import run
+        source = self.saved_suggestions.snapshot()
+        if self.closed or self.busy or source is None:
+            return
+        self.artifact_revision += 1
+        token = self.artifact_revision
+        self.restore_status.set_text("Loading saved suggestions JSON; previous suggestions and review retained until successful restore.")
+        try:
+            content = await run.io_bound(source.path.read_bytes)
+            result, preview = await run.io_bound(restore_suggestions, content, source.path.name)
+            if self.closed or token != self.artifact_revision:
+                return
+            self.completed = result, preview, None, (), None
+            self.render_artifact()
+            self.restore_status.set_text("Suggestions restored in tab 2. Review unchanged; use Load in review (replaces review) explicitly.")
+            self.refresh()
+        except Exception:
+            if not self.closed and token == self.artifact_revision:
+                self.restore_status.set_text("Could not restore suggestions JSON (limit 50 MiB). Previous suggestions/review retained.")
+        finally:
+            if not self.closed and token == self.artifact_revision:
+                self.refresh()
 
     async def load_suggestions(self, event):
         from nicegui import run

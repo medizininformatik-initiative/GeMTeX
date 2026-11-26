@@ -1104,13 +1104,18 @@ dependencies = [
     { name = "randomname" },
     { name = "requests" },
     { name = "scttsrapy" },
-    { name = "streamlit" },
     { name = "yaspin" },
+]
+
+[package.optional-dependencies]
+streamlit = [
+    { name = "streamlit" },
 ]
 
 [package.dev-dependencies]
 dev = [
     { name = "pytest" },
+    { name = "streamlit" },
 ]
 
 [package.metadata]
@@ -1125,12 +1130,16 @@ requires-dist = [
     { name = "randomname", specifier = ">=0.2.1" },
     { name = "requests", specifier = "==2.27.1" },
     { name = "scttsrapy", git = "https://github.com/AberystwythSystemsBiology/SCTTSRApy" },
-    { name = "streamlit", specifier = ">=1.50.0" },
+    { name = "streamlit", marker = "extra == 'streamlit'", specifier = ">=1.50.0" },
     { name = "yaspin", specifier = ">=3.3.0" },
 ]
+provides-extras = ["streamlit"]
 
 [package.metadata.requires-dev]
-dev = [{ name = "pytest", specifier = ">=8.4.0,<9" }]
+dev = [
+    { name = "pytest", specifier = ">=8.4.0,<9" },
+    { name = "streamlit", specifier = ">=1.50.0" },
+]
 
 [[package]]
 name = "sortedcontainers"
