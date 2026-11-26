@@ -88,9 +88,9 @@ class SharedInputControls:
         self.api_credentials = None
         self.api_downloaded_project = None
         self.api_source = _InceptionApiSource()
-        ui.label("Shared inputs").classes("text-lg font-medium")
-        ui.label("Used by Check policy and Suggest. Changing inputs never starts processing.").classes("text-sm")
+        # ui.label("Shared inputs").classes("text-lg font-medium")
         with ui.expansion("Project and policy inputs", value=False).classes("w-full") as self.container:
+            ui.label("Used by Check policy and Suggest. Changing inputs never starts processing.").classes("text-caption")
             with ui.row().classes("w-full items-center"):
                 self.data_dir = ui.input("Server data directory", value="data", on_change=self.directory_changed)
                 ui.button(icon="refresh", on_click=self.directory_changed).props("flat round dense").tooltip("Refresh server file lists")
@@ -123,16 +123,16 @@ class SharedInputControls:
                 self.excluded_annotators = ui.select({}, label="Exclude annotators (takes precedence)", multiple=True,
                                                      new_value_mode="add-unique", value=[], on_change=self.changed).classes("grow")
                 self.load_names = ui.button("Load annotators", on_click=self.load_annotators)
-            with ui.expansion("Annotation settings", value=False).classes("w-full"):
-                self.layers = ui.textarea("Target annotation types (one per line)",
-                                          value="gemtex.Concept\nwebanno.custom.Concept", on_change=self.changed).classes("w-full")
-                self.ignore = ui.textarea("Ignore overlap types (one per line)", value="", on_change=self.changed).classes("w-full")
-                self.overlap = ui.select(["overlap", "covered-by", "contains", "exact"],
-                                         label="Ignore overlap mode", value="overlap", on_change=self.changed)
-                self.feature = ui.input("SNOMED ID feature", value="id", on_change=self.changed)
-                self.prefix = ui.input("SNOMED ID prefix (empty for plain SCTIDs)",
-                                       value="http://snomed.info/id/", on_change=self.changed).classes("w-full")
             self.status = ui.label().classes("text-sm")
+        with ui.expansion("Annotation settings", value=False).classes("w-full"):
+            self.layers = ui.textarea("Target annotation types (one per line)",
+                                        value="gemtex.Concept\nwebanno.custom.Concept", on_change=self.changed).classes("w-full")
+            self.ignore = ui.textarea("Ignore overlap types (one per line)", value="", on_change=self.changed).classes("w-full")
+            self.overlap = ui.select(["overlap", "covered-by", "contains", "exact"],
+                                        label="Ignore overlap mode", value="overlap", on_change=self.changed)
+            self.feature = ui.input("SNOMED ID feature", value="id", on_change=self.changed)
+            self.prefix = ui.input("SNOMED ID prefix (empty for plain SCTIDs)",
+                                    value="http://snomed.info/id/", on_change=self.changed).classes("w-full")
         ui.context.client.on_delete(self.close)
         self.ready = True
         self.refresh()
