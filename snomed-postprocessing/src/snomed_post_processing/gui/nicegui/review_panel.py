@@ -124,6 +124,24 @@ class ReviewPanelControls:
         self.deployment = None
         self.keyboard = ui.keyboard(on_key=self.handle_key, repeating=False)
         self.keyboard.active = False
+        add_head_html = getattr(ui, "add_head_html", None)
+        if add_head_html is not None:
+            add_head_html("""
+                <script>
+                if (!window.snomedReviewSpaceGuard) {
+                    window.snomedReviewSpaceGuard = true;
+                    document.addEventListener('keydown', event => {
+                        if (event.code !== 'Space' || event.defaultPrevented || event.altKey ||
+                            event.ctrlKey || event.metaKey || event.shiftKey) return;
+                        const target = event.target;
+                        if (!(target instanceof Element) || target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement ||
+                            target instanceof HTMLSelectElement || target.isContentEditable ||
+                            target.closest('button, a, [role="button"]')) return;
+                        event.preventDefault();
+                    }, true);
+                }
+                </script>
+            """)
 
         with ui.expansion("Restore reviewed decisions", value=False).classes("w-full") as self.restore_review:
             self.restore_review_note = ui.label(
@@ -219,7 +237,7 @@ class ReviewPanelControls:
         with self.document_navigator:
             ui.label("Documents in loaded artifact — filter and click to open").classes("text-lg")
             self.document_position = ui.label().classes("text-sm")
-            ui.label("A/D: previous/next finding · W/S: previous/next document (current table filters/order; no wrap). Typing and arrow keys are unchanged.").classes("text-sm")
+            ui.label("A/D: previous/next finding · Space: accept a unique saved suggestion · W/S: previous/next document (current table filters/order; no wrap). Typing and arrow keys are unchanged.").classes("text-sm")
             ui.label("Tables: drag the lower-right corner to resize height; drag column borders to resize width.").classes("text-sm")
             self.document_grid = ui.aggrid({
                 "columnDefs": [
@@ -333,15 +351,20 @@ class ReviewPanelControls:
         key = event.key.name
         if (not self.keyboard.active or not self.document_slides or self._keyboard_busy
                 or not event.action.keydown or event.action.repeat or any(event.modifiers)
-                or key not in ("a", "d", "w", "s")):
+                or key not in ("a", "d", "w", "s", "space", "Space", " ")):
             return
-        documents = key in ("w", "s")
-        step = -1 if key in ("a", "w") else 1
-        grid = self.document_grid if documents else self.finding_grid
-        state = self.state
-        stamp = (self.load_revision, self.active_document, self.state.selected_finding_id)
         self._keyboard_busy = True
         try:
+            if key in ("space", "Space", " "):
+                row_id = self.state.selected_finding_id
+                if row_id is not None and self.controls.session.proposed_candidate(row_id) is not None:
+                    self.controls.command("accept")
+                return
+            documents = key in ("w", "s")
+            step = -1 if key in ("a", "w") else 1
+            grid = self.document_grid if documents else self.finding_grid
+            state = self.state
+            stamp = (self.load_revision, self.active_document, self.state.selected_finding_id)
             # Use displayed order, but trust only identities from the current artifact.
             try:
                 displayed_ids = await _displayed_row_ids(grid)

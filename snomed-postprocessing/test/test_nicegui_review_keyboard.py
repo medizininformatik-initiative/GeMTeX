@@ -1,4 +1,4 @@
-"""Review shortcuts inspect current visible identities, never approve changes."""
+"""Review shortcuts navigate findings and accept unique saved proposals."""
 import asyncio
 import copy
 from importlib.util import find_spec
@@ -61,6 +61,13 @@ class ReviewKeyboardTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(panel.state.selected_finding_id, ids[0])
         self.assertFalse(panel.controls.session.dirty)
         self.assertIsNone(panel.state.selected_candidate_id)
+
+    async def test_space_accepts_unique_saved_proposal(self):
+        await self.press("d")
+        row = self.panel.state.selected_finding
+        self.assertIsNotNone(self.panel.controls.session.proposed_candidate(row.row_id))
+        await self.press("space")
+        self.assertIn(row.row_id, self.panel.controls.session.drafts)
 
     async def test_previous_from_no_selection_starts_at_last_visible_finding(self):
         await self.press("a")
