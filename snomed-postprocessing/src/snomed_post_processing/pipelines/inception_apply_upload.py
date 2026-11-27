@@ -74,6 +74,8 @@ def apply_decisions_and_upload_to_inception(
     verify_tls: bool = True,
     force: bool = False,
     annotator_filter: Optional[Iterable[str]] = None,
+    store_scope: Optional[str] = None,
+    project_template: Optional[pathlib.Path] = None,
 ) -> InceptionApplyUploadResult:
     """Apply reviewed decisions to a corpus and prepare/deploy it to INCEpTION.
 
@@ -94,43 +96,63 @@ def apply_decisions_and_upload_to_inception(
         raise FileNotFoundError(f"Source project does not exist: {source_project}")
     if not decisions_path.exists() or not decisions_path.is_file():
         raise FileNotFoundError(f"Decisions JSON does not exist: {decisions_path}")
+    if output_dir.exists() and not output_dir.is_dir():
+        raise FileExistsError(f"Output directory path is an existing file: {output_dir}")
     if output_dir.exists() and any(output_dir.iterdir()) and not force:
         raise FileExistsError(f"Output directory is not empty: {output_dir}")
-    output_dir.mkdir(parents=True, exist_ok=True)
 
     shell_project = pathlib.Path(shell_project or output_dir / _default_shell_name(source_project))
     upload_artifacts_dir = pathlib.Path(upload_artifacts_dir or output_dir / "inception-upload-artifacts")
     pipeline_report_path = pathlib.Path(pipeline_report or output_dir / DEFAULT_PIPELINE_REPORT_NAME)
+    from ..utils.output_paths import guard_output_paths
+    try:
+        guard_output_paths((source_project, decisions_path, project_template),
+                           (shell_project, pipeline_report_path, output_dir / "inception-sanitized-deployment-report.json"),
+                           flat_directories=(upload_artifacts_dir,))
+    except ValueError as error:
+        raise InceptionApplyUploadError(str(error)) from error
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     decisions, decisions_metadata = read_sanitization_decisions_json(decisions_path)
     annotators = normalize_annotators(decisions_metadata.get("annotators", ()) if annotator_filter is None else annotator_filter)
     decisions = [item for item in decisions if annotator_in_scope(item.get("annotator", ""), annotators)]
     decisions_metadata["annotators"] = list(annotators)
 
-    shell_result = build_inception_shell_project(
-        source_project=source_project,
-        output_project=shell_project,
-        project_name=project_name,
-        project_slug=project_slug,
-        project_description=project_description,
-        sanitized_project_suffix=sanitized_project_suffix,
-        manual_review_layer=manual_review_layer,
-        clear_source_documents=True,
-        clear_annotation_documents=True,
-        include_source_files=False,
-        force=force,
-    )
-    artifacts_result = build_inception_upload_artifacts(
-        source_project=source_project,
-        decisions=decisions,
-        output_dir=upload_artifacts_dir,
-        id_prefix=id_prefix,
-        id_feature=id_feature,
-        manual_review_layer=manual_review_layer,
-        force=force,
-        repair_for_remote_upload=repair_for_remote_upload,
-        annotator_filter=annotators,
-    )
+    from ..annotation_source import is_annotation_store
+    from ..annotation_store.restoration import prepared_cas_project
+    if is_annotation_store(source_project):
+        saved_scope = decisions_metadata.get("store_scope") or (decisions_metadata.get("concept_rule_scope") or {}).get("store_scope")
+        if saved_scope is not None and store_scope is not None and saved_scope != store_scope:
+            raise InceptionApplyUploadError("SQLite scope differs from the reviewed decisions. Restore matching decisions first.")
+        store_scope = store_scope or saved_scope
+        decisions_metadata["store_scope"] = store_scope
+        decisions_metadata["cas_restored"] = True
+    with prepared_cas_project(source_project, store_scope=store_scope, annotators=annotators,
+                              project_template=project_template, id_prefix=id_prefix, id_feature=id_feature) as prepared:
+        shell_result = build_inception_shell_project(
+            source_project=prepared.output_project,
+            output_project=shell_project,
+            project_name=project_name,
+            project_slug=project_slug,
+            project_description=project_description,
+            sanitized_project_suffix=sanitized_project_suffix,
+            manual_review_layer=manual_review_layer,
+            clear_source_documents=True,
+            clear_annotation_documents=True,
+            include_source_files=False,
+            force=force,
+        )
+        artifacts_result = build_inception_upload_artifacts(
+            source_project=prepared.output_project,
+            decisions=decisions,
+            output_dir=upload_artifacts_dir,
+            id_prefix=prepared.id_prefix,
+            id_feature=prepared.id_feature,
+            manual_review_layer=manual_review_layer,
+            force=force,
+            repair_for_remote_upload=repair_for_remote_upload,
+            annotator_filter=annotators,
+        )
     deployment_result = deploy_inception_sanitized_project(
         shell_project=shell_result.output_project,
         upload_artifacts_dir=artifacts_result.output_dir,

@@ -1091,30 +1091,31 @@ wheels = [
 
 [[package]]
 name = "snomed-post-processing"
-version = "2.1.1"
+version = "2.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
     { name = "dkpro-cassis" },
     { name = "h5py" },
+    { name = "nicegui" },
     { name = "pandas" },
     { name = "pycaprio" },
     { name = "pydantic" },
     { name = "randomname" },
     { name = "requests" },
     { name = "scttsrapy" },
-    { name = "streamlit" },
     { name = "yaspin" },
 ]
 
 [package.optional-dependencies]
-nicegui = [
-    { name = "nicegui" },
+streamlit = [
+    { name = "streamlit" },
 ]
 
 [package.dev-dependencies]
 dev = [
     { name = "pytest" },
+    { name = "streamlit" },
 ]
 
 [package.metadata]
@@ -1122,20 +1123,23 @@ requires-dist = [
     { name = "click", specifier = ">=8.1.8" },
     { name = "dkpro-cassis", specifier = ">=0.10.1" },
     { name = "h5py", specifier = ">=3.14.0" },
-    { name = "nicegui", marker = "extra == 'nicegui'", specifier = "==4.0.0" },
+    { name = "nicegui", specifier = "==4.0.0" },
     { name = "pandas", specifier = ">=2.3.3" },
     { name = "pycaprio", specifier = ">=0.3.0" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "randomname", specifier = ">=0.2.1" },
     { name = "requests", specifier = "==2.27.1" },
     { name = "scttsrapy", git = "https://github.com/AberystwythSystemsBiology/SCTTSRApy" },
-    { name = "streamlit", specifier = ">=1.50.0" },
+    { name = "streamlit", marker = "extra == 'streamlit'", specifier = ">=1.50.0" },
     { name = "yaspin", specifier = ">=3.3.0" },
 ]
-provides-extras = ["nicegui"]
+provides-extras = ["streamlit"]
 
 [package.metadata.requires-dev]
-dev = [{ name = "pytest", specifier = ">=8.4.0,<9" }]
+dev = [
+    { name = "pytest", specifier = ">=8.4.0,<9" },
+    { name = "streamlit", specifier = ">=1.50.0" },
+]
 
 [[package]]
 name = "sortedcontainers"

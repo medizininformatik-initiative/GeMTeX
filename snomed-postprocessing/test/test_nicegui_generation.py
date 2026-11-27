@@ -13,12 +13,14 @@ from tempfile import TemporaryDirectory
 import time
 from types import SimpleNamespace
 import unittest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from snomed_post_processing.findings_io import read_critical_findings_json_with_metadata
 from snomed_post_processing.gui.nicegui.file_sources import SourceFile
 from snomed_post_processing.gui.nicegui.review import ReviewError, ReviewSession, load_review
-from snomed_post_processing.gui.nicegui.suggestion_jobs import SuggestionJob, create_cache, inspect_members, run_generation, run_rules
+from snomed_post_processing.gui.nicegui.suggestion_jobs import (
+    InvalidSnogitCacheError, SuggestionJob, create_cache, inspect_members, run_generation, run_rules,
+)
 from snomed_post_processing.gui.nicegui.suggestion_ui import SuggestionControls, rule_records
 from snomed_post_processing.gui.nicegui.suggestions import load_suggestions_preview
 from snomed_post_processing.pipelines.policy_check import PolicySettings, check_policy
@@ -111,6 +113,15 @@ class GenerationBackendTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "current policy"):
             run_generation(job)
 
+    def test_generation_rejects_snomed_hdf5_selected_as_snogit_cache(self):
+        findings = SourceFile(FIXTURE / "critical-findings.json")
+        lists = SourceFile(FIXTURE / "policy.hdf5")
+        settings = replace(self.settings, semantic_bm25_fallback=True, snogit_bm25=True)
+        job = SuggestionJob(SourceFile(FIXTURE / "project.zip"), lists, PolicySettings(), settings,
+                            cache=lists, findings_file=findings, findings_stamp=findings.stamp())
+        with self.assertRaisesRegex(InvalidSnogitCacheError, "processed SNOGIT cache"):
+            run_generation(job)
+
     def test_processed_cache_actual_backend_with_named_dat_and_owned_output(self):
         from test.test_semantic_bm25_sanitization import _write_compact_hdf5
         with TemporaryDirectory() as directory:
@@ -156,7 +167,10 @@ class GenerationProcessTest(unittest.IsolatedAsyncioTestCase):
             self.assertIs(job.project.owner, owner)
             loop = asyncio.get_running_loop()
             with ProcessPoolExecutor(max_workers=1, mp_context=multiprocessing.get_context("spawn")) as pool:
-                result, preview, snapshot = await loop.run_in_executor(pool, run_generation, payload)
+                progress_path = root / "generation-progress.json"
+                result, preview, snapshot = await loop.run_in_executor(pool, run_generation, payload, progress_path)
+                progress = json.loads(progress_path.read_text(encoding="utf-8"))
+                self.assertEqual(progress, {"value": 1.0, "label": "Sanitization suggestions finished."})
                 self.assertEqual(result.binding, job.binding())
                 self.assertEqual(len(preview.findings), 10)
                 self.assertEqual(len(preview.source_suggestions), 10)
@@ -186,9 +200,8 @@ class GenerationControlsTest(unittest.IsolatedAsyncioTestCase):
         with self.client:
             self.inputs = SharedInputControls(ui)
             self.policy = PolicyCheckControls(ui, self.inputs)
-            banner, source, scope = ui.label(), ui.label(), ui.label()
             with ui.column() as parent:
-                self.review = ReviewPanelControls(ui, parent, banner=banner, source=source, scope=scope)
+                self.review = ReviewPanelControls(ui, parent, provenance=ui.label())
             self.panel = SuggestionControls(ui, self.inputs, self.policy, lambda: self.review)
             self.panel.connect_review()
         self.worker = patch("nicegui.run.io_bound", new=AsyncMock(side_effect=inline))
@@ -217,6 +230,8 @@ class GenerationControlsTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(self.panel.generate_button.enabled)
         await self.panel.generate()
         self.assertIsNotNone(self.panel.completed, self.panel.status.text)
+        self.assertEqual(self.panel.progress.value, 1.0)
+        self.assertEqual(self.panel.progress_label.text, "Sanitization suggestions finished.")
         self.assertIs(self.cpu.await_args.args[0], run_generation)
         self.assertFalse(any(call.args[0] is run_generation for call in self.io.await_args_list))
 
@@ -298,6 +313,11 @@ class GenerationControlsTest(unittest.IsolatedAsyncioTestCase):
         await self.panel.load_suggestions(upload_event(content, "restored.json"))
         self.assertTrue(self.panel.results.visible, self.panel.status.text)
         self.assertEqual(len(self.panel.overview.options["rowData"]), 10)
+        self.assertIn("offset", {column["field"] for column in self.panel.overview.options["columnDefs"]})
+        self.assertEqual(
+            self.panel.overview.options["rowData"][0]["offset"],
+            ", ".join(map(str, self.panel.completed[1].findings[0].offset)),
+        )
         self.assertIs(self.review.state, old_source)
         self.assertIs(self.review.controls.session, session)
         self.assertTrue(session.reviewed_documents)
@@ -448,6 +468,11 @@ class GenerationControlsTest(unittest.IsolatedAsyncioTestCase):
             await self.panel.generate()
         self.assertIs(self.panel.completed, previous)
         self.assertNotIn("private contents", self.panel.status.text)
+        with patch("snomed_post_processing.gui.nicegui.suggestion_ui.run_generation",
+                   side_effect=InvalidSnogitCacheError("Select a compatible processed SNOGIT cache.")):
+            await self.panel.generate()
+        self.assertIs(self.panel.completed, previous)
+        self.assertIn("compatible processed SNOGIT cache", self.panel.status.text)
         entered, release = asyncio.Event(), asyncio.Event()
         async def delayed(function, *args, **kwargs):
             if function is run_generation:
@@ -474,8 +499,13 @@ class GenerationControlsTest(unittest.IsolatedAsyncioTestCase):
         self.review.controls.command("save")
         self.assertEqual(len(session.rules), 4)
         self.assertFalse(session.dirty)
+        row_ids = [row["row_id"] for row in self.review.rule_grid.options["rowData"]]
+        self.review.rule_grid.run_grid_method = MagicMock()
         row = dict(self.review.rule_grid.options["rowData"][0], apply=False)
         self.review.toggle_rule(SimpleNamespace(args={"data": row}))
+        self.assertEqual([row["row_id"] for row in self.review.rule_grid.options["rowData"]], row_ids)
+        self.assertTrue(any(call.args[0] == "applyTransaction"
+                            for call in self.review.rule_grid.run_grid_method.call_args_list))
         self.review.controls.command("save")
         self.assertFalse(session.rules[0]["apply"])
         self.assertTrue(session.rules[0]["rule_reviewed_by_human"])
@@ -685,6 +715,7 @@ class GenerationControlsTest(unittest.IsolatedAsyncioTestCase):
         exported = list(csv.DictReader(io.StringIO(content.decode("utf-8-sig"))))
         self.assertEqual(len(exported), len(rows))
         self.assertEqual([row["Covered text"] for row in exported], [row["text"] for row in rows])
+        self.assertEqual([row["Offset"] for row in exported], [row["offset"] for row in rows])
         self.assertTrue(all(row["Document"].startswith("document-") for row in exported))
         self.assertEqual(self.panel.overview.options["rowData"], rows)
         self.assertIs(self.review.controls.session, session)

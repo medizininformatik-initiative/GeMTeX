@@ -72,7 +72,10 @@ class GenerationResult:
     binding: str
 
 
-def generate_suggestions(hdf5, findings, metadata, policy, settings, *, binding, project=None, cache=None, custom=None):
+def generate_suggestions(hdf5, findings, metadata, policy, settings, *, binding, project=None, cache=None, custom=None,
+                         progress_callback=None):
+    report_progress = progress_callback or (lambda _value, _label: None)
+    report_progress(0.03, "Validating findings and suggestion settings…")
     settings.validate()
     scope = normalize_annotators(policy.annotators)
     source_scope = metadata.get("annotators", [])
@@ -88,19 +91,32 @@ def generate_suggestions(hdf5, findings, metadata, policy, settings, *, binding,
     findings = [finding for finding in findings if annotator_in_scope(finding.annotator, scope)]
     if settings.semantic_bm25_fallback and settings.snogit_bm25 and cache is None:
         raise ValueError("Select or create a processed SNOGIT cache, or explicitly turn SNOGIT off.")
+    report_progress(0.12, "Loading replacement constraints and SNOMED lookup data…")
     constraints = replacement_constraints(hdf5, settings, custom)
     resolver = SanitizationResolver(hdf5, allowed_association_types=settings.allowed_association_types,
                                    activate_historical_ancestor_fallback=settings.historical_ancestor_fallback,
                                    ancestor_max_distance=settings.ancestor_max_distance,
                                    ancestor_max_relative_distance=settings.ancestor_max_relative_distance, **constraints)
+    report_progress(0.25, f"Resolving historical associations for {len(findings):,} finding(s)…")
     suggestions = resolver.suggest_all(findings)
+    report_progress(0.60, "Historical-association resolution finished.")
     if settings.semantic_bm25_fallback:
+        def bm25_progress(update):
+            progress = max(0.0, min(1.0, float(update.get("progress", 0.0) or 0.0)))
+            processed = int(update.get("processed", 0) or 0)
+            total = int(update.get("total", 0) or 0)
+            attempted = int(update.get("attempted", 0) or 0)
+            report_progress(0.60 + 0.25 * progress,
+                            f"Running BM25 fallback… {processed:,}/{total:,} processed · {attempted:,} scored")
+
         suggestions = apply_semantic_bm25_fallback(
             suggestions, hdf5, min_score=settings.bm25_min_score,
             min_lexical_score=settings.bm25_min_lexical_score, max_candidates=settings.bm25_max_candidates,
             semantic_tag_boost_percent=settings.bm25_semantic_tag_boost_percent,
             excluded_fsn_postfixes=settings.bm25_excluded_fsn_postfixes,
-            allow_blacklist_findings=settings.blacklist_bm25_suggestions, snogit_sidecar_path=cache, **constraints)
+            allow_blacklist_findings=settings.blacklist_bm25_suggestions, snogit_sidecar_path=cache,
+            progress_callback=bm25_progress, **constraints)
+    report_progress(0.87, "Preparing suggestion metadata and document context…")
     cache_members = []
     if settings.semantic_bm25_fallback and settings.snogit_bm25 and cache is not None:
         with h5py.File(cache, "r") as handle:
@@ -128,7 +144,9 @@ def generate_suggestions(hdf5, findings, metadata, policy, settings, *, binding,
                   "enforce_embedded_blacklist": constraints["release_exclude_blacklist"],
                   "custom_blacklist_concepts": len(constraints["runtime_blacklist_indices"]),
                   "bm25_fsn_semantic_tags_excluded": True})
+    report_progress(0.95, "Writing JSON and Markdown suggestion reports…")
     report = StringIO()
     write_sanitization_markdown_report(suggestions, report)
+    report_progress(1.0, "Sanitization suggestions finished.")
     return GenerationResult(sanitization_suggestions_json_text(suggestions, metadata=output_metadata),
                             report.getvalue(), tuple(suggestions), binding)

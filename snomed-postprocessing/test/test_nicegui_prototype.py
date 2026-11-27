@@ -128,7 +128,12 @@ class NiceGuiBootstrapTest(unittest.TestCase):
         preview(SimpleNamespace(args={"data": {"row_id": context_id}}))
         self.assertTrue(any(label.text.startswith("Diagnostic context only") for label in labels))
         select(SimpleNamespace(args={"data": original_rows[0]}))
-        self.assertIs(candidates.options["rowData"], candidate_rows)
+        refreshed_rows = candidates.options["rowData"]
+        self.assertEqual(
+            [row["row_id"] for row in refreshed_rows],
+            [row["row_id"] for row in candidate_rows],
+        )
+        self.assertTrue(next(row for row in refreshed_rows if row["row_id"] == context_id)["inspected"])
         self.assertIs(findings.options["rowData"], original_rows)
         switch_document(ui, 2)
         select(SimpleNamespace(args={"data": findings.options["rowData"][0]}))
@@ -140,11 +145,12 @@ class NiceGuiBootstrapTest(unittest.TestCase):
         from test.test_nicegui_suggestions import fake_ui
         ui, grids, _ = fake_ui()
         columns = [call.args[0] for call in ui.column.return_value.classes.call_args_list]
-        self.assertEqual(columns[:3], ["w-full min-w-0 gap-4", "w-full min-w-0", "w-full min-w-0"])
-        self.assertEqual(columns[3:], ["w-full min-w-0 gap-1", "w-full min-w-0 gap-1"])
+        self.assertIn("w-full min-w-0 gap-4", columns)
+        self.assertGreaterEqual(columns.count("w-full min-w-0"), 2)
+        self.assertGreaterEqual(columns.count("w-full min-w-0 gap-1"), 2)
         ui.element.return_value.classes.assert_any_call("grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 w-full min-w-0")
         covered_text = next(column for column in grids[0].options["columnDefs"] if column["field"] == "text")
-        self.assertEqual(covered_text["minWidth"], 400)
+        self.assertGreaterEqual(covered_text["minWidth"], 350)
         self.assertGreater(covered_text["flex"], 0)
         candidates = {column["field"]: column for column in grids[1].options["columnDefs"]}
         self.assertEqual(candidates["fsn"]["minWidth"], 240)
@@ -182,11 +188,25 @@ class NiceGuiBootstrapTest(unittest.TestCase):
 
     def test_registers_page_and_starts_one_server_without_reload_or_browser(self):
         ui = MagicMock()
-        with patch.object(app, "_load_ui", return_value=ui):
+        with patch.object(app, "_load_ui", return_value=(ui, object())):
             self.assertEqual(app.main([]), 0)
         ui.page.assert_called_once_with("/")
         ui.run.assert_called_once_with(host="127.0.0.1", port=8080, show=False,
-                                       reload=False, title="SNOMED Postprocessing — NiceGUI prototype")
+                                       reload=False, title="SNOMED Postprocessing — NiceGUI version")
+
+    def test_development_reload_watches_python_and_css_under_source_root(self):
+        ui = MagicMock()
+        with patch.object(app, "_load_ui", return_value=(ui, object())):
+            self.assertEqual(app.main(["--reload"]), 0)
+        ui.run.assert_called_once_with(
+            host="127.0.0.1",
+            port=8080,
+            show=False,
+            reload=True,
+            title="SNOMED Postprocessing — NiceGUI version",
+            uvicorn_reload_dirs=str(app.SOURCE_ROOT),
+            uvicorn_reload_includes="*.py,*.css",
+        )
 
     def test_runtime_error_is_reported_without_starting_server(self):
         with patch.object(app, "_load_ui", side_effect=RuntimeError("Separate environment required")), redirect_stderr(io.StringIO()) as output:

@@ -1,71 +1,45 @@
 ---
 type: Runbook
-title: Follow-ups and validation checklist
-description: Open testing, smoke-test, performance, and deployment follow-up work for SNOMED Post Processing.
-resource: /snomed-post-processing/source-/snomed-post-processing/source-former documentation folder/release-view-follow-ups-and-docs-review.md
+title: Current validation backlog
+description: Open testing, smoke-test, performance, and deployment validation work for SNOMED Post Processing.
 tags: [follow-up, testing, validation, gui, deployment]
 status: draft
 generated: { by: pi-coding-agent/gpt-5, at: 2026-08-28T15:03:31Z }
 sources:
-  - id: followups-doc
-    resource: /snomed-post-processing/source-/snomed-post-processing/source-former documentation folder/release-view-follow-ups-and-docs-review.md
-    title: Release-view follow-ups and documentation review
   - id: test-tree
     resource: /test
     title: Test suite
+  - id: cli-doc
+    resource: /snomed-post-processing/interfaces/cli.md
+    title: CLI and environment validation notes
 ---
 
-# Open follow-up work
+# Current validation backlog
 
-## Python 3.11 migration validation
+This page tracks validation that remains to be performed. Completed implementation history and deferred design enhancements are documented elsewhere; see [Future work](future-work.md) for the latter.
 
-Configuration is prepared for Python 3.11.x: `pyproject.toml` uses `~=3.11.0`, `.python-version` is `3.11`, Docker uses `python3.11-bookworm-slim`, and the initial 62-package migration lock preserved retained dependency versions (the optional NiceGUI integration below subsequently extends it). PyInquirer has been replaced with Click. The 3.11 lock passes an offline consistency check.
+## Baseline status
 
-With approval, `UV_PROJECT_ENVIRONMENT=.venv-py311 uv sync --locked --python <installed-3.11.13-interpreter>` created a fresh ignored environment and installed all 62 locked packages, including the editable project and Git-pinned SCTTSRApy. Installed package consistency, imports of native/core packages and all 11 Click entry-point help commands pass. PyInquirer/prompt-toolkit are absent. The original Python 3.9.23 `.venv` remains unchanged; no system-wide Python/PATH changes were made.
+The last recorded full-suite validation reported **280 passed, 3 existing GUI-default failures, and 2 warnings**. The three failures concern defaults for BM25 and TLS settings and were reproduced under both retained Python 3.9 and Python 3.11 environments. They were not suppressed or marked as expected failures.
 
-The initial full Python 3.11 migration suite reported **275 passed, 3 failed, 2 warnings**. HTTP requests and external DNS/socket connections were blocked during testing (local internal communication/test mocks allowed). These three failures were also reproduced under the preserved 3.9 environment:
+The following baseline checks were recorded as passing:
 
-- `test_gui_automatic_conditions.py::GuiAutomaticConditionsTest::test_bm25_is_opt_in_and_shares_the_last_run_undo`
-- `test_gui_help_text.py::GuiHelpTextTest::test_automatic_condition_help_and_relationship_descriptions`
-- `test_gui_help_text.py::GuiHelpTextTest::test_deployment_help_preserves_offline_defaults`
+- Python 3.11 dependency and lock consistency;
+- core/native imports and CLI help entry points;
+- shared Streamlit/NiceGUI launcher dispatch;
+- focused NiceGUI JSON import, review, and connection regression checks.
 
-They assert BM25 opt-in / TLS opt-out should default to unchecked, while current GUI defaults are checked. Neither defaults nor tests were changed or marked xfail. No new Python-3.11-specific failure was identified, but this is not an all-green suite. Resolve these defaults separately.
+A fresh full test run and live-service validation are still separate tasks.
 
-Use `.venv-py311/Scripts/python.exe` in the IDE or set `UV_PROJECT_ENVIRONMENT=.venv-py311` for uv commands; do not allow default uv sync to replace the retained `.venv` inadvertently. Docker build/browser/live INCEpTION validation remain separate approved actions. NiceGUI is now installed as an optional project extra in that same environment; see the integration check below. Full browser interaction validation remains pending.
+## Open validation work
 
-### Shared NiceGUI runtime
+### Resolve or explicitly retain the three GUI-default failures
 
-With approval, the `nicegui` project extra was added (`nicegui==4.0.0`) and installed into `.venv-py311` using `uv sync --locked --extra nicegui`. The lock now contains 100 packages across platforms (99 installed on Windows). Existing certifi/idna/Pygments versions were updated for NiceGUI's minimums; all other retained versions and the Git SDK revision are unchanged. Installed dependency and offline lock checks pass.
+Determine whether BM25 and TLS defaults should be unchecked, update the implementation/tests consistently, and rerun the full suite. Do not mark the failures as expected without a deliberate product decision.
 
-The shared launcher defaults to Streamlit; `--frontend nicegui` dispatches lazily in-process, using the same interpreter/environment without starting Streamlit. Options are backend-specific (`--port` for NiceGUI, `--server.port` for Streamlit). Unknown frontend values fail before either server starts. Both import and default behavior remain framework-neutral/Streamlit-compatible.
+### End-to-end release-view tests
 
-Both direct-file and module shared-launcher forms started temporary, owned NiceGUI servers on loopback. `GET /` returned HTTP 200 with the synthetic warning, findings and candidate controls; both processes were stopped after checking. File dispatch excludes the launcher directory while NiceGUI runs, preventing its sibling `nicegui/` package from shadowing the installed SDK; the original search path is restored even on startup errors. Browser JavaScript/visual interaction and real backend workflows are not validated by this check. No clinical project, live INCEpTION or Docker build was involved.
-
-After adding launcher tests, the full suite reports **280 passed, the same 3 failures listed above, 2 warnings**. No failures were suppressed or defaults changed. Keep `--extra nicegui` on uv run/sync commands for the shared environment; plain base-only sync may uninstall it.
-
-### Read-only NiceGUI suggestions import
-
-The next frontend increment connects uploaded suggestions JSON through the existing backend reader, with a 50 MiB limit, inherited artifact scope, original indices, retained backend data/evidence and snapshot/role-specific row IDs. No decision staging, processing, HDF5 validation or export is enabled. Failed loads preserve prior state, and per-page revision guards protect concurrent imports/reset. Text is not rendered as HTML and uploaded content is not echoed in errors.
-
-67 focused checks pass, including existing scope/synthetic workflow coverage. A real loopback NiceGUI multipart check loaded the Alice-scoped synthetic fixture with original indices and confirmed a later invalid upload left it intact. No clinical data/live API/Docker action was involved; the owned test server was stopped. The full suite was not rerun for this increment. Next: browser interaction checks, then deliberate decision staging/import/export with existing protection semantics.
-
-### NiceGUI connection regression
-
-An installed Engine.IO adapter bug raised `KeyError('REQUEST_METHOD')` on initial ASGI disconnects. Mixed-case ASGI response headers also caused duplicate gzip compression through Starlette, breaking larger polling updates. Both were reproduced. The application now installs a mount-local ASGI guard before startup (`nicegui/transport.py`): skip already-disconnected requests, replay healthy first frames, and normalize response header names without changing values/body/stream semantics. Other routes and errors remain untouched; packages/compression settings are not patched or downgraded.
-
-61 focused tests pass, including real Engine.IO and gzip middleware regressions. Real polling and WebSocket page handshakes, synthetic scope-aware JSON uploads, live UI updates and invalid-upload feedback passed on an owned loopback server with no ASGI errors. Servers were stopped; no clinical/external-service activity or full-suite rerun. Restart the NiceGUI process, not just the browser page, to apply the change.
-
-### NiceGUI explicit manual review JSON
-
-Implemented per-page `review.py` command/state adapter plus `review_ui.py` controls: selectable replacement or explicit Keep staging, Save/discard, staged document flags, backend-version-1 JSON download and replacing import. Navigation is not approval; dirty state blocks download. Document confirmation conservatively protects human-reviewed Keep rows, while unmarking flags does not undo manual decisions. Source scope/indices remain authoritative; imports check coverage/identity/candidate membership and exported suggestion fingerprints. Manual ordinal/evidence preserves duplicate channels. Imported rule/deletion/manual-edit/ID-removal decisions are retained read-only and rule/manual conflicts rejected. No HDF5 revalidation, new rule/condition commands or CAS/deployment application is connected.
-
-All imports publish atomically. Invalid/oversized/read failures preserve review; new source/demo resets it. Latest-load tokens plus edit revisions prevent stale imports overwriting new artifacts or manual work. Unrelated saves retain imported provenance; explicit human confirmation removes automatic ownership. Explicit downloads may contain clinical text; reload loses local state.
-
-97 focused checks pass (including scope/synthetic regressions and exact existing Streamlit fixture round-trip). Actual polling and WebSocket clients passed real NiceGUI listener-event staging/Keep/Save, flags, binary JSON download, replacing import and failed-import retention with no ASGI errors. Owned loopback servers stopped. No clinical, live external service or full-suite run; visual/browser JavaScript, focus/scroll and existing baseline failures remain pending. Next: browser review checks/artifact equivalence, then explicit processing adapters, not automatic input-triggered processing.
-
-## End-to-end option tests
-
-Add CLI/pipeline tests for release-view behavior:
+Add or run CLI/pipeline tests covering:
 
 | Case | Expected release-view behavior |
 |---|---|
@@ -76,7 +50,7 @@ Add CLI/pipeline tests for release-view behavior:
 
 Include BM25/SNOGIT fallback in at least one release-view test if feasible.
 
-## Manual GUI smoke test
+### Manual GUI smoke test
 
 Run Streamlit and verify suggestion generation for:
 
@@ -84,51 +58,40 @@ Run Streamlit and verify suggestion generation for:
 - active release view with no blacklist;
 - active release view with embedded blacklist;
 - active release view with custom blacklist;
-- active release view with embedded + custom blacklist;
+- active release view with embedded and custom blacklist;
 - release view with semantic BM25 fallback;
 - release view with a processed SNOGIT cache.
 
-Check that suggestion JSON metadata records target view and blacklist settings.
+Check that suggestion JSON metadata records the target view and blacklist settings.
 
-## Manual large-dataset performance test
+### Large-dataset performance test
 
-Test realistic data sizes for:
+Measure runtime and memory for:
 
-- custom blacklist descendant resolution from HDF5 ancestor arrays;
+- custom-blacklist descendant resolution from HDF5 ancestor arrays;
 - semantic BM25 fallback over main HDF5 FSNs;
 - processed SNOGIT cache lookup;
-- repeated annotation-text caching.
+- repeated annotation-text caching;
+- policy and release mode at realistic data sizes.
 
-Track runtime and memory for policy mode and release mode.
+### INCEpTION deployment validation
 
-## INCEpTION deployment validation
+After a real `apply-decisions-to-inception --apply`, inspect the target project and verify:
 
-After real `apply-decisions-to-inception --apply`, inspect the target INCEpTION project:
+- flattened documents are imported;
+- Concept annotations and ManualReview markers are present as expected;
+- the sentence-based editor loads all documents;
+- the remote-upload compatibility issue count is zero.
 
-- flattened documents imported;
-- Concept annotations present;
-- ManualReview markers present where expected;
-- sentence-based editor loads all documents;
-- remote-upload compatibility issue count is zero.
+This requires an approved live INCEpTION environment.
 
-## Optional SNOGIT false-positive mitigation
+### Optional SNOGIT false-positive mitigation
 
-If real data shows noisy suggestions for short/generic annotations, consider:
+If real data shows noisy suggestions for short or generic annotations, evaluate:
 
-- higher lexical-overlap threshold for one-token queries;
-- minimum token count before SNOGIT fallback;
+- a higher lexical-overlap threshold for one-token queries;
+- a minimum token count before SNOGIT fallback;
 - semantic-tag compatibility checks;
-- stricter score margin for ambiguous candidates.
+- a stricter score margin for ambiguous candidates.
 
-# Current validation snapshot
-
-As of the prior implementation work, the full test run was:
-
-```text
-uv run pytest test -q
-105 passed
-```
-
-# Documentation migration status
-
-Every file formerly under the former documentation folder has been imported into this OKF bundle under `/snomed-post-processing/source-former documentation folder/`, and its content has also been consolidated into curated concept pages. Do not delete the former documentation folder automatically; deletion should be a separate human-approved cleanup step.
+This is conditional on observed false positives, not a required implementation task.

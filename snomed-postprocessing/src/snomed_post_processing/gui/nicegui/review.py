@@ -1,7 +1,7 @@
 """Page-local manual review commands using the existing backend JSON format.
 
 Navigation is not staging, staging is not saving, and exporting never applies CAS
-changes. Imported rule/delete/manual-edit decisions are preserved and protected.
+changes. Imported rule/delete/manual-edit/ID-removal decisions are preserved and protected.
 No HDF5/project is opened and no paths from metadata are followed.
 """
 from __future__ import annotations
@@ -60,6 +60,7 @@ class ReviewSession:
     draft_rule_binding: str | None = None
     rules_stale: bool = False
     draft_rules_stale: bool = False
+    conditions_undo: dict | None = None
 
     @property
     def effective_rules(self):
@@ -115,9 +116,9 @@ class ReviewSession:
     def stage(self, row_id, candidate_id=None, *, action=None):
         row = self._row(row_id)
         if self.protected(row):
-            raise ReviewError("This finding has a concept rule or protected imported action. Use rule Apply choices or clear rules; imported deletions/manual edits remain read-only.")
+            raise ReviewError("This finding has a concept rule or protected imported action. Use rule Apply choices or clear rules; imported deletions/manual edits/ID removals remain read-only.")
         action = action or ("replace" if candidate_id is not None else "none")
-        if action not in ("replace", "none", "delete", "manual_edit") or (action != "replace" and candidate_id is not None):
+        if action not in ("replace", "none", "delete", "manual_edit", "clear_id") or (action != "replace" and candidate_id is not None):
             raise ReviewError("Select one review action for this finding.")
         if action == "replace":
             candidate = next((item for item in row.candidates if item.row_id == candidate_id and item.selectable), None)
@@ -154,11 +155,12 @@ class ReviewSession:
     def _decision(self, row, candidate_id=None, *, human=False, action=None):
         candidate = next((item for item in row.candidates if item.row_id == candidate_id and item.selectable), None)
         action = action or ("replace" if candidate else "none")
+        applies = bool(candidate) or action == "clear_id"
         decision = dict(suggestion_index=row.suggestion_index, document=row.document, annotator=row.annotator,
                     layer=row.layer, offset=list(row.offset or ()), source_code=row.code, covered_text=row.text,
-                    action=action, apply=bool(candidate), delete_annotation=action == "delete",
-                    manual_edit=action == "manual_edit", reviewed_by_human=human, valid_choice=bool(candidate),
-                    resolved=bool(candidate) or action == "delete",
+                    action=action, apply=applies, delete_annotation=action == "delete",
+                    manual_edit=action == "manual_edit", reviewed_by_human=human, valid_choice=applies,
+                    resolved=applies or action == "delete",
                     replacement_code=candidate.code if candidate else None,
                     replacement_fsn=candidate.fsn if candidate else None,
                     replacement_choice=f"{candidate.code} — {candidate.fsn}".strip() if candidate else NO_REPLACEMENT,
@@ -169,6 +171,77 @@ class ReviewSession:
             decision["manual_candidate_ordinal"] = ordinal
             decision["manual_candidate"] = candidate_to_dict(self.source.source_suggestions[row.suggestion_index].candidates[ordinal])
         return decision
+
+    def apply_automatic_conditions(self, association_types, *, bm25_enabled=False,
+                                   bm25_min_dominance=2 / 3, bm25_min_relative_lead=0.20,
+                                   bm25_include_exclusion_findings=False):
+        """Apply conservative backend conditions to saved review state only."""
+        self._require_source()
+        if self.dirty:
+            raise ReviewError("Save choices or discard pending changes before applying automatic conditions.")
+        from snomed_post_processing.sanitization.conditions import apply_conditions
+        decisions = copy.deepcopy(self.rules)
+        decisions.extend(copy.deepcopy(self.saved.get(row.suggestion_index, self._decision(row)))
+                         for row in self.source.findings)
+        protected = {index for index, item in self.saved.items() if not item.get("automatic_condition")}
+        protected.update(row.suggestion_index for row in self.source.findings if self.protected(row))
+        choices = {row.suggestion_index: tuple(
+            f"{candidate.code} — {candidate.fsn}" for candidate in row.candidates if candidate.selectable
+        ) for row in self.source.findings}
+        result = apply_conditions(
+            self.source.source_suggestions, decisions, association_types, choices,
+            self.reviewed_documents, protected,
+            bm25_enabled=bm25_enabled,
+            bm25_min_dominance=bm25_min_dominance,
+            bm25_min_relative_lead=bm25_min_relative_lead,
+            bm25_include_exclusion_findings=bm25_include_exclusion_findings,
+        )
+        self._publish_condition_result(result, applying=True)
+        if result.undo is not None:
+            self.conditions_undo = copy.deepcopy(result.undo)
+        return result
+
+    def undo_automatic_conditions(self):
+        self._require_source()
+        if self.dirty:
+            raise ReviewError("Save choices or discard pending changes before undoing automatic conditions.")
+        if self.conditions_undo is None:
+            raise ReviewError("There is no automatic-condition run to undo.")
+        from snomed_post_processing.sanitization.conditions import undo_automatic_conditions
+        decisions = copy.deepcopy(self.rules)
+        decisions.extend(copy.deepcopy(self.saved.get(row.suggestion_index, self._decision(row)))
+                         for row in self.source.findings)
+        automatic_documents = set(self.imported_metadata.get("automatic_reviewed_documents", []))
+        protected_documents = (self.reviewed_documents - automatic_documents) | {
+            item["document"] for item in decisions if item.get("reviewed_by_human")
+        }
+        result = undo_automatic_conditions(
+            decisions, self.reviewed_documents, self.conditions_undo, protected_documents,
+        )
+        self._publish_condition_result(result, applying=False)
+        self.conditions_undo = None
+        return result
+
+    def _publish_condition_result(self, result, *, applying):
+        rows = {row.suggestion_index: row for row in self.source.findings}
+        changed = False
+        for item in result.decisions:
+            index = item.get("suggestion_index")
+            row = rows.get(index)
+            if row is None:
+                continue
+            current = self.saved.get(index, self._decision(row))
+            if item != current:
+                self.saved[index] = copy.deepcopy(item)
+                changed = True
+        previous_reviewed = set(self.reviewed_documents)
+        self.reviewed_documents = set(result.reviewed_documents)
+        automatic = set(self.imported_metadata.get("automatic_reviewed_documents", []))
+        if applying:
+            automatic |= self.reviewed_documents - previous_reviewed
+        self.imported_metadata["automatic_reviewed_documents"] = sorted(automatic & self.reviewed_documents)
+        if changed or previous_reviewed != self.reviewed_documents:
+            self.revision += 1
 
     def save(self):
         self._require_source()
@@ -213,7 +286,8 @@ class ReviewSession:
             choice = self.drafts[row.row_id]
             candidate = next((c for c in row.candidates if c.row_id == choice.candidate_id), None)
             return (f"Pending replacement: {candidate.code}" if candidate else
-                    {"delete": "Pending deletion", "manual_edit": "Pending manual review", "none": "Pending Keep"}[choice.action])
+                    {"delete": "Pending deletion", "manual_edit": "Pending manual review",
+                     "clear_id": "Pending ID removal", "none": "Pending Keep"}[choice.action])
         if any(_identity(rule) == _finding_identity(row) for rule in self.effective_rules):
             return "Reserved by concept rule"
         if self.protected(row):
@@ -223,8 +297,13 @@ class ReviewSession:
             return "Saved deletion"
         if item.get("manual_edit"):
             return "Saved manual review"
+        if item.get("action") == "clear_id" and item.get("apply"):
+            return "Saved ID removal"
         if item.get("apply"):
-            return f"Saved replacement: {item.get('replacement_code')}"
+            condition = (item.get("automatic_condition") or {}).get("kind")
+            label = {"historical_association": "historical condition", "bm25_gap": "BM25 gap"}.get(condition)
+            return (f"Automatic {label}: {item.get('replacement_code')}" if label
+                    else f"Saved replacement: {item.get('replacement_code')}")
         return "Saved Keep" if item.get("reviewed_by_human") else "Unreviewed"
 
     def export_text(self):
@@ -243,9 +322,15 @@ class ReviewSession:
         # Suggestions metadata may contain full-document finding_contexts for
         # excluded annotators. Like Streamlit, carry write-back settings across,
         # not the entire suggestions metadata/clinical context into a review file.
-        names = ("id_prefix", "id_feature", "manual_review_layer", "suggestions_json_path", "suggestions_report_path", "nicegui_generation_binding")
+        names = ("id_prefix", "id_feature", "manual_review_layer", "suggestions_json_path", "suggestions_report_path",
+                 "nicegui_generation_binding", "store_scope", "annotation_source_file")
         metadata = {key: copy.deepcopy(self.source.metadata[key]) for key in names if key in self.source.metadata}
         metadata.update(copy.deepcopy(self.imported_metadata))
+        # Store identity belongs to the currently loaded suggestions/rule source;
+        # an imported review cannot retarget it to another SQLite scope/file.
+        for key in ("store_scope", "annotation_source_file"):
+            if key in self.source.metadata:
+                metadata[key] = copy.deepcopy(self.source.metadata[key])
         if "finding_contexts" in metadata:
             from snomed_post_processing.uima_processing.scope import annotator_in_scope
             contexts = metadata["finding_contexts"]

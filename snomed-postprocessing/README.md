@@ -2,7 +2,7 @@
 
 SNOMED Postprocessing checks SNOMED CT annotations in INCEpTION/UIMA exports against a materialized SNOMED HDF5 file. In policy mode, annotations are checked against inclusion/exclusion-list policy views. The tool reports annotations outside the inclusion list or on the exclusion list, can generate sanitization suggestions, and can apply reviewed replacement/delete decisions to a copied project ZIP.
 
-The project can be used from the command line or through a Streamlit GUI.
+The project can be used from the command line or through the default NiceGUI workspace. Streamlit remains available as an optional fallback frontend.
 
 User-facing wording uses **inclusion list** / **exclusion list**. Existing technical identifiers remain unchanged: CLI flags such as `--custom-blacklist`, HDF5 paths such as `policy_views/whitelist`, and JSON values such as `list_type="blacklist"` retain their established names. No artifact migration is required.
 
@@ -83,13 +83,15 @@ BM25 and SNOGIT are suggestion-only evidence. Candidates must still pass the sel
 
 ## Python runtime
 
-The project requires **Python 3.11.x** and uses the standard **`.venv`** environment for the CLI and both GUI frontends. No separate frontend environment is needed.
+The project requires **Python 3.11.x**. NiceGUI is the default GUI and is installed with the standard dependencies. Streamlit is an optional fallback frontend:
 
 ```bash
+# CLI and default NiceGUI workspace
 uv sync --locked
-```
 
-To also install the optional NiceGUI frontend, use `uv sync --locked --extra nicegui`. Keep `--extra nicegui` on subsequent uv run/sync commands when using that frontend so its packages are retained.
+# Also install the Streamlit fallback
+uv sync --locked --extra streamlit
+```
 
 On Windows, select `.venv/Scripts/python.exe` in your IDE; on other systems use `.venv/bin/python`.
 
@@ -139,7 +141,7 @@ Docker CLI example with local files mounted into `/app/data`:
 docker run \
   --volume ./data:/app/data \
   --rm \
-  ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:2.1.1 \
+  ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:2.2.0 \
   log-critical-documents \
   --lists-path /app/data/gemtex_snomedct_codes.hdf5 \
   /app/data/inception-export.zip
@@ -400,6 +402,19 @@ uv run build-annotation-store \
 
 By default, annotation provenance, offsets, covered text, SCTID, FSN, semantic tag, active status, and a SHA-256 hash of the complete CAS document text are stored. Full CAS document text can be stored explicitly with `--store-document-text`.
 
+For later CAS write-back/INCEpTION review, add **`--store-cas` when creating a new store**. This preserves complete JSONCAS/XMI payloads, project configuration when available, and SHA-256-deduplicated type systems; it also stores full document text. Different type systems remain separate. Existing stores are not upgraded; appending to a CAS-enabled store requires the flag again. The extra data contains clinical text and all original annotation features.
+
+Restore one export's CAS into a new workspace ZIP:
+
+```bash
+uv run restore-annotation-store-cas \
+  --store semantic_snomed_annotations.sqlite \
+  --store-scope 1:annotation \
+  --output restored-project.zip
+```
+
+Use this ZIP with the existing INCEpTION shell/artifact workflow, **not as a native full-project backup**. Alternatively, `apply-decisions-to-inception --source-project STORE.sqlite --store-scope 1:annotation ...` restores temporarily and applies reviewed decisions directly; it remains offline unless `--apply` is supplied. If the original export had no project configuration, supply `--project-template original-project.zip`.
+
 Check whether an external plain-text document is represented in the store by content hash. This deliberately does not rely on document names.
 
 ```bash
@@ -414,31 +429,40 @@ If the SHA-256 hash matches a stored `document_text_hash`, annotation offsets ar
 
 ### Start the GUI
 
-From the repository root, start the default **Streamlit** GUI:
+From the repository root, start the default project-authored **workspace** frontend:
 
 ```bash
-uv run src/snomed_post_processing/gui/app.py
+uv run src/snomed_post_processing/gui/app.py --show
 ```
 
 Or use Docker, then open `http://localhost:8501`:
 
 ```bash
-docker run --rm -p 8501:8501 \
-  ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:2.1.1 \
+docker run --rm -p HOST_PORT:8501 \
+  ghcr.io/medizininformatik-initiative/gemtex/snomed-postprocessing:2.2.0 \
   start-gui
 ```
 
-The Docker convenience script is `bash start-gui.sh 8501`.
-
-For the experimental **NiceGUI** frontend:
+The Docker convenience script is `bash start-gui.sh 8501`. The frontend can also be selected explicitly as NiceGUI:
 
 ```bash
-uv run --extra nicegui src/snomed_post_processing/gui/app.py --frontend nicegui --show
+uv run src/snomed_post_processing/gui/app.py --frontend nicegui --show
 ```
 
-See its [setup and limitations](src/snomed_post_processing/gui/nicegui/README.md); CAS write-back and deployment are not yet connected there.
+To use the previous Streamlit frontend:
 
-### Workflow (Streamlit)
+```bash
+uv run src/snomed_post_processing/gui/app.py --frontend streamlit
+```
+
+During frontend development, add `--reload` to restart automatically when Python or
+CSS files under `src/snomed_post_processing` change. Reloading discards uploaded files,
+in-memory review state and unsaved decisions, and interrupts running background jobs;
+it remains disabled by default.
+
+See the general [GUI notes](src/snomed_post_processing/gui/README.md) and the detailed [user guide](docs/user-guide.md#workspace-frontend). Preserved SQLite CAS can be downloaded there as an offline INCEpTION review package; reviewed ZIP/API projects support sanitized-ZIP preparation and explicit new-project deployment.
+
+### Workflow
 
 1. **Check policy:** Select the annotation source and HDF5 policy file, choose annotators/layers, and run the check. Download reports and findings JSON.
 2. **Sanitization suggestions:** Use current-session or saved findings, configure rules and optional fallback methods, and generate suggestions. You can also load suggestions JSON from an earlier run; the overview appears in this tab.

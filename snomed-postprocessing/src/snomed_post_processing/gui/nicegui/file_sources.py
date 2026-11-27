@@ -28,8 +28,9 @@ def list_server_files(directory: Path, suffixes: tuple[str, ...]) -> list[Path]:
 
 
 class FileSource:
-    def __init__(self, ui, label, suffixes, data_dir, on_change):
+    def __init__(self, ui, label, suffixes, data_dir, on_change, *, max_upload_bytes=MAX_UPLOAD_BYTES):
         self.suffixes, self.data_dir, self.on_change = suffixes, data_dir, on_change
+        self.max_upload_bytes = max_upload_bytes
         self.uploaded = None
         self.uploading = self.closed = False
         self.generation = 0
@@ -39,8 +40,9 @@ class FileSource:
                                   on_change=lambda _: self.change_mode()).props("dense no-caps")
             self.uploader = ui.upload(label=f"Upload {label}", on_upload=self.load,
                                       multiple=False, max_files=1, auto_upload=True,
-                                      max_file_size=MAX_UPLOAD_BYTES,
-                                      on_rejected=lambda: self.note.set_text("Upload rejected. Limit: 200 MiB; use a server file for larger inputs.")) \
+                                      max_file_size=self.max_upload_bytes,
+                                      on_rejected=lambda: self.note.set_text(
+                                          f"Upload rejected. Limit: {self.max_upload_bytes // (1024 * 1024)} MiB; use a server file for larger inputs.")) \
                 .props("accept=" + ",".join(suffixes)).classes("w-full")
             self.uploader.on("removed", lambda _: self.clear_upload())
             self.choice = ui.select({}, label=f"Select {label}", with_input=True, on_change=lambda _: self.changed()).classes("w-full")
@@ -104,12 +106,12 @@ class FileSource:
         self.on_change()
         try:
             suffix = Path(event.file.name).suffix.casefold()
-            if suffix not in self.suffixes or event.file.size() > MAX_UPLOAD_BYTES:
+            if suffix not in self.suffixes or event.file.size() > self.max_upload_bytes:
                 raise ValueError("Unsupported upload.")
             owner = TemporaryDirectory(prefix="snomed-policy-upload-")
             target = Path(owner.name) / Path(event.file.name).name
             await event.file.save(target)
-            if target.stat().st_size > MAX_UPLOAD_BYTES:
+            if target.stat().st_size > self.max_upload_bytes:
                 raise ValueError("Upload too large.")
             if not self.closed and generation == self.generation and self.mode.value == "Upload":
                 self.uploaded = SourceFile(target, owner)
@@ -121,6 +123,11 @@ class FileSource:
             if not self.closed and generation == self.generation:
                 self.uploading = False
                 self.on_change()
+
+    def set_enabled(self, enabled):
+        self.uploader.set_enabled(enabled)
+        self.choice.set_enabled(enabled)
+        self.path.set_enabled(enabled)
 
     def close(self):
         self.closed = True

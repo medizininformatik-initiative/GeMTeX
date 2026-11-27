@@ -1,7 +1,11 @@
 """Explicit rules and suggestion generation, sharing tab 1 inputs and backend engines."""
+import asyncio
 import copy
 from dataclasses import asdict
 import io
+import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import uuid
 
 import pandas as pd
@@ -13,20 +17,48 @@ from snomed_post_processing.sanitization.semantic_text import FSN_POSTFIX_PRESET
 from snomed_post_processing.sanitization.concept_rules import (
     ConceptRule, DEFAULT_CONCEPT_RULES, preserve_rule_edits, read_rules_json, rules_json_text, validate_rules,
 )
+from .tables import resizable_table
 from .file_sources import FileSource
 from .review import ReviewError
 from .suggestion_jobs import (
-    SuggestionJob, create_cache, inspect_members, restore_suggestions, run_generation, run_rules, stamps, validate_preserved_rules,
+    InvalidSnogitCacheError, SuggestionJob, create_cache, inspect_members, restore_suggestions, run_generation, run_rules,
+    stamps, validate_preserved_rules,
 )
 from .suggestions import MAX_SUGGESTIONS_BYTES, SuggestionsPreviewError, load_suggestions_preview
 
 
+MASKED_CSV_CANDIDATE_LIMIT = 10
+
+
+def _candidate_summary(candidates, limit=MASKED_CSV_CANDIDATE_LIMIT):
+    candidates = tuple(candidates or ())
+    values = [f"{candidate.code} — {candidate.fsn or '(FSN unavailable)'}" for candidate in candidates[:limit]]
+    if len(candidates) > limit:
+        values.append(f"… ({len(candidates) - limit} more)")
+    return " | ".join(values)
+
+
+def _offset_text(offset):
+    return ", ".join(str(value) for value in (offset or ()))
+
+
 def masked_preview_csv(preview):
     columns = {"document": "Document", "annotator": "Annotator", "code": "Source code",
-               "status": "Status", "proposed_code": "Replacement code", "candidate_count": "Candidate count",
-               "text": "Covered text"}
-    frame = pd.DataFrame([{name: getattr(row, name) for name in columns} for row in preview.findings],
-                         columns=list(columns)).rename(columns=columns)
+               "text": "Covered text", "offset": "Offset", "status": "Status",
+               "proposed_code": "Replacement code", "candidate_count": "Candidate count",
+               "top_candidates": "Top candidates", "diagnostic_candidates": "Diagnostic candidates (not selectable)"}
+    rows = []
+    for row in preview.findings:
+        candidates = tuple(getattr(row, "candidates", ()))
+        rows.append({
+            "document": row.document, "annotator": row.annotator, "code": row.code,
+            "status": row.status, "proposed_code": row.proposed_code,
+            "candidate_count": row.candidate_count,
+            "text": row.text, "offset": _offset_text(row.offset),
+            "top_candidates": _candidate_summary(candidate for candidate in candidates if candidate.selectable),
+            "diagnostic_candidates": _candidate_summary(candidate for candidate in candidates if not candidate.selectable),
+        })
+    frame = pd.DataFrame(rows, columns=list(columns)).rename(columns=columns)
     return masked_overview_csv(frame)
 
 
@@ -55,7 +87,16 @@ class SuggestionControls:
         self.rule_job = self.rule_stamps = None
         self.records = rule_records(DEFAULT_CONCEPT_RULES)
         ui.label("Uses the shared Inputs sidebar for HDF5, annotator scope and annotation settings. Saved findings require HDF5 but no project input; a ZIP or read-only SQLite store supplies annotations for policy checks/rules and optional context. Inputs never start processing.").classes("text-sm")
-        with ui.expansion("Concept rules").classes("w-full"):
+        with ui.expansion("Restore suggestions JSON", value=False).classes("w-full"):
+            self.saved_suggestions = FileSource(
+                ui, "Suggestions JSON", (".json",), inputs.data_dir, self.restore_changed,
+                max_upload_bytes=MAX_SUGGESTIONS_BYTES,
+            )
+            self.uploader = self.saved_suggestions.uploader
+            self.restore_button = ui.button("Load saved suggestions", on_click=self.load_saved)
+            self.restore_status = ui.label("Restores the suggestions table without analysis or HDF5/project access. Review stays unchanged until Load in review. Limit: 50 MiB.").classes("text-sm")
+        self.findings_source = ui.label().classes("text-sm")
+        with ui.expansion("Concept rules", value=False).classes("w-full"):
             ui.label("Match original IDs across all selected layers and annotators, including annotations without findings. ID-only changes; no chaining.").classes("text-sm")
             self.rule_editor = ui.aggrid({
                 "columnDefs": [
@@ -80,14 +121,7 @@ class SuggestionControls:
             self.apply_button = ui.button("Apply rules to review", on_click=self.apply_rules)
             ui.button("Clear all pending rule decisions", on_click=self.clear_rules).props("flat dense")
             ui.label("Apply stages decisions in tab 3; Save choices commits them. Loading/editing definitions does not apply rules or change CAS.").classes("text-sm")
-        with ui.expansion("Restore suggestions JSON", value=True).classes("w-full"):
-            self.uploader = ui.upload(label="Load suggestions JSON", on_upload=self.load_suggestions,
-                                      auto_upload=True, multiple=False, max_file_size=MAX_SUGGESTIONS_BYTES,
-                                      on_rejected=lambda: self.restore_status.set_text("Upload rejected. Choose suggestions JSON up to 50 MiB; previous state retained.")) \
-                .props("accept=.json").classes("max-w-full")
-            self.restore_status = ui.label("Restores the suggestions table without analysis or HDF5/project access. Review stays unchanged until Load in review.").classes("text-sm")
-        self.findings_source = ui.label().classes("text-sm")
-        with ui.expansion("Replacement requirements", value=True).classes("w-full"):
+        with ui.expansion("Replacement requirements", value=False).classes("w-full"):
             self.target = ui.select({"policy": "Policy rules", "release": "Active release"}, value="policy", on_change=self.requirements_changed)
             self.exclusion = ui.select({"none": "No exclusion list", "embedded": "Embedded exclusion list",
                                         "custom": "Custom exclusion list", "embedded+custom": "Embedded and custom exclusion lists"},
@@ -99,7 +133,7 @@ class SuggestionControls:
             self.ancestor = ui.checkbox("Historical ancestor fallback", value=True, on_change=self.changed)
             self.bm25 = ui.checkbox("Semantic BM25 fallback", value=True, on_change=self.changed)
             self.blacklist_bm25 = ui.checkbox("Include exclusion-list findings in BM25 fallback", value=True, on_change=self.changed)
-        with ui.expansion("Advanced suggestion settings", value=True).classes("w-full"):
+        with ui.expansion("Advanced suggestion settings", value=False).classes("w-full"):
             self.associations = ui.select({name: f"{name} — {ASSOCIATION_TYPE_DESCRIPTIONS.get(name, '')}" for name in SUPPORTED_ASSOCIATION_TYPES},
                                           multiple=True, value=list(DEFAULT_ASSOCIATIONS), label="Allowed historical association types",
                                           on_change=self.changed).classes("w-full")
@@ -122,7 +156,7 @@ class SuggestionControls:
             ui.button("Add postfix", on_click=lambda: self.add_postfix()).props("flat dense")
             ui.label("Only selected literal postfixes after the last whitespace-surrounded hyphen are removed from FSN matching text. Clinical text, unspaced hyphens and SNOGIT remain unchanged. Optional presets may carry meaning; regenerate suggestions after changes. Uncheck all to disable.").classes("text-sm")
             self.snogit = ui.checkbox("Use SNOGIT/interface terms for BM25 candidates", value=True, on_change=self.changed)
-            self.cache = FileSource(ui, "Processed SNOGIT cache HDF5", (".hdf5", ".h5"), inputs.data_dir, self.changed)
+            self.cache = FileSource(ui, "Processed SNOGIT cache HDF5 (not the SNOMED HDF5)", (".hdf5", ".h5"), inputs.data_dir, self.changed)
             self.snogit_source = FileSource(ui, "SNOGIT ZIP or .dat source", (".zip", ".dat"), inputs.data_dir, self.snogit_changed)
             with ui.row():
                 self.inspect_button = ui.button("Inspect SNOGIT members", on_click=self.inspect_snogit)
@@ -131,19 +165,24 @@ class SuggestionControls:
                 self.cache_button = ui.button("Create processed SNOGIT cache", on_click=self.build_cache)
                 self.cache_download = ui.button("Download created SNOGIT cache", on_click=self.download_cache)
             ui.label("Select/create a compatible cache or turn SNOGIT off. Cache creation never starts generation; generated caches are temporary until downloaded.").classes("text-sm")
-        with ui.row():
-            self.generate_button = ui.button("Generate sanitization suggestions", on_click=self.generate)
-            self.spinner = ui.spinner()
+        self.generate_button = ui.button("Generate sanitization suggestions", on_click=self.generate)
+        with ui.column().classes("w-full gap-1") as self.progress_container:
+            self.progress_label = ui.label().classes("text-sm")
+            self.progress = ui.linear_progress(value=0, show_value=False).classes("w-full")
         self.requirements = ui.label().classes("text-sm whitespace-pre-wrap").props("role=status aria-live=polite")
         self.status = ui.label().classes("text-sm whitespace-pre-wrap")
         with ui.column().classes("w-full") as self.results:
             self.summary = ui.label()
             self.overview = ui.aggrid({
-                "columnDefs": [{"field": field} for field in ("document", "annotator", "code", "status", "proposed_code", "candidate_count")]
-                              + [{"field": "text", "headerName": "Covered text", "flex": 2, "minWidth": 350}],
+                "columnDefs": [{"field": field} for field in ("document", "annotator", "code")]
+                              + [{"field": "text", "headerName": "Covered text", "flex": 2, "minWidth": 350},
+                                 {"field": "offset", "headerName": "Offset", "width": 120}]
+                              + [{"field": field} for field in ("status", "proposed_code", "candidate_count")],
                 "defaultColDef": {"sortable": True, "filter": "agTextColumnFilter", "resizable": True, "editable": False},
                 "rowData": [], ":getRowId": "params => params.data.row_id",
             }).classes("w-full h-64 overflow-auto overscroll-contain")
+            for grid in (self.rule_editor, self.overview):
+                resizable_table(grid)
             with ui.row():
                 self.open_button = ui.button("Load in review (replaces review)", on_click=self.open_review)
                 ui.button("Download suggestions JSON", on_click=lambda: self.download("json"))
@@ -244,8 +283,9 @@ class SuggestionControls:
         self.inspect_button.set_enabled(not self.busy and self.snogit_source.snapshot() is not None)
         self.cache_button.set_enabled(not self.busy and available and self.member_stamp is not None and bool(self.members.value))
         self.cache_download.set_enabled(not self.busy and self.created_cache is not None)
-        self.spinner.set_visibility(self.busy)
-        self.uploader.set_enabled(not self.busy)
+        self.progress_container.set_visibility(self.busy)
+        self.saved_suggestions.set_enabled(not self.busy)
+        self.restore_button.set_enabled(not self.busy and self.saved_suggestions.snapshot() is not None)
         self.results.set_visibility(self.artifact_current and not self.busy)
 
     def add_postfix(self, postfix="", *, enabled=False):
@@ -319,20 +359,39 @@ class SuggestionControls:
         token = self.artifact_revision
         self.busy = True
         self.status.set_text("Generating suggestions… No review or CAS changes.")
+        self.progress.set_value(0.0)
+        self.progress_label.set_text("Preparing suggestion generation…")
         self.refresh()
+        progress_owner = TemporaryDirectory(prefix="snomed-nicegui-generation-progress-")
+        progress_path = Path(progress_owner.name) / "progress.json"
         try:
             # Native HDF5/BM25 work can hold the GIL even in a thread and starve
             # Socket.IO heartbeats. Keep the owning job here, send only data/paths.
-            result, preview, snapshot = await run.cpu_bound(run_generation, job.for_process())
+            task = asyncio.create_task(run.cpu_bound(run_generation, job.for_process(), progress_path))
+            while not task.done():
+                await asyncio.sleep(0.15)
+                try:
+                    update = json.loads(progress_path.read_text(encoding="utf-8"))
+                    self.progress.set_value(float(update["value"]))
+                    self.progress_label.set_text(str(update["label"]))
+                except (FileNotFoundError, json.JSONDecodeError, KeyError, TypeError, ValueError):
+                    pass
+            result, preview, snapshot = await task
+            self.progress.set_value(1.0)
+            self.progress_label.set_text("Sanitization suggestions finished.")
             if self.closed or version != self.version or token != self.artifact_revision:
                 return
             self.completed = result, preview, job, snapshot, version
             self.render_artifact()
             self.status.set_text("Suggestions ready. Load them in review separately; no decisions approved.")
+        except InvalidSnogitCacheError as error:
+            if not self.closed and version == self.version:
+                self.status.set_text(str(error) + " Previous successful generation retained.")
         except Exception:
             if not self.closed and version == self.version:
                 self.status.set_text("Generation failed. Check CriticalFindings JSON (up to 50 MiB), scope/ID settings, replacement requirements, HDF5 and SNOGIT compatibility. Previous successful generation retained.")
         finally:
+            progress_owner.cleanup()
             self.busy = False
             if not self.closed:
                 self.refresh()
@@ -344,13 +403,45 @@ class SuggestionControls:
     def render_artifact(self):
         result, preview = self.completed[:2]
         fields = ("row_id", "document", "annotator", "code", "status", "proposed_code", "candidate_count", "text")
-        self.overview.options["rowData"] = [{name: getattr(row, name) for name in fields} for row in preview.findings]
+        self.overview.options["rowData"] = [
+            {**{name: getattr(row, name) for name in fields}, "offset": _offset_text(row.offset)}
+            for row in preview.findings
+        ]
         self.overview.update()
         statuses = {}
         for finding in preview.findings:
             statuses[finding.status] = statuses.get(finding.status, 0) + 1
         self.summary.set_text(f"Source: {preview.source_name} · {len(preview.findings)} suggestions · " +
                               " · ".join(f"{key}: {value}" for key, value in sorted(statuses.items())))
+
+    def restore_changed(self):
+        if self.ready and not self.closed:
+            self.artifact_revision += 1
+            self.refresh()
+
+    async def load_saved(self):
+        from nicegui import run
+        source = self.saved_suggestions.snapshot()
+        if self.closed or self.busy or source is None:
+            return
+        self.artifact_revision += 1
+        token = self.artifact_revision
+        self.restore_status.set_text("Loading saved suggestions JSON; previous suggestions and review retained until successful restore.")
+        try:
+            content = await run.io_bound(source.path.read_bytes)
+            result, preview = await run.io_bound(restore_suggestions, content, source.path.name)
+            if self.closed or token != self.artifact_revision:
+                return
+            self.completed = result, preview, None, (), None
+            self.render_artifact()
+            self.restore_status.set_text("Suggestions restored in tab 2. Review unchanged; use Load in review (replaces review) explicitly.")
+            self.refresh()
+        except Exception:
+            if not self.closed and token == self.artifact_revision:
+                self.restore_status.set_text("Could not restore suggestions JSON (limit 50 MiB). Previous suggestions/review retained.")
+        finally:
+            if not self.closed and token == self.artifact_revision:
+                self.refresh()
 
     async def load_suggestions(self, event):
         from nicegui import run

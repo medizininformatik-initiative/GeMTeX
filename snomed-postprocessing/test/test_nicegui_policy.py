@@ -166,23 +166,21 @@ class PolicyControlsTest(unittest.IsolatedAsyncioTestCase):
             controls.append(control)
             return control
         with self.client, patch("snomed_post_processing.gui.nicegui.page.PolicyCheckControls", side_effect=create), \
-                patch("snomed_post_processing.gui.nicegui.page.SuggestionControls", side_effect=create_suggestions), \
-                patch.object(self.ui, "upload", wraps=self.ui.upload) as uploads:
+                patch("snomed_post_processing.gui.nicegui.page.SuggestionControls", side_effect=create_suggestions):
             build_page(self.ui, events)
-            source_upload = next(call.kwargs["on_upload"] for call in uploads.call_args_list
-                                 if call.kwargs.get("label") == "Load suggestions JSON")
         with self.client:
-            await source_upload(upload_event(encoded(payload())))
+            await suggestions[0].load_suggestions(upload_event(encoded(payload())))
             await suggestions[0].open_review()
         elements = self.client.elements
         review_grid = next(element for element in elements.values()
                            if hasattr(element, "options") and isinstance(element.options, dict)
                            and any(column.get("field") == "review" for column in element.options.get("columnDefs", [])))
         rows = [dict(row) for row in review_grid.options["rowData"]]
-        review_source = next(element for element in elements.values() if getattr(element, "text", None) == "Source: suggestions.json")
+        review_source = suggestions[0].get_review().provenance
+        self.assertEqual(review_source.parent_slot.parent.tag, "q-tab-panel")
+        self.assertFalse(any(getattr(element, "text", None) == "Saved suggestions scope" for element in elements.values()))
         tabs = next(element for element in elements.values() if element.tag == "q-tabs")
         tabs.set_value("check")
-        self.assertFalse(review_source.visible)
         policy = controls[0]
         worker_calls = self.worker_mock.await_count
         drawer = next(element for element in elements.values() if element.tag == "q-drawer")
@@ -210,7 +208,7 @@ class PolicyControlsTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(policy.result)
         self.assertEqual(review_grid.options["rowData"], rows)
         tabs.set_value("review")
-        self.assertTrue(review_source.visible)
+        self.assertIn("Saved annotator scope:", review_source.text)
 
     async def test_selection_and_directory_refresh_never_run_policy(self):
         p = self.panel
@@ -241,6 +239,8 @@ class PolicyControlsTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(p.result)
         self.assertEqual(len(p.grid.options["rowData"]), 10)
         self.assertTrue(p.results.visible)
+        self.assertEqual(p.progress.value, 1.0)
+        self.assertEqual(p.progress_label.text, "Policy check finished.")
         result = p.result
         calls = self.worker_mock.await_count
         with patch.object(p.grid, "run_grid_method", new=AsyncMock()) as grid_method:

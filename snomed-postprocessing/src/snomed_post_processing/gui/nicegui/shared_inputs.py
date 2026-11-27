@@ -1,8 +1,73 @@
 """Page-local shared input controls, settings and explicit annotator inspection."""
+import logging
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from snomed_post_processing.inception import get_project_zip
 from snomed_post_processing.pipelines.policy_check import PolicySettings, project_annotators
-from snomed_post_processing.uima_processing.scope import normalize_annotators
-from .file_sources import FileSource
+from snomed_post_processing.uima_processing.scope import normalize_annotators, resolve_annotator_scope
+from .file_sources import FileSource, SourceFile
 from snomed_post_processing.annotation_source import store_scopes, default_store_scope, AnnotationStoreError
+
+
+LOGGER = logging.getLogger(__name__)
+
+
+def _api_error_message(error, *secrets):
+    message = " ".join(str(error).split()) or "No error details returned."
+    for secret in secrets:
+        if secret:
+            message = message.replace(secret, "[redacted]")
+    if len(message) > 500:
+        message = message[:497] + "..."
+    return f"{type(error).__name__}: {message}"
+
+
+def _inception_projects(url, username, password, verify_ssl=False):
+    with TemporaryDirectory(prefix="snomed-nicegui-inception-list-") as directory:
+        projects = get_project_zip(directory, url, username, password, None, verify_ssl)
+    if not isinstance(projects, list) or any(not isinstance(project, str) for project in projects):
+        raise ValueError("INCEpTION did not return a project list.")
+    return projects
+
+
+def _inception_project(url, username, password, project):
+    owner = TemporaryDirectory(prefix="snomed-nicegui-inception-project-")
+    try:
+        path = get_project_zip(owner.name, url, username, password, project, False)
+        if not isinstance(path, Path):
+            raise ValueError("INCEpTION did not return a project ZIP.")
+        source = SourceFile(path, owner)
+        source.stamp()
+        return source
+    except Exception:
+        owner.cleanup()
+        raise
+
+
+def _release(source):
+    if source is not None and source.owner is not None:
+        source.owner.cleanup()
+
+
+class _InceptionApiSource:
+    def __init__(self):
+        self.source = None
+        self.uploading = self.closed = False
+
+    def snapshot(self):
+        return None if self.closed or self.uploading else self.source
+
+    def replace(self, source):
+        previous, self.source = self.source, source
+        _release(previous)
+
+    def clear(self):
+        self.replace(None)
+
+    def close(self):
+        self.closed = True
+        self.clear()
 
 
 def _annotators(project, scope=None):
@@ -17,18 +82,35 @@ class SharedInputControls:
     def __init__(self, ui):
         self.revision = 0
         self.busy = self.closed = self.ready = False
+        self.available_annotators = ()
         self.project_path = None
         self.listeners = []
-        ui.label("Shared inputs").classes("text-lg font-medium")
-        ui.label("Used by Check policy and Suggest. Changing inputs never starts processing.").classes("text-sm")
-        with ui.expansion("Project and policy inputs", value=True).classes("w-full") as self.container:
+        self.api_credentials = None
+        self.api_downloaded_project = None
+        self.api_source = _InceptionApiSource()
+        # ui.label("Shared inputs").classes("text-lg font-medium")
+        with ui.expansion("Project and policy inputs", value=False).classes("w-full") as self.container:
+            ui.label("Used by Check policy and Suggest. Changing inputs never starts processing.").classes("text-caption")
             with ui.row().classes("w-full items-center"):
                 self.data_dir = ui.input("Server data directory", value="data", on_change=self.directory_changed)
                 ui.button(icon="refresh", on_click=self.directory_changed).props("flat round dense").tooltip("Refresh server file lists")
             with ui.column().classes("gap-4 w-full min-w-0"):
                 self.source_kind = ui.select(["INCEpTION project", "Annotation store (SQLite)"], label="Annotation source",
                                              value="INCEpTION project", on_change=self.source_changed)
+                self.use_api = ui.switch("Use INCEpTION API", value=False, on_change=self.project_mode_changed).tooltip(
+                    "Load the source project from INCEpTION instead of selecting a project ZIP.")
                 self.zip_project = FileSource(ui, "INCEpTION project ZIP", (".zip",), self.data_dir, self.project_changed)
+                with ui.column().classes("w-full min-w-0 gap-2") as self.api_container:
+                    ui.label("INCEpTION API").classes("font-medium")
+                    self.api_url = ui.input("INCEpTION API URL", value="http://localhost:8080").classes("w-full")
+                    self.api_username = ui.input("REMOTE Role Username").classes("w-full")
+                    self.api_password = ui.input("REMOTE Role Password", password=True, password_toggle_button=True).classes("w-full")
+                    self.api_projects_button = ui.button("Get Projects", on_click=self.load_api_projects).tooltip(
+                        "Connect to INCEpTION and list projects available to this account.")
+                    self.api_project = ui.select({}, label="Select project", value=None,
+                                                 on_change=self.api_project_changed).classes("w-full")
+                    self.api_download = ui.button("Download project", on_click=self.download_api_project)
+                    self.api_note = ui.label().classes("text-sm")
                 self.store = FileSource(ui, "Annotation store SQLite", (".sqlite", ".sqlite3", ".db"), self.data_dir, self.project_changed)
                 with ui.column().classes("w-full") as self.store_selection:
                     ui.label("Read-only schema v2 snapshot. Select an export/view scope; combined scopes require unambiguous document/annotator identities.").classes("text-sm")
@@ -36,26 +118,32 @@ class SharedInputControls:
                     self.inspect_store = ui.button("Inspect SQLite scopes", on_click=self.load_store_scopes)
                 self.lists = FileSource(ui, "SNOMED HDF5", (".hdf5", ".h5"), self.data_dir, self.changed)
             with ui.row().classes("w-full items-center"):
-                self.annotators = ui.select({}, label="Annotators (empty = all)", multiple=True,
+                self.annotators = ui.select({}, label="Include annotators (empty = all)", multiple=True,
                                             new_value_mode="add-unique", value=[], on_change=self.changed).classes("grow")
+                self.excluded_annotators = ui.select({}, label="Exclude annotators (takes precedence)", multiple=True,
+                                                     new_value_mode="add-unique", value=[], on_change=self.changed).classes("grow")
                 self.load_names = ui.button("Load annotators", on_click=self.load_annotators)
-            with ui.expansion("Annotation settings").classes("w-full"):
-                self.layers = ui.textarea("Target annotation types (one per line)",
-                                          value="gemtex.Concept\nwebanno.custom.Concept", on_change=self.changed).classes("w-full")
-                self.ignore = ui.textarea("Ignore overlap types (one per line)", value="", on_change=self.changed).classes("w-full")
-                self.overlap = ui.select(["overlap", "covered-by", "contains", "exact"],
-                                         label="Ignore overlap mode", value="overlap", on_change=self.changed)
-                self.feature = ui.input("SNOMED ID feature", value="id", on_change=self.changed)
-                self.prefix = ui.input("SNOMED ID prefix (empty for plain SCTIDs)",
-                                       value="http://snomed.info/id/", on_change=self.changed).classes("w-full")
             self.status = ui.label().classes("text-sm")
+        with ui.expansion("Annotation settings", value=False).classes("w-full"):
+            self.layers = ui.textarea("Target annotation types (one per line)",
+                                        value="gemtex.Concept\nwebanno.custom.Concept", on_change=self.changed).classes("w-full")
+            self.ignore = ui.textarea("Ignore overlap types (one per line)", value="", on_change=self.changed).classes("w-full")
+            self.overlap = ui.select(["overlap", "covered-by", "contains", "exact"],
+                                        label="Ignore overlap mode", value="overlap", on_change=self.changed)
+            self.feature = ui.input("SNOMED ID feature", value="id", on_change=self.changed)
+            self.prefix = ui.input("SNOMED ID prefix (empty for plain SCTIDs)",
+                                    value="http://snomed.info/id/", on_change=self.changed).classes("w-full")
         ui.context.client.on_delete(self.close)
         self.ready = True
         self.refresh()
 
+    def effective_annotators(self):
+        return resolve_annotator_scope(self.available_annotators, self.annotators.value or (),
+                                       self.excluded_annotators.value or ())
+
     def settings(self):
         lines = lambda text: tuple(line.strip() for line in (text or "").splitlines() if line.strip())
-        return PolicySettings(normalize_annotators(self.annotators.value or ()),
+        return PolicySettings(self.effective_annotators(),
                               lines(self.layers.value) or ("gemtex.Concept",), lines(self.ignore.value),
                               self.overlap.value, "" if self.is_store else self.prefix.value or "",
                               "sctid" if self.is_store else (self.feature.value or "").strip(),
@@ -66,15 +154,37 @@ class SharedInputControls:
         return self.source_kind.value == "Annotation store (SQLite)"
 
     @property
+    def is_api(self):
+        return not self.is_store and bool(self.use_api.value)
+
+    @property
     def project(self):
-        return self.store if self.is_store else self.zip_project
+        if self.is_store:
+            return self.store
+        return self.api_source if self.is_api else self.zip_project
 
     def source_changed(self, _=None):
         if self.ready and not self.closed:
+            self.api_source.clear()
+            self.api_downloaded_project = None
+            self.api_project.set_options({}, value=None)
+            self.api_credentials = None
             self.project_path = None
             self.annotators.set_options({}, value=[])
+            self.excluded_annotators.set_options({}, value=[])
+            self.available_annotators = ()
             self.scope.set_options({}, value=None)
             self.project_changed()
+
+    def project_mode_changed(self, _=None):
+        if self.ready and not self.closed:
+            self.api_source.clear()
+            self.api_downloaded_project = None
+            self.project_path = None
+            self.annotators.set_options({}, value=[])
+            self.excluded_annotators.set_options({}, value=[])
+            self.available_annotators = ()
+            self.changed()
 
     async def load_store_scopes(self):
         from nicegui import run
@@ -116,6 +226,8 @@ class SharedInputControls:
                 if path != self.project_path:
                     self.project_path = path
                     self.annotators.set_options({}, value=[])
+                    self.excluded_annotators.set_options({}, value=[])
+                    self.available_annotators = ()
                     self.scope.set_options({}, value=None)
             self.changed()
 
@@ -128,14 +240,106 @@ class SharedInputControls:
         self.changed()
 
     def refresh(self):
-        self.zip_project.container.set_visibility(not self.is_store)
+        self.use_api.set_visibility(not self.is_store)
+        self.zip_project.container.set_visibility(not self.is_store and not self.is_api)
+        self.api_container.set_visibility(self.is_api)
         self.store.container.set_visibility(self.is_store)
         self.store_selection.set_visibility(self.is_store)
         self.feature.set_visibility(not self.is_store)
         self.prefix.set_visibility(not self.is_store)
         self.inspect_store.set_enabled(self.store.snapshot() is not None and not self.busy)
+        self.api_projects_button.set_enabled(self.is_api and not self.busy)
+        self.api_project.set_enabled(self.is_api and bool(self.api_project.options) and not self.busy)
+        selected_project = self.api_project.value
+        downloaded = (selected_project is not None and selected_project == self.api_downloaded_project
+                      and self.api_source.snapshot() is not None)
+        self.api_download.set_visibility(self.is_api and selected_project is not None and not downloaded)
+        self.api_download.set_enabled(self.is_api and selected_project is not None and not self.busy and not downloaded)
         self.load_names.set_enabled(self.project.snapshot() is not None and not self.busy
                                     and (not self.is_store or self.scope.value is not None))
+
+    async def load_api_projects(self):
+        from nicegui import run
+        if self.closed or self.busy or not self.is_api:
+            return
+        credentials = (self.api_url.value or "", self.api_username.value or "", self.api_password.value or "")
+        revision = self.revision
+        self.busy = True
+        self.api_note.set_text("Connecting to INCEpTION…")
+        self.refresh()
+        try:
+            projects = await run.io_bound(_inception_projects, *credentials)
+            if self.closed or revision != self.revision or not self.is_api:
+                return
+            self.api_credentials = credentials
+            self.api_source.clear()
+            self.api_downloaded_project = None
+            self.project_path = None
+            self.api_project.set_options(projects, value=None)
+            self.project_changed()
+            self.api_note.set_text(f"Found {len(projects)} projects.")
+        except Exception as error:
+            details = _api_error_message(error, credentials[1], credentials[2])
+            LOGGER.error("Could not list INCEpTION projects: %s", details)
+            if not self.closed and revision == self.revision:
+                self.api_credentials = None
+                self.api_project.set_options({}, value=None)
+                self.api_note.set_text(
+                    f"Could not connect to INCEpTION API. Please check credentials and URL. {details}")
+        finally:
+            self.busy = False
+            if not self.closed:
+                self.refresh()
+
+    def api_project_changed(self, _=None):
+        if self.closed or self.busy or not self.is_api:
+            return
+        self.api_source.clear()
+        self.api_downloaded_project = None
+        self.project_path = None
+        self.annotators.set_options({}, value=[])
+        self.excluded_annotators.set_options({}, value=[])
+        self.available_annotators = ()
+        self.changed()
+        self.api_note.set_text("Select Download project to fetch the export for local processing."
+                               if self.api_project.value else "")
+
+    async def download_api_project(self, _=None):
+        from nicegui import run
+        project = self.api_project.value
+        credentials = self.api_credentials
+        if self.closed or self.busy or not self.is_api or not project or credentials is None:
+            return
+        revision = self.revision
+        self.busy = True
+        self.api_source.uploading = True
+        self.api_note.set_text(f"Downloading project '{project}'…")
+        self.refresh()
+        source = None
+        try:
+            source = await run.io_bound(_inception_project, *credentials, project)
+            if self.closed or revision != self.revision or not self.is_api or self.api_project.value != project:
+                return
+            self.api_source.replace(source)
+            self.api_downloaded_project = project
+            self.project_path = source.path
+            source = None
+            self.annotators.set_options({}, value=[])
+            self.excluded_annotators.set_options({}, value=[])
+            self.available_annotators = ()
+            self.changed()
+            self.api_note.set_text(f"Downloaded project '{project}'.")
+        except Exception as error:
+            details = _api_error_message(error, credentials[1], credentials[2])
+            LOGGER.error("Could not download INCEpTION project %r: %s", project, details)
+            if not self.closed and revision == self.revision:
+                self.api_note.set_text(f"Could not load project from INCEpTION API. {details}")
+        finally:
+            _release(source)
+            self.api_source.uploading = False
+            self.busy = False
+            if not self.closed:
+                self.refresh()
 
     async def load_annotators(self):
         from nicegui import run
@@ -150,9 +354,12 @@ class SharedInputControls:
             names = await run.io_bound(_annotators, project, **({"scope": self.scope.value} if self.is_store else {}))
             if not self.closed and revision == self.revision:
                 selected = list(normalize_annotators(self.annotators.value or ()))
-                options = {**{name: name for name in selected}, **names}
+                excluded = list(normalize_annotators(self.excluded_annotators.value or ()))
+                self.available_annotators = tuple(names)
+                options = {**{name: name for name in selected + excluded}, **names}
                 self.annotators.set_options(options, value=selected)
-                self.status.set_text("Annotators loaded. Empty selection includes all annotators.")
+                self.excluded_annotators.set_options(options, value=excluded)
+                self.status.set_text("Annotators loaded. Exclusions take precedence; empty selections include all.")
         except AnnotationStoreError as error:
             if not self.closed and revision == self.revision:
                 self.status.set_text(str(error))
@@ -168,6 +375,7 @@ class SharedInputControls:
         self.closed = True
         self.revision += 1
         self.zip_project.close()
+        self.api_source.close()
         self.store.close()
         self.lists.close()
         self.listeners.clear()

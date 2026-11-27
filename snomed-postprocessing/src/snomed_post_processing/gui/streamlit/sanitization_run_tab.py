@@ -147,6 +147,7 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
 
     decisions_metadata = _decisions_metadata(rows)
     decisions_metadata["annotators"] = list(inputs.annotators)
+    decisions_metadata["store_scope"] = inputs.store_scope
     decisions_metadata["concept_rule_scope"] = st.session_state.get("concept_rule_scope", {})
     decisions_metadata["concept_rules"] = (
         [dataclasses.asdict(rule) for rule in st.session_state["concept_rules"]]
@@ -192,6 +193,7 @@ def render_sanitization_run_tab(inputs: GuiInputs) -> None:
         id_prefix=inputs.id_prefix,
         id_feature=inputs.id_feature,
         annotators=inputs.annotators,
+        store_scope=inputs.store_scope,
     )
 
 
@@ -333,6 +335,7 @@ def _render_sanitization_run_controls(
     id_prefix: str = "http://snomed.info/id/",
     id_feature: str = "id",
     annotators=(),
+    store_scope=None,
 ) -> None:
     if any(not annotator_in_scope(item.get("annotator", ""), annotators) for item in reviewed_decisions):
         st.error("Review contains decisions outside the current annotator scope. Reload or regenerate matching decisions.")
@@ -340,16 +343,27 @@ def _render_sanitization_run_controls(
     st.subheader("Run")
     project_source = st.session_state.get("zip_file")
     from snomed_post_processing.annotation_source import is_annotation_store
-    store_source = (
-        (isinstance(project_source, pathlib.Path) and project_source.is_file() and is_annotation_store(project_source))
-        or st.session_state.get("sanitization_suggestions_metadata", {}).get("store_scope") is not None
-        or (bool(st.session_state.get("concept_rule_decisions"))
-            and st.session_state.get("concept_rule_scope", {}).get("store_scope") is not None)
-    )
-    run_disabled = store_source or project_source is None or selected_count == 0 or has_invalid_selected_rows
+    actual_store = isinstance(project_source, pathlib.Path) and project_source.is_file() and is_annotation_store(project_source)
+    rule_scope = (st.session_state.get("concept_rule_scope") or {}) if st.session_state.get("concept_rule_decisions") else {}
+    saved_scope = ((st.session_state.get("sanitization_suggestions_metadata") or {}).get("store_scope")
+                   or rule_scope.get("store_scope"))
+    store_source = actual_store or saved_scope is not None
+    store_blocker = None
+    project_template = None
     if store_source:
-        st.info("SQLite-backed review is read-only. Download reviewed decisions; project sanitization and deployment are unavailable for this input.")
-    else:
+        from snomed_post_processing.annotation_store.restoration import cas_restoration_status
+        store_blocker = (cas_restoration_status(project_source, store_scope=store_scope) if actual_store
+                         else "Load the matching SQLite store before applying this store-backed review.")
+        if saved_scope is not None and store_scope != saved_scope:
+            store_blocker = "SQLite scope differs from the loaded review. Load matching suggestions/rules first."
+        if store_blocker:
+            st.info(f"SQLite-backed review is read-only for this selection. {store_blocker}")
+        else:
+            st.caption("Complete preserved CAS will be restored temporarily for write-back/deployment. The store stays unchanged; original CAS ID settings are restored automatically.")
+            project_template = st.file_uploader("INCEpTION project template ZIP (only if project configuration was absent from the export)",
+                                               type=["zip"], key="store_restoration_project_template")
+    run_disabled = bool(store_blocker) or project_source is None or selected_count == 0 or has_invalid_selected_rows
+    if not store_source:
         _render_run_readiness(
             project_loaded=project_source is not None,
             selected_count=selected_count,
@@ -377,7 +391,7 @@ def _render_sanitization_run_controls(
                 help="Save review choices and progress to restore later with matching suggestions. This does not export a project.",
             )
             st.caption("Save this JSON to restore the current review state later.")
-    if store_source:
+    if store_blocker:
         return
     _render_inception_apply_upload_controls(
         project_source=project_source,
@@ -389,6 +403,8 @@ def _render_sanitization_run_controls(
         id_prefix=id_prefix,
         id_feature=id_feature,
         annotators=annotators,
+        store_scope=store_scope,
+        project_template=project_template,
     )
 
     if not run_clicked:
@@ -409,6 +425,8 @@ def _render_sanitization_run_controls(
                 id_prefix=id_prefix,
                 id_feature=id_feature,
                 annotator_filter=set(annotators) or None,
+                store_scope=store_scope,
+                project_template=save_uploaded_file(project_template, ".zip") if project_template is not None else None,
             )
             st.write("Preparing sanitized project ZIP for download...")
             status.update(
@@ -443,6 +461,8 @@ def _render_inception_apply_upload_controls(
     id_prefix: str,
     id_feature: str,
     annotators=(),
+    store_scope=None,
+    project_template=None,
 ) -> None:
     if any(not annotator_in_scope(item.get("annotator", ""), annotators) for item in reviewed_decisions):
         st.error("Deployment contains decisions outside the current annotator scope.")
@@ -546,6 +566,8 @@ def _render_inception_apply_upload_controls(
                 verify_tls=not no_verify_tls,
                 force=force,
                 annotator_filter=tuple(annotators),
+                store_scope=store_scope,
+                project_template=save_uploaded_file(project_template, ".zip") if project_template is not None else None,
             )
             status.update(label="INCEpTION deployment pipeline finished.", state="complete", expanded=False)
         issue_count = sum(artifact.remote_upload_issue_count for artifact in result.artifacts_result.artifacts)

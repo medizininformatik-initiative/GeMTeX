@@ -25,7 +25,7 @@ sources:
 
 The annotation store is a single-file SQLite database produced by `build-annotation-store`. It merges SNOMED annotation occurrences from multiple INCEpTION export ZIPs, sites, batches, CAS views, and annotators.
 
-The database is intended for downstream analysis and reproducibility checks, not as an INCEpTION project replacement. The source export ZIPs are not modified.
+The database supports downstream analysis and reproducibility checks. Optional `--store-cas` preservation additionally supports offline restoration for the INCEpTION shell/artifact review workflow; it is not a native full-project backup. The source export ZIPs are not modified.
 
 # Applicability principle
 
@@ -166,6 +166,22 @@ One row per imported occurrence, preserving provenance even when data is shared.
 | `occurrence_hash` | text not null unique | Original provenance-aware hash for append/retry idempotence. |
 
 Build summaries report `annotations` (shared-data rows) and `annotation_occurrences` (provenance links) separately. Known/missing-ID occurrence counters explicitly count links. Bundled analysis queries count shared annotations.
+
+# Optional CAS restoration extension
+
+New stores created with `build-annotation-store --store-cas` retain the schema-v2 core plus three optional tables. Existing stores are not upgraded. Appending to a CAS-enabled store requires the flag again; retrying unchanged exports is idempotent, while changed preserved configuration/CAS is rejected rather than replacing history. This mode implies `--store-document-text` and retains additional sensitive clinical data.
+
+| Table | Columns / purpose |
+|---|---|
+| `cas_restore_blobs` | `hash` (SHA-256 of uncompressed bytes, primary key), `data` (zlib-compressed bytes). Shared by CAS payloads, type-system XML, project JSON and properties. |
+| `cas_restore_projects` | `export_id` (primary/FK), nullable `configuration_hash` / `properties_hash` (blob FKs), `id_prefix` (original builder prefix). |
+| `cas_restore_views` | `view_id` (primary/FK), `payload_hash`, `typesystem_hash` (blob FKs), `format` (`json` / `xmi`). |
+
+External TypeSystem.xml is content-addressed globally, not copied per CAS: all views using identical XML reference one blob. Different XML bytes are retained separately; there is no semantic/whitespace normalization. Nested CAS ZIPs retain the exact selected JSON/XMI payload and effective nested/external type system separately. If JSONCAS has only an inline type system, its effective XML definition is retained. Raw CAS payloads remain byte-identical, including any native inline JSON type information; no other annotation types/features/relations are projected away. XMI preservation additionally checks strict type-system completeness rather than silently accepting the analysis reader's lenient type drops. Unsupported `.ser`, skipped failed members and `INITIAL_CAS` are not converted/preserved as selected views.
+
+`annotation_store/restoration.py` opens the database through the existing immutable/read-only connection, requires one export and unambiguous scoped identities, verifies decompressed blob hashes and CAS sofa text against stored document hashes, and writes a new JSON/XMI workspace ZIP. A uniform type system is restored once at the project root; when definitions differ within an export, matching XML is restored beside each corresponding CAS group. Metadata/source text is restricted to selected documents/annotators; project schema is retained. Missing project configuration requires an explicitly supplied compatible project-template ZIP. Missing/corrupt CAS, unsafe ZIP components, mismatching text, ambiguous scopes and existing output files fail without publishing a restored ZIP. No stored metadata paths are opened and no network calls occur.
+
+Use the workspace with the existing shell plus repaired flattened artifact pipeline, not native full-project import; Python does not generate Java serialized CAS. Local write-back restores all annotators in the export/view and leaves excluded CAS unchanged; remote artifact preparation restores only the requested annotators. Original CAS `id` and stored URI-prefix settings replace the SQLite reader's normalized `sctid`/empty-prefix settings during write-back.
 
 # Explicit provenance queries
 

@@ -10,3 +10,4 @@ generated: { by: pi-coding-agent/gpt-5, at: 2026-08-28T15:03:31Z }
 # Operations
 
 - [Follow-ups](follow-ups.md)
+- [Future work](future-work.md)

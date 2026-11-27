@@ -64,8 +64,11 @@ def build_inception_shell_project(
     output_project = pathlib.Path(output_project)
     if not source_project.exists() or not source_project.is_file():
         raise FileNotFoundError(f"Source project does not exist: {source_project}")
-    if source_project.resolve() == output_project.resolve():
-        raise InceptionShellProjectError("Output project must be different from source project.")
+    from ..utils.output_paths import guard_output_paths
+    try:
+        guard_output_paths((source_project,), (output_project,))
+    except ValueError as error:
+        raise InceptionShellProjectError(str(error)) from error
     if output_project.exists() and not force:
         raise FileExistsError(f"Output project already exists: {output_project}")
 
@@ -163,6 +166,7 @@ def _prepare_shell_project_json(
 
     if clear_source_documents:
         project["source_documents"] = []
+        _clear_source_document_automation_metadata(project)
     else:
         project.setdefault("source_documents", [])
 
@@ -174,6 +178,15 @@ def _prepare_shell_project_json(
     # Avoid importing stale curation metadata without matching sanitized CAS content.
     for key in ("curated_documents", "curation_documents"):
         if key in project:
+            project[key] = []
+
+
+def _clear_source_document_automation_metadata(project: dict[str, Any]) -> None:
+    """Drop automation metadata whose documents or external files are omitted."""
+    for key in tuple(project):
+        normalized = "".join(char for char in str(key).lower() if char.isalnum())
+        if (("learning" in normalized and "record" in normalized)
+                or "recommender" in normalized or "knowledgebase" in normalized):
             project[key] = []
 
 
