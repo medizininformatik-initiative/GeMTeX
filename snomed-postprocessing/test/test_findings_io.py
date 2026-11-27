@@ -39,6 +39,13 @@ class TestFindingsIo(unittest.TestCase):
 
         self.assertEqual(loaded, findings)
 
+    def test_high_volume_models_do_not_allocate_instance_dictionaries(self):
+        finding = CriticalFinding("a", "doc", "123", "text", (0, 4), "whitelist", "not_in_whitelist")
+        overlap = IgnoreOverlap("ignore.Layer", (0, 4), "text")
+
+        self.assertFalse(hasattr(finding, "__dict__"))
+        self.assertFalse(hasattr(overlap, "__dict__"))
+
     def test_rejects_wrong_schema(self):
         buffer = io.StringIO('{"schema": "wrong", "schema_version": 1, "findings": []}')
 

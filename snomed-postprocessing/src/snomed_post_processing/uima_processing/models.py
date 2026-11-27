@@ -8,14 +8,14 @@ from typing import Optional
 import numpy as np
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(slots=True)
 class IgnoreOverlap:
     layer: str
     offset: tuple[int, int]
     text: str
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(slots=True)
 class DocumentAnnotations:
     snomed_codes: np.ndarray
     offsets: np.ndarray
@@ -26,7 +26,7 @@ class DocumentAnnotations:
     ignore_overlaps: list[list[IgnoreOverlap]] = dataclasses.field(default_factory=list)
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class CriticalFinding:
     annotator: str
     document: str
@@ -41,12 +41,12 @@ class CriticalFinding:
     ignore_overlaps: tuple[IgnoreOverlap, ...] = ()
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(slots=True)
 class TemporaryContainer:
     max_length: int
     documents: dict[str, DocumentAnnotations]
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(slots=True)
 class TemporaryCorpus:
     annotators: dict[str, TemporaryContainer]

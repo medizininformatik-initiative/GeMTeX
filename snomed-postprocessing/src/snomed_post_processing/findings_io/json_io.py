@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+from io import StringIO
 import json
 from pathlib import Path
 from typing import Any, Optional, Sequence, TextIO, Union
@@ -34,12 +35,39 @@ def write_critical_findings_json(
     *,
     metadata: Optional[dict[str, Any]] = None,
 ) -> None:
-    payload = critical_findings_payload(findings, metadata=metadata)
     if hasattr(output, "write"):
-        json.dump(payload, output, ensure_ascii=False, indent=2)
+        _write_critical_findings_payload(findings, output, metadata=metadata)
         return
     with Path(output).open("w", encoding="utf-8") as fi:
-        json.dump(payload, fi, ensure_ascii=False, indent=2)
+        _write_critical_findings_payload(findings, fi, metadata=metadata)
+
+
+def _write_critical_findings_payload(
+    findings: Sequence[CriticalFinding],
+    output: TextIO,
+    *,
+    metadata: Optional[dict[str, Any]] = None,
+) -> None:
+    """Write findings one at a time instead of duplicating the full list as dictionaries."""
+    header = {
+        "schema": SCHEMA,
+        "schema_version": SCHEMA_VERSION,
+        "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "metadata": metadata or {},
+    }
+    output.write("{\n")
+    for key, value in header.items():
+        output.write(f"  {json.dumps(key)}: ")
+        rendered = json.dumps(value, ensure_ascii=False, indent=2)
+        output.write(rendered.replace("\n", "\n  "))
+        output.write(",\n")
+    output.write('  "findings": [')
+    for index, finding in enumerate(findings):
+        output.write("," if index else "")
+        output.write("\n    ")
+        rendered = json.dumps(critical_finding_to_dict(finding), ensure_ascii=False, indent=2)
+        output.write(rendered.replace("\n", "\n    "))
+    output.write("\n  ]\n}\n")
 
 
 def read_critical_findings_json(input_: Union[str, Path, TextIO]) -> list[CriticalFinding]:
@@ -74,8 +102,6 @@ def critical_findings_json_text(
     *,
     metadata: Optional[dict[str, Any]] = None,
 ) -> str:
-    return json.dumps(
-        critical_findings_payload(findings, metadata=metadata),
-        ensure_ascii=False,
-        indent=2,
-    )
+    output = StringIO()
+    _write_critical_findings_payload(findings, output, metadata=metadata)
+    return output.getvalue()

@@ -72,6 +72,7 @@ class AnnotationSourceTest(unittest.TestCase):
         self.assertEqual(len(stored.findings), 10)
         corpus = process_inception_zip(self.path, annotation_types=list(LAYERS))
         self.assertEqual(sum(a.length for c in corpus.annotators.values() for a in c.documents.values()), 14)
+        self.assertTrue(all(not a.ignore_overlaps for c in corpus.annotators.values() for a in c.documents.values()))
         with closing(sqlite3.connect(self.path)) as connection:
             self.assertLess(connection.execute("SELECT count(*) FROM annotations").fetchone()[0], 14)
         store_texts = ReviewContext.from_project_path(self.path).document_texts

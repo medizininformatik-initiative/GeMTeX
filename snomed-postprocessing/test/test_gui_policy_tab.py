@@ -7,6 +7,7 @@ from snomed_post_processing.gui.streamlit.policy_tab import (
     _check_label,
     _finding_count_summary,
     _finding_matches_filters,
+    _finding_preview,
     _finding_row,
 )
 from snomed_post_processing.uima_processing import CriticalFinding
@@ -87,6 +88,19 @@ class FindingTableHelpersTest(unittest.TestCase):
             _finding_count_summary(FINDINGS),
             "3 critical · 1 ignored · 2 inclusion-list · 2 exclusion-list",
         )
+
+    def test_preview_is_bounded_but_counts_every_matching_finding(self):
+        preview, matching_count = _finding_preview(
+            FINDINGS,
+            status="critical",
+            check="all",
+            sctid_query="",
+            text_query="",
+            limit=2,
+        )
+
+        self.assertEqual(preview, FINDINGS[:2])
+        self.assertEqual(matching_count, 3)
 
 
 class PolicyTableGuiTest(unittest.TestCase):

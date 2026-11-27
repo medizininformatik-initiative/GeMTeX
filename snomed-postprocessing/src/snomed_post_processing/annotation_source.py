@@ -141,15 +141,21 @@ def read_annotation_store(path, *, store_scope=None, annotator_filter=None,
             ignores = [IgnoreOverlap(row["layer"], (row["begin_offset"], row["end_offset"]), row["covered_text"] or "")
                        for row in rows if row["layer"] in ignore_layers]
             targets = [row for row in rows if row["layer"] in layers]
-            overlaps = [[ignore for ignore in ignores if spans_match((row["begin_offset"], row["end_offset"]), ignore.offset, ignore_overlap_mode)]
-                        for row in targets]
+            overlaps = (
+                [[ignore for ignore in ignores if spans_match(
+                    (row["begin_offset"], row["end_offset"]), ignore.offset, ignore_overlap_mode
+                )] for row in targets]
+                if ignores else []
+            )
             codes = [str(row["sctid"]).strip() if row["sctid"] is not None else "nan" for row in targets]
             annotations = DocumentAnnotations(
                 np.asarray(codes, dtype="bytes"),
                 np.asarray([(row["begin_offset"], row["end_offset"]) for row in targets], dtype="i,i"),
                 np.asarray([row["covered_text"] or "" for row in targets], dtype=np.dtypes.StringDType),
                 np.asarray([row["layer"] for row in targets], dtype=np.dtypes.StringDType), len(targets),
-                np.asarray([bool(items) for items in overlaps], dtype=bool), overlaps)
+                (np.asarray([bool(items) for items in overlaps], dtype=bool)
+                 if overlaps else np.zeros(len(targets), dtype=bool)),
+                overlaps)
             container = corpus.annotators.setdefault(annotator, TemporaryContainer(0, {}))
             container.documents[document] = annotations
             container.max_length = max(container.max_length, len(document))

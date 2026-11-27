@@ -21,6 +21,9 @@ from .annotator_scope import sync_annotator_scope
 from snomed_post_processing.uima_processing.scope import normalize_annotators, resolve_annotator_scope
 
 
+MAX_RENDERED_FINDINGS = 5_000
+
+
 def render_policy_tab(inputs: GuiInputs) -> None:
     if inputs.target_view == "release":
         st.info(
@@ -328,13 +331,13 @@ def render_findings_table(findings: list[CriticalFinding]) -> None:
             "Covered text contains", value="", key="findings_filter_text",
         ).strip().lower()
 
-    filtered = [
-        finding for finding in findings
-        if _finding_matches_filters(
-            finding, status=status, check=check,
-            sctid_query=sctid_query, text_query=text_query,
-        )
-    ]
+    filtered, matching_count = _finding_preview(
+        findings,
+        status=status,
+        check=check,
+        sctid_query=sctid_query,
+        text_query=text_query,
+    )
     if not filtered:
         st.info("No findings match the current filters.")
         return
@@ -343,7 +346,12 @@ def render_findings_table(findings: list[CriticalFinding]) -> None:
     for finding in sorted(filtered, key=lambda item: (item.document, item.annotator, item.offset[0], item.offset[1])):
         grouped[finding.document][finding.annotator].append(finding)
 
-    st.caption(f"Showing {len(filtered):,} of {len(findings):,} finding(s).")
+    st.caption(f"Showing {len(filtered):,} of {matching_count:,} matching finding(s); {len(findings):,} total.")
+    if matching_count > len(filtered):
+        st.info(
+            f"The on-page preview is limited to {MAX_RENDERED_FINDINGS:,} findings to control memory use. "
+            "Downloaded reports and CriticalFindings JSON remain complete."
+        )
     for document, annotator_groups in grouped.items():
         doc_critical_count = sum(1 for group in annotator_groups.values() for finding in group if not finding.ignored)
         doc_ignored_count = sum(1 for group in annotator_groups.values() for finding in group if finding.ignored)
@@ -359,6 +367,32 @@ def render_findings_table(findings: list[CriticalFinding]) -> None:
                     hide_index=True,
                     width="stretch",
                 )
+
+
+def _finding_preview(
+    findings: list[CriticalFinding],
+    *,
+    status: str,
+    check: str,
+    sctid_query: str,
+    text_query: str,
+    limit: int = MAX_RENDERED_FINDINGS,
+) -> tuple[list[CriticalFinding], int]:
+    preview: list[CriticalFinding] = []
+    matching_count = 0
+    for finding in findings:
+        if not _finding_matches_filters(
+            finding,
+            status=status,
+            check=check,
+            sctid_query=sctid_query,
+            text_query=text_query,
+        ):
+            continue
+        matching_count += 1
+        if len(preview) < limit:
+            preview.append(finding)
+    return preview, matching_count
 
 
 def _finding_count_summary(findings: list[CriticalFinding]) -> str:

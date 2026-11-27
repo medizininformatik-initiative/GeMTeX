@@ -97,16 +97,21 @@ def get_annotations_from_document(
                         codes.append(_id)
 
                 offset = (annotation.begin, annotation.end)
-                overlaps = [
-                    ignore
-                    for ignore in ignore_spans
-                    if spans_match(offset, ignore.offset, ignore_overlap_mode)
-                ]
+                overlaps = (
+                    [
+                        ignore
+                        for ignore in ignore_spans
+                        if spans_match(offset, ignore.offset, ignore_overlap_mode)
+                    ]
+                    if ignore_spans
+                    else None
+                )
                 offsets.append(offset)
                 text.append(annotation.get_covered_text())
                 layers.append(type_)
-                ignore_mask.append(len(overlaps) > 0)
-                ignore_overlaps.append(overlaps)
+                ignore_mask.append(bool(overlaps))
+                if overlaps is not None:
+                    ignore_overlaps.append(overlaps)
             except Exception:
                 pass
     return DocumentAnnotations(

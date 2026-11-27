@@ -453,6 +453,14 @@ To use the previous Streamlit frontend:
 uv run src/snomed_post_processing/gui/app.py --frontend streamlit
 ```
 
+Streamlit enables fast reruns by default. Changing a widget while a long-running policy
+check is active can interrupt that run and return the page to its idle state without a
+policy result. Avoid changing controls during processing, or disable fast reruns:
+
+```bash
+uv run src/snomed_post_processing/gui/app.py --frontend streamlit --runner.fastReruns=false
+```
+
 During frontend development, add `--reload` to restart automatically when Python or
 CSS files under `src/snomed_post_processing` change. Reloading discards uploaded files,
 in-memory review state and unsaved decisions, and interrupts running background jobs;
