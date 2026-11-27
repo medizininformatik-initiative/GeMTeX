@@ -61,6 +61,7 @@ class ReviewSession:
     rules_stale: bool = False
     draft_rules_stale: bool = False
     conditions_undo: dict | None = None
+    remapped_findings: int = 0
 
     @property
     def effective_rules(self):
@@ -109,14 +110,12 @@ class ReviewSession:
     def protected(self, row):
         item = self.saved.get(row.suggestion_index, {})
         return (any(_identity(rule) == _finding_identity(row) for rule in self.effective_rules)
-                or item.get("concept_rule") or (row.suggestion_index not in self.locally_edited and (
-                    item.get("manual_edit") or item.get("delete_annotation")
-                    or item.get("action") in ("manual_edit", "delete", "delete_annotation", "clear_id"))))
+                or bool(item.get("concept_rule")))
 
     def stage(self, row_id, candidate_id=None, *, action=None):
         row = self._row(row_id)
         if self.protected(row):
-            raise ReviewError("This finding has a concept rule or protected imported action. Use rule Apply choices or clear rules; imported deletions/manual edits/ID removals remain read-only.")
+            raise ReviewError("This finding is owned by a concept rule. Use its rule Apply choice, reapply the rules, or clear the rule decisions.")
         action = action or ("replace" if candidate_id is not None else "none")
         if action not in ("replace", "none", "delete", "manual_edit", "clear_id") or (action != "replace" and candidate_id is not None):
             raise ReviewError("Select one review action for this finding.")
@@ -254,7 +253,7 @@ class ReviewSession:
         for row_id, choice in self.drafts.items():
             row = self._row(row_id)
             if self.protected(row):
-                raise ReviewError("A protected imported decision cannot be overwritten.")
+                raise ReviewError("A concept-rule decision cannot be overwritten by a generic finding action.")
             if choice.action == "replace" and not any(c.row_id == choice.candidate_id and c.selectable for c in row.candidates):
                 raise ReviewError("A pending candidate no longer matches this finding.")
             changes[row.suggestion_index] = self._decision(row, choice.candidate_id, human=True, action=choice.action)
@@ -291,8 +290,15 @@ class ReviewSession:
         if any(_identity(rule) == _finding_identity(row) for rule in self.effective_rules):
             return "Reserved by concept rule"
         if self.protected(row):
-            return "Protected imported decision"
+            return "Imported concept-rule decision (read-only)"
         item = self.saved.get(row.suggestion_index, {})
+        if row.suggestion_index not in self.locally_edited:
+            if item.get("manual_edit") or item.get("action") == "manual_edit":
+                return "Imported manual review"
+            if item.get("delete_annotation") or item.get("action") in ("delete", "delete_annotation"):
+                return "Imported deletion"
+            if item.get("action") == "clear_id":
+                return "Imported ID removal"
         if item.get("delete_annotation"):
             return "Saved deletion"
         if item.get("manual_edit"):
@@ -326,9 +332,9 @@ class ReviewSession:
                  "nicegui_generation_binding", "store_scope", "annotation_source_file")
         metadata = {key: copy.deepcopy(self.source.metadata[key]) for key in names if key in self.source.metadata}
         metadata.update(copy.deepcopy(self.imported_metadata))
-        # Store identity belongs to the currently loaded suggestions/rule source;
-        # an imported review cannot retarget it to another SQLite scope/file.
-        for key in ("store_scope", "annotation_source_file"):
+        # Source identity belongs to the currently loaded suggestions/rule source;
+        # an imported review cannot retarget it or preserve a stale generation binding.
+        for key in ("nicegui_generation_binding", "store_scope", "annotation_source_file"):
             if key in self.source.metadata:
                 metadata[key] = copy.deepcopy(self.source.metadata[key])
         if "finding_contexts" in metadata:
@@ -366,13 +372,17 @@ def load_review(content: bytes, state: PreviewState) -> ReviewSession:
         if not scope_covers(normalize_annotators(scope), state.source_annotators):
             raise ReviewError("Reviewed decisions have a narrower annotator scope than these suggestions.")
         binding = metadata.get("nicegui_generation_binding")
-        if binding is not None and binding != state.metadata.get("nicegui_generation_binding"):
-            raise ReviewError("Reviewed decisions do not match these generated project/scope inputs.")
+        binding_mismatch = binding is not None and binding != state.metadata.get("nicegui_generation_binding")
         fingerprint = metadata.get("nicegui_suggestions_sha256")
-        if fingerprint is not None and fingerprint != _fingerprint(state):
-            raise ReviewError("Reviewed decisions do not match these suggestions. Load their matching suggestions JSON.")
+        fingerprint_mismatch = fingerprint is not None and fingerprint != _fingerprint(state)
+        snapshot_mismatch = binding_mismatch or fingerprint_mismatch
         rows = {row.suggestion_index: row for row in state.findings}
+        rows_by_identity = {}
+        for row in state.findings:
+            rows_by_identity.setdefault(_finding_identity(row), []).append(row)
         seen_rules = set()
+        remapped = 0
+        scoped_decisions = 0
         for raw in decisions:
             if not isinstance(raw, dict):
                 raise ValueError()
@@ -389,11 +399,22 @@ def load_review(content: bytes, state: PreviewState) -> ReviewSession:
                 seen_rules.add(identity)
                 session.rules.append(item)
                 continue
+            scoped_decisions += 1
             index = item.get("suggestion_index")
-            if type(index) is not int or index not in rows or index in session.saved:
+            if type(index) is not int:
                 raise ValueError()
-            row = rows[index]
-            if _identity(item) != _finding_identity(row) or ("covered_text" in item and item["covered_text"] != row.text):
+            row = rows.get(index)
+            if row is None or _identity(item) != _finding_identity(row):
+                matches = rows_by_identity.get(_identity(item), ())
+                if not snapshot_mismatch or len(matches) != 1:
+                    raise ReviewError("Reviewed decisions do not match these suggestions. Load their matching suggestions JSON.")
+                row = matches[0]
+                remapped += 1
+            index = row.suggestion_index
+            if index in session.saved:
+                raise ValueError()
+            item["suggestion_index"] = index
+            if ("covered_text" in item and item["covered_text"] != row.text):
                 raise ReviewError("Reviewed decisions do not match these suggestions. Load their matching suggestions JSON.")
             if item.get("action", "none") not in ("none", "replace", "delete", "delete_annotation", "manual_edit", "clear_id"):
                 raise ValueError()
@@ -414,6 +435,26 @@ def load_review(content: bytes, state: PreviewState) -> ReviewSession:
                         != json.dumps(candidate_to_dict(candidates[ordinal]), sort_keys=True)):
                     raise ValueError()
             session.saved[index] = item
+        if snapshot_mismatch:
+            source_name = metadata.get("annotation_source_file")
+            same_source = (isinstance(source_name, str) and bool(source_name)
+                           and source_name == state.metadata.get("annotation_source_file"))
+            same_scope = normalize_annotators(scope) == normalize_annotators(state.source_annotators)
+            same_policy = all(key not in metadata or key not in state.metadata or metadata[key] == state.metadata[key]
+                              for key in ("store_scope", "id_prefix", "id_feature"))
+            complete_permutation = (remapped > 0 and scoped_decisions == len(state.findings)
+                                    and len(session.saved) == len(state.findings))
+            evidence_matches = all(
+                item.get("suggestion_status") == rows[index].status
+                and item.get("review_note") == rows[index].reason
+                for index, item in session.saved.items()
+            )
+            if not (same_source and same_scope and same_policy and complete_permutation and evidence_matches):
+                message = ("Reviewed decisions do not match these generated project/scope inputs."
+                           if binding_mismatch else
+                           "Reviewed decisions do not match these suggestions. Load their matching suggestions JSON.")
+                raise ReviewError(message)
+            session.remapped_findings = remapped
         if any(_identity(item) in seen_rules and (item.get("apply") or item.get("manual_edit") or item.get("delete_annotation")
                                                 or item.get("reviewed_by_human")) for item in session.saved.values()):
             raise ReviewError("Imported rule and manual decisions conflict. Resolve them in Streamlit before importing.")

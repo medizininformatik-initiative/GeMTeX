@@ -10,6 +10,7 @@ For installation and CLI usage, see the [main README](../README.md).
 - [Deploying a reviewed project to INCEpTION](#deploying-a-reviewed-project-to-inception)
 - [SQLite instead of an INCEpTION project](#sqlite-instead-of-an-inception-project)
 - [Review workspace](#review-workspace)
+  - [Finding review states](#finding-review-states)
 - [Masked suggestion overview download](#masked-suggestion-overview-download)
 - [Suggestion warnings and diagnostics](#suggestion-warnings-and-diagnostics)
 - [FSN postfix exclusions](#fsn-postfix-exclusions)
@@ -182,11 +183,33 @@ Right-click a finding to stage one mutually exclusive action:
 - **Keep Original** — records explicit human review without changing the annotation.
 
 Right-click a selectable candidate and choose **Apply** to stage that exact candidate.
-Diagnostic candidates cannot be applied. Imported protected decisions and concept-rule
-reservations remain read-only until explicitly revalidated through their owning workflow.
+Diagnostic candidates cannot be applied. Validated imported generic decisions remain
+editable; concept-rule reservations remain read-only until revalidated through the rule workflow.
 
 Use **Save choices** before downloading decisions or preparing output. **Discard pending
 changes** restores the last saved state. Reloading the page is not a save operation.
+
+### Finding review states
+
+The **Review** column distinguishes pending edits, saved decisions, imported actions,
+automatic choices, and concept-rule ownership:
+
+| State | Meaning |
+|---|---|
+| **Unreviewed** | No saved human or automatic decision exists. |
+| **Pending Keep / replacement / deletion / manual review / ID removal** | A local change is staged but has not been committed with **Save choices**. |
+| **Saved Keep** | A human explicitly reviewed the finding and retained the original annotation. |
+| **Saved replacement: SCTID** | A local or restored replacement is saved and remains editable unless another workflow owns it. |
+| **Saved deletion / manual review / ID removal** | The special action was staged locally and saved; it remains editable in the current session. |
+| **Imported deletion / manual review / ID removal** | The saved action came from reviewed-decisions JSON. It will be exported/applied and can be replaced with another finding action after import validation. |
+| **Automatic historical condition / BM25 gap: SCTID** | A guarded automatic condition selected the saved replacement. |
+| **Reserved by concept rule** | A concept-rule decision owns the annotation; change it through the rule Apply choices or clear/reapply the rules. |
+| **Imported concept-rule decision (read-only)** | An imported rule decision is retained but cannot be edited as a generic finding action. |
+
+An imported decision is not unreviewed: it remains part of reviewed-decisions export and
+downstream write-back/deployment. Imported generic actions are editable after successful
+identity/scope validation. Concept-rule decisions remain read-only because the rule workflow
+owns and revalidates them separately.
 
 ### Candidate row colors
 

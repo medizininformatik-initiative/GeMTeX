@@ -166,7 +166,7 @@ class InceptionDeploymentControls:
                         "REMOTE Role Password", password=True, password_toggle_button=True, on_change=self.connection_changed,
                     ).classes("grow")
                 self.annotation_user = ui.input(
-                    "Annotation user (optional; defaults to username)", on_change=self.connection_changed,
+                    "Annotation user (optional; defaults to username; needs to exist in INCEpTION)", on_change=self.connection_changed,
                 ).classes("w-full")
                 self.disable_tls = ui.checkbox("Disable TLS verification", value=True, on_change=self.connection_changed)
                 self.disable_tls.tooltip("Weakens connection security. Prefer a correctly trusted server certificate.")

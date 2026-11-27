@@ -90,21 +90,25 @@ finding candidate grid for Apply only. Accept Suggestion uses only a unique sele
 match for the saved proposed SCTID; otherwise choose a specific candidate and Apply.
 Delete stages annotation removal, and Manual Review stages a later ManualReview
 marker without resolving the finding. Opening a menu never stages. The separate
-Keep original button is removed. Local saved actions can be changed or reset with
-the Keep Original menu item; imported protected
-actions remain read-only. No context-menu command itself writes CAS.
+Keep original button is removed. Local and validated imported generic actions can be
+changed or reset with the Keep Original menu item. Concept-rule-owned decisions remain
+read-only until revalidated through their rule workflow. No context-menu command itself writes CAS.
 
 Imports replace review atomically, preserve existing provenance, and cannot
 supersede newer uploads, demo reset or manual edits. Imported rule/deletion/manual-
-edit/ID-removal actions are retained read-only, not revalidated against HDF5;
-rule/manual conflicts fail rather than overwriting protected work. No CAS write-back,
+edit/ID-removal actions are retained after validation and remain editable as generic
+finding actions; rule/manual conflicts fail rather than overwriting rule-owned work. The
+findings table uses action-specific labels such as `Imported deletion`, `Imported manual
+review`, and `Imported ID removal`. These are saved decisions included in export/write-back,
+not unreviewed findings. Imported concept-rule decisions remain read-only. The complete state table is in
+the [user guide](../../../docs/user-guide.md#finding-review-states). No CAS write-back,
 conditions, rule application or deployment is connected in NiceGUI. JSON downloads
 may contain clinical data and are the only application-level persisted review;
 reload otherwise loses page state. See the GUI interface OKF for tests/limits.
 
 # Matching semantics
 
-Decisions are matched conservatively by document, annotator, annotation layer, span/offset, source code, and optionally covered text. A decision that cannot be matched is reported as unmatched. Matching is planned against original IDs before modifications, preventing accidental chaining. Ambiguous concept-rule matches and multiple decisions targeting one annotation are rejected.
+Decisions are matched conservatively by document, annotator, annotation layer, span/offset, source code, and optionally covered text. NiceGUI may remap changed suggestion indices only when the artifact is a complete permutation of the current findings, every identity is unique, source/project scope and policy metadata agree, and saved status/reason and selected-candidate evidence still validate. Identity, saved status/reason, selected-candidate, scope, or project mismatches remain rejected without altering the current review; restore failures are displayed as a prominent alert. A decision that cannot be matched is reported as unmatched. Matching is planned against original IDs before modifications, preventing accidental chaining. Ambiguous concept-rule matches and multiple decisions targeting one annotation are rejected.
 
 # Local ZIP write-back
 

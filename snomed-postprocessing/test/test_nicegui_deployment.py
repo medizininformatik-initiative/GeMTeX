@@ -1,4 +1,5 @@
 """NiceGUI deployment preparation and explicit remote apply; network is mocked."""
+import copy
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -12,7 +13,8 @@ from snomed_post_processing.gui.nicegui.deployment_ui import (
     prepare_review_deployment,
 )
 from snomed_post_processing.gui.nicegui.file_sources import SourceFile
-from snomed_post_processing.gui.nicegui.review import load_review
+from snomed_post_processing.gui.nicegui.review import ReviewSession, load_review
+from snomed_post_processing.gui.nicegui.review_ui import ReviewControls
 from snomed_post_processing.gui.nicegui.suggestions import load_suggestions_preview
 from snomed_post_processing.pipelines.inception_deployment import InceptionDeploymentResult
 
@@ -55,6 +57,7 @@ def fake_ui():
 class FakeFileSource:
     def __init__(self, *_args, **_kwargs):
         self.container = element()
+        self.uploader = element()
         self.uploading = False
         self.source = None
 
@@ -66,6 +69,38 @@ class FakeFileSource:
 
 
 class DeploymentWorkerTest(unittest.TestCase):
+    def test_review_restore_failure_is_a_prominent_alert(self):
+        ui = fake_ui()
+        state, _ = reviewed_state()
+        with patch("snomed_post_processing.gui.nicegui.review_ui.FileSource", FakeFileSource):
+            controls = ReviewControls(ui, lambda: state, lambda: 0, lambda: 0, lambda _session: None)
+        controls._restore_failure("Reviewed decisions do not match these suggestions.")
+        self.assertTrue(controls.notice.visible)
+        self.assertIn("Current review unchanged", controls.notice.text)
+        self.assertEqual(controls.notice.props.call_args.args[0], 'role="alert" aria-live="assertive"')
+        self.assertEqual(controls.notice.classes.call_args.kwargs["add"], "border-red-500 bg-red-50 text-red-950")
+        self.assertEqual(ui.notify.call_args.kwargs["type"], "negative")
+
+    def test_review_restore_remaps_a_complete_reordered_snapshot_by_identity(self):
+        data = json.loads((FIXTURE / "suggestions.json").read_text(encoding="utf-8"))
+        data["metadata"].update(annotation_source_file="project.zip", nicegui_generation_binding="original")
+        source = load_suggestions_preview(json.dumps(data).encode(), "suggestions.json")
+        review = ReviewSession(source)
+        review.mark_document(source.findings[0].row_id, True)
+        review.save()
+        artifact = review.export_text().encode()
+
+        reordered = copy.deepcopy(data)
+        reordered["suggestions"][0], reordered["suggestions"][1] = reordered["suggestions"][1], reordered["suggestions"][0]
+        reordered["metadata"]["nicegui_generation_binding"] = "regenerated"
+        current = load_suggestions_preview(json.dumps(reordered).encode(), "suggestions.json")
+        restored = load_review(artifact, current)
+
+        self.assertEqual(restored.remapped_findings, 2)
+        self.assertEqual(restored.reviewed_documents, review.reviewed_documents)
+        self.assertTrue(restored.saved[current.findings[1].suggestion_index]["reviewed_by_human"])
+        self.assertEqual(json.loads(restored.export_text())["metadata"]["nicegui_generation_binding"], "regenerated")
+
     def decisions_text(self, source="project.zip"):
         data = json.loads((FIXTURE / "staged-decisions.json").read_text(encoding="utf-8"))
         data["metadata"]["annotation_source_file"] = source

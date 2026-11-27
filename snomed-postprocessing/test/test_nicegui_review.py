@@ -96,7 +96,8 @@ class ReviewSessionTest(unittest.TestCase):
                 self.assertNotIn("manual_candidate", item)
                 self.assertFalse(review.protected(row))  # Local actions remain reversible.
                 restored = load_review(review.export_text().encode(), source)
-                self.assertTrue(restored.protected(row))  # Existing import protection is unchanged.
+                self.assertFalse(restored.protected(row))
+                self.assertTrue(restored.status(row).startswith("Imported "))
                 self.assertEqual(json.loads(restored.export_text())["decisions"][0], item)
                 review.stage(row.row_id); review.save()
                 self.assertEqual(review.saved[0]["action"], "none")
@@ -210,17 +211,25 @@ class ReviewSessionTest(unittest.TestCase):
         for key in ("concept_rules", "concept_rule_scope", "id_feature", "id_prefix", "automatic_reviewed_documents"):
             self.assertEqual(metadata[key], expected["metadata"][key])
         reserved = next(row for row in source.findings if review.protected(row))
-        with self.assertRaisesRegex(ReviewError, "protected"):
+        with self.assertRaisesRegex(ReviewError, "concept rule"):
             review.stage(reserved.row_id)
 
-    def test_imported_manual_edit_and_delete_are_protected(self):
+    def test_imported_manual_edit_delete_and_id_removal_remain_editable(self):
         source = state(); base = json.loads(ReviewSession(source).export_text())
-        for action in ("manual_edit", "delete", "clear_id"):
+        expected = {
+            "manual_edit": "Imported manual review",
+            "delete": "Imported deletion",
+            "clear_id": "Imported ID removal",
+        }
+        for action, status in expected.items():
             data = copy.deepcopy(base); data["decisions"][0]["action"] = action
             review = load_review(encoded(data), source)
-            with self.assertRaisesRegex(ReviewError, "protected"):
-                review.stage(source.findings[0].row_id)
-            self.assertEqual(json.loads(review.export_text())["decisions"], data["decisions"])
+            row = source.findings[0]
+            self.assertFalse(review.protected(row))
+            self.assertEqual(review.status(row), status)
+            review.stage(row.row_id)
+            review.save()
+            self.assertEqual(review.status(row), "Saved Keep")
 
     def test_historical_conditions_apply_and_undo_with_provenance(self):
         source = load_suggestions_preview((FIXTURE / "suggestions.json").read_bytes())
@@ -516,7 +525,7 @@ class ReviewUiTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(grids[0].options["rowData"][0]["review"], "Unreviewed")
         self.assertEqual(grids[0].options["rowData"][1]["review"], "Pending deletion")
 
-    async def test_protected_import_and_old_snapshot_menus_cannot_stage(self):
+    async def test_editable_import_and_old_snapshot_menus_cannot_stage(self):
         ui, grids, labels, source_handler, import_handler, _ = await self.setup_page()
         row = grids[0].options["rowData"][0]
         actions = open_context(ui, grids[0], row)
@@ -525,8 +534,9 @@ class ReviewUiTest(unittest.IsolatedAsyncioTestCase):
         with patch("nicegui.run.io_bound", new=AsyncMock(side_effect=lambda function, *args: function(*args))):
             await import_handler(upload_event(encoded(data)))
         actions["Delete"].callback(None)
-        protected = open_context(ui, grids[0], row)
-        self.assertTrue(all(not item.enabled for item in protected.values()))
+        editable = open_context(ui, grids[0], row)
+        self.assertTrue(all(editable[name].enabled for name in ("Remove concept ID", "Delete", "Manual Review", "Keep Original")))
+        self.assertEqual(grids[0].options["rowData"][0]["review"], "Imported deletion")
         with patch("nicegui.run.io_bound", new=AsyncMock(side_effect=lambda function, *args: function(*args))):
             await source_handler(upload_event(encoded(payload())))
         count = len(ui.context_items)

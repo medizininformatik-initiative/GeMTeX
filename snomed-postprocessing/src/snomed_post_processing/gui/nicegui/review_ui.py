@@ -17,7 +17,11 @@ class ReviewControls:
         self.data_dir = data_dir
         self.session = ReviewSession(get_state())
         self.before_export = None
-        self.status = ui.label().classes("text-sm whitespace-pre-wrap")
+        self.notice = ui.label().classes(
+            "w-full rounded-md border px-4 py-3 font-medium whitespace-pre-wrap shadow-sm"
+        ).props('role="alert" aria-live="assertive"')
+        self.notice.set_visibility(False)
+        self.status = ui.label().classes("text-sm whitespace-pre-wrap text-slate-700")
         self.menu = ui.context_menu().props("no-parent-event")
         self.menu_target = None
         ui.label("Findings: right-click for Accept Suggestion, Remove concept ID, Delete, Manual Review or Keep Original. Selected finding candidates: right-click for Apply. Save choices commits staged actions; Shift + right-click opens the browser menu.").classes("text-sm")
@@ -59,7 +63,7 @@ class ReviewControls:
         with ui.row():
             self.export = ui.button("Download reviewed decisions JSON", on_click=self.download)
         ui.label("Save document flags with Save choices. Reviewed is progress, not proof of replacements for all findings.")
-        ui.label("Import replaces current review. Imported deletions/manual edits/ID removals remain protected. Reapply imported rules against current inputs in tab 2 to edit their Apply choices.")
+        ui.label("Import replaces current review. Imported deletion, manual-review and ID-removal actions remain editable after validation. Reapply imported rules against current inputs in tab 2 to edit their Apply choices.")
         with restore_container if restore_container is not None else nullcontext():
             self.saved_decisions = FileSource(
                 ui, "Reviewed decisions JSON", (".json",), self.data_dir, self.restore_source_changed,
@@ -69,9 +73,24 @@ class ReviewControls:
             self.restore_button = ui.button("Load saved decisions", on_click=self.load_saved)
             ui.label("Select a reviewed-decisions JSON file from upload, the data directory, or a server path, then load it explicitly. Limit: 50 MiB.").classes("text-sm")
 
+    def _show_notice(self, message="", *, level="info"):
+        colors = {
+            "info": "border-blue-300 bg-blue-50 text-blue-950",
+            "success": "border-green-400 bg-green-50 text-green-950",
+            "warning": "border-amber-400 bg-amber-50 text-amber-950",
+            "error": "border-red-500 bg-red-50 text-red-950",
+        }
+        self.notice.classes(
+            remove="border-blue-300 bg-blue-50 text-blue-950 border-green-400 bg-green-50 text-green-950 border-amber-400 bg-amber-50 text-amber-950 border-red-500 bg-red-50 text-red-950",
+            add=colors[level],
+        )
+        self.notice.set_text(message)
+        self.notice.set_visibility(bool(message))
+
     def reset(self):
         self.session = ReviewSession(self.get_state())
         self.condition_status.set_text("")
+        self._show_notice()
         self.refresh()
 
     def refresh(self, *, update_grid=True):
@@ -221,6 +240,21 @@ class ReviewControls:
         if hasattr(self, "restore_button"):
             self.restore_button.set_enabled(self.get_state().source_name is not None and self.saved_decisions.snapshot() is not None)
 
+    def _restore_success(self, loaded):
+        self.session = loaded
+        self.condition_status.set_text("")
+        self.refresh()
+        detail = (f" {loaded.remapped_findings} reordered finding(s) were matched by annotation identity."
+                  if loaded.remapped_findings else "")
+        self._show_notice(
+            "Reviewed decisions restored; prior saved/pending choices and flags replaced. No CAS changed." + detail,
+            level="success",
+        )
+
+    def _restore_failure(self, message):
+        self._show_notice(message + " Current review unchanged.", level="error")
+        self.ui.notify("Review restore failed — see the highlighted message in Review & apply.", type="negative")
+
     async def load_saved(self):
         from nicegui import run
         source = self.saved_decisions.snapshot()
@@ -229,30 +263,27 @@ class ReviewControls:
         revision = self.begin_load()
         original_state, original_session = self.get_state(), self.session
         edit_revision = self.session.revision
-        self.status.set_text("Loading reviewed decisions; the current review remains until loading succeeds.")
+        self._show_notice("Loading reviewed decisions; the current review remains until loading succeeds.", level="info")
         try:
             content = await run.io_bound(source.path.read_bytes)
             loaded = await run.io_bound(load_review, content, original_state)
         except (ReviewError, OSError) as error:
             if revision == self.get_revision():
                 message = str(error) if isinstance(error, ReviewError) else "Could not read reviewed decisions JSON."
-                self.status.set_text(message + " Current review unchanged.")
+                self._restore_failure(message)
             return
         if revision != self.get_revision() or self.get_state() is not original_state or self.session is not original_session:
             return
         if self.session.revision != edit_revision:
-            self.status.set_text("Review changed while importing. Import again to replace it; current review unchanged.")
+            self._show_notice("Review changed while importing. Import again to replace it; current review unchanged.", level="warning")
             return
-        self.session = loaded
-        self.condition_status.set_text("")
-        self.refresh()
-        self.status.set_text("Reviewed decisions restored; prior saved/pending choices and flags replaced. No CAS changed.")
+        self._restore_success(loaded)
 
     async def load(self, event):
         revision = self.begin_load()
         original_state, original_session = self.get_state(), self.session
         edit_revision = self.session.revision
-        self.status.set_text("Loading reviewed decisions; the current review remains until loading succeeds.")
+        self._show_notice("Loading reviewed decisions; the current review remains until loading succeeds.", level="info")
         try:
             self.session._require_source()
             if event.file.size() > MAX_DECISIONS_BYTES:
@@ -263,17 +294,14 @@ class ReviewControls:
         except (ReviewError, OSError) as error:
             if revision == self.get_revision():
                 message = str(error) if isinstance(error, ReviewError) else "Could not read uploaded reviewed decisions JSON."
-                self.status.set_text(message + " Current review unchanged.")
+                self._restore_failure(message)
                 self.upload.reset()
             return
         if revision != self.get_revision() or self.get_state() is not original_state or self.session is not original_session:
             return
         if self.session.revision != edit_revision:
-            self.status.set_text("Review changed while importing. Import again to replace it; current review unchanged.")
+            self._show_notice("Review changed while importing. Import again to replace it; current review unchanged.", level="warning")
             self.upload.reset()
             return
-        self.session = loaded
-        self.condition_status.set_text("")
-        self.refresh()
-        self.status.set_text("Reviewed decisions restored; prior saved/pending choices and flags replaced. No CAS changed.")
+        self._restore_success(loaded)
         self.upload.reset()
