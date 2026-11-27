@@ -110,9 +110,9 @@ def _candidate_rows(finding, session=None, inspected_id=None):
 
 
 class ReviewPanelControls:
-    def __init__(self, ui, panel, *, banner, source, scope, data_dir=None):
+    def __init__(self, ui, panel, *, provenance, data_dir=None):
         self.ui, self.panel = ui, panel
-        self.banner, self.source, self.scope = banner, source, scope
+        self.provenance = provenance
         self.data_dir = data_dir or "data"
         self.state = PreviewState()
         self.review_context = ReviewContext()
@@ -494,14 +494,13 @@ class ReviewPanelControls:
 
     def show_source(self):
         self.review_context = ReviewContext.from_metadata(self.state.metadata)
-        self.banner.set_text(
-            "Suggestions and manual review. "
-            + "No project/CAS is changed. Review is page-local until downloaded as JSON."
-        )
-        self.source.set_text(f"Source: {self.state.source_name or 'No suggestions loaded'}")
         saved_mode = self.state.metadata.get("target_view")
         mode = {"policy": "Policy rules", "release": "Active release"}.get(saved_mode, "not recorded") if isinstance(saved_mode, str) else "not recorded"
-        self.scope.set_text(f"Saved annotator scope: {', '.join(self.state.source_annotators) or 'all annotators'} · Saved replacement mode: {mode}")
+        self.provenance.set_text(
+            f"Source: {self.state.source_name or 'No suggestions loaded'} · "
+            f"Saved annotator scope: {', '.join(self.state.source_annotators) or 'all annotators'} · "
+            f"Saved replacement mode: {mode}"
+        )
         total = len(self.state.source_suggestions)
         self.counts.set_text(f"{total} saved suggestions · {len(self.state.findings)} in artifact scope before grid filters · explicit review only · Save/export include all documents")
         # Reuse one workspace; clearing old slides must not delete its widgets.

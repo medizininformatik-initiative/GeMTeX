@@ -19,8 +19,9 @@ class ReviewKeyboardTest(unittest.IsolatedAsyncioTestCase):
         self.client = Client(page("/review-keyboard-test"))
         with self.client:
             with ui.column() as container:
-                self.panel = ReviewPanelControls(ui, container, banner=ui.label(), source=ui.label(), scope=ui.label())
+                self.panel = ReviewPanelControls(ui, container, provenance=ui.label())
             data = payload()
+            data["suggestions"][0]["replacement_code"] = "990000201"
             second = copy.deepcopy(data["suggestions"][0])
             second["finding"]["offset"] = [20, 35]
             third = copy.deepcopy(second)

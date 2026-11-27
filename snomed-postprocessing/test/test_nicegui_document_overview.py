@@ -17,7 +17,7 @@ class DocumentOverviewTest(unittest.IsolatedAsyncioTestCase):
         self.client = Client(page("/document-overview-test"))
         with self.client:
             with ui.column() as container:
-                self.panel = ReviewPanelControls(ui, container, banner=ui.label(), source=ui.label(), scope=ui.label())
+                self.panel = ReviewPanelControls(ui, container, provenance=ui.label())
             data = payload()
             second = copy.deepcopy(data["suggestions"][0])
             second["finding"]["document"] = "second.txt"

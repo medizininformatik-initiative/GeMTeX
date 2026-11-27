@@ -111,7 +111,7 @@ class CandidateHighlightPanelTest(unittest.IsolatedAsyncioTestCase):
         try:
             with client:
                 with ui.column() as container:
-                    panel = ReviewPanelControls(ui, container, banner=ui.label(), source=ui.label(), scope=ui.label())
+                    panel = ReviewPanelControls(ui, container, provenance=ui.label())
                 panel.publish_generated(preview())
                 finding = panel.state.findings[0]
                 event = lambda row: SimpleNamespace(args={"data": {"row_id": row.row_id}})

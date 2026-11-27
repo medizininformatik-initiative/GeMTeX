@@ -11,7 +11,8 @@ from snomed_post_processing.gui.nicegui.suggestion_ui import masked_preview_csv
 class MaskedOverviewTest(unittest.TestCase):
     def test_only_identity_columns_change_and_export_order_is_stable(self):
         rows = [SimpleNamespace(document=document, annotator=annotator, code="00123", status="Manual",
-                                proposed_code="00456", candidate_count=2, text="Clinical name, café\nsecond line")
+                                proposed_code="00456", candidate_count=2, text="Clinical name, café\nsecond line",
+                                offset=(12, 34))
                 for document, annotator in (("private-b", "Bob"), ("private-a", "Alice"), ("private-b", "Alice"))]
         preview = SimpleNamespace(findings=rows)
         before = copy.deepcopy([vars(row) for row in rows])
@@ -19,7 +20,7 @@ class MaskedOverviewTest(unittest.TestCase):
         self.assertTrue(content.startswith(b"\xef\xbb\xbf"))
         reader = csv.DictReader(io.StringIO(content.decode("utf-8-sig")))
         exported = list(reader)
-        self.assertEqual(reader.fieldnames, ["Document", "Annotator", "Source code", "Status", "Replacement code", "Candidate count", "Top candidates", "Diagnostic candidates (not selectable)", "Covered text"])
+        self.assertEqual(reader.fieldnames, ["Document", "Annotator", "Source code", "Covered text", "Offset", "Status", "Replacement code", "Candidate count", "Top candidates", "Diagnostic candidates (not selectable)"])
         self.assertEqual([row["Document"] for row in exported], ["document-1", "document-2", "document-1"])
         self.assertEqual([row["Annotator"] for row in exported], ["annotator-1", "annotator-2", "annotator-2"])
         for row in exported:
@@ -28,6 +29,7 @@ class MaskedOverviewTest(unittest.TestCase):
             self.assertEqual(row["Status"], "Manual")
             self.assertEqual(row["Candidate count"], "2")
             self.assertEqual(row["Covered text"], rows[0].text)
+            self.assertEqual(row["Offset"], "12, 34")
         self.assertEqual([vars(row) for row in rows], before)
 
     def test_export_uses_artifact_scope_not_unfiltered_suggestions(self):

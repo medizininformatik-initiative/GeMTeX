@@ -38,11 +38,15 @@ def _candidate_summary(candidates, limit=MASKED_CSV_CANDIDATE_LIMIT):
     return " | ".join(values)
 
 
+def _offset_text(offset):
+    return ", ".join(str(value) for value in (offset or ()))
+
+
 def masked_preview_csv(preview):
     columns = {"document": "Document", "annotator": "Annotator", "code": "Source code",
-               "status": "Status", "proposed_code": "Replacement code", "candidate_count": "Candidate count",
-               "top_candidates": "Top candidates", "diagnostic_candidates": "Diagnostic candidates (not selectable)",
-               "text": "Covered text"}
+               "text": "Covered text", "offset": "Offset", "status": "Status",
+               "proposed_code": "Replacement code", "candidate_count": "Candidate count",
+               "top_candidates": "Top candidates", "diagnostic_candidates": "Diagnostic candidates (not selectable)"}
     rows = []
     for row in preview.findings:
         candidates = tuple(getattr(row, "candidates", ()))
@@ -50,9 +54,9 @@ def masked_preview_csv(preview):
             "document": row.document, "annotator": row.annotator, "code": row.code,
             "status": row.status, "proposed_code": row.proposed_code,
             "candidate_count": row.candidate_count,
+            "text": row.text, "offset": _offset_text(row.offset),
             "top_candidates": _candidate_summary(candidate for candidate in candidates if candidate.selectable),
             "diagnostic_candidates": _candidate_summary(candidate for candidate in candidates if not candidate.selectable),
-            "text": row.text,
         })
     frame = pd.DataFrame(rows, columns=list(columns)).rename(columns=columns)
     return masked_overview_csv(frame)
@@ -170,8 +174,10 @@ class SuggestionControls:
         with ui.column().classes("w-full") as self.results:
             self.summary = ui.label()
             self.overview = ui.aggrid({
-                "columnDefs": [{"field": field} for field in ("document", "annotator", "code", "status", "proposed_code", "candidate_count")]
-                              + [{"field": "text", "headerName": "Covered text", "flex": 2, "minWidth": 350}],
+                "columnDefs": [{"field": field} for field in ("document", "annotator", "code")]
+                              + [{"field": "text", "headerName": "Covered text", "flex": 2, "minWidth": 350},
+                                 {"field": "offset", "headerName": "Offset", "width": 120}]
+                              + [{"field": field} for field in ("status", "proposed_code", "candidate_count")],
                 "defaultColDef": {"sortable": True, "filter": "agTextColumnFilter", "resizable": True, "editable": False},
                 "rowData": [], ":getRowId": "params => params.data.row_id",
             }).classes("w-full h-64 overflow-auto overscroll-contain")
@@ -397,7 +403,10 @@ class SuggestionControls:
     def render_artifact(self):
         result, preview = self.completed[:2]
         fields = ("row_id", "document", "annotator", "code", "status", "proposed_code", "candidate_count", "text")
-        self.overview.options["rowData"] = [{name: getattr(row, name) for name in fields} for row in preview.findings]
+        self.overview.options["rowData"] = [
+            {**{name: getattr(row, name) for name in fields}, "offset": _offset_text(row.offset)}
+            for row in preview.findings
+        ]
         self.overview.update()
         statuses = {}
         for finding in preview.findings:

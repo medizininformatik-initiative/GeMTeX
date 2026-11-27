@@ -200,9 +200,8 @@ class GenerationControlsTest(unittest.IsolatedAsyncioTestCase):
         with self.client:
             self.inputs = SharedInputControls(ui)
             self.policy = PolicyCheckControls(ui, self.inputs)
-            banner, source, scope = ui.label(), ui.label(), ui.label()
             with ui.column() as parent:
-                self.review = ReviewPanelControls(ui, parent, banner=banner, source=source, scope=scope)
+                self.review = ReviewPanelControls(ui, parent, provenance=ui.label())
             self.panel = SuggestionControls(ui, self.inputs, self.policy, lambda: self.review)
             self.panel.connect_review()
         self.worker = patch("nicegui.run.io_bound", new=AsyncMock(side_effect=inline))
@@ -314,6 +313,11 @@ class GenerationControlsTest(unittest.IsolatedAsyncioTestCase):
         await self.panel.load_suggestions(upload_event(content, "restored.json"))
         self.assertTrue(self.panel.results.visible, self.panel.status.text)
         self.assertEqual(len(self.panel.overview.options["rowData"]), 10)
+        self.assertIn("offset", {column["field"] for column in self.panel.overview.options["columnDefs"]})
+        self.assertEqual(
+            self.panel.overview.options["rowData"][0]["offset"],
+            ", ".join(map(str, self.panel.completed[1].findings[0].offset)),
+        )
         self.assertIs(self.review.state, old_source)
         self.assertIs(self.review.controls.session, session)
         self.assertTrue(session.reviewed_documents)
@@ -711,6 +715,7 @@ class GenerationControlsTest(unittest.IsolatedAsyncioTestCase):
         exported = list(csv.DictReader(io.StringIO(content.decode("utf-8-sig"))))
         self.assertEqual(len(exported), len(rows))
         self.assertEqual([row["Covered text"] for row in exported], [row["text"] for row in rows])
+        self.assertEqual([row["Offset"] for row in exported], [row["offset"] for row in rows])
         self.assertTrue(all(row["Document"].startswith("document-") for row in exported))
         self.assertEqual(self.panel.overview.options["rowData"], rows)
         self.assertIs(self.review.controls.session, session)
