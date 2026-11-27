@@ -107,58 +107,108 @@ class StoreData:
     document_texts: dict[str, str]
 
 
+def _read_view_annotations(connection, view, layers, ignore_layers, ignore_overlap_mode, texts, available):
+    document = view["document_name"]
+    text_row = connection.execute(
+        "SELECT text FROM document_texts WHERE id=? AND document_hash_id=?",
+        (view["document_text_id"], view["document_hash_id"]),
+    ).fetchone()
+    text = text_row[0] if text_row is not None else None
+    if text is not None:
+        if not isinstance(text, str):
+            raise AnnotationStoreError("Invalid stored document text.")
+        if document in texts and texts[document] != text:
+            raise AnnotationStoreError("Selected views contain conflicting text for the same document name.")
+        texts[document] = text
+    rows = connection.execute("""SELECT a.* FROM annotation_occurrence_links l
+        LEFT JOIN annotations a ON a.id=l.annotation_id WHERE l.view_id=? ORDER BY l.id""", (view["id"],)).fetchall()
+    available.update(row["layer"] for row in rows)
+    for row in rows:
+        if row["id"] is None:
+            raise AnnotationStoreError("An annotation occurrence has no annotation payload.")
+        if row["document_hash_id"] != view["document_hash_id"] or row["begin_offset"] < 0 or row["end_offset"] < row["begin_offset"]:
+            raise AnnotationStoreError("Invalid annotation occurrence identity or offsets.")
+        if text is not None and (row["end_offset"] > len(text) or
+                                     (row["covered_text"] is not None and text[row["begin_offset"]:row["end_offset"]] != row["covered_text"])):
+            raise AnnotationStoreError("Stored annotation offsets/covered text disagree with document text.")
+    ignores = [IgnoreOverlap(row["layer"], (row["begin_offset"], row["end_offset"]), row["covered_text"] or "")
+               for row in rows if row["layer"] in ignore_layers]
+    targets = [row for row in rows if row["layer"] in layers]
+    overlaps = (
+        [[ignore for ignore in ignores if spans_match(
+            (row["begin_offset"], row["end_offset"]), ignore.offset, ignore_overlap_mode
+        )] for row in targets]
+        if ignores else []
+    )
+    codes = [str(row["sctid"]).strip() if row["sctid"] is not None else "nan" for row in targets]
+    return document, DocumentAnnotations(
+        np.asarray(codes, dtype="bytes"),
+        np.asarray([(row["begin_offset"], row["end_offset"]) for row in targets], dtype="i,i"),
+        np.asarray([row["covered_text"] or "" for row in targets], dtype=np.dtypes.StringDType),
+        np.asarray([row["layer"] for row in targets], dtype=np.dtypes.StringDType), len(targets),
+        (np.asarray([bool(items) for items in overlaps], dtype=bool)
+         if overlaps else np.zeros(len(targets), dtype=bool)),
+        overlaps,
+    )
+
+
+def _validate_ignore_layers(ignore_layers, available):
+    if any(layer not in available for layer in ignore_layers):
+        raise AnnotationStoreError("A requested ignore-overlap layer is unavailable in the selected annotation-store scope.")
+
+
+def annotation_store_document_count(path, *, store_scope=None, annotator_filter=None):
+    with _connect(path) as connection:
+        return len(_views(connection, store_scope, annotator_filter))
+
+
+def iter_annotation_store_batches(path, *, store_scope=None, annotator_filter=None,
+                                  annotation_types=None, ignore_overlap_types=None,
+                                  ignore_overlap_mode="overlap", batch_size=16):
+    """Yield bounded corpora in the same annotator/document order as a full store load."""
+    if batch_size < 1:
+        raise ValueError("Annotation-store batch size must be positive.")
+    layers = tuple(annotation_types or ("gemtex.Concept",))
+    ignore_layers = tuple(ignore_overlap_types or ())
+    spans_match((0, 1), (0, 1), ignore_overlap_mode)
+    texts, available = {}, set()
+    with _connect(path) as connection:
+        views = _views(connection, store_scope, annotator_filter)
+        grouped = {}
+        for view in views:
+            grouped.setdefault(view["annotator"], []).append(view)
+        for annotator, annotator_views in grouped.items():
+            corpus = TemporaryCorpus({annotator: TemporaryContainer(0, {})})
+            container = corpus.annotators[annotator]
+            for view in annotator_views:
+                document, annotations = _read_view_annotations(
+                    connection, view, layers, ignore_layers, ignore_overlap_mode, texts, available
+                )
+                container.documents[document] = annotations
+                container.max_length = max(container.max_length, len(document))
+                if len(container.documents) >= batch_size:
+                    yield corpus
+                    corpus = TemporaryCorpus({annotator: TemporaryContainer(0, {})})
+                    container = corpus.annotators[annotator]
+            if container.documents:
+                yield corpus
+        _validate_ignore_layers(ignore_layers, available)
+
+
 def read_annotation_store(path, *, store_scope=None, annotator_filter=None,
                           annotation_types=None, ignore_overlap_types=None, ignore_overlap_mode="overlap"):
     layers = tuple(annotation_types or ("gemtex.Concept",))
     ignore_layers = tuple(ignore_overlap_types or ())
     spans_match((0, 1), (0, 1), ignore_overlap_mode)  # Validate even if there are no annotations.
-    corpus, texts = TemporaryCorpus({}), {}
+    corpus, texts, available = TemporaryCorpus({}), {}, set()
     with _connect(path) as connection:
-        views = _views(connection, store_scope, annotator_filter)
-        available = set()
-        for view in views:
-            document, annotator = view["document_name"], view["annotator"]
-            text_row = connection.execute("SELECT text FROM document_texts WHERE id=? AND document_hash_id=?",
-                                          (view["document_text_id"], view["document_hash_id"])).fetchone()
-            text = text_row[0] if text_row is not None else None
-            if text is not None:
-                if not isinstance(text, str):
-                    raise AnnotationStoreError("Invalid stored document text.")
-                if document in texts and texts[document] != text:
-                    raise AnnotationStoreError("Selected views contain conflicting text for the same document name.")
-                texts[document] = text
-            rows = connection.execute("""SELECT a.* FROM annotation_occurrence_links l
-                LEFT JOIN annotations a ON a.id=l.annotation_id WHERE l.view_id=? ORDER BY l.id""", (view["id"],)).fetchall()
-            available.update(row["layer"] for row in rows)
-            for row in rows:
-                if row["id"] is None:
-                    raise AnnotationStoreError("An annotation occurrence has no annotation payload.")
-                if row["document_hash_id"] != view["document_hash_id"] or row["begin_offset"] < 0 or row["end_offset"] < row["begin_offset"]:
-                    raise AnnotationStoreError("Invalid annotation occurrence identity or offsets.")
-                if text is not None and (row["end_offset"] > len(text) or
-                                             (row["covered_text"] is not None and text[row["begin_offset"]:row["end_offset"]] != row["covered_text"])):
-                    raise AnnotationStoreError("Stored annotation offsets/covered text disagree with document text.")
-            ignores = [IgnoreOverlap(row["layer"], (row["begin_offset"], row["end_offset"]), row["covered_text"] or "")
-                       for row in rows if row["layer"] in ignore_layers]
-            targets = [row for row in rows if row["layer"] in layers]
-            overlaps = (
-                [[ignore for ignore in ignores if spans_match(
-                    (row["begin_offset"], row["end_offset"]), ignore.offset, ignore_overlap_mode
-                )] for row in targets]
-                if ignores else []
+        for view in _views(connection, store_scope, annotator_filter):
+            document, annotations = _read_view_annotations(
+                connection, view, layers, ignore_layers, ignore_overlap_mode, texts, available
             )
-            codes = [str(row["sctid"]).strip() if row["sctid"] is not None else "nan" for row in targets]
-            annotations = DocumentAnnotations(
-                np.asarray(codes, dtype="bytes"),
-                np.asarray([(row["begin_offset"], row["end_offset"]) for row in targets], dtype="i,i"),
-                np.asarray([row["covered_text"] or "" for row in targets], dtype=np.dtypes.StringDType),
-                np.asarray([row["layer"] for row in targets], dtype=np.dtypes.StringDType), len(targets),
-                (np.asarray([bool(items) for items in overlaps], dtype=bool)
-                 if overlaps else np.zeros(len(targets), dtype=bool)),
-                overlaps)
+            annotator = view["annotator"]
             container = corpus.annotators.setdefault(annotator, TemporaryContainer(0, {}))
             container.documents[document] = annotations
             container.max_length = max(container.max_length, len(document))
-        if any(layer not in available for layer in ignore_layers):
-            raise AnnotationStoreError("A requested ignore-overlap layer is unavailable in the selected annotation-store scope.")
+        _validate_ignore_layers(ignore_layers, available)
     return StoreData(corpus, texts)

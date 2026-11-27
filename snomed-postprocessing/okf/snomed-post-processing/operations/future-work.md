@@ -52,6 +52,8 @@ If needed later, expose document status in the project model and add an explicit
 
 NiceGUI currently runs the complete policy check through `run.io_bound`. This keeps the event loop responsive but does not parallelize the calculation itself. CAS extraction in `process_inception_zip`, document iteration in `analyze_documents`, and the inclusion/exclusion passes remain serial. Inclusion checking currently performs `np.isin` for each document against the complete inclusion-list array.
 
+Schema-v2 SQLite policy checks use bounded document batches rather than materializing the complete annotation corpus. The store is traversed once per policy pass to preserve existing inclusion-before-exclusion finding and report ordering. ZIP/CAS inputs still materialize the extracted corpus. Streamlit report artifacts remain file-backed in session state instead of being copied into complete report strings, although the findings collection and structured report dictionary are still retained in memory.
+
 ### Measure and optimize before adding concurrency
 
 Add non-sensitive phase timings for CAS/SQLite extraction, inclusion-list analysis, exclusion-list analysis, and report generation. Record only durations and counts; do not log document names, annotators, covered text, or other clinical content.

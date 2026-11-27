@@ -22,7 +22,7 @@ FINDINGS = [
 
 APP = '''
 import pathlib
-from types import SimpleNamespace
+import tempfile
 from unittest.mock import patch
 import streamlit as st
 from snomed_post_processing.gui.streamlit.policy_tab import render_policy_tab
@@ -37,8 +37,11 @@ inputs = GuiInputs(
     data_dir=pathlib.Path("."), hdf5_temp_path=pathlib.Path("policy.hdf5"),
     target_view=st.session_state.get("test_target_view", "policy"),
 )
+report_dir = pathlib.Path(tempfile.mkdtemp(prefix="policy-tab-test-"))
 def report_path(name, text):
-    return SimpleNamespace(name=name, parent=pathlib.Path("reports"), read_text=lambda **kwargs: text)
+    path = report_dir / name
+    path.write_text(text, encoding="utf-8")
+    return path
 def generate(**kwargs):
     st.session_state["generation_count"] = st.session_state.get("generation_count", 0) + 1
     st.session_state["generation_kwargs"] = kwargs
@@ -123,7 +126,7 @@ class PolicyTableGuiTest(unittest.TestCase):
         self.run_check()
         self.assertEqual(self.app.session_state["generation_count"], 1)
         self.assertEqual(self.app.session_state["critical_findings"], FINDINGS)
-        self.assertEqual(self.app.session_state["critical_findings_json_text"], "[]")
+        self.assertEqual(self.app.session_state["critical_findings_json_path"].read_text(encoding="utf-8"), "[]")
         self.assertEqual(self.app.session_state["critical_findings_json_name"], "findings.json")
         self.assertEqual(self.app.session_state["generation_kwargs"]["annotation_types"], ["Concept"])
         self.assertEqual(len(self.app.dataframe), 3)

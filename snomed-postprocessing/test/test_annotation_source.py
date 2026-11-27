@@ -7,8 +7,12 @@ from pathlib import Path
 import sqlite3
 import tempfile
 import unittest
+from unittest.mock import patch
 
-from snomed_post_processing.annotation_source import read_annotation_store, store_scopes, store_annotators
+from snomed_post_processing.annotation_source import (
+    iter_annotation_store_batches, read_annotation_store, store_scopes, store_annotators,
+)
+from snomed_post_processing.gui.streamlit.report_generation import generate_report
 from snomed_post_processing.pipelines.policy_check import check_policy, PolicySettings
 from snomed_post_processing.pipelines.suggestion_generation import generate_suggestions, SuggestionSettings
 from snomed_post_processing.review_context import ReviewContext
@@ -67,8 +71,12 @@ class AnnotationSourceTest(unittest.TestCase):
         policy = PolicySettings(annotation_types=LAYERS)
         sql_policy = replace(policy, store_scope="*:annotation")
         original = check_policy(FIXTURE / "project.zip", FIXTURE / "policy.hdf5", policy)
-        stored = check_policy(self.path, FIXTURE / "policy.hdf5", sql_policy)
+        with patch("snomed_post_processing.pipelines.policy_check.process_inception_zip",
+                   side_effect=AssertionError("SQLite policy checks must use bounded store batches")):
+            stored = check_policy(self.path, FIXTURE / "policy.hdf5", sql_policy)
         self.assertEqual(stored.findings, original.findings)
+        self.assertEqual(stored.reports["policy-report.md"], original.reports["policy-report.md"])
+        self.assertEqual(stored.reports["policy-report.json"], original.reports["policy-report.json"])
         self.assertEqual(len(stored.findings), 10)
         corpus = process_inception_zip(self.path, annotation_types=list(LAYERS))
         self.assertEqual(sum(a.length for c in corpus.annotators.values() for a in c.documents.values()), 14)
@@ -91,6 +99,27 @@ class AnnotationSourceTest(unittest.TestCase):
         self.assertEqual(hashlib.sha256(self.path.read_bytes()).hexdigest(), before)
         self.assertFalse(Path(str(self.path) + "-wal").exists())
         self.assertFalse(Path(str(self.path) + "-shm").exists())
+
+    def test_streaming_batches_and_file_reports_remain_complete(self):
+        batches = list(iter_annotation_store_batches(
+            self.path, store_scope="*:annotation", annotation_types=LAYERS, batch_size=1,
+        ))
+        self.assertTrue(batches)
+        self.assertTrue(all(sum(len(c.documents) for c in batch.annotators.values()) == 1 for batch in batches))
+        output_dir = Path(self.owner.name) / "reports"
+        output_dir.mkdir()
+        with patch("snomed_post_processing.gui.streamlit.report_generation.tempfile.mkdtemp", return_value=str(output_dir)):
+            paths = generate_report(
+                self.path, FIXTURE / "policy.hdf5", annotation_types=list(LAYERS), store_scope="*:annotation",
+            )
+        self.assertEqual(len(paths[-1]), 10)
+        self.assertTrue(all(path.exists() for path in paths[:4]))
+        streamed_order = [(annotator, document) for batch in batches
+                          for annotator, container in batch.annotators.items() for document in container.documents]
+        full = read_annotation_store(self.path, store_scope="*:annotation", annotation_types=LAYERS).corpus
+        full_order = [(annotator, document) for annotator, container in full.annotators.items()
+                      for document in container.documents]
+        self.assertEqual(streamed_order, full_order)
 
     def test_scope_filters_and_duplicate_view_rejection(self):
         self.assertEqual(store_scopes(self.path), {"*:annotation": "All exports · annotation"})

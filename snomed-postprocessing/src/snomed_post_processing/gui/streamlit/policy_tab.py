@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from contextlib import contextmanager
 import pathlib
 from io import StringIO
 
@@ -69,6 +70,7 @@ def render_policy_tab(inputs: GuiInputs) -> None:
                 st.session_state["critical_findings_annotators"] = saved_scope
                 st.session_state["critical_findings_metadata"] = metadata
                 st.session_state["critical_findings_json_text"] = content.decode("utf-8-sig")
+                st.session_state.pop("critical_findings_json_path", None)
                 st.session_state["critical_findings_json_name"] = _selected_source_name(findings_selection.value)
                 st.session_state["loaded_critical_findings_key"] = findings_key
                 st.session_state["policy_check_result"] = {
@@ -193,11 +195,6 @@ def render_policy_tab(inputs: GuiInputs) -> None:
                 progress_bar.empty()
                 status.update(label="Policy check finished.", state="complete", expanded=False)
 
-            report_text = output_path_md.read_text(encoding="utf-8")
-            report_text_masked = output_path_md_masked.read_text(encoding="utf-8")
-            json_text = output_path_json.read_text(encoding="utf-8")
-            findings_json_text = output_path_findings_json.read_text(encoding="utf-8")
-
             st.session_state["critical_findings"] = critical_findings
             st.session_state["critical_findings_annotators"] = inputs.annotators
             st.session_state["critical_findings_store_scope"] = inputs.store_scope
@@ -205,7 +202,8 @@ def render_policy_tab(inputs: GuiInputs) -> None:
                 (str(zip_temp_path.resolve()), zip_temp_path.stat().st_size, zip_temp_path.stat().st_mtime_ns)
                 if inputs.store_scope is not None else None
             )
-            st.session_state["critical_findings_json_text"] = findings_json_text
+            st.session_state.pop("critical_findings_json_text", None)
+            st.session_state["critical_findings_json_path"] = output_path_findings_json
             st.session_state["critical_findings_json_name"] = output_path_findings_json.name
 
             st.session_state["policy_check_result"] = {
@@ -213,13 +211,13 @@ def render_policy_tab(inputs: GuiInputs) -> None:
                 "annotators": list(inputs.annotators),
                 "critical_documents_found": erroneous_doc_count,
                 "report_folder": str(output_path_md.parent.resolve()),
-                "markdown_text": report_text,
+                "markdown_path": output_path_md,
                 "markdown_name": output_path_md.name,
-                "masked_markdown_text": report_text_masked,
+                "masked_markdown_path": output_path_md_masked,
                 "masked_markdown_name": output_path_md_masked.name,
-                "json_text": json_text,
+                "json_path": output_path_json,
                 "json_name": output_path_json.name,
-                "findings_json_text": findings_json_text,
+                "findings_json_path": output_path_findings_json,
                 "findings_json_name": output_path_findings_json.name,
             }
             st.success("Policy check finished.")
@@ -258,32 +256,44 @@ def render_policy_check_result(annotators=()) -> None:
 
     st.caption("Results from the last successful policy check; changed inputs require a new check.")
     st.metric("Critical documents found", result["critical_documents_found"])
-    st.download_button(
-        label="Download CriticalFindings JSON",
-        data=result["findings_json_text"],
-        file_name=result["findings_json_name"],
-        mime="application/json",
-        help="Download the critical findings as JSON to load them in later for sanitization.",
-    )
+    findings_source = result.get("findings_json_path", result.get("findings_json_text", ""))
+    with _download_source(findings_source) as findings_data:
+        st.download_button(
+            label="Download CriticalFindings JSON",
+            data=findings_data,
+            file_name=result["findings_json_name"],
+            mime="application/json",
+            help="Download the critical findings as JSON to load them in later for sanitization.",
+        )
 
     render_findings_table(result["critical_findings"])
 
-    if result.get("markdown_text"):
+    markdown_source = result.get("markdown_path", result.get("markdown_text", ""))
+    if markdown_source:
         st.subheader("Reports")
         st.write(f"Report saved to folder: `{result['report_folder']}`")
         report_col1, report_col2, report_col3 = st.columns(3)
-        with report_col1:
-            download_md_report(result["markdown_text"], pathlib.Path(result["markdown_name"]), "markdown")
-        with report_col2:
+        with report_col1, _download_source(markdown_source) as data:
+            download_md_report(data, pathlib.Path(result["markdown_name"]), "markdown")
+        with report_col2, _download_source(result.get("masked_markdown_path", result.get("masked_markdown_text", ""))) as data:
             download_md_report(
-                result["masked_markdown_text"], pathlib.Path(result["masked_markdown_name"]), "masked markdown",
+                data, pathlib.Path(result["masked_markdown_name"]), "masked markdown",
                 help="Masks document and annotator names, not clinical text. This is not full anonymization.",
             )
-        with report_col3:
+        with report_col3, _download_source(result.get("json_path", result.get("json_text", ""))) as data:
             download_json_report(
-                result["json_text"], pathlib.Path(result["json_name"]), "report",
+                data, pathlib.Path(result["json_name"]), "report",
                 help="Structured policy-check report. Use CriticalFindings JSON instead as input for suggestion generation.",
             )
+
+
+@contextmanager
+def _download_source(source):
+    if isinstance(source, pathlib.Path):
+        with source.open("rb") as stream:
+            yield stream
+    else:
+        yield source
 
 
 def render_findings_table(findings: list[CriticalFinding]) -> None:

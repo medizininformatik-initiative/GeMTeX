@@ -4,10 +4,12 @@ from io import StringIO
 import json
 from pathlib import Path
 
+from snomed_post_processing.annotation_source import is_annotation_store
 from snomed_post_processing.findings_io.json_io import critical_findings_json_text
 from snomed_post_processing.uima_processing import (
     CriticalFinding, create_log_from_results, get_annotator_names, process_inception_zip,
 )
+from snomed_post_processing.uima_processing.report_creation import create_log_from_annotation_store
 from snomed_post_processing.uima_processing.scope import normalize_annotators
 
 
@@ -45,20 +47,30 @@ def check_policy(project: Path, lists: Path, settings: PolicySettings, *, progre
     if not settings.id_feature.strip():
         raise ValueError("An annotation ID feature is required.")
     project_annotators(project, store_scope=settings.store_scope)
-    corpus = process_inception_zip(
-        project, annotator_filter=list(settings.annotators) or None,
+    source_options = dict(
+        annotator_filter=list(settings.annotators) or None,
         annotation_types=list(settings.annotation_types) or ["gemtex.Concept"],
         ignore_overlap_types=list(settings.ignore_overlap_types),
         ignore_overlap_mode=settings.ignore_overlap_mode,
-        id_prefix=settings.id_prefix, id_feature=settings.id_feature,
         **({"store_scope": settings.store_scope} if settings.store_scope is not None else {}),
     )
-    if corpus is None:
-        raise ValueError("Project processing failed.")
     markdown, masked = StringIO(), StringIO()
     report, findings = {}, []
-    count = create_log_from_results(corpus, markdown, masked, lists, progress_obj=progress_obj,
-                                   dump_dict=report, critical_findings=findings)
+    if is_annotation_store(project):
+        count = create_log_from_annotation_store(
+            project, markdown, masked, lists, progress_obj=progress_obj,
+            dump_dict=report, critical_findings=findings, **source_options,
+        )
+    else:
+        corpus = process_inception_zip(
+            project, id_prefix=settings.id_prefix, id_feature=settings.id_feature, **source_options,
+        )
+        if corpus is None:
+            raise ValueError("Project processing failed.")
+        count = create_log_from_results(
+            corpus, markdown, masked, lists, progress_obj=progress_obj,
+            dump_dict=report, critical_findings=findings,
+        )
     metadata = dict(source="nicegui-policy-check", annotators=list(settings.annotators),
                     lists_path=str(lists), annotation_types=list(settings.annotation_types) or ["gemtex.Concept"],
                     ignore_overlap_types=list(settings.ignore_overlap_types),
