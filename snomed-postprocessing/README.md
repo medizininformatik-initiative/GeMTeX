@@ -4,11 +4,9 @@ SNOMED Postprocessing checks SNOMED CT annotations in INCEpTION/UIMA exports aga
 
 The project can be used from the command line or through the default NiceGUI workspace. Streamlit remains available as an optional fallback frontend.
 
-User-facing wording uses **inclusion list** / **exclusion list**. Existing technical identifiers remain unchanged: CLI flags such as `--custom-blacklist`, HDF5 paths such as `policy_views/whitelist`, and JSON values such as `list_type="blacklist"` retain their established names. No artifact migration is required.
-
 The usage of this program requires a SNOMED CT policy file (``hdf5`` format). You can either create it yourself with a SNOMED CT release archive (``zip``)
 or with a SNOWSTORM instance - see below for instructions.  
-For the GeMTeX project there is a working file here:  
+For the GeMTeX project there is a working file here (restricted access):  
 [Technik/Methodik > Technisches Dashboard > SNOMED CT Semantic Tag / Dashboard](https://confluence.imi.med.fau.de/download/attachments/317216732/gemtex_snomedct_codes_release20260401_policy20240401.hdf5?version=1&modificationDate=1788504062723&api=v2)
 
 ## Main workflows
