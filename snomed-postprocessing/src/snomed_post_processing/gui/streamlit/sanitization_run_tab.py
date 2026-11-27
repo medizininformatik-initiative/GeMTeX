@@ -472,6 +472,16 @@ def _render_inception_apply_upload_controls(
         "One-step deployment workflow: original project ZIP + reviewed decisions → schema shell ZIP "
         "→ repaired flattened CAS artifacts → INCEpTION dry-run or upload. The original ZIP is not modified."
     )
+    try:
+        _, decisions_metadata = read_sanitization_decisions_json(io.StringIO(decisions_text))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        decisions_metadata = {}
+    reviewed_documents = {str(name) for name in decisions_metadata.get("reviewed_documents", [])}
+    review_documents = {str(item.get("document")) for item in reviewed_decisions if item.get("document")}
+    st.caption(
+        f"{len(reviewed_documents)} of {len(review_documents | reviewed_documents)} review document(s) "
+        "are marked reviewed and saved."
+    )
     disabled = project_source is None or selected_count == 0 or has_invalid_selected_rows
     with st.expander("INCEpTION deployment settings", expanded=False):
         with st.form("inception_pipeline_form"):
@@ -523,6 +533,12 @@ def _render_inception_apply_upload_controls(
                 key="inception_pipeline_apply_remote",
                 help="Leave unchecked for offline preparation / dry-run. Check only when you are ready to write to INCEpTION.",
             )
+            saved_documents_only = st.checkbox(
+                "Only export and upload saved reviewed documents",
+                value=False,
+                key="inception_pipeline_saved_documents_only",
+                help="Default off: all documents are exported. Enable this to include only documents marked reviewed and saved.",
+            )
             force = st.checkbox(
                 "Overwrite temporary pipeline outputs if needed",
                 value=True,
@@ -532,12 +548,14 @@ def _render_inception_apply_upload_controls(
             clicked = st.form_submit_button(
                 "Run INCEpTION deployment pipeline",
                 help="Prepare deployment artifacts. Remote import/upload occurs only when Apply to INCEpTION now is checked.",
-                disabled=disabled,
+                disabled=disabled or (saved_documents_only and not reviewed_documents),
                 type="primary",
                 width="stretch",
             )
     if disabled:
         st.info("Load a project ZIP, select valid reviewed actions, then run the INCEpTION deployment pipeline.")
+    elif saved_documents_only and not reviewed_documents:
+        st.info("Mark and save at least one reviewed document before restricting deployment to saved documents.")
     if not clicked:
         return
     try:
@@ -566,6 +584,7 @@ def _render_inception_apply_upload_controls(
                 verify_tls=not no_verify_tls,
                 force=force,
                 annotator_filter=tuple(annotators),
+                document_filter=reviewed_documents if saved_documents_only else None,
                 store_scope=store_scope,
                 project_template=save_uploaded_file(project_template, ".zip") if project_template is not None else None,
             )

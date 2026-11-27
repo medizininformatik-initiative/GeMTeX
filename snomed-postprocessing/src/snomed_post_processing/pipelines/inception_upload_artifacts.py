@@ -70,6 +70,7 @@ def build_inception_upload_artifacts(
     force: bool = False,
     repair_for_remote_upload: bool = True,
     annotator_filter: Optional[Iterable[str]] = None,
+    document_filter: Optional[Iterable[str]] = None,
 ) -> InceptionUploadArtifactsResult:
     """Create flattened sanitized JSONCAS/XMI files and a deployment report.
 
@@ -82,7 +83,9 @@ def build_inception_upload_artifacts(
     """
 
     annotators = normalize_annotators(annotator_filter)
-    decisions = [item for item in decisions if annotator_in_scope(item.get("annotator", ""), annotators)]
+    documents = None if document_filter is None else {str(name) for name in document_filter}
+    decisions = [item for item in decisions if annotator_in_scope(item.get("annotator", ""), annotators)
+                 and (documents is None or str(item.get("document", "")) in documents)]
     source_project = pathlib.Path(source_project)
     output_dir = pathlib.Path(output_dir)
     if not source_project.exists() or not source_project.is_file():
@@ -123,6 +126,8 @@ def build_inception_upload_artifacts(
         typesystem = _load_typesystem_from_zip(zip_file)
         typesystem_by_parent = {}
         for source_document, member_names in matching_document_files:
+            if documents is not None and str(source_document) not in documents:
+                continue
             for member_name in sorted(dict.fromkeys(member_names)):
                 annotator = _annotator_name_from_cas_path(
                     member_name, fallback_flat_layout=fallback_flat_layout
@@ -206,6 +211,7 @@ def build_inception_upload_artifacts(
         artifacts=artifacts,
         unmatched_decisions=unmatched_decisions,
         skipped_decisions=skipped_decisions,
+        included_documents=documents,
     )
     report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     return InceptionUploadArtifactsResult(
@@ -282,12 +288,14 @@ def _artifacts_report(
     artifacts: list[InceptionUploadArtifact],
     unmatched_decisions: tuple[dict[str, Any], ...],
     skipped_decisions: tuple[dict[str, Any], ...],
+    included_documents: set[str] | None,
 ) -> dict[str, Any]:
     return {
         "mode": "flattened-documents",
         "source_project": str(source_project),
         "output_dir": str(output_dir),
         "artifact_count": len(artifacts),
+        "included_documents": None if included_documents is None else sorted(included_documents),
         "uploads": [
             {
                 "source_member": artifact.source_member,

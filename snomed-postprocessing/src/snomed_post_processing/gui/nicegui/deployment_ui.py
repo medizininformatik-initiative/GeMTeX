@@ -41,6 +41,7 @@ def prepare_review_deployment(
     manual_review_layer: str,
     store_scope: str | None,
     project_template: Path | None,
+    document_filter: set[str] | None = None,
 ) -> PreparedDeployment:
     """Validate source binding and prepare a frozen, offline deployment package."""
     decisions, metadata = read_sanitization_decisions_json(io.StringIO(decisions_text))
@@ -49,10 +50,15 @@ def prepare_review_deployment(
         raise ReviewError("Loaded review does not record its annotation source. Regenerate suggestions from the selected source before deployment.")
     if _source_name(recorded_source) != source_project.name:
         raise ReviewError("The selected annotation source does not match the source recorded by this review.")
-    if not any(_actionable(item) for item in decisions):
-        raise ReviewError("Select and save at least one replacement, deletion, ID removal or manual-review action.")
+    filtered_decisions = decisions if document_filter is None else [
+        item for item in decisions if str(item.get("document", "")) in document_filter
+    ]
+    if document_filter is not None and not document_filter:
+        raise ReviewError("Mark and save at least one document before restricting deployment to saved documents.")
+    if not any(_actionable(item) for item in filtered_decisions):
+        raise ReviewError("Select and save at least one replacement, deletion, ID removal or manual-review action in the included documents.")
     sanitized_project_zip = None
-    if metadata.get("store_scope") is None:
+    if metadata.get("store_scope") is None and document_filter is None:
         from .zip_writeback_ui import build_sanitized_zip
         sanitized_project_zip = output_dir / f"{source_project.stem}-sanitized.zip"
         build_sanitized_zip(
@@ -72,6 +78,7 @@ def prepare_review_deployment(
         force=True,
         store_scope=store_scope,
         project_template=project_template,
+        document_filter=document_filter,
     )
     artifacts_zip = output_dir / "inception-upload-artifacts.zip"
     with zipfile.ZipFile(artifacts_zip, "w", compression=zipfile.ZIP_DEFLATED) as archive:
@@ -126,6 +133,13 @@ class InceptionDeploymentControls:
             with ui.row().classes("w-full gap-4 flex-wrap"):
                 self.project_name = ui.input("Sanitized project name (optional)", on_change=self.preparation_changed).classes("grow")
                 self.project_slug = ui.input("Sanitized project slug (optional)", on_change=self.preparation_changed).classes("grow")
+            self.review_summary = ui.label().classes("text-sm")
+            self.saved_documents_only = ui.checkbox(
+                "Only export and upload saved reviewed documents", value=False, on_change=self.preparation_changed,
+            )
+            self.saved_documents_only.tooltip(
+                "Default off: all documents in the selected source/scope are exported. When enabled, only documents marked reviewed and saved are included in repaired upload artifacts."
+            )
             self.manual_layer = ui.input(
                 "Manual-review marker layer", value="webanno.custom.ManualReview", on_change=self.preparation_changed,
             ).classes("w-full")
@@ -180,7 +194,7 @@ class InceptionDeploymentControls:
             template, template.stamp() if template is not None else None,
             self.review.state, session, session.revision,
             (self.project_name.value or "").strip(), (self.project_slug.value or "").strip(),
-            (self.manual_layer.value or "").strip(),
+            (self.manual_layer.value or "").strip(), bool(self.saved_documents_only.value),
         )
 
     def _release(self):
@@ -234,6 +248,15 @@ class InceptionDeploymentControls:
             preparation_blockers.append("save or discard pending review choices")
         if session.invalid_rules:
             preparation_blockers.append("reapply or clear stale concept rules")
+        document_count = len({row.document for row in self.review.state.findings}
+                             | {str(item.get("document")) for item in session.effective_rules if item.get("document")}
+                             | set(session.reviewed_documents))
+        saved_count = len(session.reviewed_documents)
+        self.review_summary.set_text(
+            f"{saved_count} of {document_count} review document(s) are marked reviewed and saved."
+        )
+        if self.saved_documents_only.value and not session.reviewed_documents:
+            preparation_blockers.append("mark and save at least one reviewed document")
         if self.template.uploading:
             preparation_blockers.append("wait for the project-template upload")
         if self.inputs.is_store and self.inputs.scope.value is None:
@@ -274,6 +297,7 @@ class InceptionDeploymentControls:
         state, session = self.review.state, self.review.controls.session
         input_revision, review_revision = self.inputs.revision, session.revision
         template = self.template.snapshot()
+        saved_documents_only = bool(self.saved_documents_only.value)
         owner = None
         self._release()
         self.busy = True
@@ -304,6 +328,7 @@ class InceptionDeploymentControls:
                     and session.revision == review_revision and self.inputs.project.snapshot() == project
                     and project.stamp() == source_stamp and self.template.snapshot() == template
                     and (template is None or template.stamp() == template_stamp)
+                    and bool(self.saved_documents_only.value) == saved_documents_only
                 )
 
             if not current():
@@ -322,6 +347,7 @@ class InceptionDeploymentControls:
                 manual_review_layer=(self.manual_layer.value or "").strip() or "webanno.custom.ManualReview",
                 store_scope=self.inputs.scope.value if self.inputs.is_store else None,
                 project_template=template.path if template is not None else None,
+                document_filter=set(snapshot.reviewed_documents) if saved_documents_only else None,
             )
             if not current():
                 raise ReviewError("Inputs or review changed during preparation. The stale package was discarded.")

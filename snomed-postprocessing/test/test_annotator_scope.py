@@ -109,7 +109,8 @@ class AnnotatorScopeTest(unittest.TestCase):
         findings = app.session_state["critical_findings"]
         self.assertEqual(len(findings), 4)
         self.assertEqual({item.annotator for item in findings}, {"alice"})
-        _, metadata = read_critical_findings_json_with_metadata(io.StringIO(app.session_state["critical_findings_json_text"]))
+        findings_json = app.session_state["critical_findings_json_path"].read_text(encoding="utf-8")
+        _, metadata = read_critical_findings_json_with_metadata(io.StringIO(findings_json))
         self.assertEqual(metadata["annotators"], ["alice"])
         # Also exercise the generation boundary with an out-of-scope imported/session finding.
         app.session_state["critical_findings"] = findings + [dataclasses.replace(findings[0], annotator="bob")]

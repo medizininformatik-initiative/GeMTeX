@@ -89,6 +89,22 @@ class DeploymentWorkerTest(unittest.TestCase):
             self.assertGreater(prepared.result.deployment_result.planned_upload_count, 0)
             self.assertFalse(prepared.result.applied)
 
+    def test_saved_document_filter_limits_prepared_upload_artifacts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            prepared = prepare_review_deployment(
+                FIXTURE / "project.zip", self.decisions_text(), Path(directory),
+                project_name=None, project_slug=None,
+                manual_review_layer="webanno.custom.ManualReview",
+                store_scope=None, project_template=None,
+                document_filter={"automatic.txt"},
+            )
+            self.assertIsNone(prepared.sanitized_project_zip)
+            self.assertTrue(prepared.result.artifacts_result.artifacts)
+            self.assertEqual(
+                {artifact.source_document for artifact in prepared.result.artifacts_result.artifacts},
+                {"automatic.txt"},
+            )
+
     def test_rejects_review_bound_to_another_source(self):
         with tempfile.TemporaryDirectory() as directory, self.assertRaisesRegex(Exception, "does not match"):
             prepare_review_deployment(
@@ -123,6 +139,8 @@ class DeploymentControlsTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(controls.username.value, "")
         self.assertEqual(controls.password.value, "")
         self.assertTrue(controls.prepare_button.enabled)
+        self.assertFalse(controls.saved_documents_only.value)
+        self.assertIn("1 of 3 review document(s)", controls.review_summary.text)
         self.assertIn("no INCEpTION connection", controls.prepare_readiness.text)
         controls.close()
 

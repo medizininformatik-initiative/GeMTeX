@@ -74,6 +74,7 @@ def apply_decisions_and_upload_to_inception(
     verify_tls: bool = True,
     force: bool = False,
     annotator_filter: Optional[Iterable[str]] = None,
+    document_filter: Optional[Iterable[str]] = None,
     store_scope: Optional[str] = None,
     project_template: Optional[pathlib.Path] = None,
 ) -> InceptionApplyUploadResult:
@@ -115,8 +116,13 @@ def apply_decisions_and_upload_to_inception(
 
     decisions, decisions_metadata = read_sanitization_decisions_json(decisions_path)
     annotators = normalize_annotators(decisions_metadata.get("annotators", ()) if annotator_filter is None else annotator_filter)
-    decisions = [item for item in decisions if annotator_in_scope(item.get("annotator", ""), annotators)]
+    documents = None if document_filter is None else {str(name) for name in document_filter}
+    if documents is not None and not documents:
+        raise InceptionApplyUploadError("Document filter is empty; select at least one saved reviewed document.")
+    decisions = [item for item in decisions if annotator_in_scope(item.get("annotator", ""), annotators)
+                 and (documents is None or str(item.get("document", "")) in documents)]
     decisions_metadata["annotators"] = list(annotators)
+    decisions_metadata["deployment_documents"] = None if documents is None else sorted(documents)
 
     from ..annotation_source import is_annotation_store
     from ..annotation_store.restoration import prepared_cas_project
@@ -152,6 +158,7 @@ def apply_decisions_and_upload_to_inception(
             force=force,
             repair_for_remote_upload=repair_for_remote_upload,
             annotator_filter=annotators,
+            document_filter=documents,
         )
     deployment_result = deploy_inception_sanitized_project(
         shell_project=shell_result.output_project,
